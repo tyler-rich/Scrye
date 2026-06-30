@@ -1,0 +1,89 @@
+# CLAUDE.md — Scrye
+
+Operating contract for Claude Code on the **Scrye** project. Read this first, every session.
+Full detail lives in `docs/PLAN.md` — this file is the condensed, authoritative ruleset.
+When this file and the plan disagree, **this file wins**; if either conflicts with explicit user
+instructions in the session, the user wins.
+
+---
+
+## What Scrye is
+A self-hosted, browser-based web UI that unifies the **Trivy** and **Grype** scanners. Trivy:
+container images, git repos, and images in a Docker environment — scanning for CVEs, SBOM/OS
+packages & dependencies, IaC misconfigurations, secrets, and licenses. Grype: vulnerability
+scanning of images, filesystems, and SBOMs, including private registries. Results export to
+CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
+
+## Locked decisions — do not re-open
+1. **Name:** Scrye.
+2. **Stack:** React 18 + TS + Vite + **Mantine v7** frontend; **Python 3.12 + FastAPI + Pydantic
+   v2 + SQLAlchemy 2.0 + Alembic** backend; **SQLite**.
+3. **Job model:** single-container **in-process async worker** (DB-backed `scans` table +
+   concurrency semaphore). **No Redis/arq in v1** — but keep a thin worker interface so it could be
+   swapped later.
+4. **"Scan running images":** **in v1**, via read-only **`docker-socket-proxy`**. The app **never**
+   mounts `/var/run/docker.sock`.
+5. **Secrets at rest:** **application-layer AES-256-GCM field encryption** (required). **SQLCipher
+   is deferred** — leave a seam, don't build it.
+6. **Distribution:** **build the Docker image locally only.** Do **not** add Docker Hub / any
+   registry publishing, CI publish jobs, or `<dockerhub-user>/...` references.
+7. **Theme:** **teal** primary (`primaryColor: 'teal'`), first-class **light and dark** modes.
+
+## Hard security rules (non-negotiable)
+- **Never** hardcode credentials, secrets, API keys, tokens, or other sensitive values — not in
+  code, config, Compose, image layers, tests, or logs. Use the secret-file master key + env vars
+  for non-sensitive config.
+- Stored secrets (registry creds, git tokens, OIDC client secret, API tokens) are **field-encrypted
+  with AES-256-GCM**; the **master key comes from a Docker secret file** (`APP_SECRET_KEY_FILE`),
+  never an env var or image layer.
+- Secret API fields are **write-only**: accept on write, return a mask (`••••`) + timestamp on
+  read. Never return or log plaintext secrets. Add a logging redaction filter.
+- Decrypt secrets **only at scan time**, in memory, into **tmpfs** credential files, and shred them
+  after the subprocess exits.
+- All Docker work follows the **CIS Docker Benchmark baseline**: pinned image digests, non-root
+  `USER`/`user:`, `cap_drop: ALL`, `no-new-privileges`, read-only root FS + tmpfs, resource limits,
+  healthchecks, loopback port binding (`127.0.0.1`), restart policies, capped json-file logging.
+  The only `docker.sock` mount permitted is on the read-only socket-proxy sidecar — document the
+  residual risk.
+- CSRF protection on state-changing endpoints; rate-limit auth endpoints; maintain an audit log.
+
+## Coding standards
+- **Python:** type hints everywhere; module/function docstrings; `ruff` + `black` clean; meaningful
+  `try/except` with descriptive errors (no bare excepts, no silent failures); Pydantic models for
+  I/O validation; SQLAlchemy 2.0 typed style; Alembic migration for every schema change.
+- **TypeScript:** ESLint + Prettier clean; typed API client generated from the FastAPI OpenAPI
+  schema; Mantine components over bespoke CSS; no inline secrets or tokens.
+- **Commits:** Conventional Commits. Small, reviewable changes. Update docs in the same PR as the
+  code they describe.
+- **Scanner faithfulness:** orchestrate the official `trivy`/`grype`/`syft` binaries and parse
+  their **JSON** output. Persist raw scanner JSON as the source of truth; normalize into the
+  shared findings model for display. Don't reimplement scanner logic.
+
+## Required deliverables (build these — they are not optional)
+- **`README.md`** — full docs: what it is, features, integrations, architecture, requirements,
+  quick start, configuration (env vars + secret-key mechanism), usage per scan type, security
+  model, backup/restore, roadmap, contributing/license links. (See plan §10.1.)
+- **`CONTRIBUTING.md`** — full local-dev setup (backend venv + migrations + secret key + FastAPI
+  reload; frontend Vite dev server; Compose integrated run; first-admin seed), project layout,
+  coding standards, testing, PR process, private security-disclosure note. (See plan §10.2.)
+- **`LICENSE`** — MIT unless told otherwise.
+- **`.env.example`** — generate it in Phase 0–1 **from the Pydantic `Settings` model** (the config
+  loader is the single source of truth — keep the two in sync). **Non-sensitive configuration vars
+  only.** The master key is never included (it comes from the Docker secret file
+  `APP_SECRET_KEY_FILE`); secrets like `OIDC_CLIENT_SECRET` appear as a named placeholder with a
+  comment, never a real value. `.gitignore` already ignores `.env` but allows `.env.example`.
+
+## Build order
+Follow the phased roadmap in `docs/PLAN.md` §12 (Phase 0 scaffold → Phase 6 polish).
+Create `README.md`, `CONTRIBUTING.md`, `LICENSE`, and `.gitignore` in Phase 0; generate
+`.env.example` from the `Settings` model once the config layer exists (Phase 0–1); and finalize the
+docs in Phase 6 to match the shipped app.
+
+## Deployment target (context, not a build step)
+DockHand stack on `<the deployment host>` (`<your-deployment-host-ip>`); env vars in the DockHand stack editor (no `.env` on
+disk); app secret key as a Docker secret file; fronted by Caddy at `scrye.your-domain.tld`
+(acme.sh wildcard TLS); persistent data under `/mnt/appdata/scrye`; OIDC via Pocket ID at
+`https://pocket-id.your-domain.tld`.
+
+## Out of scope for v1 (do not build)
+arq/Redis scale-out · SQLCipher full-DB encryption · registry publishing.
