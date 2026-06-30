@@ -491,3 +491,19 @@ the shipped app.
 - arq + Redis scale-out worker.
 - SQLCipher full-DB-at-rest encryption.
 - Container registry publishing (Docker Hub or other).
+
+---
+
+## 14. Deviations from this plan
+
+Running log of anywhere the implementation diverged from what's written above. Add a dated entry
+at the time the deviation is made — don't batch these up for later. Format:
+
+```
+### YYYY-MM-DD — Phase PX — <short title>
+**What changed:** <the actual deviation>
+**Why:** <reason — constraint discovered, better approach found, plan ambiguity resolved, etc.>
+**Plan section affected:** <§ reference>
+```
+
+*(No deviations yet.)*
