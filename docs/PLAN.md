@@ -506,4 +506,33 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
-*(No deviations yet.)*
+### 2026-06-30 — Phase 0 — Scanner versions bumped to current releases
+**What changed:** Bundled scanner versions pinned to the current releases —
+Trivy `0.71.2`, Grype `0.115.0`, Syft `1.46.0` — in `docker/Dockerfile`. The
+optional `trivy-server` sidecar in `docker/docker-compose.yml` is pinned to the
+matching `aquasec/trivy:0.71.2` (digest-locked) rather than the `0.66.0` shown
+in the plan's Compose example.
+**Why:** The plan's `0.66.0` was an illustrative example; CLAUDE.md
+§ Dependency hygiene requires pinning to current, actively-maintained versions
+with no known vulnerabilities, and the bundled Trivy binary and the trivy-server
+image should share a version.
+**Plan section affected:** §9.1, §9.2.
+
+### 2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles
+**What changed:** The `trivy-server` and `docker-socket-proxy` services in
+`docker/docker-compose.yml` are placed behind Compose `profiles`
+(`trivy-server`, `docker-env`) so the default `docker compose up` starts only
+the Scrye app. Both sidecar images are pinned by resolved multi-arch digest.
+**Why:** Phase 0 only needs the app and a healthy `/healthz`; the sidecars are
+consumed by later phases (Trivy server cache in Phase 2+, Docker-environment
+enumeration in Phase 3). Gating them keeps the default bring-up minimal and
+avoids mounting the Docker socket until that feature is actually built, while
+leaving the hardened definitions ready to enable.
+**Plan section affected:** §9.2.
+
+### 2026-06-30 — Phase 0 — Branch name `phase/P0`
+**What changed:** Phase 0 work is developed on branch `phase/P0`.
+**Why:** Matches the repo convention in CLAUDE.md § Git & PR conventions
+(`phase/PX`), per explicit instruction in the build session. (Noted for the
+record; the session harness had suggested a different default branch name.)
+**Plan section affected:** §12 (process, not output).
