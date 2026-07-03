@@ -6,15 +6,19 @@ worker and produces persisted findings + a stored artifact without any binaries.
 
 from __future__ import annotations
 
+import base64
 import json
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core import config
 from app.db.models import Severity
 from app.scanners import NormalizedFinding, ScanExecution, ScannerError
 from app.scanners.base import tally_severities
+from app.scanners.syft import SbomResult
 from app.workers import inprocess
 
 ADMIN_PW = "unit-test-admin-passphrase"
@@ -49,12 +53,16 @@ def _fake_execution() -> ScanExecution:
 
 
 class _FakeScanner:
-    async def scan_image(self, target: str, options: dict) -> ScanExecution:
+    async def scan_image(
+        self, target: str, options: dict, *, env: dict | None = None
+    ) -> ScanExecution:
         return _fake_execution()
 
 
 class _FailingScanner:
-    async def scan_image(self, target: str, options: dict) -> ScanExecution:
+    async def scan_image(
+        self, target: str, options: dict, *, env: dict | None = None
+    ) -> ScanExecution:
         raise ScannerError("Trivy exited with code 1: boom")
 
 
@@ -165,13 +173,26 @@ def test_viewer_cannot_launch_but_can_read(client: TestClient, monkeypatch) -> N
     assert client.get("/api/scans").status_code == 200
 
 
-def test_unsupported_target_type_rejected(client: TestClient, monkeypatch) -> None:
+def test_sbom_target_via_json_is_rejected(client: TestClient, monkeypatch) -> None:
     monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _FakeScanner())
     csrf = _setup_admin(client)
+    # SBOM scans require the upload endpoint, not the JSON create body.
     resp = client.post(
         "/api/scans",
         headers={CSRF: csrf},
-        json={"scanner": "trivy", "target": "https://x/y.git", "target_type": "repository"},
+        json={"scanner": "grype", "target": "sbom.json", "target_type": "sbom"},
+    )
+    assert resp.status_code == 422
+
+
+def test_unsupported_scanner_target_combo_rejected(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _FakeScanner())
+    csrf = _setup_admin(client)
+    # Grype has no repository target; Trivy owns repo scans (docs/PLAN.md §4).
+    resp = client.post(
+        "/api/scans",
+        headers={CSRF: csrf},
+        json={"scanner": "grype", "target": "https://x/y.git", "target_type": "repository"},
     )
     assert resp.status_code == 422
 
@@ -181,7 +202,9 @@ def test_cancel_queued_scan(client: TestClient, monkeypatch) -> None:
     import asyncio
 
     class _SlowScanner:
-        async def scan_image(self, target: str, options: dict) -> ScanExecution:
+        async def scan_image(
+            self, target: str, options: dict, *, env: dict | None = None
+        ) -> ScanExecution:
             await asyncio.sleep(0.2)
             return _fake_execution()
 
@@ -217,3 +240,208 @@ def test_list_filters_by_scanner(client: TestClient, monkeypatch, scanner: str) 
     listed = client.get("/api/scans", params={"scanner": scanner}).json()
     assert len(listed) == 1
     assert listed[0]["scanner"] == scanner
+
+
+# --- Phase 3: repository, filesystem, SBOM, registry credentials -------------
+
+
+class _MultiTargetScanner:
+    """Records the target/env each scan method receives (image/repo/fs/sbom)."""
+
+    def __init__(self) -> None:
+        self.calls: dict[str, dict] = {}
+
+    async def scan_image(self, target, options, *, env=None):
+        call: dict = {"target": target, "env": env}
+        if env and "DOCKER_CONFIG" in env:
+            config_file = Path(env["DOCKER_CONFIG"]) / "config.json"
+            call["docker_config"] = json.loads(config_file.read_text())
+        self.calls["image"] = call
+        return _fake_execution()
+
+    async def scan_repo(self, target, options, *, env=None):
+        self.calls["repo"] = {"target": target, "env": env or {}}
+        return _fake_execution()
+
+    async def scan_filesystem(self, target, options, *, env=None):
+        self.calls["filesystem"] = {"target": target}
+        return _fake_execution()
+
+    async def scan_sbom(self, target, options, *, env=None):
+        self.calls["sbom"] = {"target": target, "exists": Path(target).is_file()}
+        return _fake_execution()
+
+
+def _install_multitarget(client: TestClient, monkeypatch) -> _MultiTargetScanner:
+    scanner = _MultiTargetScanner()
+    monkeypatch.setattr(inprocess, "get_scanner", lambda s: scanner)
+    return scanner
+
+
+def test_repository_scan_runs(client: TestClient, monkeypatch) -> None:
+    scanner = _install_multitarget(client, monkeypatch)
+    csrf = _setup_admin(client)
+    resp = client.post(
+        "/api/scans",
+        headers={CSRF: csrf},
+        json={
+            "scanner": "trivy",
+            "target": "https://github.com/org/repo.git",
+            "target_type": "repository",
+            "branch": "main",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    settled = _wait_for_status(client, resp.json()["id"], {"succeeded", "failed"})
+    assert settled["status"] == "succeeded"
+    assert scanner.calls["repo"]["target"] == "https://github.com/org/repo.git"
+
+
+def test_repository_scan_with_git_credential_injects_token(client: TestClient, monkeypatch) -> None:
+    scanner = _install_multitarget(client, monkeypatch)
+    csrf = _setup_admin(client)
+    cred = client.post(
+        "/api/git-credentials",
+        headers={CSRF: csrf},
+        json={"name": "gh", "provider": "github", "token": "ghp_worker_token"},
+    )
+    assert cred.status_code == 201, cred.text
+    resp = client.post(
+        "/api/scans",
+        headers={CSRF: csrf},
+        json={
+            "scanner": "trivy",
+            "target": "https://github.com/org/repo.git",
+            "target_type": "repository",
+            "git_credential_id": cred.json()["id"],
+        },
+    )
+    _wait_for_status(client, resp.json()["id"], {"succeeded", "failed"})
+    # GitHub tokens are supplied via env, never embedded in the clone URL.
+    assert scanner.calls["repo"]["env"]["GITHUB_TOKEN"] == "ghp_worker_token"
+    assert "ghp_worker_token" not in scanner.calls["repo"]["target"]
+
+
+def test_image_scan_with_registry_materializes_docker_config(
+    client: TestClient, monkeypatch
+) -> None:
+    scanner = _install_multitarget(client, monkeypatch)
+    csrf = _setup_admin(client)
+    reg = client.post(
+        "/api/registries",
+        headers={CSRF: csrf},
+        json={
+            "name": "ghcr",
+            "registry_host": "ghcr.io",
+            "auth_type": "username_password",
+            "username": "alice",
+            "secret": "regpass",
+        },
+    )
+    assert reg.status_code == 201, reg.text
+    resp = client.post(
+        "/api/scans",
+        headers={CSRF: csrf},
+        json={"scanner": "trivy", "target": "ghcr.io/org/app:1", "registry_id": reg.json()["id"]},
+    )
+    _wait_for_status(client, resp.json()["id"], {"succeeded", "failed"})
+    # The scanner saw a transient DOCKER_CONFIG with the expected auth blob.
+    blob = scanner.calls["image"]["docker_config"]["auths"]["ghcr.io"]["auth"]
+    assert base64.b64decode(blob).decode() == "alice:regpass"
+    # The materialized directory was shredded after the scan finished.
+    assert not Path(scanner.calls["image"]["env"]["DOCKER_CONFIG"]).exists()
+
+
+def test_filesystem_scan_requires_configured_root(client: TestClient, monkeypatch) -> None:
+    _install_multitarget(client, monkeypatch)
+    csrf = _setup_admin(client)
+    # No SCRYE_FILESYSTEM_SCAN_ROOTS configured (default): rejected at create.
+    resp = client.post(
+        "/api/scans",
+        headers={CSRF: csrf},
+        json={"scanner": "grype", "target": "/etc", "target_type": "filesystem"},
+    )
+    assert resp.status_code == 422
+
+
+def test_filesystem_scan_runs_within_allowed_root(
+    client: TestClient, monkeypatch, tmp_path
+) -> None:
+    from app.scanners import targets
+
+    root = tmp_path / "scanroot"
+    project = root / "project"
+    project.mkdir(parents=True)
+    monkeypatch.setattr(
+        targets, "get_settings", lambda: config.Settings(filesystem_scan_roots=[str(root)])
+    )
+    scanner = _install_multitarget(client, monkeypatch)
+    csrf = _setup_admin(client)
+    resp = client.post(
+        "/api/scans",
+        headers={CSRF: csrf},
+        json={"scanner": "grype", "target": str(project), "target_type": "filesystem"},
+    )
+    assert resp.status_code == 201, resp.text
+    _wait_for_status(client, resp.json()["id"], {"succeeded", "failed"})
+    assert scanner.calls["filesystem"]["target"] == str(project.resolve())
+
+
+def test_sbom_upload_scan(client: TestClient, monkeypatch) -> None:
+    scanner = _install_multitarget(client, monkeypatch)
+    csrf = _setup_admin(client)
+    resp = client.post(
+        "/api/scans/sbom",
+        headers={CSRF: csrf},
+        data={"scanner": "grype"},
+        files={
+            "file": ("app.cdx.json", json.dumps({"artifacts": []}).encode(), "application/json")
+        },  # noqa: E501
+    )
+    assert resp.status_code == 201, resp.text
+    scan = resp.json()
+    assert scan["target_type"] == "sbom"
+    assert scan["target"] == "app.cdx.json"
+    _wait_for_status(client, scan["id"], {"succeeded", "failed"})
+    assert scanner.calls["sbom"]["exists"] is True
+
+    # The uploaded SBOM is stored as an input artifact alongside the raw output.
+    artifacts = client.get(f"/api/scans/{scan['id']}/artifacts").json()
+    kinds = {a["kind"] for a in artifacts}
+    assert "sbom" in kinds and "raw_grype_json" in kinds
+
+
+def test_sbom_upload_rejects_non_json(client: TestClient, monkeypatch) -> None:
+    _install_multitarget(client, monkeypatch)
+    csrf = _setup_admin(client)
+    resp = client.post(
+        "/api/scans/sbom",
+        headers={CSRF: csrf},
+        data={"scanner": "grype"},
+        files={"file": ("bad.json", b"not json", "application/json")},
+    )
+    assert resp.status_code == 422
+
+
+def test_generate_sbom_stores_sbom_artifact(client: TestClient, monkeypatch) -> None:
+    _install_multitarget(client, monkeypatch)
+
+    async def _fake_sbom(source, fmt=None, *, env=None):
+        return SbomResult(
+            raw_output=b'{"bomFormat":"CycloneDX"}',
+            sbom_format="cyclonedx-json",
+            filename="sbom.cyclonedx.json",
+        )
+
+    monkeypatch.setattr(inprocess.syft, "generate_sbom", _fake_sbom)
+    csrf = _setup_admin(client)
+    resp = client.post(
+        "/api/scans",
+        headers={CSRF: csrf},
+        json={"scanner": "trivy", "target": "alpine:3.19", "generate_sbom": True},
+    )
+    _wait_for_status(client, resp.json()["id"], {"succeeded", "failed"})
+    artifacts = client.get(f"/api/scans/{resp.json()['id']}/artifacts").json()
+    sbom_artifacts = [a for a in artifacts if a["kind"] == "sbom"]
+    assert len(sbom_artifacts) == 1
+    assert sbom_artifacts[0]["filename"] == "sbom.cyclonedx.json"

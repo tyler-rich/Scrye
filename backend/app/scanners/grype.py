@@ -15,7 +15,7 @@ from app.core.config import get_settings
 from app.db.models import FindingClass, Scanner
 from app.scanners.base import (
     DESCRIPTION_LIMIT,
-    ImageScanner,
+    BaseScanner,
     NormalizedFinding,
     ScanExecution,
     ScannerError,
@@ -26,20 +26,35 @@ from app.scanners.base import (
     tally_severities,
 )
 
-
-def build_command(binary: str, target: str) -> list[str]:
-    """Build the ``grype`` argument vector for an image scan."""
-    return [binary, target, "-o", "json"]
+#: Env var that disables Grype's interactive app-update check for batch runs.
+_UPDATE_CHECK_ENV = {"GRYPE_CHECK_FOR_APP_UPDATE": "false"}
 
 
-def scan_env() -> dict[str, str]:
+def build_command(binary: str, reference: str) -> list[str]:
+    """Build the ``grype`` argument vector for a source reference.
+
+    Args:
+        binary: Resolved Grype executable path.
+        reference: A Grype source string — an image ref, ``dir:<path>``, or
+            ``sbom:<path>``.
+
+    Returns:
+        The full argv list.
+    """
+    return [binary, reference, "-o", "json"]
+
+
+def scan_env(overlay: dict[str, str] | None = None) -> dict[str, str]:
     """Return the child environment for Grype.
 
-    Suppresses the interactive app-update check so batch runs stay quiet; the DB
-    still auto-updates (offline/air-gapped DB import is a later phase).
+    Suppresses the interactive app-update check so batch runs stay quiet (the DB
+    still auto-updates; offline/air-gapped DB import is a later phase) and layers
+    on any credential overlay (e.g. a transient ``DOCKER_CONFIG``).
     """
     env = dict(os.environ)
-    env["GRYPE_CHECK_FOR_APP_UPDATE"] = "false"
+    env.update(_UPDATE_CHECK_ENV)
+    if overlay:
+        env.update(overlay)
     return env
 
 
@@ -106,21 +121,22 @@ def parse_output(raw: bytes) -> tuple[list[NormalizedFinding], str | None]:
     return findings, version
 
 
-class GrypeImageScanner(ImageScanner):
-    """Scans a container image with ``grype`` (vulnerabilities only)."""
+class GrypeScanner(BaseScanner):
+    """Scans images, filesystems, and SBOMs with Grype (vulnerabilities only)."""
 
     scanner = Scanner.GRYPE
 
-    async def scan_image(self, target: str, options: dict[str, Any]) -> ScanExecution:
-        """Run Grype against ``target`` and normalize the matches.
+    async def _execute(self, reference: str, *, env: dict[str, str] | None) -> ScanExecution:
+        """Run Grype against a source reference and normalize its matches.
 
         Raises:
             ScannerError: If the binary is missing, times out, or exits non-zero.
         """
-        settings = get_settings()
-        binary = resolve_binary(settings.grype_binary)
-        argv = build_command(binary, target)
-        result = await run_command(argv, timeout=settings.scan_timeout_seconds, env=scan_env())
+        binary = resolve_binary(get_settings().grype_binary)
+        argv = build_command(binary, reference)
+        result = await run_command(
+            argv, timeout=get_settings().scan_timeout_seconds, env=scan_env(env)
+        )
         if result.returncode != 0:
             detail = result.stderr.decode("utf-8", "replace").strip() or "no error output"
             raise ScannerError(f"Grype exited with code {result.returncode}: {detail}")
@@ -133,3 +149,21 @@ class GrypeImageScanner(ImageScanner):
             command=argv,
             scanner_version=version,
         )
+
+    async def scan_image(
+        self, target: str, options: dict[str, Any], *, env: dict[str, str] | None = None
+    ) -> ScanExecution:
+        """Scan a container image reference."""
+        return await self._execute(target, env=env)
+
+    async def scan_filesystem(
+        self, target: str, options: dict[str, Any], *, env: dict[str, str] | None = None
+    ) -> ScanExecution:
+        """Scan a filesystem directory (``grype dir:<path>``)."""
+        return await self._execute(f"dir:{target}", env=env)
+
+    async def scan_sbom(
+        self, target: str, options: dict[str, Any], *, env: dict[str, str] | None = None
+    ) -> ScanExecution:
+        """Scan an existing SBOM file (``grype sbom:<path>``)."""
+        return await self._execute(f"sbom:{target}", env=env)
