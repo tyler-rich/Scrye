@@ -25,19 +25,26 @@ from app.db.models import (
 TrivyScannerName = Literal["vuln", "misconfig", "secret", "license"]
 #: Trivy severity tokens a caller may filter to (default: all).
 TrivySeverity = Literal["UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
+#: Syft SBOM output formats a caller may request.
+SbomFormat = Literal["cyclonedx-json", "spdx-json", "syft-json"]
 
 
 class ScanCreateIn(BaseModel):
-    """Request payload to launch a scan.
+    """Request payload to launch an image, repository, or filesystem scan.
 
-    Phase 2 supports ``image`` targets for both scanners. Trivy honors scanner
+    Target support (docs/PLAN.md §4): ``image`` (Trivy or Grype), ``repository``
+    (Trivy), and ``filesystem`` (Grype). ``sbom`` targets are launched via the
+    dedicated upload endpoint, not this JSON body. Trivy honors scanner
     selection, severity filtering, and ``ignore_unfixed``; Grype (vulnerabilities
-    only) ignores those knobs.
+    only) ignores those knobs. A registry / git credential is referenced by id
+    and resolved (and decrypted) only at scan time.
     """
 
     scanner: Scanner
     target_type: TargetType = TargetType.IMAGE
-    target: str = Field(min_length=1, max_length=512, description="Image reference to scan.")
+    target: str = Field(
+        min_length=1, max_length=512, description="Image ref, repo URL, or filesystem path."
+    )
     trivy_scanners: list[TrivyScannerName] | None = Field(
         default=None, description="Trivy scanner selection; null means all."
     )
@@ -46,6 +53,25 @@ class ScanCreateIn(BaseModel):
     )
     ignore_unfixed: bool = Field(
         default=False, description="Trivy: report only vulnerabilities with a known fix."
+    )
+    registry_id: int | None = Field(
+        default=None, description="Registry credential for a private image (image targets)."
+    )
+    git_credential_id: int | None = Field(
+        default=None, description="Git credential for a private repo (repository targets)."
+    )
+    branch: str | None = Field(
+        default=None, max_length=255, description="Repo branch to check out."
+    )
+    commit: str | None = Field(
+        default=None, max_length=128, description="Repo commit to check out."
+    )
+    tag: str | None = Field(default=None, max_length=255, description="Repo tag to check out.")
+    generate_sbom: bool = Field(
+        default=False, description="Also generate a Syft SBOM artifact (image/filesystem)."
+    )
+    sbom_format: SbomFormat | None = Field(
+        default=None, description="SBOM format when generate_sbom is set; null means default."
     )
 
     @field_validator("target")
@@ -58,14 +84,30 @@ class ScanCreateIn(BaseModel):
         return stripped
 
     def to_options(self) -> dict[str, object]:
-        """Build the stored ``options`` dict relevant to the chosen scanner."""
+        """Build the stored ``options`` dict for the scanner and target type."""
+        options: dict[str, object] = {}
         if self.scanner is Scanner.TRIVY:
-            return {
-                "scanners": self.trivy_scanners,
-                "severity": self.trivy_severity,
-                "ignore_unfixed": self.ignore_unfixed,
-            }
-        return {}
+            options["scanners"] = self.trivy_scanners
+            options["severity"] = self.trivy_severity
+            options["ignore_unfixed"] = self.ignore_unfixed
+
+        if self.target_type is TargetType.IMAGE:
+            if self.registry_id is not None:
+                options["registry_id"] = self.registry_id
+            options["generate_sbom"] = self.generate_sbom
+            if self.generate_sbom and self.sbom_format:
+                options["sbom_format"] = self.sbom_format
+        elif self.target_type is TargetType.REPOSITORY:
+            if self.git_credential_id is not None:
+                options["git_credential_id"] = self.git_credential_id
+            for key, value in (("branch", self.branch), ("commit", self.commit), ("tag", self.tag)):
+                if value:
+                    options[key] = value.strip()
+        elif self.target_type is TargetType.FILESYSTEM:
+            options["generate_sbom"] = self.generate_sbom
+            if self.generate_sbom and self.sbom_format:
+                options["sbom_format"] = self.sbom_format
+        return options
 
 
 class ScanOut(BaseModel):

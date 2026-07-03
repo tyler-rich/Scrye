@@ -128,11 +128,14 @@ scrye/
 │   ├── app/
 │   │   ├── main.py      # FastAPI app: API + SPA serving, startup key check,
 │   │   │                #   scan-worker lifecycle
-│   │   ├── api/         # routers: health, auth, users, audit, scans
+│   │   ├── api/         # routers: health, auth, users, audit, scans,
+│   │   │                #   registries, git_credentials, docker_environments
 │   │   ├── auth/        # passwords (argon2id), sessions, RBAC/CSRF deps
-│   │   ├── core/        # config, crypto (AES-GCM envelope), logging/redaction,
-│   │   │                #   masking, rate limiting, audit helper, artifact store
-│   │   ├── scanners/    # Trivy/Grype orchestration + JSON normalization
+│   │   ├── core/        # config, crypto (AES-GCM envelope), secret_store,
+│   │   │                #   logging/redaction, masking, rate limiting, audit
+│   │   │                #   helper, artifact store, docker_proxy, registry_check
+│   │   ├── scanners/    # Trivy/Grype/Syft orchestration + JSON normalization,
+│   │   │                #   credential materialization, target resolution
 │   │   ├── workers/     # in-process async scan worker (interface + impl)
 │   │   └── db/          # SQLAlchemy base + session + models/
 │   ├── alembic/         # migration environment + versions
@@ -143,9 +146,11 @@ scrye/
 │   ├── src/
 │   │   ├── theme.ts     # teal Mantine theme
 │   │   ├── auth/        # AuthContext (login state + actions)
-│   │   ├── pages/       # dashboard, login, setup, scans (list/new/detail)
-│   │   ├── components/  # shared components (toggle, user menu, badges)
-│   │   └── api/         # API client (CSRF-aware fetch wrapper)
+│   │   ├── pages/       # dashboard, login, setup, scans (list/new/detail),
+│   │   │                #   settings (registries / git / docker environments)
+│   │   ├── components/  # shared components (toggle, user menu, badges),
+│   │   │                #   settings/ panels
+│   │   └── api/         # API client (CSRF-aware fetch + multipart upload)
 │   ├── vite.config.ts
 │   └── package.json
 └── docker/

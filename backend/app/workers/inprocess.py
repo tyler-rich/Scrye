@@ -16,11 +16,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from contextlib import nullcontext
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.artifacts import artifact_path, store_artifact
+from app.core.logging import redact
 from app.core.timeutil import utcnow
 from app.db.models import (
     SEVERITY_RANK,
@@ -32,8 +34,18 @@ from app.db.models import (
     Scanner,
     ScanStatus,
     Severity,
+    TargetType,
 )
-from app.scanners import ScanExecution, ScannerError, get_scanner
+from app.scanners import BaseScanner, ScanExecution, ScannerError, get_scanner, syft
+from app.scanners.credentials import docker_config_env, git_clone_auth
+from app.scanners.syft import SbomResult
+from app.scanners.targets import (
+    TargetError,
+    resolve_filesystem_path,
+    resolve_git_auth,
+    resolve_registry_auth,
+    resolve_sbom_path,
+)
 from app.workers.base import ScanWorker
 
 logger = logging.getLogger(__name__)
@@ -167,17 +179,25 @@ class InProcessScanWorker(ScanWorker):
             logger.info("Scan %d was %s before start; skipping.", scan.id, scan.status.value)
             return
         session.refresh(scan)
-        logger.info("Scan %d started: %s %s", scan.id, scan.scanner.value, scan.target)
+        logger.info(
+            "Scan %d started: %s %s %s",
+            scan.id,
+            scan.scanner.value,
+            scan.target_type.value,
+            scan.target,
+        )
 
         try:
-            scanner = get_scanner(scan.scanner)
-            execution = await scanner.scan_image(scan.target, scan.options or {})
+            execution, sbom = await self._dispatch(session, scan)
         except ScannerError as exc:
+            # ScannerError/TargetError messages are operator-safe, but repo scans
+            # can surface a scanner stderr that echoes a credential-embedded URL;
+            # redact() strips URL userinfo before the message is stored/logged.
             self._fail(session, scan.id, str(exc))
-            logger.info("Scan %d failed: %s", scan.id, exc)
+            logger.info("Scan %d failed: %s", scan.id, redact(str(exc)))
             return
 
-        self._persist_success(session, scan, execution)
+        self._persist_success(session, scan, execution, sbom)
         logger.info(
             "Scan %d succeeded: %d finding(s), highest=%s",
             scan.id,
@@ -185,10 +205,77 @@ class InProcessScanWorker(ScanWorker):
             scan.highest_severity.value if scan.highest_severity else "none",
         )
 
-    def _persist_success(self, session: Session, scan: Scan, execution: ScanExecution) -> None:
-        """Store the raw artifact and normalized findings; mark succeeded."""
+    async def _dispatch(
+        self, session: Session, scan: Scan
+    ) -> tuple[ScanExecution, SbomResult | None]:
+        """Run the scan appropriate to its target type, resolving credentials.
+
+        Returns the parsed execution plus an optional Syft SBOM (when the scan
+        requested one). Registry/git secrets are decrypted here and materialized
+        into tmpfs only for the duration of the subprocess.
+        """
+        scanner = get_scanner(scan.scanner)
+        options = scan.options or {}
+        target_type = scan.target_type
+
+        if target_type is TargetType.IMAGE:
+            return await self._scan_image(session, scanner, scan, options)
+        if target_type is TargetType.REPOSITORY:
+            return await self._scan_repo(session, scanner, scan, options), None
+        if target_type is TargetType.FILESYSTEM:
+            path = resolve_filesystem_path(scan.target)
+            sbom = await self._maybe_sbom(f"dir:{path}", options, None)
+            execution = await scanner.scan_filesystem(path, options)
+            return execution, sbom
+        if target_type is TargetType.SBOM:
+            path = resolve_sbom_path(session, scan)
+            return await scanner.scan_sbom(path, options), None
+        raise TargetError(f"Unsupported target type {target_type.value!r}.")
+
+    async def _scan_image(
+        self, session: Session, scanner: BaseScanner, scan: Scan, options: dict
+    ) -> tuple[ScanExecution, SbomResult | None]:
+        """Scan an image, materializing registry credentials into tmpfs if set.
+
+        The credential file lives only for the lifetime of the ``with`` block —
+        which wraps both the optional SBOM pass and the vulnerability scan — and
+        is shredded on exit, even on cancellation or error.
+        """
+        auth = resolve_registry_auth(session, options)
+        context = docker_config_env(auth) if auth is not None else nullcontext({})
+        with context as overlay:
+            env = overlay or None
+            sbom = await self._maybe_sbom(scan.target, options, env)
+            execution = await scanner.scan_image(scan.target, options, env=env)
+        return execution, sbom
+
+    async def _scan_repo(
+        self, session: Session, scanner: BaseScanner, scan: Scan, options: dict
+    ) -> ScanExecution:
+        """Scan a git repository, authenticating a private clone if configured."""
+        auth = resolve_git_auth(session, options)
+        if auth is not None:
+            clone_url, overlay = git_clone_auth(scan.target, auth)
+        else:
+            clone_url, overlay = scan.target, {}
+        return await scanner.scan_repo(clone_url, options, env=overlay or None)
+
+    async def _maybe_sbom(
+        self, source: str, options: dict, env: dict[str, str] | None
+    ) -> SbomResult | None:
+        """Generate a Syft SBOM for ``source`` when the scan requested one."""
+        if not options.get("generate_sbom"):
+            return None
+        return await syft.generate_sbom(source, options.get("sbom_format"), env=env)
+
+    def _persist_success(
+        self, session: Session, scan: Scan, execution: ScanExecution, sbom: SbomResult | None
+    ) -> None:
+        """Store artifacts (raw output + optional SBOM) and findings; succeed."""
         filename, kind = _RAW_ARTIFACT[scan.scanner]
+        written: list[str] = []
         stored = store_artifact(scan.id, filename, execution.raw_output)
+        written.append(stored.relative_path)
         session.add(
             Artifact(
                 scan_id=scan.id,
@@ -200,6 +287,21 @@ class InProcessScanWorker(ScanWorker):
                 sha256=stored.sha256,
             )
         )
+
+        if sbom is not None:
+            stored_sbom = store_artifact(scan.id, sbom.filename, sbom.raw_output)
+            written.append(stored_sbom.relative_path)
+            session.add(
+                Artifact(
+                    scan_id=scan.id,
+                    kind=ArtifactKind.SBOM,
+                    filename=sbom.filename,
+                    content_type="application/json",
+                    relative_path=stored_sbom.relative_path,
+                    size_bytes=stored_sbom.size_bytes,
+                    sha256=stored_sbom.sha256,
+                )
+            )
 
         for nf in execution.findings:
             session.add(
@@ -229,21 +331,22 @@ class InProcessScanWorker(ScanWorker):
         try:
             session.commit()
         except Exception:
-            # The artifact bytes were already written to disk; if the row that
-            # would own them fails to commit, remove the file so it doesn't
-            # accumulate as an orphan. Re-raise so _execute marks the scan failed.
-            with contextlib.suppress(OSError, ValueError):
-                artifact_path(stored.relative_path).unlink(missing_ok=True)
+            # The artifact bytes were already written to disk; if the rows that
+            # would own them fail to commit, remove the files so they don't
+            # accumulate as orphans. Re-raise so _execute marks the scan failed.
+            for relative_path in written:
+                with contextlib.suppress(OSError, ValueError):
+                    artifact_path(relative_path).unlink(missing_ok=True)
             raise
 
     def _fail(self, session: Session, scan_id: int, message: str) -> None:
-        """Mark a scan failed with a safe error message (best-effort)."""
+        """Mark a scan failed with a safe, secret-redacted error message."""
         try:
             scan = session.get(Scan, scan_id)
             if scan is None:
                 return
             scan.status = ScanStatus.FAILED
-            scan.error = message
+            scan.error = redact(message)
             scan.finished_at = utcnow()
             session.commit()
         except Exception:  # noqa: BLE001 - never mask the original failure

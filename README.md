@@ -213,6 +213,7 @@ Configuration is driven by environment variables (prefix `SCRYE_`). The
 | `SCRYE_MAX_CONCURRENT_SCANS`| `2`                          | Max scans the in-process worker runs at once.                     |
 | `SCRYE_SCAN_TIMEOUT_SECONDS`| `1800`                       | Per-scan wall-clock timeout (seconds).                            |
 | `SCRYE_ARTIFACTS_DIR`       | `/data/artifacts`            | Directory holding raw scanner artifacts (JSON output, SBOMs).     |
+| `SCRYE_FILESYSTEM_SCAN_ROOTS` | _(empty)_                  | Comma-separated absolute paths under which filesystem (`dir:`) scans are allowed. Empty disables filesystem scanning. |
 | `SCRYE_FRONTEND_DIST_DIR`   | `/app/frontend/dist`         | Directory of the built SPA served by FastAPI.                     |
 
 ### The master key
@@ -233,24 +234,35 @@ secrets can be re-encrypted, after which the old line can be removed.
 
 ## Usage
 
-**Available now (Phase 2 — image scanning):**
+**Available now (Phase 3 — targets & registries):**
 
-- **Run an image scan** — from **New scan**, choose **Trivy** or **Grype** and
-  enter a container image reference (e.g. `alpine:3.19` or
-  `ghcr.io/org/app:tag`). For Trivy, pick which scanners run
-  (vulnerabilities / misconfigurations / secrets / licenses), an optional
-  severity filter, and whether to ignore unfixed vulnerabilities. Grype scans
-  for vulnerabilities only. The in-process async worker runs the official binary
-  under a concurrency limit and parses its JSON output.
-- **Read results** — the **scan detail** page shows live status while the scan
-  runs, then a severity summary and a normalized findings table (both scanners
-  render in one shape). Filter findings by severity or class.
-- **Raw artifacts** — every completed scan stores the scanner's original JSON
-  verbatim as the source of truth; download it from the scan detail page.
+- **Image scans** — from **New scan**, pick target type **Image**, choose
+  **Trivy** or **Grype**, and enter a reference (e.g. `alpine:3.19` or
+  `ghcr.io/org/app:tag`). For a private registry, select a **registry
+  credential** (Settings → Registries); Scrye materializes a transient Docker
+  config in tmpfs for the scan and shreds it afterward. For Trivy, pick which
+  scanners run and an optional severity filter. Optionally toggle **Generate
+  SBOM** to also produce a Syft SBOM artifact.
+- **Repository scans (Trivy)** — target type **Repository**, enter an HTTPS
+  clone URL, and optionally set a branch / commit / tag. For a private repo,
+  select a **git credential** (Settings → Git providers): GitHub/GitLab use the
+  provider token env vars, and a generic host uses a transient credential-in-URL
+  that is never stored or logged.
+- **Filesystem scans (Grype)** — target type **Filesystem**, enter an absolute
+  path. Filesystem scanning is off by default; an admin must allow paths via
+  `SCRYE_FILESYSTEM_SCAN_ROOTS`, and targets outside those roots are rejected.
+- **SBOM scans (Grype)** — target type **SBOM**, upload a CycloneDX / SPDX /
+  Syft JSON file; Scrye stores it as the scan input and runs `grype sbom:…`.
+- **Scan running images** — Settings → Docker environments: register a
+  read-only `docker-socket-proxy` URL, acknowledge the residual risk, then
+  **enumerate** images and scan any listed reference as an image target.
+- **Read results & raw artifacts** — the **scan detail** page shows live status,
+  a severity summary, and a normalized findings table; every completed scan
+  stores the scanner's original JSON (and any generated SBOM) verbatim as the
+  source of truth, downloadable from the scan detail page.
 
-**Coming in later phases:** git-repository / filesystem / SBOM targets and
-private-registry credentials (Phase 3); history, scan diff, and CSV/Markdown/JSON
-exports (Phase 4); OIDC, backup/restore, and settings (Phase 5).
+**Coming in later phases:** history, scan diff, and CSV/Markdown/JSON exports
+(Phase 4); OIDC, backup/restore, and the remaining settings (Phase 5).
 
 Scanner options that stay write-only and secret (registry / git / OIDC
 credentials, API tokens) are entered once and never returned in plaintext — the
@@ -311,10 +323,11 @@ Build order (see [`docs/PLAN.md`](./docs/PLAN.md) §12):
   (argon2id) + revocable sessions + RBAC + first-admin bootstrap; AES-256-GCM
   envelope encryption with master-key rotation; write-only secret pattern + log
   redaction; CSRF + auth rate limiting; audit log.
-- **Phase 2** — core scanning (Trivy image + Grype image), async worker,
+- **Phase 2 — Core scanning** ✅ — Trivy image + Grype image, async worker,
   normalized findings, scan detail + raw artifacts.
-- **Phase 3** — Trivy repo + git creds; Grype filesystem/SBOM; Syft SBOM;
-  registry credentials; Docker-environment enumeration.
+- **Phase 3 — Targets & registries** ✅ _(this release)_ — Trivy repo + git
+  creds; Grype filesystem/SBOM; Syft SBOM generation; registry credentials with
+  transient tmpfs docker-config materialization; Docker-environment enumeration.
 - **Phase 4** — history, filters, scan diff/trend, exports.
 - **Phase 5** — full settings, OIDC + MFA, backup/restore, scheduled backups.
 - **Phase 6** — dashboard, notifications, scheduled scans, API tokens,

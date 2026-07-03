@@ -9,9 +9,10 @@ import { LoginPage } from './pages/LoginPage';
 import { NewScanPage } from './pages/NewScanPage';
 import { ScanDetailPage } from './pages/ScanDetailPage';
 import { ScansPage } from './pages/ScansPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { SetupPage } from './pages/SetupPage';
 
-const NAV_LINKS = [
+const BASE_NAV_LINKS = [
   { to: '/', label: 'Dashboard' },
   { to: '/scans', label: 'Scans' },
   { to: '/scans/new', label: 'New scan' },
@@ -20,10 +21,15 @@ const NAV_LINKS = [
 /** Header navigation links, highlighting the active section. */
 function NavLinks() {
   const { pathname } = useLocation();
+  const { user } = useAuth();
   const isActive = (to: string) => (to === '/' ? pathname === '/' : pathname.startsWith(to));
+  const links =
+    user && user.role !== 'viewer'
+      ? [...BASE_NAV_LINKS, { to: '/settings', label: 'Settings' }]
+      : BASE_NAV_LINKS;
   return (
     <Group gap="xs" visibleFrom="sm">
-      {NAV_LINKS.map((link) => (
+      {links.map((link) => (
         <Button
           key={link.to}
           component={Link}
@@ -87,6 +93,7 @@ export function App() {
           <Route path="/scans" element={<ScansPage />} />
           <Route path="/scans/new" element={<NewScanPage />} />
           <Route path="/scans/:scanId" element={<ScanDetailPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppShell.Main>
