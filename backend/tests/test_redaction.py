@@ -58,6 +58,30 @@ class TestRedact:
         assert redact("token_count=42") == "token_count=42"
         assert redact("duration=4.2s count=42") == "duration=4.2s count=42"
 
+    def test_near_miss_keys_that_end_in_a_non_secret_word(self) -> None:
+        # Keys that carry a secret word but do NOT end in one describe/qualify a
+        # secret rather than being one, so their (non-secret) value is preserved.
+        # `*_hint`, `*_type`, `*_santa`, `*_field` are all metadata, not the value.
+        for text in (
+            "password_hint=reset via email",  # a hint, not the password
+            "token_type=Bearer",  # OAuth token *type*, not the token
+            "secret_santa=alice",  # not a secret at all
+            "not_a_password_field=whatever",  # ends in 'field'
+        ):
+            assert redact(text) == text, f"unexpectedly redacted: {text!r}"
+
+    def test_expiry_style_metadata_is_not_redacted(self) -> None:
+        # `access_token_expiry` names *when a token expires* (a timestamp), not
+        # the token itself — the secret word 'token' is mid-key, not the tail,
+        # so the timestamp value is kept. Contrast with the bare `access_token`,
+        # which is the credential and IS redacted. If a contains-based policy is
+        # ever preferred over this suffix rule, this is the case that flips.
+        assert (
+            redact("access_token_expiry=2026-01-01T00:00:00Z")
+            == "access_token_expiry=2026-01-01T00:00:00Z"
+        )
+        assert redact("access_token=abc.def.ghi") == f"access_token={REDACTED}"
+
 
 class TestRedactionFilter:
     def _capture(self) -> tuple[logging.Logger, io.StringIO]:
