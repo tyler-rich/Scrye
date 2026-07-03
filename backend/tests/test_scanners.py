@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 
 from app.db.models import FindingClass, Severity
-from app.scanners import base, grype, trivy
+from app.scanners import base, grype, syft, trivy
 
 # --- Trivy: command building -------------------------------------------------
 
@@ -245,3 +245,56 @@ def test_tally_severities_counts_every_level() -> None:
     assert counts[Severity.CRITICAL] == 1
     assert counts[Severity.NEGLIGIBLE] == 1
     assert counts[Severity.LOW] == 0
+
+
+# --- Trivy repo command (Phase 3) --------------------------------------------
+
+
+def test_trivy_repo_command_basic() -> None:
+    argv = trivy.build_repo_command("trivy", "https://github.com/org/repo.git", {})
+    assert argv[:2] == ["trivy", "repo"]
+    assert argv[-1] == "https://github.com/org/repo.git"
+    assert argv[argv.index("--scanners") + 1] == "vuln,misconfig,secret,license"
+
+
+def test_trivy_repo_command_adds_single_ref_selector() -> None:
+    argv = trivy.build_repo_command(
+        "trivy", "https://x/y.git", {"branch": "main", "commit": "abc123"}
+    )
+    # Only the first set selector (branch) is emitted; Trivy accepts just one.
+    assert "--branch" in argv and argv[argv.index("--branch") + 1] == "main"
+    assert "--commit" not in argv
+    assert "--tag" not in argv
+
+
+def test_trivy_repo_command_tag_selector() -> None:
+    argv = trivy.build_repo_command("trivy", "https://x/y.git", {"tag": "v1.2.3"})
+    assert argv[argv.index("--tag") + 1] == "v1.2.3"
+
+
+# --- Grype filesystem / SBOM references (Phase 3) ----------------------------
+
+
+def test_grype_command_accepts_dir_and_sbom_references() -> None:
+    assert grype.build_command("grype", "dir:/srv/app") == ["grype", "dir:/srv/app", "-o", "json"]
+    assert grype.build_command("grype", "sbom:/tmp/s.json")[1] == "sbom:/tmp/s.json"
+
+
+def test_grype_scan_env_layers_overlay_over_update_check() -> None:
+    env = grype.scan_env({"DOCKER_CONFIG": "/tmp/cfg"})
+    assert env["GRYPE_CHECK_FOR_APP_UPDATE"] == "false"
+    assert env["DOCKER_CONFIG"] == "/tmp/cfg"
+
+
+# --- Syft SBOM generation (Phase 3) ------------------------------------------
+
+
+def test_syft_command_and_default_format() -> None:
+    argv = syft.build_command("syft", "alpine:3.19", "cyclonedx-json")
+    assert argv == ["syft", "--quiet", "-o", "cyclonedx-json", "alpine:3.19"]
+
+
+def test_syft_resolve_format_defaults_and_validates() -> None:
+    assert syft.resolve_format(None) == "cyclonedx-json"
+    assert syft.resolve_format("bogus") == "cyclonedx-json"
+    assert syft.resolve_format("spdx-json") == "spdx-json"

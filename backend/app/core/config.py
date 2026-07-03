@@ -137,6 +137,14 @@ class Settings(BaseSettings):
         default=Path("/data/artifacts"),
         description="Directory holding raw scanner artifacts (JSON output, SBOMs).",
     )
+    filesystem_scan_roots: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Comma-separated absolute paths under which filesystem (Grype 'dir:') "
+            "scans are allowed. Empty disables filesystem scanning so arbitrary "
+            "host paths (e.g. the database or secret files) can never be read."
+        ),
+    )
 
     # --- Frontend ----------------------------------------------------------
     frontend_dist_dir: Path = Field(

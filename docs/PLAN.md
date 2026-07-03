@@ -601,3 +601,68 @@ cancellation semantics. The in-process worker (locked §0.2) has no channel to
 interrupt a live scanner subprocess, so cancelling a running scan cannot be done
 safely in v1; queued cancellation is the useful, well-defined subset.
 **Plan section affected:** §12 (Phase 2 scope), §0.2.
+
+### 2026-07-03 — Phase P3 — Filesystem scans gated behind an allowlist
+**What changed:** Filesystem (Grype `dir:`) scanning is disabled unless the admin
+sets `SCRYE_FILESYSTEM_SCAN_ROOTS` to one or more absolute paths; a scan target
+must resolve to a path within an allowed root or it is rejected (at create time
+and again in the worker).
+**Why:** §4.2 lists "filesystem/directory (mounted path)" as a target but does
+not constrain which paths are scannable. Allowing arbitrary absolute paths would
+let an operator read sensitive host files (the SQLite DB, the master-key file) as
+scan output. Restricting to configured roots (empty = feature off) is a
+security-model hardening consistent with the plan's security-first principle. The
+new non-sensitive setting is emitted in `.env.example`.
+**Plan section affected:** §4.2 (Grype filesystem target).
+
+### 2026-07-03 — Phase P3 — Git authentication mechanism per provider
+**What changed:** Private `trivy repo` clones authenticate by provider:
+GitHub/GitLab credentials are passed via the `GITHUB_TOKEN` / `GITLAB_TOKEN`
+environment variables Trivy honors, while a `generic` provider embeds
+`username:token` into the transient HTTPS clone URL (never stored, never logged).
+A URL-userinfo redaction pattern was added to the logging filter and applied to
+stored scan errors so an embedded credential can never surface via logs or a
+scanner stderr.
+**Why:** §4.1 requires "private uses stored git credential → `trivy repo <url>`"
+but does not specify the mechanism. Env tokens are Trivy's documented, no-leak
+path for the hosted providers; URL embedding is the generic fallback, hardened
+with redaction.
+**Plan section affected:** §4.1 (Trivy repo target), §6 (logging redaction).
+
+### 2026-07-03 — Phase P3 — SBOM generation is an opt-in per-scan pass
+**What changed:** Syft SBOM generation is a per-scan option (`generate_sbom` +
+`sbom_format`) on image and filesystem scans that runs Syft as a second pass and
+stores the SBOM as a downloadable artifact. Grype SBOM *targets* are launched via
+a dedicated multipart upload endpoint (`POST /api/scans/sbom`) that stores the
+uploaded SBOM as the scan's input artifact.
+**Why:** §4.2's note ("generate one SBOM per artifact with Syft, hand it to both
+Grype and store it") describes the intent but not the UX. Making SBOM generation
+explicit (rather than always-on) keeps default scans fast, and a dedicated upload
+endpoint is the natural way to feed an "existing SBOM" that arrives as a file
+rather than a JSON reference. Feeding the generated SBOM back into the same Grype
+run (one cataloging pass) is left as a future optimization.
+**Plan section affected:** §4.2 (Grype SBOM/filesystem, Syft).
+
+### 2026-07-03 — Phase P3 — Registry credential helpers configured but not bundled
+**What changed:** Registry auth types include `aws_ecr` / `google_gcr` /
+`azure_acr`, which generate a Docker `credHelpers` config at scan time. The helper
+binaries themselves are **not** bundled in the v1 image; those auth types work
+only where the matching helper is present in the runtime environment. The two
+static auth types (`username_password`, `token`) are fully supported end to end.
+**Why:** §4.2 explicitly notes helper binaries are "present only if that registry
+type is enabled." Bundling cloud helper binaries by default would bloat the image
+and pull in unvetted dependencies; generating the correct config while leaving the
+binary as a deployment add-on matches the plan and keeps the base image lean.
+**Plan section affected:** §4.2 (private registries, credential helpers).
+
+### 2026-07-03 — Phase P3 — Runtime deps (httpx, python-multipart) and read scope
+**What changed:** `httpx` (Docker-proxy + registry-test HTTP) and
+`python-multipart` (SBOM upload) were moved/added to runtime dependencies.
+Registry/git-credential **read** (masked list) is allowed for the `operator` role
+so operators can select a credential when launching a scan; all mutations and the
+registry connectivity test remain `admin`-only.
+**Why:** §2's tech-stack table did not enumerate these transport/runtime libs;
+both are pinned, current, and vetted. §5 assigns credential *management* to admin
+but scanning is an operator action that must reference a credential by name, so a
+masked read for operators is required and exposes no secret material.
+**Plan section affected:** §2 (Tech stack), §5 (RBAC).

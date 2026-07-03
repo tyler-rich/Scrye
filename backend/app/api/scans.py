@@ -7,9 +7,21 @@ state-changing operations.
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -22,13 +34,16 @@ from app.api.scan_schemas import (
     ScanOut,
 )
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
-from app.core.artifacts import artifact_path
+from app.core.artifacts import artifact_path, store_artifact
 from app.core.audit import record_audit
 from app.core.timeutil import utcnow
 from app.db.models import (
     Artifact,
+    ArtifactKind,
     Finding,
     FindingClass,
+    GitCredential,
+    Registry,
     Role,
     Scan,
     Scanner,
@@ -37,6 +52,7 @@ from app.db.models import (
     TargetType,
 )
 from app.db.session import get_db
+from app.scanners.targets import TargetError, resolve_filesystem_path
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +60,19 @@ router = APIRouter(prefix="/scans", tags=["scans"])
 
 _viewer = require_role(Role.VIEWER)
 _operator = require_role(Role.OPERATOR)
+
+#: Which scanners may run against each target type (docs/PLAN.md §4).
+_ALLOWED_SCANNERS: dict[TargetType, set[Scanner]] = {
+    TargetType.IMAGE: {Scanner.TRIVY, Scanner.GRYPE},
+    TargetType.REPOSITORY: {Scanner.TRIVY},
+    TargetType.FILESYSTEM: {Scanner.GRYPE},
+    TargetType.SBOM: {Scanner.GRYPE},
+}
+
+#: Filename used to store an uploaded SBOM (the display target keeps the original).
+_UPLOADED_SBOM_FILENAME = "uploaded-sbom.json"
+#: Maximum accepted uploaded-SBOM size (SBOMs are JSON; 25 MiB is generous).
+_MAX_SBOM_UPLOAD_BYTES = 25 * 1024 * 1024
 
 
 def _get_scan_or_404(db: Session, scan_id: int) -> Scan:
@@ -54,6 +83,44 @@ def _get_scan_or_404(db: Session, scan_id: int) -> Scan:
     return scan
 
 
+def _reject_unsupported_combo(target_type: TargetType, scanner: Scanner) -> None:
+    """Raise 422 if ``scanner`` cannot run against ``target_type``."""
+    if scanner not in _ALLOWED_SCANNERS[target_type]:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{scanner.value} does not support {target_type.value} targets.",
+        )
+
+
+async def _queue_scan(request: Request, db: Session, scan: Scan, auth: AuthContext) -> ScanOut:
+    """Persist a queued scan, audit it, hand it to the worker, and return it."""
+    db.add(scan)
+    db.flush()
+    record_audit(
+        db,
+        action="scan.created",
+        actor=auth.user,
+        ip=client_ip(request),
+        target_type="scan",
+        target_id=str(scan.id),
+        details={
+            "scanner": scan.scanner.value,
+            "target_type": scan.target_type.value,
+            "target": scan.target,
+        },
+    )
+    db.commit()
+    await request.app.state.scan_worker.submit(scan.id)
+    logger.info(
+        "Queued scan %d (%s %s %s).",
+        scan.id,
+        scan.scanner.value,
+        scan.target_type.value,
+        scan.target,
+    )
+    return ScanOut.model_validate(scan)
+
+
 @router.post("", response_model=ScanOut, status_code=status.HTTP_201_CREATED)
 async def create_scan(
     payload: ScanCreateIn,
@@ -62,16 +129,42 @@ async def create_scan(
     _: AuthContext = Depends(_operator),
     db: Session = Depends(get_db),
 ) -> ScanOut:
-    """Queue a new scan and hand it to the worker.
+    """Queue an image, repository, or filesystem scan and hand it to the worker.
 
-    Phase 2 supports image targets only; other target types are rejected until
-    Phase 3 adds them.
+    SBOM targets are launched via ``POST /scans/sbom`` (they carry an uploaded
+    file). Registry/git credentials are referenced by id and resolved — and
+    decrypted — only when the worker runs the scan.
     """
-    if payload.target_type is not TargetType.IMAGE:
+    if payload.target_type is TargetType.SBOM:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Target type '{payload.target_type.value}' is not supported yet.",
+            detail="SBOM scans require a file upload; use POST /api/scans/sbom.",
         )
+    _reject_unsupported_combo(payload.target_type, payload.scanner)
+
+    if (
+        payload.target_type is TargetType.IMAGE
+        and payload.registry_id is not None
+        and db.get(Registry, payload.registry_id) is None
+    ):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The selected registry does not exist."
+        )
+    if (
+        payload.target_type is TargetType.REPOSITORY
+        and payload.git_credential_id is not None
+        and db.get(GitCredential, payload.git_credential_id) is None
+    ):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The selected git credential does not exist.",
+        )
+    if payload.target_type is TargetType.FILESYSTEM:
+        # Reject an out-of-bounds or missing path up front (the worker re-checks).
+        try:
+            resolve_filesystem_path(payload.target)
+        except TargetError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     scan = Scan(
         scanner=payload.scanner,
@@ -83,22 +176,66 @@ async def create_scan(
         created_by_id=auth.user.id,
         created_by_username=auth.user.username,
     )
+    return await _queue_scan(request, db, scan, auth)
+
+
+@router.post("/sbom", response_model=ScanOut, status_code=status.HTTP_201_CREATED)
+async def create_sbom_scan(
+    request: Request,
+    file: UploadFile = File(..., description="An SBOM file (CycloneDX/SPDX/Syft JSON)."),
+    scanner: Scanner = Form(Scanner.GRYPE),
+    auth: AuthContext = Depends(require_csrf),
+    _: AuthContext = Depends(_operator),
+    db: Session = Depends(get_db),
+) -> ScanOut:
+    """Queue a Grype scan of an uploaded SBOM (``grype sbom:<file>``).
+
+    The SBOM is stored as the scan's input artifact; the worker feeds it to
+    Grype. Only Grype scans SBOMs (docs/PLAN.md §4.2).
+    """
+    _reject_unsupported_combo(TargetType.SBOM, scanner)
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The SBOM file is empty.")
+    if len(data) > _MAX_SBOM_UPLOAD_BYTES:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"SBOM exceeds the {_MAX_SBOM_UPLOAD_BYTES // (1024 * 1024)} MiB limit.",
+        )
+    try:
+        json.loads(data)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The SBOM file is not valid JSON."
+        ) from exc
+
+    display_name = Path(file.filename or "sbom.json").name or "sbom.json"
+    scan = Scan(
+        scanner=scanner,
+        target_type=TargetType.SBOM,
+        target=display_name[:512],
+        status=ScanStatus.QUEUED,
+        options={},
+        severity_counts={},
+        created_by_id=auth.user.id,
+        created_by_username=auth.user.username,
+    )
     db.add(scan)
     db.flush()
-    record_audit(
-        db,
-        action="scan.created",
-        actor=auth.user,
-        ip=client_ip(request),
-        target_type="scan",
-        target_id=str(scan.id),
-        details={"scanner": scan.scanner.value, "target": scan.target},
+    stored = store_artifact(scan.id, _UPLOADED_SBOM_FILENAME, data)
+    db.add(
+        Artifact(
+            scan_id=scan.id,
+            kind=ArtifactKind.SBOM,
+            filename=_UPLOADED_SBOM_FILENAME,
+            content_type="application/json",
+            relative_path=stored.relative_path,
+            size_bytes=stored.size_bytes,
+            sha256=stored.sha256,
+        )
     )
-    db.commit()
-
-    await request.app.state.scan_worker.submit(scan.id)
-    logger.info("Queued scan %d (%s %s).", scan.id, scan.scanner.value, scan.target)
-    return ScanOut.model_validate(scan)
+    return await _queue_scan(request, db, scan, auth)
 
 
 @router.get("", response_model=list[ScanOut])

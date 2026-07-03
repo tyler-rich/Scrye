@@ -14,10 +14,11 @@ from app.core.config import get_settings
 from app.db.models import FindingClass, Scanner
 from app.scanners.base import (
     DESCRIPTION_LIMIT,
-    ImageScanner,
+    BaseScanner,
     NormalizedFinding,
     ScanExecution,
     ScannerError,
+    build_env,
     clip,
     resolve_binary,
     run_command,
@@ -36,6 +37,36 @@ TRIVY_SCANNERS: tuple[str, ...] = ("vuln", "misconfig", "secret", "license")
 TRIVY_SEVERITIES: tuple[str, ...] = ("UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL")
 
 
+def _common_flags(options: dict[str, Any]) -> list[str]:
+    """Build the flags shared by ``trivy image`` and ``trivy repo``.
+
+    Covers output format, scanner selection, severity filter, ``ignore_unfixed``,
+    and the optional shared Trivy-server vuln-DB cache. Selections are re-ordered
+    into canonical order and unknown tokens dropped, so the argv is stable
+    regardless of how options were supplied.
+    """
+    settings = get_settings()
+    scanners = options.get("scanners") or list(TRIVY_SCANNERS)
+    severities = options.get("severity") or list(TRIVY_SEVERITIES)
+    scanners = [s for s in TRIVY_SCANNERS if s in scanners]
+    severities = [s for s in TRIVY_SEVERITIES if s in severities]
+
+    flags = [
+        "--quiet",
+        "--format",
+        "json",
+        "--scanners",
+        ",".join(scanners),
+        "--severity",
+        ",".join(severities),
+    ]
+    if options.get("ignore_unfixed"):
+        flags.append("--ignore-unfixed")
+    if settings.trivy_server_url:
+        flags += ["--server", settings.trivy_server_url]
+    return flags
+
+
 def build_command(binary: str, target: str, options: dict[str, Any]) -> list[str]:
     """Build the ``trivy image`` argument vector.
 
@@ -47,28 +78,27 @@ def build_command(binary: str, target: str, options: dict[str, Any]) -> list[str
     Returns:
         The full argv list.
     """
-    settings = get_settings()
-    scanners = options.get("scanners") or list(TRIVY_SCANNERS)
-    severities = options.get("severity") or list(TRIVY_SEVERITIES)
-    # Preserve canonical ordering regardless of how options were supplied.
-    scanners = [s for s in TRIVY_SCANNERS if s in scanners]
-    severities = [s for s in TRIVY_SEVERITIES if s in severities]
+    return [binary, "image", *_common_flags(options), target]
 
-    argv = [
-        binary,
-        "image",
-        "--quiet",
-        "--format",
-        "json",
-        "--scanners",
-        ",".join(scanners),
-        "--severity",
-        ",".join(severities),
-    ]
-    if options.get("ignore_unfixed"):
-        argv.append("--ignore-unfixed")
-    if settings.trivy_server_url:
-        argv += ["--server", settings.trivy_server_url]
+
+def build_repo_command(binary: str, target: str, options: dict[str, Any]) -> list[str]:
+    """Build the ``trivy repo`` argument vector.
+
+    Args:
+        binary: Resolved Trivy executable path.
+        target: The repository clone URL.
+        options: Validated scan options; may carry a single ``branch``,
+            ``commit``, or ``tag`` to check out.
+
+    Returns:
+        The full argv list.
+    """
+    argv = [binary, "repo", *_common_flags(options)]
+    for flag in ("branch", "commit", "tag"):
+        value = options.get(flag)
+        if value:
+            argv += [f"--{flag}", str(value)]
+            break  # Trivy accepts only one ref selector; first set wins.
     argv.append(target)
     return argv
 
@@ -184,21 +214,20 @@ def _parse_licenses(items: Any, target: str | None) -> list[NormalizedFinding]:
     return out
 
 
-class TrivyImageScanner(ImageScanner):
-    """Scans a container image with ``trivy image`` (all selected scanners)."""
+class TrivyScanner(BaseScanner):
+    """Scans images and git repositories with Trivy (all selected scanners)."""
 
     scanner = Scanner.TRIVY
 
-    async def scan_image(self, target: str, options: dict[str, Any]) -> ScanExecution:
-        """Run Trivy against ``target`` and normalize the results.
+    async def _execute(self, argv: list[str], *, env: dict[str, str] | None) -> ScanExecution:
+        """Run a Trivy argv to completion and normalize its JSON output.
 
         Raises:
             ScannerError: If the binary is missing, times out, or exits non-zero.
         """
-        settings = get_settings()
-        binary = resolve_binary(settings.trivy_binary)
-        argv = build_command(binary, target, options)
-        result = await run_command(argv, timeout=settings.scan_timeout_seconds)
+        result = await run_command(
+            argv, timeout=get_settings().scan_timeout_seconds, env=build_env(env)
+        )
         if result.returncode != 0:
             detail = result.stderr.decode("utf-8", "replace").strip() or "no error output"
             raise ScannerError(f"Trivy exited with code {result.returncode}: {detail}")
@@ -210,3 +239,17 @@ class TrivyImageScanner(ImageScanner):
             severity_counts=tally_severities(findings),
             command=argv,
         )
+
+    async def scan_image(
+        self, target: str, options: dict[str, Any], *, env: dict[str, str] | None = None
+    ) -> ScanExecution:
+        """Run ``trivy image`` against ``target`` and normalize the results."""
+        binary = resolve_binary(get_settings().trivy_binary)
+        return await self._execute(build_command(binary, target, options), env=env)
+
+    async def scan_repo(
+        self, target: str, options: dict[str, Any], *, env: dict[str, str] | None = None
+    ) -> ScanExecution:
+        """Run ``trivy repo`` against ``target`` (a clone URL) and normalize it."""
+        binary = resolve_binary(get_settings().trivy_binary)
+        return await self._execute(build_repo_command(binary, target, options), env=env)

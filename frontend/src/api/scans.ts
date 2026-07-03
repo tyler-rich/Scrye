@@ -1,6 +1,6 @@
 /** Scan API types and calls (hand-written shim; generated client comes later). */
 
-import { api } from './client';
+import { api, apiUpload } from './client';
 
 export type Scanner = 'trivy' | 'grype';
 export type TargetType = 'image' | 'repository' | 'filesystem' | 'sbom';
@@ -9,6 +9,7 @@ export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'negligible' | '
 export type FindingClass = 'vulnerability' | 'misconfiguration' | 'secret' | 'license';
 export type TrivyScannerName = 'vuln' | 'misconfig' | 'secret' | 'license';
 export type TrivySeverity = 'UNKNOWN' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type SbomFormat = 'cyclonedx-json' | 'spdx-json' | 'syft-json';
 
 /** Severity ordering (worst first) for display and sorting. */
 export const SEVERITY_ORDER: Severity[] = [
@@ -69,10 +70,18 @@ export interface Artifact {
 
 export interface CreateScanInput {
   scanner: Scanner;
+  target_type?: TargetType;
   target: string;
   trivy_scanners?: TrivyScannerName[] | null;
   trivy_severity?: TrivySeverity[] | null;
   ignore_unfixed?: boolean;
+  registry_id?: number | null;
+  git_credential_id?: number | null;
+  branch?: string | null;
+  commit?: string | null;
+  tag?: string | null;
+  generate_sbom?: boolean;
+  sbom_format?: SbomFormat | null;
 }
 
 /** True while a scan is still in a non-terminal state (worth polling). */
@@ -92,6 +101,14 @@ export function listScans(
 
 export function createScan(input: CreateScanInput): Promise<Scan> {
   return api<Scan>('/api/scans', { method: 'POST', body: input });
+}
+
+/** Launch a Grype scan of an uploaded SBOM file (multipart). */
+export function createSbomScan(file: File, scanner: Scanner = 'grype'): Promise<Scan> {
+  const form = new FormData();
+  form.append('scanner', scanner);
+  form.append('file', file);
+  return apiUpload<Scan>('/api/scans/sbom', form);
 }
 
 export function getScan(id: number): Promise<Scan> {

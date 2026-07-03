@@ -58,6 +58,15 @@ _KV_PATTERN = re.compile(
 )
 # Authorization header style bearer/basic tokens.
 _BEARER_PATTERN = re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+")
+# URL userinfo credentials: https://user:token@host -> https://[REDACTED]@host.
+# Covers transient credential-embedded git clone URLs (docs/PLAN.md §4.1) so a
+# token can never surface through a logged URL or a stored scanner error.
+_URL_USERINFO_PATTERN = re.compile(r"(?i)\b(https?://)[^/\s@]+@")
+
+
+def strip_url_credentials(text: str) -> str:
+    """Mask ``user:pass@`` userinfo in any ``http(s)`` URL within ``text``."""
+    return _URL_USERINFO_PATTERN.sub(rf"\g<1>{REDACTED}@", text)
 
 
 def redact(text: str) -> str:
@@ -65,7 +74,8 @@ def redact(text: str) -> str:
 
     Args:
         text: Arbitrary log text that may contain ``key=value`` /
-            ``"key": "value"`` pairs or Authorization-style tokens.
+            ``"key": "value"`` pairs, Authorization-style tokens, or URLs with
+            embedded credentials.
 
     Returns:
         The text with secret values replaced by ``[REDACTED]``.
@@ -73,6 +83,7 @@ def redact(text: str) -> str:
     # Bearer/Basic first, so the scheme keyword can't be consumed as a KV value
     # (which would leave the token itself exposed).
     text = _BEARER_PATTERN.sub(rf"\g<1> {REDACTED}", text)
+    text = strip_url_credentials(text)
     return _KV_PATTERN.sub(rf"\g<1>\g<2>{REDACTED}\g<4>", text)
 
 

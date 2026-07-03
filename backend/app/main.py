@@ -22,7 +22,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app import __version__
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
+from app.api.docker_environments import router as docker_environments_router
+from app.api.git_credentials import router as git_credentials_router
 from app.api.health import router as health_router
+from app.api.registries import router as registries_router
 from app.api.scans import router as scans_router
 from app.api.users import router as users_router
 from app.core.config import Settings, get_settings
@@ -138,6 +141,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(users_router, prefix="/api")
     app.include_router(audit_router, prefix="/api")
     app.include_router(scans_router, prefix="/api")
+    app.include_router(registries_router, prefix="/api")
+    app.include_router(git_credentials_router, prefix="/api")
+    app.include_router(docker_environments_router, prefix="/api")
 
     dist_dir = settings.frontend_dist_dir
     if (dist_dir / "index.html").is_file():
