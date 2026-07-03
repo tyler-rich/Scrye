@@ -55,7 +55,9 @@ class _FakeScanner:
         self._execution = execution
         self._error = error
 
-    async def scan_image(self, target: str, options: dict) -> ScanExecution:
+    async def scan_image(
+        self, target: str, options: dict, *, env: dict | None = None
+    ) -> ScanExecution:
         if self._error is not None:
             raise ScannerError(self._error)
         assert self._execution is not None

@@ -61,3 +61,35 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   }
   return (await response.json()) as T;
 }
+
+/**
+ * POST multipart form data (file uploads), echoing the CSRF token like `api`.
+ * Used for endpoints that accept an uploaded file (e.g. SBOM scans).
+ */
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  const csrf = readCookie('scrye_csrf');
+  if (csrf) headers['X-CSRF-Token'] = csrf;
+
+  const response = await fetch(path, {
+    method: 'POST',
+    headers,
+    credentials: 'same-origin',
+    body: form,
+  });
+
+  if (!response.ok) {
+    let detail = `Request failed (${response.status})`;
+    try {
+      const data = (await response.json()) as { detail?: unknown };
+      if (typeof data.detail === 'string') detail = data.detail;
+    } catch {
+      // Non-JSON error body; keep the generic message.
+    }
+    throw new ApiError(response.status, detail);
+  }
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return (await response.json()) as T;
+}

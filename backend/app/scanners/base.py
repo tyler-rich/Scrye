@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import shutil
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -178,29 +179,81 @@ def clip(value: Any, limit: int) -> str | None:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-class ImageScanner(ABC):
-    """Abstract base for a scanner that scans a container image."""
+def build_env(*overlays: dict[str, str] | None) -> dict[str, str] | None:
+    """Merge environment overlays onto the process env.
+
+    Returns ``None`` when no overlay contributes anything, so the caller can let
+    the child simply inherit the parent environment.
+
+    Args:
+        overlays: Zero or more optional ``{name: value}`` overlays, applied in
+            order (later ones win).
+
+    Returns:
+        The full child environment, or ``None`` if every overlay was empty.
+    """
+    if not any(overlays):
+        return None
+    env = dict(os.environ)
+    for overlay in overlays:
+        if overlay:
+            env.update(overlay)
+    return env
+
+
+class BaseScanner(ABC):
+    """Base for a scanner engine, dispatched by target type.
+
+    Each engine implements the target kinds it supports (docs/PLAN.md §4);
+    unsupported combinations raise a clear :class:`ScannerError` rather than
+    silently doing nothing. ``env`` is an optional environment **overlay**
+    (e.g. transient registry/git credentials) applied on top of the process
+    environment for the scanner subprocess.
+    """
 
     scanner: Scanner
 
-    @abstractmethod
-    async def scan_image(self, target: str, options: dict[str, Any]) -> ScanExecution:
-        """Run the scanner against ``target`` and return a parsed execution."""
-        raise NotImplementedError
+    def _unsupported(self, target_kind: str) -> ScannerError:
+        """Build the error for a target kind this engine does not support."""
+        return ScannerError(f"{self.scanner.value} does not support {target_kind} targets.")
+
+    async def scan_image(
+        self, target: str, options: dict[str, Any], *, env: dict[str, str] | None = None
+    ) -> ScanExecution:
+        """Scan a container image reference."""
+        raise self._unsupported("image")
+
+    async def scan_repo(
+        self, target: str, options: dict[str, Any], *, env: dict[str, str] | None = None
+    ) -> ScanExecution:
+        """Scan a git repository (``target`` is the clone URL)."""
+        raise self._unsupported("repository")
+
+    async def scan_filesystem(
+        self, target: str, options: dict[str, Any], *, env: dict[str, str] | None = None
+    ) -> ScanExecution:
+        """Scan a filesystem directory (``target`` is an absolute path)."""
+        raise self._unsupported("filesystem")
+
+    async def scan_sbom(
+        self, target: str, options: dict[str, Any], *, env: dict[str, str] | None = None
+    ) -> ScanExecution:
+        """Scan an existing SBOM file (``target`` is an absolute path)."""
+        raise self._unsupported("SBOM")
 
 
-def get_scanner(scanner: Scanner) -> ImageScanner:
-    """Return the image scanner implementation for ``scanner``.
+def get_scanner(scanner: Scanner) -> BaseScanner:
+    """Return the scanner implementation for ``scanner``.
 
     Imports are local to avoid a circular import at module load time
     (the concrete scanners import :mod:`app.scanners.base`).
     """
     if scanner is Scanner.TRIVY:
-        from app.scanners.trivy import TrivyImageScanner
+        from app.scanners.trivy import TrivyScanner
 
-        return TrivyImageScanner()
+        return TrivyScanner()
     if scanner is Scanner.GRYPE:
-        from app.scanners.grype import GrypeImageScanner
+        from app.scanners.grype import GrypeScanner
 
-        return GrypeImageScanner()
+        return GrypeScanner()
     raise ScannerError(f"No scanner implementation for {scanner!r}.")
