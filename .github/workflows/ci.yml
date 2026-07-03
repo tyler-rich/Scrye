@@ -1,0 +1,85 @@
+# Scrye CI — baseline lint + test pipeline.
+#
+# This is the CI baseline all future phases build on: add new jobs/steps here as
+# the app grows (e.g. the Phase 6 dogfood self-scan that runs Trivy + Grype
+# against Scrye's own image). Per CLAUDE.md locked decisions, there is NO
+# publish/registry job — the image is built locally only.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least-privilege token; CI only needs to read the repo.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — lint + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend (with dev extras)
+        run: pip install -e ".[dev]"
+
+      - name: Lint — ruff
+        run: ruff check .
+
+      - name: Format — black
+        run: black --check .
+
+      - name: Check .env.example is in sync with Settings
+        run: python -m scripts.gen_env_example --check
+
+      - name: Tests — pytest
+        run: pytest -q
+
+  frontend:
+    name: Frontend — lint + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint — ESLint
+        run: npm run lint
+
+      - name: Format — Prettier
+        run: npm run format:check
+
+      # Type-checks (tsc) and bundles; also the frontend test entrypoint as the
+      # suite grows (`npm test` can be added here in a later phase).
+      - name: Build
+        run: npm run build
