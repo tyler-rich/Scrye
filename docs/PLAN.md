@@ -25,6 +25,9 @@ These were decided and are not open for re-litigation during the build:
 6. **Distribution:** Docker image is **built locally only** for now. **Do not** add Docker Hub
    (or any registry) publishing — no registry slot available yet. The image must build cleanly
    and run locally; publishing is a later concern.
+7. **Backend runtime:** **Python 3.13.** (Originally locked to Python 3.12; revised to 3.13 in
+   Phase 6 to resolve Grype-flagged CPython interpreter CVEs whose fixes are only available in
+   3.13+ — see § Deviations for the full rationale.)
 
 ---
 
@@ -58,7 +61,7 @@ scan history, export results to CSV/Markdown/JSON, and include complete project 
 |-------|--------|-------|
 | Frontend | **React 18 + TypeScript + Vite** | |
 | Component library | **Mantine v7** (+ `mantine-datatable`, `@mantine/form`, `@mantine/notifications`, `@mantine/modals`) | Native light/dark, trivial teal `primaryColor`, rich tables/forms. |
-| Backend | **Python 3.12 + FastAPI + Pydantic v2** | Consistent with the Lacunarr stack; strong async subprocess handling. |
+| Backend | **Python 3.13 + FastAPI + Pydantic v2** | Consistent with the Lacunarr stack; strong async subprocess handling. (Bumped from 3.12 in Phase 6 — see § Deviations.) |
 | ORM / migrations | **SQLAlchemy 2.0 + Alembic** | Typed models; migrations gate backup/restore. |
 | Database | **SQLite** | Secrets field-encrypted at the app layer (§6). |
 | Auth | **Authlib** (OIDC) + **argon2-cffi** (local) + **pyotp** (optional TOTP MFA) | Generic OIDC → Pocket ID (RS256). |
@@ -393,7 +396,7 @@ Must include, at minimum:
 Must include:
 - **Code of conduct** pointer (or a short statement).
 - **Local development environment** — step-by-step:
-  - Prereqs (Python 3.12, Node 20+, Docker, `trivy`/`grype`/`syft` for native runs).
+  - Prereqs (Python 3.13, Node 20+, Docker, `trivy`/`grype`/`syft` for native runs).
   - Backend: create venv, install deps, configure a local `app_secret_key`, run Alembic
     migrations, start FastAPI with reload.
   - Frontend: install deps, start the Vite dev server, proxy config to the API.
@@ -1074,6 +1077,8 @@ than relying on FastAPI's floor.
 **Plan section affected:** §2 (Tech stack pins), CLAUDE.md § Dependency hygiene.
 
 ### 2026-07-03 — Phase P6 — Grype gate excludes the CPython interpreter binary
+**(Superseded by the "Backend runtime bumped Python 3.12 → 3.13" entry below — the
+interpreter exclusion was removed once the runtime moved to 3.13.)**
 **What changed:** With the app deps fixed, the Grype gate then failed on the CPython
 interpreter binary (`python 3.12.13`, Grype `binary` type) from the
 `python:3.12-slim-bookworm` base image — a run of HIGH CVEs (CVE-2026-7210, -6100, -4224,
@@ -1100,3 +1105,31 @@ versions; keeping the bundled binary and the matching `trivy-server` image on th
 release continues the Phase 0 convention. Trivy self-verifies the new release against its
 published checksums at build time, so only the version string changed.
 **Plan section affected:** §9.1, §9.2 (bundled/sidecar Trivy version).
+
+### 2026-07-03 — Phase P6 — Backend runtime bumped Python 3.12 → 3.13 (locked decision revised)
+**What changed:** The locked backend runtime was revised from **Python 3.12 to Python 3.13**
+and the Grype interpreter-binary exclusion added in the superseded entry above was **removed**.
+Concretely: the Dockerfile base image is now `python:3.13-slim-bookworm` (digest-pinned) for
+both the venv-builder and runtime stages; `backend/pyproject.toml` `requires-python` is
+`>=3.13` and the black/ruff `target-version` are `py313`; the CI backend job runs on Python
+`3.13`; and the `package: {type: binary, name: python}` ignore was deleted from
+`ci/grype.yaml` so the CPython interpreter is scanned and gated like everything else. The
+locked decision is updated in `CLAUDE.md` § Locked decisions #2 and `docs/PLAN.md` §0 (#7) and
+§2. Verified locally on Python 3.13.12: a clean install of all dependencies (including the
+C-extension/Rust ones — `cryptography`, `argon2-cffi`, `cffi`, `pydantic-core`), the full
+325-test suite passing, a full Alembic upgrade/downgrade/upgrade cycle, and a clean app import,
+with no new 3.13-specific deprecations or behavior changes (the only warnings are the
+pre-existing Starlette `HTTP_422_UNPROCESSABLE_ENTITY` deprecation, unrelated to the runtime).
+The CI dogfood self-scan — now with the interpreter exclusion removed — is the authoritative
+confirmation that the interpreter CVEs are actually gone on 3.13 rather than merely assumed.
+**Why:** The Grype-flagged CPython CVEs (CVE-2026-7210, -6100, -4224, -3298, -3644, -9669,
+-4786, …) have fixes only in Python 3.13+/3.14+, none in the 3.12 line, and the 3.12 base image
+was already the latest — so the only real fix is to move off 3.12. This reverses the original
+lock. **Chose 3.13 over 3.14** for ecosystem/dependency maturity: at the time of this decision
+3.13 has had roughly a year longer for the dependency ecosystem (especially C-extension and
+Rust-backed wheels) to validate compatibility than 3.14 (~9 months), which reduces the risk of
+missing/immature wheels while still resolving the interpreter CVEs. The interpreter-CVE
+"treadmill" (new CPython CVEs vs. base-image rebuild lag) still exists in principle, but the
+current 3.13 patch release clears the specific HIGH findings that motivated the change.
+**Plan section affected:** §0 (#7, new locked runtime), §2 (tech stack), §9.1 (base image),
+§12 (Phase 6 self-scan), CLAUDE.md § Locked decisions #2.

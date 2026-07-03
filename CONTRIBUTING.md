@@ -15,7 +15,7 @@ everyone.
 
 ### Prerequisites
 
-- **Python 3.12**
+- **Python 3.13**
 - **Node 20+** (the image builds with Node 22)
 - **Docker** + the **Compose v2** plugin (for the integrated run; Buildx for a
   multi-arch image build)
@@ -31,7 +31,7 @@ can run them natively side by side, or use Compose for an integrated stack.
 cd backend
 
 # Create and activate a virtualenv
-python3.12 -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
 # Install the app plus dev tooling (pinned versions)

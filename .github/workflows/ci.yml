@@ -31,10 +31,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
           cache: pip
           cache-dependency-path: backend/pyproject.toml
 
@@ -151,13 +151,12 @@ jobs:
             -v /tmp/scrye-image.tar:/image.tar:ro \
             anchore/grype:v0.115.0 docker-archive:/image.tar -o table || true
 
-      # Grype gate. In addition to the bundled scanner binaries, this excludes the
-      # CPython interpreter binary (`python`) from the base image: its CVEs are
-      # fixed only in Python 3.13+/3.14+, but Scrye is pinned to Python 3.12
-      # (locked decision §2), so they are unfixable-by-us base-image runtime items
-      # (the ignore lives in ci/grype.yaml). Trivy's OS-aware scan still gates the
+      # Grype gate. Excludes only the bundled trivy/grype/syft binaries (see the
+      # Trivy gate note above); the base-image CPython interpreter is no longer
+      # excluded now that Scrye runs on Python 3.13, whose current patch release
+      # carries the interpreter-CVE fixes. Trivy's OS-aware scan also gates the
       # base image. See docs/PLAN.md § Deviations.
-      - name: Grype — gate on fixable High+ (excl. bundled + base runtime)
+      - name: Grype — gate on fixable High+ (excl. bundled scanners)
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
