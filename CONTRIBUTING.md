@@ -126,11 +126,14 @@ scrye/
 │   └── PLAN.md          # detailed build specification + deviation log
 ├── backend/
 │   ├── app/
-│   │   ├── main.py      # FastAPI app: API + SPA serving, startup key check
-│   │   ├── api/         # routers: health, auth, users, audit
+│   │   ├── main.py      # FastAPI app: API + SPA serving, startup key check,
+│   │   │                #   scan-worker lifecycle
+│   │   ├── api/         # routers: health, auth, users, audit, scans
 │   │   ├── auth/        # passwords (argon2id), sessions, RBAC/CSRF deps
 │   │   ├── core/        # config, crypto (AES-GCM envelope), logging/redaction,
-│   │   │                #   masking, rate limiting, audit helper
+│   │   │                #   masking, rate limiting, audit helper, artifact store
+│   │   ├── scanners/    # Trivy/Grype orchestration + JSON normalization
+│   │   ├── workers/     # in-process async scan worker (interface + impl)
 │   │   └── db/          # SQLAlchemy base + session + models/
 │   ├── alembic/         # migration environment + versions
 │   ├── scripts/         # dev helpers (.env.example generator)
@@ -140,8 +143,8 @@ scrye/
 │   ├── src/
 │   │   ├── theme.ts     # teal Mantine theme
 │   │   ├── auth/        # AuthContext (login state + actions)
-│   │   ├── pages/       # dashboard, login, first-run setup
-│   │   ├── components/  # shared components (toggle, user menu)
+│   │   ├── pages/       # dashboard, login, setup, scans (list/new/detail)
+│   │   ├── components/  # shared components (toggle, user menu, badges)
 │   │   └── api/         # API client (CSRF-aware fetch wrapper)
 │   ├── vite.config.ts
 │   └── package.json
