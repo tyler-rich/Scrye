@@ -15,7 +15,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.core.config import get_settings
-from app.scanners.base import ScannerError, resolve_binary, run_command
+from app.scanners.base import (
+    ScannerError,
+    build_env,
+    resolve_binary,
+    run_command,
+    scanner_cache_env,
+)
 
 #: Version-probe argument (after the binary) for each scanner.
 _VERSION_ARGS: dict[str, list[str]] = {
@@ -56,10 +62,16 @@ async def _probe_scanner(name: str, binary: str) -> ScannerInfo:
     except ScannerError as exc:
         return ScannerInfo(name=name, available=False, version=None, detail=str(exc))
     try:
+        # Point the probe at the writable cache volume: `trivy --version
+        # --format json` reads the vuln-DB metadata under its cache dir, which
+        # otherwise defaults to the read-only $HOME/.cache (mkdir /app/.cache:
+        # read-only file system).
         result = await run_command(
-            [executable, *_VERSION_ARGS[name]], timeout=_PROBE_TIMEOUT_SECONDS
+            [executable, *_VERSION_ARGS[name]],
+            timeout=_PROBE_TIMEOUT_SECONDS,
+            env=build_env(scanner_cache_env()),
         )
-    except ScannerError as exc:
+    except (ScannerError, OSError) as exc:
         return ScannerInfo(name=name, available=False, version=None, detail=str(exc))
     if result.returncode != 0:
         return ScannerInfo(name=name, available=False, version=None, detail="version probe failed")
@@ -121,9 +133,11 @@ async def _probe_trivy_db() -> ScannerDbInfo:
     try:
         binary = resolve_binary(settings.trivy_binary)
         result = await run_command(
-            [binary, "--version", "--format", "json"], timeout=_PROBE_TIMEOUT_SECONDS
+            [binary, "--version", "--format", "json"],
+            timeout=_PROBE_TIMEOUT_SECONDS,
+            env=build_env(scanner_cache_env()),
         )
-    except ScannerError as exc:
+    except (ScannerError, OSError) as exc:
         return ScannerDbInfo(name="trivy", available=False, detail=str(exc))
     try:
         payload = json.loads(result.stdout or b"{}")
@@ -138,9 +152,11 @@ async def _probe_grype_db() -> ScannerDbInfo:
     try:
         binary = resolve_binary(settings.grype_binary)
         result = await run_command(
-            [binary, "db", "status", "-o", "json"], timeout=_PROBE_TIMEOUT_SECONDS
+            [binary, "db", "status", "-o", "json"],
+            timeout=_PROBE_TIMEOUT_SECONDS,
+            env=build_env(scanner_cache_env()),
         )
-    except ScannerError as exc:
+    except (ScannerError, OSError) as exc:
         return ScannerDbInfo(name="grype", available=False, detail=str(exc))
     try:
         payload = json.loads(result.stdout or b"{}")

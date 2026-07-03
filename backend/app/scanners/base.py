@@ -17,6 +17,7 @@ from abc import ABC
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.core.config import get_settings
 from app.db.models import Scanner, Severity
 
 
@@ -145,6 +146,59 @@ def resolve_binary(name_or_path: str) -> str:
             "Install it or set the corresponding *_BINARY setting."
         )
     return resolved
+
+
+#: Per-engine cache subdirectory names under the writable cache volume.
+TRIVY_CACHE_SUBDIR = "trivy"
+GRYPE_CACHE_SUBDIR = "grype"
+SCRATCH_SUBDIR = "tmp"
+
+
+def scanner_cache_env() -> dict[str, str]:
+    """Return the env overlay pointing every bundled scanner at the cache volume.
+
+    Under the hardened runtime the container runs as a **non-root uid** on a
+    **read-only root filesystem**, and ``/tmp`` is a small owner-only tmpfs. That
+    makes a scanner's default cache location (``$HOME/.cache`` — e.g.
+    ``/app/.cache``) unwritable, so a vuln-DB write or even a ``trivy --version
+    --format json`` DB-freshness read fails with ``mkdir /app/.cache: read-only
+    file system``; and the tmpfs is both too small for a multi-hundred-MB DB and,
+    unless its ownership matches the app uid, unwritable at all
+    (``mkdir /tmp/trivy-XXXXXXXXX: permission denied``).
+
+    Redirect **all** of it onto the persistent, writable cache volume via
+    environment variables, so the fix covers every invocation uniformly — image/
+    repo/filesystem/SBOM scans **and** the lightweight version / DB-status probes
+    — without threading a flag through each call site:
+
+    - ``TMPDIR`` → a scratch dir on the volume (keeps large temp extraction off
+      the tiny tmpfs);
+    - ``HOME`` / ``XDG_CACHE_HOME`` → the volume root, so any ``$HOME/.cache``
+      fallback also lands somewhere writable;
+    - ``TRIVY_CACHE_DIR`` / ``GRYPE_DB_CACHE_DIR`` → explicit per-engine cache /
+      DB directories.
+
+    The vulnerability DB therefore downloads once and persists across restarts
+    (the volume outlives the container) instead of re-downloading into a
+    transient or broken location. Directories are created if missing — the cache
+    volume starts empty.
+
+    Returns:
+        An environment overlay to layer onto every scanner subprocess.
+    """
+    base = get_settings().scanner_cache_dir
+    tmp_dir = base / SCRATCH_SUBDIR
+    trivy_dir = base / TRIVY_CACHE_SUBDIR
+    grype_dir = base / GRYPE_CACHE_SUBDIR
+    for path in (tmp_dir, trivy_dir, grype_dir):
+        path.mkdir(parents=True, exist_ok=True)
+    return {
+        "TMPDIR": str(tmp_dir),
+        "HOME": str(base),
+        "XDG_CACHE_HOME": str(base),
+        "TRIVY_CACHE_DIR": str(trivy_dir),
+        "GRYPE_DB_CACHE_DIR": str(grype_dir / "db"),
+    }
 
 
 def tally_severities(findings: list[NormalizedFinding]) -> dict[Severity, int]:
