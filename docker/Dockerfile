@@ -106,6 +106,7 @@ COPY --from=scanners /scanners/trivy /scanners/grype /scanners/syft /usr/local/b
 COPY --chown=1000:1000 backend/ /app/backend/
 COPY --chown=1000:1000 --from=frontend-builder /build/frontend/dist /app/frontend/dist
 COPY --chown=1000:1000 docker/entrypoint.sh /app/entrypoint.sh
+COPY --chown=1000:1000 THIRD_PARTY_LICENSES/ /THIRD_PARTY_LICENSES/
 RUN chmod 0755 /app/entrypoint.sh
 
 WORKDIR /app/backend
