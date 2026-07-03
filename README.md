@@ -207,6 +207,12 @@ Configuration is driven by environment variables (prefix `SCRYE_`). The
 | `SCRYE_AUTH_RATE_LIMIT_WINDOW_SECONDS` | `60`              | Auth rate-limit window length (seconds).                          |
 | `SCRYE_TRIVY_SERVER_URL`    | _(unset)_                    | Optional Trivy server URL (shared vuln-DB cache).                 |
 | `SCRYE_DOCKER_PROXY_URL`    | _(unset)_                    | Optional read-only docker-socket-proxy URL.                       |
+| `SCRYE_TRIVY_BINARY`        | `trivy`                      | Trivy binary path/name (resolved on `PATH` if a bare name).       |
+| `SCRYE_GRYPE_BINARY`        | `grype`                      | Grype binary path/name (resolved on `PATH` if a bare name).       |
+| `SCRYE_SYFT_BINARY`         | `syft`                       | Syft binary path/name (resolved on `PATH` if a bare name).        |
+| `SCRYE_MAX_CONCURRENT_SCANS`| `2`                          | Max scans the in-process worker runs at once.                     |
+| `SCRYE_SCAN_TIMEOUT_SECONDS`| `1800`                       | Per-scan wall-clock timeout (seconds).                            |
+| `SCRYE_ARTIFACTS_DIR`       | `/data/artifacts`            | Directory holding raw scanner artifacts (JSON output, SBOMs).     |
 | `SCRYE_FRONTEND_DIST_DIR`   | `/app/frontend/dist`         | Directory of the built SPA served by FastAPI.                     |
 
 ### The master key
@@ -227,17 +233,29 @@ secrets can be re-encrypted, after which the old line can be removed.
 
 ## Usage
 
-> Scanning lands in Phase 2+. Once available:
+**Available now (Phase 2 — image scanning):**
 
-- **Run a scan** — choose Trivy or Grype, pick a target (image / repo /
-  filesystem / SBOM) and scanner options, and launch. The async worker executes
-  the official binary and parses its JSON output.
-- **Read results** — findings are normalized into one table with severity
-  counts; the raw scanner JSON is always available as an artifact.
-- **Export** — download CSV, Markdown, or JSON per scan or for a filtered set.
-- **Manage credentials safely** — registry/git/OIDC secrets are entered once and
-  are **write-only**: the API returns a mask and a "last updated" timestamp, and
-  plaintext is only ever decrypted in memory at scan time.
+- **Run an image scan** — from **New scan**, choose **Trivy** or **Grype** and
+  enter a container image reference (e.g. `alpine:3.19` or
+  `ghcr.io/org/app:tag`). For Trivy, pick which scanners run
+  (vulnerabilities / misconfigurations / secrets / licenses), an optional
+  severity filter, and whether to ignore unfixed vulnerabilities. Grype scans
+  for vulnerabilities only. The in-process async worker runs the official binary
+  under a concurrency limit and parses its JSON output.
+- **Read results** — the **scan detail** page shows live status while the scan
+  runs, then a severity summary and a normalized findings table (both scanners
+  render in one shape). Filter findings by severity or class.
+- **Raw artifacts** — every completed scan stores the scanner's original JSON
+  verbatim as the source of truth; download it from the scan detail page.
+
+**Coming in later phases:** git-repository / filesystem / SBOM targets and
+private-registry credentials (Phase 3); history, scan diff, and CSV/Markdown/JSON
+exports (Phase 4); OIDC, backup/restore, and settings (Phase 5).
+
+Scanner options that stay write-only and secret (registry / git / OIDC
+credentials, API tokens) are entered once and never returned in plaintext — the
+API returns a mask and a "last updated" timestamp, and plaintext is only ever
+decrypted in memory at scan time.
 
 ---
 

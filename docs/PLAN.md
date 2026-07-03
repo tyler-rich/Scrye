@@ -561,3 +561,43 @@ actually operable: add `v2`, restart, re-encrypt, then drop `v1`.
 (`phase/PX`), per explicit instruction in the build session. (Noted for the
 record; the session harness had suggested a different default branch name.)
 **Plan section affected:** §12 (process, not output).
+
+### 2026-07-03 — Phase P2 — Raw artifact bytes stored on the filesystem
+**What changed:** The `artifacts` table stores metadata + a SHA-256 checksum +
+a path relative to a configurable artifacts directory (`SCRYE_ARTIFACTS_DIR`,
+default `/data/artifacts`); the raw scanner JSON bytes live on disk under that
+directory (one subdirectory per scan), not as a BLOB column in SQLite.
+**Why:** §4.3/§7 require persisting the raw scanner JSON as the source-of-truth
+artifact but don't specify where the bytes live. Keeping large blobs out of
+SQLite keeps the database small, backups cheap, and downloads streamable, while
+the checksum still lets restore/backup verify integrity. `/data` is already the
+persistent volume in the Compose definition, so no new mount is needed.
+**Plan section affected:** §4.3, §7.
+
+### 2026-07-03 — Phase P2 — Frontend routing via `react-router-dom` v7
+**What changed:** Added `react-router-dom` (pinned `7.18.1`) for SPA routing —
+the plan's tech stack (§2) lists Mantine helpers but no router. Chose v7 rather
+than v6 because every 6.x release carries known advisories (`npm audit`), and
+CLAUDE.md § Dependency hygiene requires versions with no known vulnerabilities.
+**Why:** The scan detail page needs client-side routing (list → detail → new).
+Router choice is a routine implementation detail under CLAUDE.md § When to ask
+vs. decide; logged here for the record and to explain the v7 pin.
+**Plan section affected:** §2 (Tech stack).
+
+### 2026-07-03 — Phase P2 — Scan views use Mantine `Table`, not `mantine-datatable`
+**What changed:** The scans list and findings table use the base Mantine
+`Table` component instead of `mantine-datatable` (listed in §2).
+**Why:** Phase 2 needs only a plain, sortless table; `mantine-datatable`'s
+value (sortable/paginated/filterable history with saved presets) belongs to the
+Phase 4 history view, where it will be introduced. Deferring the dependency
+keeps the bundle smaller until the feature that needs it lands.
+**Plan section affected:** §2, §4.4.
+
+### 2026-07-03 — Phase P2 — Scan cancellation limited to queued scans
+**What changed:** `POST /api/scans/{id}/cancel` cancels only scans still in the
+`queued` state; a scan already `running` cannot be canceled.
+**Why:** The plan calls for "concurrency control" but does not specify
+cancellation semantics. The in-process worker (locked §0.2) has no channel to
+interrupt a live scanner subprocess, so cancelling a running scan cannot be done
+safely in v1; queued cancellation is the useful, well-defined subset.
+**Plan section affected:** §12 (Phase 2 scope), §0.2.

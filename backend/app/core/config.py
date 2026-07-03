@@ -112,6 +112,32 @@ class Settings(BaseSettings):
         description="Optional read-only docker-socket-proxy URL ('scan running images').",
     )
 
+    # --- Scanning ----------------------------------------------------------
+    trivy_binary: str = Field(
+        default="trivy",
+        description="Path or name of the Trivy binary (resolved on PATH if a bare name).",
+    )
+    grype_binary: str = Field(
+        default="grype",
+        description="Path or name of the Grype binary (resolved on PATH if a bare name).",
+    )
+    syft_binary: str = Field(
+        default="syft",
+        description="Path or name of the Syft binary (resolved on PATH if a bare name).",
+    )
+    max_concurrent_scans: int = Field(
+        default=2,
+        description="Maximum number of scans the in-process worker runs concurrently.",
+    )
+    scan_timeout_seconds: int = Field(
+        default=1800,
+        description="Per-scan wall-clock timeout in seconds (default 1800 = 30 minutes).",
+    )
+    artifacts_dir: Path = Field(
+        default=Path("/data/artifacts"),
+        description="Directory holding raw scanner artifacts (JSON output, SBOMs).",
+    )
+
     # --- Frontend ----------------------------------------------------------
     frontend_dist_dir: Path = Field(
         default=Path("/app/frontend/dist"),
