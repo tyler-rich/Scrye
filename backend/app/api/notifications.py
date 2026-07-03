@@ -25,6 +25,7 @@ from app.core.timeutil import utcnow
 from app.db.models import (
     SECRET_OPTIONAL_TYPES,
     NotificationChannel,
+    NotificationEvent,
     NotificationType,
     Role,
 )
@@ -33,6 +34,14 @@ from app.db.session import get_db
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 _admin = require_role(Role.ADMIN)
+
+
+def _clean_events(events: list[NotificationEvent] | None) -> list[str]:
+    """De-duplicate event keys, preserving canonical order."""
+    if not events:
+        return []
+    selected = {e.value for e in events}
+    return [e.value for e in NotificationEvent if e.value in selected]
 
 
 class NotificationChannelOut(BaseModel):
@@ -44,6 +53,7 @@ class NotificationChannelOut(BaseModel):
     name: str
     type: NotificationType
     config: dict[str, Any]
+    events: list[NotificationEvent]
     enabled: bool
     secret: MaskedSecret
     created_by_username: str | None
@@ -57,6 +67,7 @@ class NotificationChannelCreateIn(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     type: NotificationType
     config: dict[str, Any] = Field(default_factory=dict)
+    events: list[NotificationEvent] = Field(default_factory=list)
     secret: SecretStr | None = None
     enabled: bool = True
 
@@ -66,6 +77,7 @@ class NotificationChannelUpdateIn(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=128)
     config: dict[str, Any] | None = None
+    events: list[NotificationEvent] | None = None
     secret: SecretStr | None = None
     enabled: bool | None = None
 
@@ -84,6 +96,7 @@ def _to_out(channel: NotificationChannel) -> NotificationChannelOut:
         name=channel.name,
         type=channel.type,
         config=channel.config or {},
+        events=[NotificationEvent(e) for e in (channel.events or [])],
         enabled=channel.enabled,
         secret=masked_secret(channel.secret_updated_at),
         created_by_username=channel.created_by_username,
@@ -98,6 +111,12 @@ def _get_or_404(db: Session, channel_id: int) -> NotificationChannel:
     if channel is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Notification channel not found.")
     return channel
+
+
+@router.get("/events", response_model=list[str])
+def list_events(_: AuthContext = Depends(_admin)) -> list[str]:
+    """List the notification events a channel can subscribe to."""
+    return [e.value for e in NotificationEvent]
 
 
 @router.get("", response_model=list[NotificationChannelOut])
@@ -136,6 +155,7 @@ def create_channel(
         name=payload.name,
         type=payload.type,
         config=payload.config,
+        events=_clean_events(payload.events),
         enabled=payload.enabled,
         created_by_id=auth.user.id,
         created_by_username=auth.user.username,
@@ -182,6 +202,9 @@ def update_channel(
     if payload.config is not None:
         channel.config = payload.config
         changes["config"] = "updated"
+    if payload.events is not None:
+        channel.events = _clean_events(payload.events)
+        changes["events"] = channel.events
     if payload.enabled is not None:
         channel.enabled = payload.enabled
         changes["enabled"] = payload.enabled

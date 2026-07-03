@@ -25,6 +25,9 @@ These were decided and are not open for re-litigation during the build:
 6. **Distribution:** Docker image is **built locally only** for now. **Do not** add Docker Hub
    (or any registry) publishing — no registry slot available yet. The image must build cleanly
    and run locally; publishing is a later concern.
+7. **Backend runtime:** **Python 3.13.** (Originally locked to Python 3.12; revised to 3.13 in
+   Phase 6 to resolve Grype-flagged CPython interpreter CVEs whose fixes are only available in
+   3.13+ — see § Deviations for the full rationale.)
 
 ---
 
@@ -58,7 +61,7 @@ scan history, export results to CSV/Markdown/JSON, and include complete project 
 |-------|--------|-------|
 | Frontend | **React 18 + TypeScript + Vite** | |
 | Component library | **Mantine v7** (+ `mantine-datatable`, `@mantine/form`, `@mantine/notifications`, `@mantine/modals`) | Native light/dark, trivial teal `primaryColor`, rich tables/forms. |
-| Backend | **Python 3.12 + FastAPI + Pydantic v2** | Consistent with the Lacunarr stack; strong async subprocess handling. |
+| Backend | **Python 3.13 + FastAPI + Pydantic v2** | Consistent with the Lacunarr stack; strong async subprocess handling. (Bumped from 3.12 in Phase 6 — see § Deviations.) |
 | ORM / migrations | **SQLAlchemy 2.0 + Alembic** | Typed models; migrations gate backup/restore. |
 | Database | **SQLite** | Secrets field-encrypted at the app layer (§6). |
 | Auth | **Authlib** (OIDC) + **argon2-cffi** (local) + **pyotp** (optional TOTP MFA) | Generic OIDC → Pocket ID (RS256). |
@@ -393,7 +396,7 @@ Must include, at minimum:
 Must include:
 - **Code of conduct** pointer (or a short statement).
 - **Local development environment** — step-by-step:
-  - Prereqs (Python 3.12, Node 20+, Docker, `trivy`/`grype`/`syft` for native runs).
+  - Prereqs (Python 3.13, Node 20+, Docker, `trivy`/`grype`/`syft` for native runs).
   - Backend: create venv, install deps, configure a local `app_secret_key`, run Alembic
     migrations, start FastAPI with reload.
   - Frontend: install deps, start the Vite dev server, proxy config to the API.
@@ -924,3 +927,209 @@ bugs — accepted for hardening before merge. Explicit algorithm pinning removes
 reliance on library defaults for JWS `alg` handling; the higher scrypt cost strengthens
 offline brute-force resistance of the portable, passphrase-encrypted backup bundle.
 **Plan section affected:** §5 (OIDC), §8 (Backup & restore).
+
+### 2026-07-03 — Phase P6 — Branch name `phase/P6`
+**What changed:** Phase 6 work is developed on branch `phase/P6`.
+**Why:** Matches the repo convention in CLAUDE.md § Git & PR conventions
+(`phase/PX`) and the explicit build-session instruction, continuing the pattern of
+phases 0–5. (Noted for the record; the session harness had suggested a different
+default branch name.)
+**Plan section affected:** §12 (process, not output).
+
+### 2026-07-03 — Phase P6 — Cron scheduling via a self-contained evaluator
+**What changed:** Scheduled/recurring scans use an in-repo 5-field cron evaluator
+(`app/core/cron.py`, standard `* , - /` syntax with Vixie dom/dow semantics) rather
+than a third-party cron dependency. Schedules live in a new `scan_schedules` table
+(a scan template + cron), and an in-process `MaintenanceScheduler` (mirroring the
+existing backup scheduler) fires due schedules on a one-minute tick and hands the
+created scans to the worker. Schedule *management* is an `operator` action (like
+launching scans) with `viewer` reads; SBOM targets cannot be scheduled (they need a
+file upload); `PUT` replaces a whole schedule and a `run now` action fires one
+immediately.
+**Why:** §4.6/§12 call for "cron per target/profile" without specifying the engine or
+storage. A small, tested evaluator avoids adding an unvetted dependency (CLAUDE.md
+§ Dependency hygiene) and keeps full control of the semantics; an in-process loop fits
+the locked single-container model (§0.2).
+**Plan section affected:** §4.6, §7 (data model), §12 (Phase 6).
+
+### 2026-07-03 — Phase P6 — Notification dispatch: per-channel event subscriptions
+**What changed:** Phase 5 built the notification channels + test-send; Phase 6 wires
+dispatch. A per-channel `events` JSON column records which events a channel is notified
+about — `scan_completed`, `scan_failed`, and `scan_high_severity` (a completed scan with
+any CRITICAL/HIGH finding). When a scan finishes the worker calls a best-effort dispatcher
+(`app/core/notification_dispatch.py`) that sends a plain-text summary to each enabled,
+subscribed channel; a transport failure is logged, never raised into the scan.
+**Why:** §4.5/§4.6 place notification *configuration* in Phase 5 and *dispatch* in Phase 6
+but do not define the event taxonomy or routing. Per-channel opt-in (rather than a global
+rule table) is the least-surprising materialization and needs only one additive column.
+**Plan section affected:** §4.5, §4.6, §7 (data model).
+
+### 2026-07-03 — Phase P6 — Trivy VEX/ignore applied via env vars, ignore rules structured
+**What changed:** VEX documents (`vex_documents`) and structured ignore rules
+(`trivy_ignore_rules`, an id + optional reason + optional expiry) are admin-managed and
+applied to every Trivy scan by materializing them into the container's tmpfs `/tmp` at
+scan time and passing Trivy's `TRIVY_VEX` / `TRIVY_IGNOREFILE` environment variables
+(the env equivalents of `--vex` / `--ignorefile`) — so the scanner argv-builders are
+unchanged and the transient paths stay off the process argv. The rendered `.trivyignore`
+combines the global blob from scanner settings (a Phase 5 gap now actually applied) with
+the active managed rules.
+**Why:** §4.1/§4.5 list "VEX policy" and "`.trivyignore` rules" without a storage or
+plumbing design. Env-var delivery is Trivy's documented equivalent of the flags and needs
+no scanner changes; a structured rule table (rather than only a raw blob) lets rules carry
+a reason and an expiry and be toggled individually.
+**Plan section affected:** §4.1, §4.5, §7 (data model).
+
+### 2026-07-03 — Phase P6 — Dashboard "open" posture from the latest scan per target
+**What changed:** The dashboard's open critical/high counts and top-vulnerable-targets
+widget are computed from the **latest succeeded scan per (scanner, target)**, not a running
+total across all scans. Scanner-DB freshness probes `trivy --version --format json` and
+`grype db status -o json` best-effort (a missing binary degrades to "unknown").
+**Why:** §4.6 lists the widgets but not their semantics. Deriving "open" from the most
+recent scan per target makes re-scanning a fixed target lower the number, which is the
+useful live-posture reading; a running total would only ever grow.
+**Plan section affected:** §4.6.
+
+### 2026-07-03 — Phase P6 — `/metrics` is authenticated; hand-rolled exposition
+**What changed:** The Prometheus `/metrics` endpoint requires the `viewer` role rather than
+being public, and renders the text exposition format directly (no `prometheus_client`
+dependency) from DB-derived gauges. A Prometheus scrape authenticates with a personal API
+token as a bearer credential.
+**Why:** The metrics reveal scan volume and open-vulnerability posture, so exposing them
+unauthenticated conflicts with the security-first principle (§1); API-token bearer auth is
+the standard Prometheus mechanism and needs no new auth path. Hand-rolling the (simple)
+exposition format for point-in-time gauges avoids an added dependency (CLAUDE.md
+§ Dependency hygiene).
+**Plan section affected:** §1 (security-first), §12 (Phase 6 `/metrics`).
+
+### 2026-07-03 — Phase P6 — Retention prunes raw artifacts only; config in the settings table
+**What changed:** The result-retention policy (a new `retention` group in the existing
+`settings` table: `enabled` + `max_age_days`) prunes the **raw** artifacts (scanner JSON +
+SBOMs) of scans older than the age, removing the files and their `artifacts` rows while
+keeping the scan row and its normalized findings. The maintenance scheduler runs it on each
+tick when enabled.
+**Why:** §12 says "prune old raw artifacts" — keeping the scan and normalized findings
+preserves history, trends, and severity counts while reclaiming the bulk of the disk
+footprint. Storing the policy in the typed settings store matches the Phase 5 settings
+pattern and needs no new table.
+**Plan section affected:** §4.3, §12 (Phase 6 retention).
+
+### 2026-07-03 — Phase P6 — Dogfood self-scan gates on fixable High/Critical with triage allowlists
+**What changed:** CI adds an `image` job that builds the image (amd64, loaded) and scans it
+with Trivy and Grype pinned to the versions Scrye bundles, plus an `image-multiarch` job that
+builds `linux/amd64,linux/arm64` to prove both architectures build. The gate fails on any
+**fixable HIGH/CRITICAL** finding (Trivy `--ignore-unfixed --severity HIGH,CRITICAL`; Grype
+`--only-fixed --fail-on high`); fixable lower-severity items are reported but non-gating, and
+triaged exceptions live in `ci/trivyignore` and `ci/grype.yaml` with dated justifications.
+Because the whole image filesystem and OS package set are scanned, the bundled
+`THIRD_PARTY_LICENSES/` directory and the `git` runtime dependency (added in Phase 3) are
+covered automatically. No registry publishing is added (locked §6): the image is only
+loaded/saved within the job.
+**Why:** CLAUDE.md § Dependency hygiene requires dogfooding Trivy + Grype against Scrye's own
+image and resolving all *fixable* findings, with only genuinely-unfixable items remaining.
+Gating on fixable HIGH/CRITICAL (with an audited allowlist for the rare fixable item that
+cannot be bumped immediately) is the practical, low-churn enforcement of that rule while
+still surfacing everything.
+**Plan section affected:** §9.1 (multi-arch build), §12 (Phase 6 self-scanning CI),
+CLAUDE.md § Dependency hygiene.
+
+### 2026-07-03 — Phase P6 — Fix wrong `debian:bookworm-slim` base digest
+**What changed:** The `scanners` build stage in `docker/Dockerfile` pinned
+`debian:bookworm-slim` to `sha256:8a7e7cc0…`, which is actually the
+`python:3.12-slim-bookworm` manifest digest (a copy-paste error latent since Phase 0).
+Corrected it to the real `debian:bookworm-slim` multi-arch index digest
+`sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df`.
+**Why:** The new Phase 6 CI image job is the first time the image is actually built in
+CI, which surfaced the bad digest (`… : not found`) — no earlier phase built the image,
+so the error went unnoticed. The two python stages and the node stage were already
+correct. Pinning to the current debian index digest keeps §9.1's digest-pinning intact.
+**Plan section affected:** §9.1 (image), §12 (Phase 6 CI).
+
+### 2026-07-03 — Phase P6 — Dogfood gate excludes the bundled scanner binaries
+**What changed:** The CI dogfood gate skips the bundled `trivy`/`grype`/`syft` binaries
+(`--skip-files` for Trivy, `--exclude` + a `package.location` ignore for Grype) while
+still scanning them in the informational report and still gating on everything else in
+the image. The first successful image build's scan flagged 7 fixable HIGH findings, all
+inside those binaries' embedded Go modules / Go stdlib (containerd, oras-go, docker/docker,
+crypto/x509, net/textproto); none were in Scrye's own OS packages, Python/JS deps, or app.
+**Why:** Those are unmodified upstream Go binaries Scrye bundles under Apache-2.0 and
+cannot rebuild — their embedded-dependency CVEs are fixed only when Aqua/Anchore cut a new
+release built against a patched Go, so they are "genuinely unfixable upstream items" from
+Scrye's side (CLAUDE.md § Dependency hygiene). Gating on them would make CI perpetually red
+on the newest Go-stdlib CVE regardless of Scrye's own hygiene. Keeping them visible in the
+informational report and keeping the pinned scanner versions current is how they are
+tracked; the gate stays meaningful for Scrye's actual attack surface — including the `git`
+runtime dependency and `THIRD_PARTY_LICENSES/`, which remain fully gated.
+**Plan section affected:** §9.1, §12 (Phase 6 self-scan), CLAUDE.md § Dependency hygiene.
+
+### 2026-07-03 — Phase P6 — Dogfood-driven dependency bumps (FastAPI/Starlette/multipart)
+**What changed:** With the scanner binaries excluded, the dogfood gate correctly flagged six
+fixable HIGH CVEs in Scrye's own Python deps: `python-multipart` 0.0.20 (CVE-2026-24486,
+CVE-2026-42561, CVE-2026-53539) and `starlette` 0.41.3 (CVE-2025-62727, CVE-2026-48818,
+CVE-2026-54283). Resolved by bumping `python-multipart` → `0.0.32`, adding an explicit
+`starlette==1.3.1` pin (the version that fixes all three, previously an unpinned FastAPI
+transitive), and bumping `fastapi` `0.115.6` → `0.139.0` (the release whose
+`starlette>=0.46.0` constraint permits 1.3.1). All 325 backend tests pass on the new
+versions; no application code changed.
+**Why:** CLAUDE.md § Dependency hygiene requires resolving all fixable findings in Scrye's
+own dependencies — these are exactly that (direct/transitive deps we control), unlike the
+vendored scanner binaries. Pinning starlette explicitly guarantees the fixed version rather
+than relying on FastAPI's floor.
+**Plan section affected:** §2 (Tech stack pins), CLAUDE.md § Dependency hygiene.
+
+### 2026-07-03 — Phase P6 — Grype gate excludes the CPython interpreter binary
+**(Superseded by the "Backend runtime bumped Python 3.12 → 3.13" entry below — the
+interpreter exclusion was removed once the runtime moved to 3.13.)**
+**What changed:** With the app deps fixed, the Grype gate then failed on the CPython
+interpreter binary (`python 3.12.13`, Grype `binary` type) from the
+`python:3.12-slim-bookworm` base image — a run of HIGH CVEs (CVE-2026-7210, -6100, -4224,
+-3298, -3644, -9669, -4786, …) whose "fixed in" versions are all Python 3.13+/3.14+/3.15+.
+Excluded the `python` binary from the Grype gate (a `package: {type: binary, name: python}`
+ignore in `ci/grype.yaml`) and added an informational Grype run so the finding stays
+visible. The pinned base image was confirmed to already be the latest 3.12-slim-bookworm
+digest, so the CVEs cannot be cleared without leaving Python 3.12.
+**Why:** Python 3.12 is a locked decision (§2); these CVEs are fixed only by moving to
+3.13+, so they are genuinely unfixable-by-us base-image runtime items — the same carve-out
+CLAUDE.md § Dependency hygiene allows ("only genuinely unfixable upstream/OS-level items may
+remain, noted in the README"). Trivy's OS-aware scan still gates the base image, and Grype's
+binary classifier is the only thing that flags the interpreter binary at all.
+**Plan section affected:** §2 (Python 3.12), §12 (Phase 6 self-scan), CLAUDE.md § Dependency
+hygiene.
+
+### 2026-07-03 — Phase P6 — Bundled Trivy bumped 0.71.2 → 0.72.0
+**What changed:** The bundled Trivy version (`docker/Dockerfile` `TRIVY_VERSION`), the
+digest-pinned `trivy-server` sidecar image in `docker/docker-compose.yml`, and the Trivy
+image used by the CI dogfood job were bumped from `0.71.2` to `0.72.0` (the release Trivy's
+own version notice flagged as current).
+**Why:** CLAUDE.md § Dependency hygiene requires pinning to current, actively-maintained
+versions; keeping the bundled binary and the matching `trivy-server` image on the latest
+release continues the Phase 0 convention. Trivy self-verifies the new release against its
+published checksums at build time, so only the version string changed.
+**Plan section affected:** §9.1, §9.2 (bundled/sidecar Trivy version).
+
+### 2026-07-03 — Phase P6 — Backend runtime bumped Python 3.12 → 3.13 (locked decision revised)
+**What changed:** The locked backend runtime was revised from **Python 3.12 to Python 3.13**
+and the Grype interpreter-binary exclusion added in the superseded entry above was **removed**.
+Concretely: the Dockerfile base image is now `python:3.13-slim-bookworm` (digest-pinned) for
+both the venv-builder and runtime stages; `backend/pyproject.toml` `requires-python` is
+`>=3.13` and the black/ruff `target-version` are `py313`; the CI backend job runs on Python
+`3.13`; and the `package: {type: binary, name: python}` ignore was deleted from
+`ci/grype.yaml` so the CPython interpreter is scanned and gated like everything else. The
+locked decision is updated in `CLAUDE.md` § Locked decisions #2 and `docs/PLAN.md` §0 (#7) and
+§2. Verified locally on Python 3.13.12: a clean install of all dependencies (including the
+C-extension/Rust ones — `cryptography`, `argon2-cffi`, `cffi`, `pydantic-core`), the full
+325-test suite passing, a full Alembic upgrade/downgrade/upgrade cycle, and a clean app import,
+with no new 3.13-specific deprecations or behavior changes (the only warnings are the
+pre-existing Starlette `HTTP_422_UNPROCESSABLE_ENTITY` deprecation, unrelated to the runtime).
+The CI dogfood self-scan — now with the interpreter exclusion removed — is the authoritative
+confirmation that the interpreter CVEs are actually gone on 3.13 rather than merely assumed.
+**Why:** The Grype-flagged CPython CVEs (CVE-2026-7210, -6100, -4224, -3298, -3644, -9669,
+-4786, …) have fixes only in Python 3.13+/3.14+, none in the 3.12 line, and the 3.12 base image
+was already the latest — so the only real fix is to move off 3.12. This reverses the original
+lock. **Chose 3.13 over 3.14** for ecosystem/dependency maturity: at the time of this decision
+3.13 has had roughly a year longer for the dependency ecosystem (especially C-extension and
+Rust-backed wheels) to validate compatibility than 3.14 (~9 months), which reduces the risk of
+missing/immature wheels while still resolving the interpreter CVEs. The interpreter-CVE
+"treadmill" (new CPython CVEs vs. base-image rebuild lag) still exists in principle, but the
+current 3.13 patch release clears the specific HIGH findings that motivated the change.
+**Plan section affected:** §0 (#7, new locked runtime), §2 (tech stack), §9.1 (base image),
+§12 (Phase 6 self-scan), CLAUDE.md § Locked decisions #2.

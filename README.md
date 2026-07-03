@@ -12,24 +12,26 @@ place, on your own infrastructure.
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](./LICENSE)
 ![Build](https://img.shields.io/badge/build-local-informational)
 
-> **Project status — early, actively building.** Scrye is being built in phases
-> (see the [Roadmap](#roadmap)). Shipped so far: the application skeleton
-> (FastAPI + React/Mantine SPA, SQLite/Alembic, hardened CIS-aligned image); the
-> **auth & secrets foundation** — local accounts (argon2id) with revocable
-> server-side sessions, first-run admin bootstrap, RBAC (viewer/operator/admin),
-> CSRF protection, auth rate limiting, an audit log, and the AES-256-GCM
-> field-encryption module for stored secrets; **core scanning** (Trivy/Grype
-> across image, repository, filesystem, and SBOM targets with private-registry
-> and git credentials); and **history, reports & exports** — a filterable,
-> sortable, paginated history view with saved presets, scan-to-scan diff, and
-> CSV/Markdown/JSON exports per scan and for a filtered set; and the
-> **settings, OIDC & backup/restore** layer — the full settings section (general,
-> authentication, users & roles, scanners, registries, git providers, Docker
-> environments, notifications, API tokens, backup & restore, about/health),
-> generic **OIDC** login (Authlib) alongside local auth, optional **TOTP MFA**,
-> personal **API tokens**, and passphrase-protected **backup/restore** with
-> scheduled backups. The dashboard, notification dispatch, and scheduled scans
-> arrive in the final phase and are documented here as the intended end state.
+> **Project status — feature-complete (v1).** All six build phases (see the
+> [Roadmap](#roadmap)) have shipped: the application skeleton (FastAPI +
+> React/Mantine SPA, SQLite/Alembic, hardened CIS-aligned image); the **auth &
+> secrets foundation** — local accounts (argon2id) with revocable server-side
+> sessions, first-run admin bootstrap, RBAC (viewer/operator/admin), CSRF
+> protection, auth rate limiting, an audit log, and AES-256-GCM field encryption
+> for stored secrets; **core scanning** (Trivy/Grype across image, repository,
+> filesystem, and SBOM targets with private-registry and git credentials);
+> **history, reports & exports** — a filterable, sortable, paginated history view
+> with saved presets, scan-to-scan diff, and CSV/Markdown/JSON exports; the
+> **settings, OIDC & backup/restore** layer — the full settings section, generic
+> **OIDC** login (Authlib) alongside local auth, optional **TOTP MFA**, personal
+> **API tokens**, and passphrase-protected **backup/restore** with scheduled
+> backups; and the final **dashboard & automation** layer — an aggregate
+> **dashboard**, event-driven **notification dispatch** to the configured
+> channels, **scheduled/recurring scans** on a cron cadence, **Trivy VEX &
+> ignore-rule** management, a Prometheus **`/metrics`** endpoint, a
+> result-**retention** policy that prunes old raw artifacts, and a **multi-arch**
+> (amd64/arm64) image with a **dogfooding** CI job that scans Scrye's own image
+> with Trivy and Grype.
 
 ---
 
@@ -70,8 +72,20 @@ and one normalized findings model.
   history set.
 - **Scan history** — filterable, sortable, paginated table with saved presets;
   **scan diff** to compare two scans of the same target (new vs. fixed).
-- **Dashboard** — aggregate widgets (totals, trend, top vulnerable targets, open
-  critical/high, scanner-DB freshness, recent and failed scans).
+- **Dashboard** — aggregate widgets (totals, 30-day trend, top vulnerable
+  targets, open critical/high, scanner-DB freshness, recent scans, failed-scan
+  alerts).
+- **Scheduled scans** — recurring scans on a standard 5-field **cron** cadence,
+  per target/profile, with a "run now" action.
+- **Notifications** — event-driven dispatch (scan completed / failed /
+  critical-or-high) to **webhook / Discord / SMTP / Matrix** channels, each
+  subscribing to the events it cares about.
+- **Trivy policy** — managed **VEX documents** (OpenVEX / CycloneDX / CSAF) and
+  structured **`.trivyignore`** rules, materialized into the scan at run time.
+- **Result retention** — optionally prune the raw scanner artifacts of old scans
+  to bound disk usage while keeping history and normalized findings.
+- **Metrics** — a Prometheus **`/metrics`** endpoint (authenticated) exposing
+  scan counts, open critical/high posture, and schedule counts.
 - **Authentication** — local accounts (argon2id) with sessions and optional TOTP
   MFA, plus generic **OIDC** (Pocket ID / RS256). **RBAC**: viewer / operator /
   admin.
@@ -80,7 +94,8 @@ and one normalized findings model.
   fields are write-only. (See [Security model](#security-model).)
 - **Backup & restore** — portable, passphrase-protected bundles that re-key
   secrets on restore; optional scheduled backups.
-- **Notifications, scheduled scans, and API tokens** — for automation and alerts.
+- **API tokens** — personal bearer tokens for automation, scoped to a role no
+  higher than their owner's.
 
 ## Integrations
 
@@ -93,7 +108,9 @@ and one normalized findings model.
 - **Docker** — image enumeration via a **read-only** `docker-socket-proxy`
   sidecar (the app never mounts the Docker socket itself).
 - **Private registries** — static credentials and ECR/GCR/ACR helpers.
-- **Notification channels** — webhook / Discord / SMTP / Matrix (planned).
+- **Notification channels** — webhook / Discord / SMTP / Matrix, dispatched on
+  scan events.
+- **Prometheus** — an authenticated `/metrics` endpoint for scraping.
 
 ---
 
@@ -143,7 +160,7 @@ and one normalized findings model.
   Compose); disk for the scanner vulnerability databases (under `/cache`).
 - Optional sidecars: a **Trivy server** (shared vuln-DB cache) and a read-only
   **docker-socket-proxy** (to scan running images).
-- For native (non-container) development: **Python 3.12**, **Node 20+**, and the
+- For native (non-container) development: **Python 3.13**, **Node 20+**, and the
   `trivy`/`grype`/`syft` binaries on `PATH`. See
   [CONTRIBUTING.md](./CONTRIBUTING.md).
 
@@ -247,7 +264,7 @@ secrets can be re-encrypted, after which the old line can be removed.
 
 ## Usage
 
-**Available now (Phase 3 — targets & registries):**
+**Running scans:**
 
 - **Image scans** — from **New scan**, pick target type **Image**, choose
   **Trivy** or **Grype**, and enter a reference (e.g. `alpine:3.19` or
@@ -295,8 +312,20 @@ screen); any user can enable optional **TOTP MFA** and manage their password,
 API tokens, and sessions from the **Account** page. **Backups** are created and
 restored from *Settings → Backup & restore* (see [Backup & restore](#backup--restore)).
 
-**Coming in the final phase:** the dashboard, notification dispatch, and
-scheduled scans (Phase 6).
+**Dashboard, automation & policy (Phase 6).** The landing **Dashboard**
+summarizes your posture — total scans, a 30-day trend, top vulnerable targets,
+open critical/high counts, scanner-DB freshness, recent scans, and failed-scan
+alerts. **Scheduled scans** (*Settings → Scheduled scans*, operator role) run a
+saved scan template on a 5-field **cron** cadence, with a "run now" action.
+**Notification channels** (*Settings → Notifications*, admin) subscribe to scan
+events — completed, failed, or critical/high findings — and Scrye dispatches a
+summary to each matching webhook / Discord / SMTP / Matrix channel when a scan
+finishes. **Trivy policy** (*Settings → Trivy policy*, admin) manages **VEX
+documents** and structured **ignore rules** that are applied to every Trivy scan
+(via `TRIVY_VEX` / `TRIVY_IGNOREFILE`, materialized into tmpfs at scan time).
+**Retention** (*Settings → Retention*, admin) optionally prunes the raw
+artifacts of scans older than a chosen age. A Prometheus **`/metrics`** endpoint
+exposes operational gauges — see [Monitoring](#monitoring).
 
 Scanner options that stay write-only and secret (registry / git / OIDC
 credentials, API tokens) are entered once and never returned in plaintext — the
@@ -361,6 +390,66 @@ in v1 requires the bundle's schema version to match the running installation.
 
 ---
 
+## Monitoring
+
+Scrye exposes Prometheus metrics at **`/metrics`** in the text exposition format
+— `scrye_scans_total{status=…}`, `scrye_open_findings{severity=critical|high}`,
+`scrye_scan_schedules{state=…}`, `scrye_build_info`, and account/token/channel
+counts. Because these reveal scan volume and vulnerability posture, the endpoint
+is **authenticated** (viewer role): configure a Prometheus scrape with a personal
+**API token** as a bearer credential rather than exposing it publicly.
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: scrye
+    metrics_path: /metrics
+    authorization: { credentials: '<a Scrye API token>' }
+    static_configs: [{ targets: ['scrye.internal:8089'] }]
+```
+
+---
+
+## Building the image
+
+The image is **built locally** — there is no published registry image (a locked
+decision for v1). A single-arch build for the host you are on:
+
+```bash
+docker build -f docker/Dockerfile -t scrye:0.1.0 .
+```
+
+For a **multi-arch** image (so it runs on both `linux/amd64` and `linux/arm64`),
+use Buildx. The `docker/Dockerfile` is arch-aware and pulls the correct
+`trivy`/`grype`/`syft` binaries per target platform:
+
+```bash
+docker buildx create --use --name scrye-builder   # once
+docker buildx build -f docker/Dockerfile \
+  --platform linux/amd64,linux/arm64 \
+  -t scrye:0.1.0 .
+```
+
+CI builds both architectures on every PR to catch arch-specific breakage, and
+**dogfoods** the result: it scans Scrye's own image with Trivy and Grype and
+fails on any fixable HIGH/CRITICAL finding in Scrye's own attack surface — its
+base-image OS packages (including the `git` runtime dependency), Python and JS
+dependencies, and application code (the whole image filesystem is scanned, so
+the bundled `THIRD_PARTY_LICENSES/` directory is covered too). No publish/registry
+step runs in CI.
+
+The **bundled `trivy`/`grype`/`syft` binaries** are the one thing **excluded from
+the gate** (they still appear in the informational scan report): they are
+unmodified upstream Go binaries Scrye ships as-is and cannot rebuild, so CVEs in
+their embedded Go modules or Go standard library track upstream's release cadence.
+Keeping the pinned scanner versions current is how those are addressed.
+
+Everything else — the base image (including the CPython interpreter), OS packages
+(including `git`), Python and JS dependencies, and the application code — is gated
+as above.
+
+---
+
 ## Roadmap
 
 Build order (see [`docs/PLAN.md`](./docs/PLAN.md) §12):
@@ -374,13 +463,16 @@ Build order (see [`docs/PLAN.md`](./docs/PLAN.md) §12):
   redaction; CSRF + auth rate limiting; audit log.
 - **Phase 2 — Core scanning** ✅ — Trivy image + Grype image, async worker,
   normalized findings, scan detail + raw artifacts.
-- **Phase 3 — Targets & registries** ✅ _(this release)_ — Trivy repo + git
-  creds; Grype filesystem/SBOM; Syft SBOM generation; registry credentials with
-  transient tmpfs docker-config materialization; Docker-environment enumeration.
-- **Phase 4** — history, filters, scan diff/trend, exports.
-- **Phase 5** — full settings, OIDC + MFA, backup/restore, scheduled backups.
-- **Phase 6** — dashboard, notifications, scheduled scans, API tokens,
-  `/metrics`, retention, multi-arch build, self-scanning CI.
+- **Phase 3 — Targets & registries** ✅ — Trivy repo + git creds; Grype
+  filesystem/SBOM; Syft SBOM generation; registry credentials with transient
+  tmpfs docker-config materialization; Docker-environment enumeration.
+- **Phase 4 — History, reports & exports** ✅ — history, filters, saved presets,
+  scan diff/trend, CSV/Markdown/JSON exports.
+- **Phase 5 — Settings, OIDC & backup/restore** ✅ — full settings, OIDC + MFA,
+  API tokens, notification channels, backup/restore, scheduled backups.
+- **Phase 6 — Dashboard & automation** ✅ _(this release)_ — dashboard,
+  notification dispatch, scheduled/recurring scans, Trivy VEX & ignore-rule
+  management, `/metrics`, result retention, multi-arch build, self-scanning CI.
 
 **Deferred (not in v1):** arq/Redis scale-out, SQLCipher full-DB encryption,
 container-registry publishing.

@@ -11,6 +11,7 @@ from app.db.models.git_credential import GitCredential, GitProvider
 from app.db.models.notification import (
     SECRET_OPTIONAL_TYPES,
     NotificationChannel,
+    NotificationEvent,
     NotificationType,
 )
 from app.db.models.oidc import OIDC_CONFIG_ID, OidcConfig, OidcIdentity, OidcLoginFlow
@@ -33,6 +34,13 @@ from app.db.models.scan import (
     Severity,
     TargetType,
 )
+from app.db.models.scan_schedule import ScanSchedule
+from app.db.models.trivy_policy import (
+    VEX_FILE_SUFFIX,
+    TrivyIgnoreRule,
+    VexDocument,
+    VexFormat,
+)
 from app.db.models.user import ROLE_RANK, Role, User
 
 __all__ = [
@@ -43,6 +51,7 @@ __all__ = [
     "SECRET_BEARING_AUTH_TYPES",
     "SECRET_OPTIONAL_TYPES",
     "SEVERITY_RANK",
+    "VEX_FILE_SUFFIX",
     "ApiToken",
     "AppSetting",
     "Artifact",
@@ -59,6 +68,7 @@ __all__ = [
     "GitCredential",
     "GitProvider",
     "NotificationChannel",
+    "NotificationEvent",
     "NotificationType",
     "OidcConfig",
     "OidcIdentity",
@@ -67,10 +77,14 @@ __all__ = [
     "RegistryAuthType",
     "Role",
     "Scan",
+    "ScanSchedule",
     "ScanStatus",
     "ScanTag",
     "Scanner",
     "Severity",
     "TargetType",
+    "TrivyIgnoreRule",
     "User",
+    "VexDocument",
+    "VexFormat",
 ]

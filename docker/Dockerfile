@@ -25,10 +25,10 @@ RUN npm run build
 
 
 # --- Stage 2: download + checksum-verify the scanner binaries ----------------
-FROM debian:bookworm-slim@sha256:8a7e7cc04fd3e2bd787f7f24e22d5d119aa590d429b50c95dfe12b3abe52f48b AS scanners
+FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS scanners
 ARG TARGETARCH
 # Pinned, current scanner versions (CLAUDE.md § Dependency hygiene).
-ARG TRIVY_VERSION=0.71.2
+ARG TRIVY_VERSION=0.72.0
 ARG GRYPE_VERSION=0.115.0
 ARG SYFT_VERSION=1.46.0
 
@@ -68,7 +68,7 @@ RUN set -eux; \
 
 
 # --- Stage 3: build the Python virtualenv ------------------------------------
-FROM python:3.12-slim-bookworm@sha256:8a7e7cc04fd3e2bd787f7f24e22d5d119aa590d429b50c95dfe12b3abe52f48b AS backend-builder
+FROM python:3.13-slim-bookworm@sha256:fcbd8dfc2605ba7c2eca646846c5e892b2931e41f6227985154a596f26ab8ed7 AS backend-builder
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build/backend
@@ -83,7 +83,7 @@ RUN pip install .
 
 
 # --- Final stage: minimal runtime image --------------------------------------
-FROM python:3.12-slim-bookworm@sha256:8a7e7cc04fd3e2bd787f7f24e22d5d119aa590d429b50c95dfe12b3abe52f48b AS runtime
+FROM python:3.13-slim-bookworm@sha256:fcbd8dfc2605ba7c2eca646846c5e892b2931e41f6227985154a596f26ab8ed7 AS runtime
 
 # ca-certificates: scanner DB downloads + TLS. curl: container HEALTHCHECK.
 # git: authenticated clone of generic-host private repos into tmpfs, so the
