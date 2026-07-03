@@ -24,16 +24,20 @@ from app.api.api_tokens import router as api_tokens_router
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.backups import router as backups_router
+from app.api.dashboard import router as dashboard_router
 from app.api.docker_environments import router as docker_environments_router
 from app.api.filter_presets import router as filter_presets_router
 from app.api.git_credentials import router as git_credentials_router
 from app.api.health import router as health_router
+from app.api.metrics import router as metrics_router
 from app.api.notifications import router as notifications_router
 from app.api.oidc import config_router as oidc_config_router
 from app.api.oidc import login_router as oidc_login_router
 from app.api.registries import router as registries_router
+from app.api.scan_schedules import router as scan_schedules_router
 from app.api.scans import router as scans_router
 from app.api.settings import router as settings_router
+from app.api.trivy_policy import router as trivy_policy_router
 from app.api.users import router as users_router
 from app.auth.mfa import PendingMfaStore
 from app.core.config import Settings, get_settings
@@ -41,7 +45,7 @@ from app.core.crypto import MasterKeyError, get_secret_cipher
 from app.core.logging import configure_logging
 from app.core.ratelimit import SlidingWindowRateLimiter
 from app.db.session import SessionLocal
-from app.workers import InProcessScanWorker
+from app.workers import InProcessScanWorker, MaintenanceScheduler
 from app.workers.backup_scheduler import BackupScheduler
 
 logger = logging.getLogger(__name__)
@@ -81,12 +85,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.backup_scheduler = backup_scheduler
     logger.info("Backup scheduler started.")
 
+    maintenance = MaintenanceScheduler(SessionLocal, worker)
+    maintenance.start()
+    app.state.maintenance_scheduler = maintenance
+    logger.info("Maintenance scheduler started (scheduled scans + retention).")
+
     try:
         yield
     finally:
+        await maintenance.shutdown()
         await backup_scheduler.shutdown()
         await worker.shutdown()
-        logger.info("Scan worker and backup scheduler stopped.")
+        logger.info("Scan worker, backup, and maintenance schedulers stopped.")
 
 
 def _mount_spa(app: FastAPI, dist_dir: Path) -> None:
@@ -153,17 +163,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.include_router(health_router)
+    app.include_router(metrics_router)
     app.include_router(auth_router, prefix="/api")
     app.include_router(oidc_login_router, prefix="/api")
     app.include_router(oidc_config_router, prefix="/api")
     app.include_router(users_router, prefix="/api")
     app.include_router(audit_router, prefix="/api")
+    app.include_router(dashboard_router, prefix="/api")
     app.include_router(scans_router, prefix="/api")
+    app.include_router(scan_schedules_router, prefix="/api")
     app.include_router(filter_presets_router, prefix="/api")
     app.include_router(registries_router, prefix="/api")
     app.include_router(git_credentials_router, prefix="/api")
     app.include_router(docker_environments_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
+    app.include_router(trivy_policy_router, prefix="/api")
     app.include_router(notifications_router, prefix="/api")
     app.include_router(api_tokens_router, prefix="/api")
     app.include_router(backups_router, prefix="/api")

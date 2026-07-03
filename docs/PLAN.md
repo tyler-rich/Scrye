@@ -924,3 +924,107 @@ bugs — accepted for hardening before merge. Explicit algorithm pinning removes
 reliance on library defaults for JWS `alg` handling; the higher scrypt cost strengthens
 offline brute-force resistance of the portable, passphrase-encrypted backup bundle.
 **Plan section affected:** §5 (OIDC), §8 (Backup & restore).
+
+### 2026-07-03 — Phase P6 — Branch name `phase/P6`
+**What changed:** Phase 6 work is developed on branch `phase/P6`.
+**Why:** Matches the repo convention in CLAUDE.md § Git & PR conventions
+(`phase/PX`) and the explicit build-session instruction, continuing the pattern of
+phases 0–5. (Noted for the record; the session harness had suggested a different
+default branch name.)
+**Plan section affected:** §12 (process, not output).
+
+### 2026-07-03 — Phase P6 — Cron scheduling via a self-contained evaluator
+**What changed:** Scheduled/recurring scans use an in-repo 5-field cron evaluator
+(`app/core/cron.py`, standard `* , - /` syntax with Vixie dom/dow semantics) rather
+than a third-party cron dependency. Schedules live in a new `scan_schedules` table
+(a scan template + cron), and an in-process `MaintenanceScheduler` (mirroring the
+existing backup scheduler) fires due schedules on a one-minute tick and hands the
+created scans to the worker. Schedule *management* is an `operator` action (like
+launching scans) with `viewer` reads; SBOM targets cannot be scheduled (they need a
+file upload); `PUT` replaces a whole schedule and a `run now` action fires one
+immediately.
+**Why:** §4.6/§12 call for "cron per target/profile" without specifying the engine or
+storage. A small, tested evaluator avoids adding an unvetted dependency (CLAUDE.md
+§ Dependency hygiene) and keeps full control of the semantics; an in-process loop fits
+the locked single-container model (§0.2).
+**Plan section affected:** §4.6, §7 (data model), §12 (Phase 6).
+
+### 2026-07-03 — Phase P6 — Notification dispatch: per-channel event subscriptions
+**What changed:** Phase 5 built the notification channels + test-send; Phase 6 wires
+dispatch. A per-channel `events` JSON column records which events a channel is notified
+about — `scan_completed`, `scan_failed`, and `scan_high_severity` (a completed scan with
+any CRITICAL/HIGH finding). When a scan finishes the worker calls a best-effort dispatcher
+(`app/core/notification_dispatch.py`) that sends a plain-text summary to each enabled,
+subscribed channel; a transport failure is logged, never raised into the scan.
+**Why:** §4.5/§4.6 place notification *configuration* in Phase 5 and *dispatch* in Phase 6
+but do not define the event taxonomy or routing. Per-channel opt-in (rather than a global
+rule table) is the least-surprising materialization and needs only one additive column.
+**Plan section affected:** §4.5, §4.6, §7 (data model).
+
+### 2026-07-03 — Phase P6 — Trivy VEX/ignore applied via env vars, ignore rules structured
+**What changed:** VEX documents (`vex_documents`) and structured ignore rules
+(`trivy_ignore_rules`, an id + optional reason + optional expiry) are admin-managed and
+applied to every Trivy scan by materializing them into the container's tmpfs `/tmp` at
+scan time and passing Trivy's `TRIVY_VEX` / `TRIVY_IGNOREFILE` environment variables
+(the env equivalents of `--vex` / `--ignorefile`) — so the scanner argv-builders are
+unchanged and the transient paths stay off the process argv. The rendered `.trivyignore`
+combines the global blob from scanner settings (a Phase 5 gap now actually applied) with
+the active managed rules.
+**Why:** §4.1/§4.5 list "VEX policy" and "`.trivyignore` rules" without a storage or
+plumbing design. Env-var delivery is Trivy's documented equivalent of the flags and needs
+no scanner changes; a structured rule table (rather than only a raw blob) lets rules carry
+a reason and an expiry and be toggled individually.
+**Plan section affected:** §4.1, §4.5, §7 (data model).
+
+### 2026-07-03 — Phase P6 — Dashboard "open" posture from the latest scan per target
+**What changed:** The dashboard's open critical/high counts and top-vulnerable-targets
+widget are computed from the **latest succeeded scan per (scanner, target)**, not a running
+total across all scans. Scanner-DB freshness probes `trivy --version --format json` and
+`grype db status -o json` best-effort (a missing binary degrades to "unknown").
+**Why:** §4.6 lists the widgets but not their semantics. Deriving "open" from the most
+recent scan per target makes re-scanning a fixed target lower the number, which is the
+useful live-posture reading; a running total would only ever grow.
+**Plan section affected:** §4.6.
+
+### 2026-07-03 — Phase P6 — `/metrics` is authenticated; hand-rolled exposition
+**What changed:** The Prometheus `/metrics` endpoint requires the `viewer` role rather than
+being public, and renders the text exposition format directly (no `prometheus_client`
+dependency) from DB-derived gauges. A Prometheus scrape authenticates with a personal API
+token as a bearer credential.
+**Why:** The metrics reveal scan volume and open-vulnerability posture, so exposing them
+unauthenticated conflicts with the security-first principle (§1); API-token bearer auth is
+the standard Prometheus mechanism and needs no new auth path. Hand-rolling the (simple)
+exposition format for point-in-time gauges avoids an added dependency (CLAUDE.md
+§ Dependency hygiene).
+**Plan section affected:** §1 (security-first), §12 (Phase 6 `/metrics`).
+
+### 2026-07-03 — Phase P6 — Retention prunes raw artifacts only; config in the settings table
+**What changed:** The result-retention policy (a new `retention` group in the existing
+`settings` table: `enabled` + `max_age_days`) prunes the **raw** artifacts (scanner JSON +
+SBOMs) of scans older than the age, removing the files and their `artifacts` rows while
+keeping the scan row and its normalized findings. The maintenance scheduler runs it on each
+tick when enabled.
+**Why:** §12 says "prune old raw artifacts" — keeping the scan and normalized findings
+preserves history, trends, and severity counts while reclaiming the bulk of the disk
+footprint. Storing the policy in the typed settings store matches the Phase 5 settings
+pattern and needs no new table.
+**Plan section affected:** §4.3, §12 (Phase 6 retention).
+
+### 2026-07-03 — Phase P6 — Dogfood self-scan gates on fixable High/Critical with triage allowlists
+**What changed:** CI adds an `image` job that builds the image (amd64, loaded) and scans it
+with Trivy and Grype pinned to the versions Scrye bundles, plus an `image-multiarch` job that
+builds `linux/amd64,linux/arm64` to prove both architectures build. The gate fails on any
+**fixable HIGH/CRITICAL** finding (Trivy `--ignore-unfixed --severity HIGH,CRITICAL`; Grype
+`--only-fixed --fail-on high`); fixable lower-severity items are reported but non-gating, and
+triaged exceptions live in `ci/trivyignore` and `ci/grype.yaml` with dated justifications.
+Because the whole image filesystem and OS package set are scanned, the bundled
+`THIRD_PARTY_LICENSES/` directory and the `git` runtime dependency (added in Phase 3) are
+covered automatically. No registry publishing is added (locked §6): the image is only
+loaded/saved within the job.
+**Why:** CLAUDE.md § Dependency hygiene requires dogfooding Trivy + Grype against Scrye's own
+image and resolving all *fixable* findings, with only genuinely-unfixable items remaining.
+Gating on fixable HIGH/CRITICAL (with an audited allowlist for the rare fixable item that
+cannot be bumped immediately) is the practical, low-churn enforcement of that rule while
+still surfacing everything.
+**Plan section affected:** §9.1 (multi-arch build), §12 (Phase 6 self-scanning CI),
+CLAUDE.md § Dependency hygiene.

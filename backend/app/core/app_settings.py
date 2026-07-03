@@ -64,10 +64,24 @@ class ScannerSettings(BaseModel):
     db_update_interval_hours: int = Field(default=24, ge=1, le=720)
 
 
+class RetentionSettings(BaseModel):
+    """Result-retention policy for pruning old raw scan artifacts (Phase 6).
+
+    Retention prunes the large **raw** artifacts (scanner JSON + SBOMs) of scans
+    older than ``max_age_days`` while keeping the scan row and its normalized
+    findings, so history and trends stay intact but disk usage is bounded.
+    """
+
+    enabled: bool = False
+    #: Prune raw artifacts of scans older than this many days (min 1).
+    max_age_days: int = Field(default=90, ge=1, le=3650)
+
+
 #: Setting group keys used as ``settings.key`` values.
 _KEY_GENERAL = "general"
 _KEY_AUTH = "authentication"
 _KEY_SCANNERS = "scanners"
+_KEY_RETENTION = "retention"
 
 
 class SettingsService:
@@ -106,6 +120,10 @@ class SettingsService:
         """Return the scanner default settings."""
         return ScannerSettings.model_validate(self._read(_KEY_SCANNERS))
 
+    def retention(self) -> RetentionSettings:
+        """Return the result-retention policy settings."""
+        return RetentionSettings.model_validate(self._read(_KEY_RETENTION))
+
     def set_general(self, value: GeneralSettings, *, username: str | None) -> GeneralSettings:
         """Persist general settings and return the stored value."""
         self._write(_KEY_GENERAL, value.model_dump(mode="json"), username=username)
@@ -119,4 +137,9 @@ class SettingsService:
     def set_scanners(self, value: ScannerSettings, *, username: str | None) -> ScannerSettings:
         """Persist scanner settings and return the stored value."""
         self._write(_KEY_SCANNERS, value.model_dump(mode="json"), username=username)
+        return value
+
+    def set_retention(self, value: RetentionSettings, *, username: str | None) -> RetentionSettings:
+        """Persist result-retention settings and return the stored value."""
+        self._write(_KEY_RETENTION, value.model_dump(mode="json"), username=username)
         return value

@@ -83,3 +83,89 @@ jobs:
       # suite grows (`npm test` can be added here in a later phase).
       - name: Build
         run: npm run build
+
+  # Phase 6: build the image and dogfood Scrye's own scanners against it
+  # (CLAUDE.md § Dependency hygiene). The scan covers the whole image filesystem
+  # and OS package set, so the bundled THIRD_PARTY_LICENSES/ directory and the
+  # `git` runtime dependency (added in Phase 3) are included automatically. The
+  # gate fails on any FIXABLE HIGH/CRITICAL finding; fixable lower-severity items
+  # are reported (non-gating) and genuinely unfixable items are noted in the
+  # README. Triaged exceptions live in ci/trivyignore and ci/grype.yaml. Still
+  # NO registry publishing (locked decision §6) — the image is only loaded/saved
+  # locally within the job.
+  image:
+    name: Image — build + dogfood self-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (amd64) and load
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          tags: scrye:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Export image to a tar for offline scanning
+        run: docker save scrye:ci -o /tmp/scrye-image.tar
+
+      # Trivy pinned to the version Scrye bundles (docs/PLAN.md § Deviations).
+      - name: Trivy — full report (informational)
+        run: |
+          docker run --rm \
+            -v /tmp/scrye-image.tar:/image.tar:ro \
+            aquasec/trivy:0.71.2 image --input /image.tar \
+            --scanners vuln --severity LOW,MEDIUM,HIGH,CRITICAL --no-progress || true
+
+      - name: Trivy — gate on fixable HIGH/CRITICAL
+        run: |
+          docker run --rm \
+            -v /tmp/scrye-image.tar:/image.tar:ro \
+            -v "${{ github.workspace }}/ci/trivyignore:/.trivyignore:ro" \
+            aquasec/trivy:0.71.2 image --input /image.tar \
+            --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL \
+            --ignorefile /.trivyignore --exit-code 1 --no-progress
+
+      # Grype pinned to the version Scrye bundles.
+      - name: Grype — gate on fixable High+
+        run: |
+          docker run --rm \
+            -v /tmp/scrye-image.tar:/image.tar:ro \
+            -v "${{ github.workspace }}/ci/grype.yaml:/.grype.yaml:ro" \
+            anchore/grype:v0.115.0 docker-archive:/image.tar \
+            --only-fixed --fail-on high -c /.grype.yaml
+
+  # Phase 6: prove the image builds for both target architectures
+  # (linux/amd64 + linux/arm64, docs/PLAN.md §9.1). No load/push — a multi-arch
+  # build cannot be loaded into the local daemon, so this only verifies both
+  # platforms build cleanly (the arm64 scanner-download path included).
+  image-multiarch:
+    name: Image — multi-arch build check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

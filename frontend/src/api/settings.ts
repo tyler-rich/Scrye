@@ -55,4 +55,13 @@ export const getScannerSettings = () => api<ScannerSettings>('/api/settings/scan
 export const updateScannerSettings = (body: ScannerSettings) =>
   api<ScannerSettings>('/api/settings/scanners', { method: 'PUT', body });
 
+export interface RetentionSettings {
+  enabled: boolean;
+  max_age_days: number;
+}
+
+export const getRetentionSettings = () => api<RetentionSettings>('/api/settings/retention');
+export const updateRetentionSettings = (body: RetentionSettings) =>
+  api<RetentionSettings>('/api/settings/retention', { method: 'PUT', body });
+
 export const getAbout = () => api<AboutInfo>('/api/settings/about');
