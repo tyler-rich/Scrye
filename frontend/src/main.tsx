@@ -5,6 +5,7 @@ import { ColorSchemeScript, MantineProvider } from '@mantine/core';
 import '@mantine/core/styles.css';
 
 import { App } from './App';
+import { AuthProvider } from './auth/AuthContext';
 import { theme } from './theme';
 
 const rootElement = document.getElementById('root');
@@ -16,7 +17,9 @@ createRoot(rootElement).render(
   <StrictMode>
     <ColorSchemeScript defaultColorScheme="auto" />
     <MantineProvider theme={theme} defaultColorScheme="auto">
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </MantineProvider>
   </StrictMode>,
 );
