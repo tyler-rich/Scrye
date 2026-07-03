@@ -365,11 +365,14 @@ decrypted in memory at scan time.
   `/data` and `/cache` volumes and a small `/tmp` tmpfs. The tmpfs is mounted
   **owned by the container's uid** (`uid=1000,gid=1000`) — a bare tmpfs is
   root-owned, so a non-root process could not write to it — and holds only the
-  in-memory credential files. The scanners' vulnerability databases and their
-  (multi-hundred-MB) temporary extraction are pointed at the persistent `/cache`
-  volume via each engine's cache dir and `TMPDIR`, so they never rely on the
-  read-only default `$HOME/.cache` or overflow the tmpfs, and the DB survives
-  restarts instead of re-downloading every scan.
+  in-memory credential files. Every scanner invocation (image/repo/filesystem/
+  SBOM scans **and** the About-tab version / DB-status probes) is pointed at the
+  persistent `/cache` volume through environment variables — `TRIVY_CACHE_DIR`,
+  `GRYPE_DB_CACHE_DIR`, `XDG_CACHE_HOME`/`HOME`, and `TMPDIR` — so nothing ever
+  falls back to the read-only default `$HOME/.cache` (`/app/.cache`) or overflows
+  the tmpfs. The vulnerability DB therefore downloads **once** and persists
+  across restarts (the volume outlives the container) instead of re-downloading
+  into a transient or broken location every scan.
 - **Docker socket residual risk.** "Scan running images" uses a **read-only**
   `docker-socket-proxy` restricted to read endpoints (`POST=0`). The Scrye app
   **never** mounts `/var/run/docker.sock`. The proxy is the only place the

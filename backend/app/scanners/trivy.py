@@ -22,7 +22,7 @@ from app.scanners.base import (
     clip,
     resolve_binary,
     run_command,
-    scanner_scratch,
+    scanner_cache_env,
     severity_from_string,
     tally_severities,
 )
@@ -258,15 +258,15 @@ class TrivyScanner(BaseScanner):
     ) -> ScanExecution:
         """Run ``trivy image`` against ``target`` and normalize the results."""
         binary = resolve_binary(get_settings().trivy_binary)
-        cache_dir, scratch = scanner_scratch("trivy")
-        argv = build_command(binary, target, options, str(cache_dir))
-        return await self._execute(argv, env={**scratch, **(env or {})})
+        cache_env = scanner_cache_env()
+        argv = build_command(binary, target, options, cache_env["TRIVY_CACHE_DIR"])
+        return await self._execute(argv, env={**cache_env, **(env or {})})
 
     async def scan_repo(
         self, target: str, options: dict[str, Any], *, env: dict[str, str] | None = None
     ) -> ScanExecution:
         """Run ``trivy repo`` against ``target`` (a clone URL) and normalize it."""
         binary = resolve_binary(get_settings().trivy_binary)
-        cache_dir, scratch = scanner_scratch("trivy")
-        argv = build_repo_command(binary, target, options, str(cache_dir))
-        return await self._execute(argv, env={**scratch, **(env or {})})
+        cache_env = scanner_cache_env()
+        argv = build_repo_command(binary, target, options, cache_env["TRIVY_CACHE_DIR"])
+        return await self._execute(argv, env={**cache_env, **(env or {})})

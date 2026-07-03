@@ -25,6 +25,9 @@ os.environ.setdefault("SCRYE_APP_SECRET_KEY_FILE", str(_KEY_FILE))
 os.environ.setdefault("SCRYE_SESSION_COOKIE_SECURE", "false")
 os.environ.setdefault("SCRYE_ARTIFACTS_DIR", str(_TMP / "artifacts"))
 os.environ.setdefault("SCRYE_BACKUPS_DIR", str(_TMP / "backups"))
+# Scanner cache volume: a writable temp path so scanner_cache_env()'s mkdir
+# succeeds under CI's non-root runner (production mounts a writable /cache volume).
+os.environ.setdefault("SCRYE_SCANNER_CACHE_DIR", str(_TMP / "cache"))
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
