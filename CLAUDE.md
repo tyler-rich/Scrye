@@ -23,8 +23,9 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 
 ## Locked decisions — do not re-open
 1. **Name:** Scrye.
-2. **Stack:** React 18 + TS + Vite + **Mantine v7** frontend; **Python 3.12 + FastAPI + Pydantic
-   v2 + SQLAlchemy 2.0 + Alembic** backend; **SQLite**.
+2. **Stack:** React 18 + TS + Vite + **Mantine v7** frontend; **Python 3.13 + FastAPI + Pydantic
+   v2 + SQLAlchemy 2.0 + Alembic** backend; **SQLite**. (Originally locked to Python 3.12;
+   revised to 3.13 in Phase 6 — see `docs/PLAN.md` § Deviations.)
 3. **Job model:** single-container **in-process async worker** (DB-backed `scans` table +
    concurrency semaphore). **No Redis/arq in v1** — but keep a thin worker interface so it could be
    swapped later.

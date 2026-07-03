@@ -2,7 +2,7 @@
 name = "scrye"
 version = "0.1.0"
 description = "Self-hosted, browser-based web UI unifying the Trivy and Grype scanners."
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 license = { text = "MIT" }
 authors = [{ name = "Scrye contributors" }]
 
@@ -44,11 +44,11 @@ include = ["app*"]
 
 [tool.black]
 line-length = 100
-target-version = ["py312"]
+target-version = ["py313"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py313"
 
 [tool.ruff.lint]
 # pycodestyle, pyflakes, isort, pep8-naming, pyupgrade, flake8-bugbear, docstrings.

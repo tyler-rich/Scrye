@@ -160,7 +160,7 @@ and one normalized findings model.
   Compose); disk for the scanner vulnerability databases (under `/cache`).
 - Optional sidecars: a **Trivy server** (shared vuln-DB cache) and a read-only
   **docker-socket-proxy** (to scan running images).
-- For native (non-container) development: **Python 3.12**, **Node 20+**, and the
+- For native (non-container) development: **Python 3.13**, **Node 20+**, and the
   `trivy`/`grype`/`syft` binaries on `PATH`. See
   [CONTRIBUTING.md](./CONTRIBUTING.md).
 
@@ -438,23 +438,15 @@ dependencies, and application code (the whole image filesystem is scanned, so
 the bundled `THIRD_PARTY_LICENSES/` directory is covered too). No publish/registry
 step runs in CI.
 
-Two classes of finding are **excluded from the gate** (they still appear in the
-informational scan report), because they are not fixable by Scrye within its
-constraints:
+The **bundled `trivy`/`grype`/`syft` binaries** are the one thing **excluded from
+the gate** (they still appear in the informational scan report): they are
+unmodified upstream Go binaries Scrye ships as-is and cannot rebuild, so CVEs in
+their embedded Go modules or Go standard library track upstream's release cadence.
+Keeping the pinned scanner versions current is how those are addressed.
 
-- The **bundled `trivy`/`grype`/`syft` binaries** — unmodified upstream Go
-  binaries Scrye ships as-is and cannot rebuild, so CVEs in their embedded Go
-  modules or Go standard library track upstream's release cadence. Keeping the
-  pinned scanner versions current is how those are addressed.
-- The **CPython interpreter binary** from the `python:3.12-slim-bookworm` base
-  image. Grype's binary classifier matches it against CPython CVEs whose fixes
-  land only in Python 3.13+/3.14+; Scrye is pinned to **Python 3.12** (a locked
-  decision), and the base image is already the latest 3.12 build, so these are
-  upstream base-image runtime items. Trivy's OS-aware scan still gates the base
-  image itself.
-
-Everything else — OS packages (including `git`), Python and JS dependencies, and
-the application code — is gated as above.
+Everything else — the base image (including the CPython interpreter), OS packages
+(including `git`), Python and JS dependencies, and the application code — is gated
+as above.
 
 ---
 
