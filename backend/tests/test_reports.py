@@ -10,6 +10,7 @@ import csv
 import io
 import json
 
+import pytest
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -23,6 +24,7 @@ from app.db.models import (
     TargetType,
 )
 from app.reports import ExportFormat, diff_findings, export_history, export_scan
+from app.reports.exporters import _csv_safe
 
 
 def _scan(db: Session, **overrides) -> Scan:
@@ -180,3 +182,74 @@ def test_diff_matches_ignoring_package_version_churn(db: Session) -> None:
     assert diff.added_count == 0
     assert diff.removed_count == 0
     assert diff.unchanged_count == 1
+
+
+# --- CSV / spreadsheet formula-injection prevention --------------------------
+
+
+@pytest.mark.parametrize("trigger", ["=", "+", "-", "@", "\t", "\r"])
+def test_csv_safe_prefixes_every_trigger_character(trigger: str) -> None:
+    # A cell that leads with a formula trigger is prefixed with a literal quote.
+    payload = f"{trigger}HYPERLINK(0)"
+    assert _csv_safe(payload) == f"'{payload}"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "libfoo",
+        "1.2.3",
+        "CVE-2024-0001",
+        "openssl@3",  # '@' only triggers when it is the *first* character
+        "a=b",  # '=' mid-string is harmless
+        "team-a",  # a hyphen mid-string is a normal name, not a trigger
+    ],
+)
+def test_csv_safe_passes_normal_values_through_unmodified(value: str) -> None:
+    assert _csv_safe(value) == value
+
+
+def test_csv_safe_guards_leading_hyphen_even_when_it_looks_legitimate() -> None:
+    # A negative-sounding but legitimate package name still leads with '-', which
+    # is a genuine formula trigger — it must be neutralized, not special-cased.
+    assert _csv_safe("-rc-tools") == "'-rc-tools"
+
+
+def test_scan_csv_export_neutralizes_formula_injection(db: Session) -> None:
+    scan = _scan(db)
+    finding = _finding(
+        scan.id,
+        vuln_id="CVE-INJECT",
+        pkg_name="-danger",
+        title='=HYPERLINK("http://evil","click")',
+    )
+    db.add(finding)
+    db.flush()
+    rows = list(
+        csv.reader(io.StringIO(export_scan(scan, [finding], ExportFormat.CSV).content.decode()))
+    )
+    row = rows[1]
+    assert "'-danger" in row  # pkg_name guarded
+    assert any(cell.startswith("'=HYPERLINK") for cell in row)  # title guarded
+
+
+def test_history_csv_export_neutralizes_formula_injection(db: Session) -> None:
+    scan = _scan(db, target="=cmd|calc", created_by_username="+admin")
+    db.add(ScanTag(scan_id=scan.id, tag="-prod"))
+    db.flush()
+    rows = list(csv.reader(io.StringIO(export_history([scan], ExportFormat.CSV).content.decode())))
+    row = rows[1]
+    assert "'=cmd|calc" in row  # target guarded
+    assert "'+admin" in row  # initiator guarded
+    assert "'-prod" in row  # joined tags guarded
+
+
+def test_markdown_export_neutralizes_formula_injection(db: Session) -> None:
+    scan = _scan(db)
+    finding = _finding(scan.id, vuln_id="=cmd", pkg_name="normalpkg")
+    db.add(finding)
+    db.flush()
+    text = export_scan(scan, [finding], ExportFormat.MARKDOWN).content.decode()
+    assert "'=cmd" in text
+    assert "normalpkg" in text  # untouched
