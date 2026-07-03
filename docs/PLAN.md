@@ -903,3 +903,24 @@ Scanners, API tokens, and About tabs. API tokens remain a Settings tab per §4.5
 Settings), so they belong on a per-user page; gating the admin tabs avoids showing
 operators panels whose endpoints would 403.
 **Plan section affected:** §4.5 (Settings), §5 (RBAC).
+
+### 2026-07-03 — Phase P5 — Security review hardening: OIDC alg allowlist + scrypt work factor
+**What changed:** Two hardening items from the Phase 5 pre-merge security review were
+applied. (1) `verify_id_token` now pins the accepted ID-token signing algorithms to an
+explicit allowlist — the provider's discovered `id_token_signing_alg_values_supported`
+(with `none` stripped) when advertised, falling back to `["RS256"]` — using a per-call
+`JsonWebToken(<allowlist>)` instead of the library-default decoder, so a token presented
+with an unexpected `alg` (`none`, or an HS/RS confusion attempt) is rejected before its
+claims are trusted. Discovery now captures the advertised algorithm set on `OidcMetadata`.
+(2) The backup passphrase KDF work factor was raised from scrypt `N=2**15` to `N=2**17`
+(r=8, p=1 → ~128 MiB per derivation, per current OWASP guidance) in `core/passphrase.py`,
+and the parameter comment's memory estimate corrected (the prior "~64 MiB" was inaccurate
+at both the old and new N). New tests cover both: real RSA-signed ID-token verification
+(valid RS256 accepted; `none`, HS256-confusion, wrong-audience, expired, and nonce-mismatch
+tokens rejected; discovery parsing of the advertised algs) and the scrypt parameters/
+derivation round-trip.
+**Why:** Both were low-severity, defense-in-depth findings raised in the review — not live
+bugs — accepted for hardening before merge. Explicit algorithm pinning removes any
+reliance on library defaults for JWS `alg` handling; the higher scrypt cost strengthens
+offline brute-force resistance of the portable, passphrase-encrypted backup bundle.
+**Plan section affected:** §5 (OIDC), §8 (Backup & restore).

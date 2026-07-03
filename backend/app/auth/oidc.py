@@ -25,7 +25,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from app.auth._jose import JoseError, JsonWebKey, jwt
+from app.auth._jose import JoseError, JsonWebKey, JsonWebToken
 
 #: Discovery/JWKS cache TTL (seconds). Provider metadata rarely changes; caching
 #: avoids a network round-trip on every login while still refreshing keys.
@@ -33,6 +33,9 @@ _CACHE_TTL_SECONDS = 300
 _HTTP_TIMEOUT_SECONDS = 10
 #: Clock-skew tolerance when validating time-based claims.
 _LEEWAY_SECONDS = 60
+#: Signing algorithm used when the provider doesn't advertise a set. RS256 is the
+#: OIDC-mandated default (and Pocket ID's algorithm).
+_DEFAULT_SIGNING_ALGS = ("RS256",)
 
 
 class OidcError(RuntimeError):
@@ -51,6 +54,9 @@ class OidcMetadata:
     authorization_endpoint: str
     token_endpoint: str
     jwks_uri: str
+    #: ``id_token_signing_alg_values_supported`` from discovery, if advertised.
+    #: Empty when the provider omits it (Scrye then falls back to RS256).
+    id_token_signing_alg_values_supported: tuple[str, ...] = ()
 
 
 #: Simple in-process TTL cache: issuer -> (expiry_epoch, value).
@@ -93,12 +99,16 @@ async def discover(issuer: str) -> OidcMetadata:
     except (httpx.HTTPError, ValueError) as exc:
         raise OidcError(f"OIDC discovery failed for issuer {issuer!r}.") from exc
 
+    algs = doc.get("id_token_signing_alg_values_supported")
     try:
         metadata = OidcMetadata(
             issuer=doc["issuer"],
             authorization_endpoint=doc["authorization_endpoint"],
             token_endpoint=doc["token_endpoint"],
             jwks_uri=doc["jwks_uri"],
+            id_token_signing_alg_values_supported=(
+                tuple(str(a) for a in algs) if isinstance(algs, list) else ()
+            ),
         )
     except KeyError as exc:
         raise OidcError(f"OIDC discovery document missing {exc.args[0]!r}.") from exc
@@ -187,6 +197,22 @@ async def exchange_code(
     return tokens
 
 
+def _allowed_algorithms(metadata: OidcMetadata) -> list[str]:
+    """Return the signing-algorithm allowlist for ID-token verification.
+
+    Uses the provider's advertised ``id_token_signing_alg_values_supported``
+    when present, and always falls back to RS256 when it is absent or empty.
+    ``none`` is stripped defensively — an unsigned ID token is never acceptable —
+    so a provider that (mis)advertises it can't downgrade verification.
+    """
+    advertised = [
+        alg
+        for alg in metadata.id_token_signing_alg_values_supported
+        if alg and alg.lower() != "none"
+    ]
+    return advertised or list(_DEFAULT_SIGNING_ALGS)
+
+
 async def verify_id_token(
     metadata: OidcMetadata,
     id_token: str,
@@ -196,14 +222,20 @@ async def verify_id_token(
 ) -> dict:
     """Verify an ID token's signature and core claims, returning the claims.
 
+    The accepted signature algorithms are pinned to an explicit allowlist (the
+    provider's advertised set, or RS256), so a token presented with an
+    unexpected ``alg`` (e.g. ``none`` or an HMAC-key-confusion attempt) is
+    rejected before its claims are trusted.
+
     Raises:
-        OidcError: On signature failure, claim mismatch, expiry, or nonce
-            mismatch. Never leaks token material.
+        OidcError: On signature failure, disallowed algorithm, claim mismatch,
+            expiry, or nonce mismatch. Never leaks token material.
     """
     jwks = await _fetch_jwks(metadata.jwks_uri)
     try:
         key_set = JsonWebKey.import_key_set(jwks)
-        claims = jwt.decode(
+        decoder = JsonWebToken(_allowed_algorithms(metadata))
+        claims = decoder.decode(
             id_token,
             key_set,
             claims_options={

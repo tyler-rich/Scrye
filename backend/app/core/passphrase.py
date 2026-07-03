@@ -19,9 +19,11 @@ import os
 
 from app.core.crypto import SecretCipher
 
-#: scrypt cost parameters (RFC 7914). N must be a power of two; these give a
-#: ~64 MiB, sub-second derivation that is expensive to brute-force offline.
-SCRYPT_N = 2**15
+#: scrypt cost parameters (RFC 7914). N must be a power of two. Memory use is
+#: ``128 * N * r`` bytes, so ``N=2**17`` with ``r=8`` needs ~128 MiB per
+#: derivation — expensive to brute-force offline, per current OWASP guidance,
+#: while still deriving in well under a second on a modern host.
+SCRYPT_N = 2**17
 SCRYPT_R = 8
 SCRYPT_P = 1
 _DERIVED_KEY_BYTES = 32
