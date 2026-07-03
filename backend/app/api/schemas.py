@@ -26,6 +26,7 @@ class UserOut(BaseModel):
     username: str
     role: Role
     is_active: bool
+    mfa_enabled: bool
     created_at: datetime
     last_login_at: datetime | None
 
@@ -44,19 +45,60 @@ class NewUserIn(BaseModel):
     password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
 
+class OidcStatusOut(BaseModel):
+    """Public OIDC availability info for the login screen."""
+
+    enabled: bool
+    display_name: str
+
+
 class AuthStatusOut(BaseModel):
     """Public bootstrap/auth state used by the SPA on load."""
 
     needs_setup: bool
     authenticated: bool
     user: UserOut | None
+    oidc: OidcStatusOut
 
 
 class LoginOut(BaseModel):
-    """Successful login/setup response."""
+    """Login/setup response.
 
-    user: UserOut
-    csrf_token: str
+    On a completed login, ``user`` and ``csrf_token`` are set. When the account
+    has MFA enabled, the first step instead returns ``mfa_required=True`` plus a
+    short-lived ``mfa_token`` to submit with the TOTP code.
+    """
+
+    user: UserOut | None = None
+    csrf_token: str | None = None
+    mfa_required: bool = False
+    mfa_token: str | None = None
+
+
+class MfaVerifyIn(BaseModel):
+    """Second-step login payload: the challenge token plus the TOTP code."""
+
+    mfa_token: str = Field(min_length=1, max_length=128)
+    code: str = Field(min_length=6, max_length=10)
+
+
+class MfaEnrollOut(BaseModel):
+    """One-time enrollment material for setting up an authenticator app."""
+
+    secret: str
+    otpauth_uri: str
+
+
+class MfaActivateIn(BaseModel):
+    """Confirm MFA enrollment by proving a code from the new secret."""
+
+    code: str = Field(min_length=6, max_length=10)
+
+
+class MfaDisableIn(BaseModel):
+    """Disable MFA, re-authenticating with the current password."""
+
+    password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
 
 
 class SessionOut(BaseModel):
