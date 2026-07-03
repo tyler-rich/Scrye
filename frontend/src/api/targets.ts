@@ -8,6 +8,17 @@ export interface MaskedSecret {
   updated_at: string | null;
 }
 
+/**
+ * Minimal id/name pair for picking a credential when launching a scan.
+ *
+ * The full registry/git-credential lists (with host, username, etc.) are
+ * admin-only; operators select from these id/name options instead.
+ */
+export interface CredentialOption {
+  id: number;
+  name: string;
+}
+
 // --- Registries --------------------------------------------------------------
 
 export type RegistryAuthType =
@@ -51,6 +62,11 @@ export function listRegistries(): Promise<Registry[]> {
   return api<Registry[]>('/api/registries');
 }
 
+/** Operator-accessible id/name options for the scan-launch registry picker. */
+export function listRegistryOptions(): Promise<CredentialOption[]> {
+  return api<CredentialOption[]>('/api/registries/options');
+}
+
 export function createRegistry(input: RegistryCreateInput): Promise<Registry> {
   return api<Registry>('/api/registries', { method: 'POST', body: input });
 }
@@ -89,6 +105,11 @@ export interface GitCredentialCreateInput {
 
 export function listGitCredentials(): Promise<GitCredential[]> {
   return api<GitCredential[]>('/api/git-credentials');
+}
+
+/** Operator-accessible id/name options for the scan-launch git-credential picker. */
+export function listGitCredentialOptions(): Promise<CredentialOption[]> {
+  return api<CredentialOption[]>('/api/git-credentials/options');
 }
 
 export function createGitCredential(input: GitCredentialCreateInput): Promise<GitCredential> {

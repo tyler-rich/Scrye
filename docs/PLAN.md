@@ -666,3 +666,47 @@ both are pinned, current, and vetted. §5 assigns credential *management* to adm
 but scanning is an operator action that must reference a credential by name, so a
 masked read for operators is required and exposes no secret material.
 **Plan section affected:** §2 (Tech stack), §5 (RBAC).
+
+### 2026-07-03 — Phase P3 — Security Review #2: generic-host git auth off-argv
+**What changed:** Generic (non-GitHub/GitLab) private-repo scanning no longer
+embeds `username:token` in the clone URL passed to `trivy repo` (which put the
+credential on the process argv, visible via `/proc/<pid>/cmdline`). Instead,
+generic HTTPS hosts are now cloned locally with the system `git` binary: the
+credential is delivered through a transient tmpfs `GIT_ASKPASS` helper (mode
+`0700`, echoing the credential from the clone subprocess's own environment — never
+argv, never the parent process env, never the script file, never persisted), the
+requested ref is checked out, and Trivy then scans the local checkout. Both the
+helper and the checkout are shredded/removed in a `finally` block on success,
+failure, or cancellation. `git` is added to the runtime image (unpinned, tracking
+the digest-pinned base like the other apt packages). GitHub/GitLab are unchanged
+and keep Trivy's native `GITHUB_TOKEN`/`GITLAB_TOKEN` env path (already off-argv).
+**Why:** Resolves finding #2 of the Phase 3 security review. Trivy clones via
+`go-git`, which never invokes the system git binary and so ignores `GIT_ASKPASS`,
+`.netrc`, and credential helpers; for generic hosts its only credential channel is
+the URL, which necessarily lands on argv. Cloning with the real `git` binary is the
+only way to keep the credential off the process list while still supporting generic
+hosts. Decision and implementation approach are per
+`docs/reviews/phase3-finding2-resolution.md` (Option 1). Two adaptations to that
+spec, both preserving its security mechanics: the askpass script is `0700` rather
+than `0600` because git *execs* it (a non-executable helper fails with `EACCES`),
+and the clone runs through the existing async `run_command` seam on the container's
+tmpfs `/tmp` (matching `docker_config_env`) rather than a sync `subprocess.run` and
+a bespoke mount, so it doesn't block the event loop.
+**Plan section affected:** §4.1 (Trivy repo target), §6 (secrets at scan time), §9.1
+(image dependency).
+
+### 2026-07-03 — Phase P3 — Security Review #5: credential lists are admin-only
+**What changed:** `GET /api/registries` and `GET /api/git-credentials` (the full
+metadata views) are now **admin-only**; operators previously had read access.
+Because launching a scan still requires an operator to pick a credential by name,
+two new operator-accessible endpoints — `GET /api/registries/options` and
+`GET /api/git-credentials/options` — return only `{id, name}` (enabled registries
+for the registry list), exposing no host, username, provider, auth type, or secret.
+The New Scan page now populates its credential pickers from these option endpoints.
+**Why:** Resolves finding #5 of the Phase 3 security review. The masked list already
+withheld the secret, but it still exposed credential *metadata* (registry host,
+username, git provider/host) to operators. Narrowing the operator surface to bare
+id/name keeps that metadata admin-only while preserving the scan-launch selection
+flow. Supersedes the operator-read decision logged in the 2026-07-03 “Runtime deps
+… and read scope” entry above.
+**Plan section affected:** §5 (RBAC).
