@@ -1,0 +1,34 @@
+# Scrye dogfood self-scan — Grype configuration for the CI image scan.
+#
+# The CI "image" job scans Scrye's own image with Grype and gates on FIXABLE
+# findings at HIGH severity or above (`--only-fixed --fail-on high`). Per
+# CLAUDE.md § Dependency hygiene, all fixable findings in Scrye's own attack
+# surface must be resolved; only genuinely unfixable-by-us items may remain
+# (documented in the README).
+#
+# The bundled trivy/grype/syft binaries are unmodified upstream Go binaries that
+# Scrye cannot rebuild, so their embedded-module / Go-stdlib CVEs track upstream
+# releases, not Scrye. They are excluded from the GATE here (by package location)
+# and via `--exclude` on the command line, but remain visible in the informational
+# report. The gate still covers the base image, OS packages (incl. git), Python
+# and JS dependencies, and the app itself.
+#
+# NOTE: the base-image CPython interpreter binary is intentionally NOT excluded —
+# Scrye runs on Python 3.13, whose current patch release carries the fixes for the
+# interpreter CVEs that only existed in the 3.12 line.
+#
+# To triage a genuinely-fixable finding that cannot be resolved immediately, add
+# a `vulnerability:` entry with a dated justification comment.
+
+# Suppress Grype's own app-update check and match noise in CI output.
+check-for-app-update: false
+
+ignore:
+  # Bundled upstream scanner binaries — see the note above.
+  - package:
+      location: "**/usr/local/bin/trivy"
+  - package:
+      location: "**/usr/local/bin/grype"
+  - package:
+      location: "**/usr/local/bin/syft"
+  # (No triaged CVE exceptions at authoring time.)

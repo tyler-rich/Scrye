@@ -1,0 +1,111 @@
+"""Dashboard aggregation endpoint (docs/PLAN.md §4.6, Phase 6).
+
+Serves the aggregate widgets shown on the landing page: total scans, scans over
+time, top vulnerable targets, open critical/high counts, scanner-DB freshness,
+recent scans, and failed-scan alerts. Read-only; requires the ``viewer`` role.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.api.scan_schemas import ScanOut
+from app.auth.deps import AuthContext, require_role
+from app.core.dashboard import (
+    compute_dashboard,
+    failed_scan_alerts,
+    recent_scans,
+)
+from app.core.system_info import scanner_db_status
+from app.db.models import Role
+from app.db.session import get_db
+
+router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+_viewer = require_role(Role.VIEWER)
+
+
+class TargetPostureOut(BaseModel):
+    """Open critical/high posture for one target."""
+
+    scanner: str
+    target: str
+    critical: int
+    high: int
+    total: int
+
+
+class ScannerDbOut(BaseModel):
+    """Vulnerability-DB freshness for one scanner."""
+
+    name: str
+    available: bool
+    updated_at: str | None = None
+    next_update: str | None = None
+    detail: str | None = None
+
+
+class FailedAlertOut(BaseModel):
+    """A failed-scan alert entry."""
+
+    id: int
+    scanner: str
+    target: str
+    error: str | None
+    created_at: datetime
+    finished_at: datetime | None
+
+
+class DashboardOut(BaseModel):
+    """The full dashboard payload."""
+
+    total_scans: int
+    scans_by_status: dict[str, int]
+    scans_by_scanner: dict[str, int]
+    open_critical: int
+    open_high: int
+    scans_over_time: list[dict[str, object]]
+    top_vulnerable_targets: list[TargetPostureOut]
+    recent_scans: list[ScanOut]
+    failed_alerts: list[FailedAlertOut]
+    scanner_db: list[ScannerDbOut]
+    schedules_enabled: int
+    schedules_total: int
+
+
+@router.get("", response_model=DashboardOut)
+async def get_dashboard(
+    _: AuthContext = Depends(_viewer),
+    db: Session = Depends(get_db),
+) -> DashboardOut:
+    """Return the aggregate dashboard widgets (docs/PLAN.md §4.6)."""
+    data = compute_dashboard(db)
+    db_status = await scanner_db_status()
+    return DashboardOut(
+        total_scans=data.total_scans,
+        scans_by_status=data.scans_by_status,
+        scans_by_scanner=data.scans_by_scanner,
+        open_critical=data.open_critical,
+        open_high=data.open_high,
+        scans_over_time=data.scans_over_time,
+        top_vulnerable_targets=[TargetPostureOut(**vars(p)) for p in data.top_vulnerable_targets],
+        recent_scans=[ScanOut.model_validate(s) for s in recent_scans(db)],
+        failed_alerts=[
+            FailedAlertOut(
+                id=s.id,
+                scanner=s.scanner.value,
+                target=s.target,
+                error=s.error,
+                created_at=s.created_at,
+                finished_at=s.finished_at,
+            )
+            for s in failed_scan_alerts(db)
+        ],
+        scanner_db=[ScannerDbOut(**vars(info)) for info in db_status],
+        schedules_enabled=data.schedules_enabled,
+        schedules_total=data.schedules_total,
+    )

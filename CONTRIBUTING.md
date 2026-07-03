@@ -15,11 +15,12 @@ everyone.
 
 ### Prerequisites
 
-- **Python 3.12**
+- **Python 3.13**
 - **Node 20+** (the image builds with Node 22)
-- **Docker** + the **Compose v2** plugin (for the integrated run)
-- For native scan runs in later phases: the **`trivy`**, **`grype`**, and
-  **`syft`** binaries on your `PATH`
+- **Docker** + the **Compose v2** plugin (for the integrated run; Buildx for a
+  multi-arch image build)
+- For native scan runs: the **`trivy`**, **`grype`**, and **`syft`** binaries on
+  your `PATH`
 
 The repo is split into `backend/` (FastAPI) and `frontend/` (React + Vite). You
 can run them natively side by side, or use Compose for an integrated stack.
@@ -30,7 +31,7 @@ can run them natively side by side, or use Compose for an integrated stack.
 cd backend
 
 # Create and activate a virtualenv
-python3.12 -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
 # Install the app plus dev tooling (pinned versions)
@@ -108,8 +109,8 @@ curl -X POST http://localhost:8089/api/auth/setup \
 
 Once any account exists the endpoint (and screen) permanently return
 409/redirect to login. Additional users are created by an admin via
-`POST /api/users` or the UI (later phase). OIDC users (Phase 5) will default to
-`viewer`.
+`POST /api/users` or the *Settings → Users & roles* UI. OIDC users are
+auto-provisioned (when enabled) with the configured default role.
 
 ---
 
@@ -128,20 +129,24 @@ scrye/
 │   ├── app/
 │   │   ├── main.py      # FastAPI app: API + SPA serving, startup key check,
 │   │   │                #   scan-worker lifecycle
-│   │   ├── api/         # routers: health, auth, users, audit, scans,
-│   │   │                #   registries, git_credentials, docker_environments,
-│   │   │                #   settings, oidc, notifications, api_tokens, backups
+│   │   ├── api/         # routers: health, metrics, auth, users, audit,
+│   │   │                #   dashboard, scans, scan_schedules, registries,
+│   │   │                #   git_credentials, docker_environments, settings,
+│   │   │                #   trivy_policy, oidc, notifications, api_tokens, backups
 │   │   ├── auth/        # passwords (argon2id), sessions, RBAC/CSRF+token deps,
 │   │   │                #   OIDC client, TOTP MFA, API-token minting
 │   │   ├── core/        # config, crypto (AES-GCM envelope), secret_store,
-│   │   │                #   app_settings, passphrase KDF, notifications,
-│   │   │                #   system_info, logging/redaction, masking, rate
-│   │   │                #   limiting, audit helper, artifact store, proxies
+│   │   │                #   app_settings, passphrase KDF, cron, dashboard,
+│   │   │                #   metrics, notifications + notification_dispatch,
+│   │   │                #   retention, system_info, logging/redaction, masking,
+│   │   │                #   rate limiting, audit helper, artifact store, proxies
 │   │   ├── scanners/    # Trivy/Grype/Syft orchestration + JSON normalization,
-│   │   │                #   credential materialization, target resolution
+│   │   │                #   credential materialization, target resolution,
+│   │   │                #   Trivy VEX/ignore policy materialization
 │   │   ├── backup/      # portable bundle build/restore + secret re-wrap,
 │   │   │                #   on-disk store, scheduled-backup logic
-│   │   ├── workers/     # in-process async scan worker + backup scheduler
+│   │   ├── workers/     # in-process async scan worker, backup scheduler,
+│   │   │                #   maintenance scheduler (scheduled scans + retention)
 │   │   └── db/          # SQLAlchemy base + session + models/
 │   ├── alembic/         # migration environment + versions
 │   ├── scripts/         # dev helpers (.env.example generator)
@@ -158,10 +163,13 @@ scrye/
 │   │   └── api/         # API client (CSRF-aware fetch + multipart upload)
 │   ├── vite.config.ts
 │   └── package.json
-└── docker/
-    ├── Dockerfile       # multi-stage, CIS-aligned
-    ├── docker-compose.yml
-    └── entrypoint.sh
+├── docker/
+│   ├── Dockerfile       # multi-stage, CIS-aligned, multi-arch (amd64/arm64)
+│   ├── docker-compose.yml
+│   └── entrypoint.sh
+├── ci/                  # dogfood self-scan triage allowlists (trivyignore, grype.yaml)
+└── .github/workflows/
+    └── ci.yml           # lint + tests, multi-arch build, Trivy/Grype self-scan
 ```
 
 ---

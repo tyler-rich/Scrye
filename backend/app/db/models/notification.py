@@ -30,6 +30,21 @@ class NotificationType(enum.StrEnum):
     MATRIX = "matrix"
 
 
+class NotificationEvent(enum.StrEnum):
+    """Events a channel can subscribe to (docs/PLAN.md §4.6, Phase 6).
+
+    Dispatch is opt-in per channel: a channel is only notified about the events
+    listed in its ``events`` array.
+    """
+
+    #: A scan finished successfully (any result).
+    SCAN_COMPLETED = "scan_completed"
+    #: A scan failed (scanner/target error).
+    SCAN_FAILED = "scan_failed"
+    #: A completed scan found at least one CRITICAL or HIGH finding.
+    SCAN_HIGH_SEVERITY = "scan_high_severity"
+
+
 #: Channel types that carry a stored (encrypted) secret. A plain webhook may be
 #: unauthenticated, so its secret is optional; the others' secrets are required.
 SECRET_OPTIONAL_TYPES: frozenset[NotificationType] = frozenset({NotificationType.WEBHOOK})
@@ -53,6 +68,8 @@ class NotificationChannel(Base):
     )
     #: Non-secret routing configuration (URLs, SMTP host/port/from/to, room id).
     config: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    #: Event keys this channel is dispatched for (``NotificationEvent`` values).
+    events: Mapped[list[str]] = mapped_column(JSON, default=list)
     #: Encrypted secret (SMTP password / webhook token / Matrix token).
     secret_ciphertext: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     secret_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

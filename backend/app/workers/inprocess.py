@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.artifacts import artifact_path, store_artifact
 from app.core.config import get_settings
 from app.core.logging import redact
+from app.core.notification_dispatch import dispatch_scan_event
 from app.core.timeutil import utcnow
 from app.db.models import (
     SEVERITY_RANK,
@@ -54,6 +55,7 @@ from app.scanners.targets import (
     resolve_registry_auth,
     resolve_sbom_path,
 )
+from app.scanners.trivy_policy import load_trivy_policy, materialize_trivy_policy
 from app.workers.base import ScanWorker
 
 logger = logging.getLogger(__name__)
@@ -166,8 +168,18 @@ class InProcessScanWorker(ScanWorker):
                 logger.exception("Unexpected failure while executing scan %d.", scan_id)
                 session.rollback()
                 self._fail(session, scan_id, "Unexpected internal error during scan execution.")
+                await self._notify(session, scan_id)
             finally:
                 session.close()
+
+    async def _notify(self, session: Session, scan_id: int) -> None:
+        """Dispatch finished-scan notifications; never raise into the worker."""
+        try:
+            scan = session.get(Scan, scan_id)
+            if scan is not None:
+                await dispatch_scan_event(session, scan)
+        except Exception:  # noqa: BLE001 - notification failures never fail a scan
+            logger.exception("Notification dispatch failed for scan %d.", scan_id)
 
     async def _run(self, session: Session, scan: Scan) -> None:
         """Mark the scan running, invoke the scanner, and persist results."""
@@ -203,6 +215,7 @@ class InProcessScanWorker(ScanWorker):
             # redact() strips URL userinfo before the message is stored/logged.
             self._fail(session, scan.id, str(exc))
             logger.info("Scan %d failed: %s", scan.id, redact(str(exc)))
+            await self._notify(session, scan.id)
             return
 
         self._persist_success(session, scan, execution, sbom)
@@ -212,53 +225,73 @@ class InProcessScanWorker(ScanWorker):
             scan.findings_count,
             scan.highest_severity.value if scan.highest_severity else "none",
         )
+        await self._notify(session, scan.id)
 
     async def _dispatch(
         self, session: Session, scan: Scan
+    ) -> tuple[ScanExecution, SbomResult | None]:
+        """Run the scan for its target type, applying any Trivy policy.
+
+        For Trivy scans the managed VEX documents and ignore rules are resolved
+        and materialized into tmpfs for the duration of the run (passed through
+        Trivy's ``TRIVY_IGNOREFILE`` / ``TRIVY_VEX`` env vars); Grype scans carry
+        no such policy, so the overlay is empty.
+        """
+        if scan.scanner is Scanner.TRIVY:
+            policy = load_trivy_policy(session)
+            with materialize_trivy_policy(policy) as policy_env:
+                return await self._dispatch_target(session, scan, policy_env)
+        return await self._dispatch_target(session, scan, {})
+
+    async def _dispatch_target(
+        self, session: Session, scan: Scan, base_env: dict[str, str]
     ) -> tuple[ScanExecution, SbomResult | None]:
         """Run the scan appropriate to its target type, resolving credentials.
 
         Returns the parsed execution plus an optional Syft SBOM (when the scan
         requested one). Registry/git secrets are decrypted here and materialized
-        into tmpfs only for the duration of the subprocess.
+        into tmpfs only for the duration of the subprocess. ``base_env`` is a
+        non-secret environment overlay (e.g. the Trivy policy) merged under any
+        credential overlay.
         """
         scanner = get_scanner(scan.scanner)
         options = scan.options or {}
         target_type = scan.target_type
 
         if target_type is TargetType.IMAGE:
-            return await self._scan_image(session, scanner, scan, options)
+            return await self._scan_image(session, scanner, scan, options, base_env)
         if target_type is TargetType.REPOSITORY:
-            return await self._scan_repo(session, scanner, scan, options), None
+            return await self._scan_repo(session, scanner, scan, options, base_env), None
         if target_type is TargetType.FILESYSTEM:
             path = resolve_filesystem_path(scan.target)
-            sbom = await self._maybe_sbom(f"dir:{path}", options, None)
-            execution = await scanner.scan_filesystem(path, options)
+            sbom = await self._maybe_sbom(f"dir:{path}", options, base_env or None)
+            execution = await scanner.scan_filesystem(path, options, env=base_env or None)
             return execution, sbom
         if target_type is TargetType.SBOM:
             path = resolve_sbom_path(session, scan)
-            return await scanner.scan_sbom(path, options), None
+            return await scanner.scan_sbom(path, options, env=base_env or None), None
         raise TargetError(f"Unsupported target type {target_type.value!r}.")
 
     async def _scan_image(
-        self, session: Session, scanner: BaseScanner, scan: Scan, options: dict
+        self, session: Session, scanner: BaseScanner, scan: Scan, options: dict, base_env: dict
     ) -> tuple[ScanExecution, SbomResult | None]:
         """Scan an image, materializing registry credentials into tmpfs if set.
 
         The credential file lives only for the lifetime of the ``with`` block —
         which wraps both the optional SBOM pass and the vulnerability scan — and
-        is shredded on exit, even on cancellation or error.
+        is shredded on exit, even on cancellation or error. The credential
+        overlay is layered over ``base_env`` (e.g. the Trivy policy).
         """
         auth = resolve_registry_auth(session, options)
         context = docker_config_env(auth) if auth is not None else nullcontext({})
         with context as overlay:
-            env = overlay or None
+            env = {**base_env, **(overlay or {})} or None
             sbom = await self._maybe_sbom(scan.target, options, env)
             execution = await scanner.scan_image(scan.target, options, env=env)
         return execution, sbom
 
     async def _scan_repo(
-        self, session: Session, scanner: BaseScanner, scan: Scan, options: dict
+        self, session: Session, scanner: BaseScanner, scan: Scan, options: dict, base_env: dict
     ) -> ScanExecution:
         """Scan a git repository, authenticating a private clone if configured.
 
@@ -266,24 +299,26 @@ class InProcessScanWorker(ScanWorker):
         remote directly — the token, if any, rides in Trivy's native env vars and
         never touches argv. A generic private host is cloned locally first (see
         :func:`generic_repo_checkout`) so its credential stays off the process
-        argv, then Trivy scans the local checkout.
+        argv, then Trivy scans the local checkout. ``base_env`` (the Trivy policy)
+        is merged under any credential overlay.
         """
         auth = resolve_git_auth(session, options)
         if auth is None:
-            return await scanner.scan_repo(scan.target, options, env=None)
+            return await scanner.scan_repo(scan.target, options, env=base_env or None)
         if auth.provider is not GitProvider.GENERIC:
             overlay = git_env_token(auth)
-            return await scanner.scan_repo(scan.target, options, env=overlay or None)
+            env = {**base_env, **(overlay or {})} or None
+            return await scanner.scan_repo(scan.target, options, env=env)
         if not is_http_url(scan.target):
             # A non-HTTP generic target (e.g. ssh://) carries no URL credential to
             # inject; let Trivy clone it with its own mechanisms.
-            return await scanner.scan_repo(scan.target, options, env=None)
+            return await scanner.scan_repo(scan.target, options, env=base_env or None)
 
         timeout = get_settings().scan_timeout_seconds
         # The ref is already materialized by our clone; don't re-pass it to Trivy.
         local_options = {k: v for k, v in options.items() if k not in REPO_REF_KEYS}
         async with generic_repo_checkout(scan.target, auth, options, timeout=timeout) as checkout:
-            return await scanner.scan_repo(checkout, local_options, env=None)
+            return await scanner.scan_repo(checkout, local_options, env=base_env or None)
 
     async def _maybe_sbom(
         self, source: str, options: dict, env: dict[str, str] | None

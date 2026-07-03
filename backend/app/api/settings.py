@@ -20,6 +20,7 @@ from app.auth.deps import AuthContext, client_ip, require_auth, require_csrf, re
 from app.core.app_settings import (
     AuthSettings,
     GeneralSettings,
+    RetentionSettings,
     ScannerSettings,
     SettingsService,
 )
@@ -146,6 +147,41 @@ def update_scanners(
     """Update the scanner default options, thresholds, and ignore rules (admin)."""
     value = SettingsService(db).set_scanners(payload, username=auth.user.username)
     record_audit(db, action="settings.scanners_updated", actor=auth.user, ip=client_ip(request))
+    db.commit()
+    return value
+
+
+@router.get("/retention", response_model=RetentionSettings)
+def get_retention(
+    _: AuthContext = Depends(_any_user),
+    db: Session = Depends(get_db),
+) -> RetentionSettings:
+    """Return the result-retention policy settings."""
+    return SettingsService(db).retention()
+
+
+@router.put("/retention", response_model=RetentionSettings)
+def update_retention(
+    payload: RetentionSettings,
+    request: Request,
+    auth: AuthContext = Depends(require_csrf),
+    _: AuthContext = Depends(_admin),
+    db: Session = Depends(get_db),
+) -> RetentionSettings:
+    """Update the result-retention policy (admin).
+
+    When enabled, raw scan artifacts (scanner JSON + SBOMs) of scans older than
+    ``max_age_days`` are pruned by the maintenance scheduler; the scan rows and
+    their normalized findings are kept.
+    """
+    value = SettingsService(db).set_retention(payload, username=auth.user.username)
+    record_audit(
+        db,
+        action="settings.retention_updated",
+        actor=auth.user,
+        ip=client_ip(request),
+        details={"enabled": value.enabled, "max_age_days": value.max_age_days},
+    )
     db.commit()
     return value
 

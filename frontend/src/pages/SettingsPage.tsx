@@ -3,6 +3,7 @@ import {
   IconAdjustments,
   IconBell,
   IconBrandDocker,
+  IconCalendarClock,
   IconDatabaseExport,
   IconGitBranch,
   IconInfoCircle,
@@ -10,6 +11,8 @@ import {
   IconLock,
   IconServer2,
   IconSettings,
+  IconShieldCheck,
+  IconTrashX,
   IconUsers,
 } from '@tabler/icons-react';
 
@@ -22,7 +25,10 @@ import { GeneralPanel } from '../components/settings/GeneralPanel';
 import { GitCredentialsPanel } from '../components/settings/GitCredentialsPanel';
 import { NotificationsPanel } from '../components/settings/NotificationsPanel';
 import { RegistriesPanel } from '../components/settings/RegistriesPanel';
+import { RetentionPanel } from '../components/settings/RetentionPanel';
 import { ScannersPanel } from '../components/settings/ScannersPanel';
+import { ScheduledScansPanel } from '../components/settings/ScheduledScansPanel';
+import { TrivyPolicyPanel } from '../components/settings/TrivyPolicyPanel';
 import { UsersPanel } from '../components/settings/UsersPanel';
 import { useAuth } from '../auth/AuthContext';
 
@@ -64,8 +70,14 @@ export function SettingsPage() {
           <Tabs.Tab value="scanners" leftSection={<IconAdjustments size={16} />}>
             Scanners
           </Tabs.Tab>
+          <Tabs.Tab value="schedules" leftSection={<IconCalendarClock size={16} />}>
+            Scheduled scans
+          </Tabs.Tab>
           {isAdmin && (
             <>
+              <Tabs.Tab value="trivy-policy" leftSection={<IconShieldCheck size={16} />}>
+                Trivy policy
+              </Tabs.Tab>
               <Tabs.Tab value="registries" leftSection={<IconServer2 size={16} />}>
                 Registries
               </Tabs.Tab>
@@ -77,6 +89,9 @@ export function SettingsPage() {
               </Tabs.Tab>
               <Tabs.Tab value="notifications" leftSection={<IconBell size={16} />}>
                 Notifications
+              </Tabs.Tab>
+              <Tabs.Tab value="retention" leftSection={<IconTrashX size={16} />}>
+                Retention
               </Tabs.Tab>
             </>
           )}
@@ -109,8 +124,14 @@ export function SettingsPage() {
         <Tabs.Panel value="scanners" pl="lg">
           <ScannersPanel />
         </Tabs.Panel>
+        <Tabs.Panel value="schedules" pl="lg">
+          <ScheduledScansPanel />
+        </Tabs.Panel>
         {isAdmin && (
           <>
+            <Tabs.Panel value="trivy-policy" pl="lg">
+              <TrivyPolicyPanel />
+            </Tabs.Panel>
             <Tabs.Panel value="registries" pl="lg">
               <RegistriesPanel />
             </Tabs.Panel>
@@ -122,6 +143,9 @@ export function SettingsPage() {
             </Tabs.Panel>
             <Tabs.Panel value="notifications" pl="lg">
               <NotificationsPanel />
+            </Tabs.Panel>
+            <Tabs.Panel value="retention" pl="lg">
+              <RetentionPanel />
             </Tabs.Panel>
           </>
         )}
