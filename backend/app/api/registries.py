@@ -2,9 +2,10 @@
 
 Container-registry credentials are **write-only** and field-encrypted: the
 password/token is accepted on write, stored as ciphertext, and never returned
-(reads get a mask). Admins manage registries; operators may list them to select
-one when launching a scan. A ``test`` action probes the registry to validate
-connectivity and the stored credential.
+(reads get a mask). Admins manage registries and see their full metadata;
+operators get only an id/name options list (``GET /registries/options``) to
+select a credential when launching a scan (docs/PLAN.md §14). A ``test`` action
+probes the registry to validate connectivity and the stored credential.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.target_schemas import (
+    CredentialOption,
     RegistryCreateIn,
     RegistryOut,
     RegistryTestOut,
@@ -61,12 +63,32 @@ def _get_or_404(db: Session, registry_id: int) -> Registry:
 
 @router.get("", response_model=list[RegistryOut])
 def list_registries(
-    _: AuthContext = Depends(_operator),
+    _: AuthContext = Depends(_admin),
     db: Session = Depends(get_db),
 ) -> list[RegistryOut]:
-    """List configured registries (secrets masked)."""
+    """List configured registries with full metadata (admin only; secrets masked).
+
+    Non-secret metadata (host, username) is still credential material, so the
+    full view is admin-only. Operators launching a scan use ``GET
+    /registries/options`` for id/name selection instead (docs/PLAN.md §14).
+    """
     rows = db.scalars(select(Registry).order_by(Registry.name)).all()
     return [_to_out(r) for r in rows]
+
+
+@router.get("/options", response_model=list[CredentialOption])
+def list_registry_options(
+    _: AuthContext = Depends(_operator),
+    db: Session = Depends(get_db),
+) -> list[CredentialOption]:
+    """List enabled registries as id/name pairs for scan-launch selection.
+
+    Operator-accessible and intentionally minimal: no host, username, auth type,
+    or secret — just enough to reference a credential by name when starting a
+    scan.
+    """
+    rows = db.scalars(select(Registry).where(Registry.enabled).order_by(Registry.name)).all()
+    return [CredentialOption(id=r.id, name=r.name) for r in rows]
 
 
 @router.post("", response_model=RegistryOut, status_code=status.HTTP_201_CREATED)

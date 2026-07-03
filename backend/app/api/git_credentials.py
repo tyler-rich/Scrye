@@ -2,8 +2,9 @@
 
 Access tokens for cloning private git repositories are **write-only** and
 field-encrypted: accepted on write, stored as ciphertext, and never returned
-(reads get a mask). Admins manage credentials; operators may list them to select
-one when launching a ``trivy repo`` scan.
+(reads get a mask). Admins manage credentials and see their full metadata;
+operators get only an id/name options list (``GET /git-credentials/options``)
+to select a credential when launching a ``trivy repo`` scan (docs/PLAN.md §14).
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.target_schemas import (
+    CredentialOption,
     GitCredentialCreateIn,
     GitCredentialOut,
     GitCredentialUpdateIn,
@@ -56,12 +58,32 @@ def _get_or_404(db: Session, credential_id: int) -> GitCredential:
 
 @router.get("", response_model=list[GitCredentialOut])
 def list_git_credentials(
-    _: AuthContext = Depends(_operator),
+    _: AuthContext = Depends(_admin),
     db: Session = Depends(get_db),
 ) -> list[GitCredentialOut]:
-    """List configured git credentials (tokens masked)."""
+    """List configured git credentials with full metadata (admin only; tokens masked).
+
+    Metadata (provider, host, username) is credential material, so the full view
+    is admin-only. Operators launching a scan use ``GET /git-credentials/options``
+    for id/name selection instead (docs/PLAN.md §14).
+    """
     rows = db.scalars(select(GitCredential).order_by(GitCredential.name)).all()
     return [_to_out(c) for c in rows]
+
+
+@router.get("/options", response_model=list[CredentialOption])
+def list_git_credential_options(
+    _: AuthContext = Depends(_operator),
+    db: Session = Depends(get_db),
+) -> list[CredentialOption]:
+    """List git credentials as id/name pairs for scan-launch selection.
+
+    Operator-accessible and intentionally minimal: no provider, host, username,
+    or token — just enough to reference a credential by name when starting a
+    ``trivy repo`` scan.
+    """
+    rows = db.scalars(select(GitCredential).order_by(GitCredential.name)).all()
+    return [CredentialOption(id=c.id, name=c.name) for c in rows]
 
 
 @router.post("", response_model=GitCredentialOut, status_code=status.HTTP_201_CREATED)
