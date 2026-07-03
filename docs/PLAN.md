@@ -1179,3 +1179,45 @@ identically (writes to `/cache/grype/db`, never `/app/.cache`); its DB registry
 was unreachable from the CI sandbox's egress policy, so its download step is
 covered by unit tests + the shared mechanism rather than a live pull.
 **Plan section affected:** §9.2 (hardened Compose), §4 (scanner orchestration).
+
+### 2026-07-03 — Post-P6 bug-fix round — `/tmp` tmpfs kept at 200 MB; footprint documented; cache/staging fix re-verified live end-to-end
+**What changed:** No change to the hardened Compose posture (§9.2) or to the
+scanner code — this round *confirmed* the existing posture and documented its
+real resource footprint. A field report from the deployed stack showed both
+scanners failing (`mkdir /app/.cache: read-only file system`) and Grype dying
+with `no space left on device` while staging image layers under
+`/tmp/stereoscope-…`; both failure signatures match the **pre-fix** image (the
+two 2026-07-03 entries above shipped the fix on `main`), so the deployed
+container needed a rebuild rather than new code. Faced with the tmpfs question
+("grow `/tmp` or move staging off it"), the existing choice — keep `/tmp` at
+**200 MB** and route all large scanner writes to the disk-backed `/cache`
+volume via `TMPDIR`/`TRIVY_CACHE_DIR`/`GRYPE_DB_CACHE_DIR`/`HOME`/
+`XDG_CACHE_HOME` — is retained deliberately: tmpfs is **RAM-backed**, so a
+staging-sized tmpfs (multiple GB) would count image unpacking against the
+container's 2 GB memory limit and trade a disk-space error for an OOM kill.
+The README "Requirements" section now carries the measured footprint (Trivy DB
+~1.2 GB, Grype DB ~1.5–2 GB, transient staging ≈ the uncompressed size of the
+scanned image, `/cache` sizing guidance ≥ 10 GB, and the RAM trade-off note).
+Re-verified live against the real hardened Compose config through the real
+API path (admin bootstrap → `POST /api/scans` → worker → subprocess): a real
+`trivy image` scan of a ~330 MB-compressed / ~1.1 GB-unpacked public image
+succeeded (7 072 findings), the Trivy DB (1.17 GB) downloaded once to
+`/cache/trivy/db` and survived `docker compose down`/`up` (post-restart scan
+completed in ~5 s with no re-download), and a Syft SBOM pass staged ~1.07 GB
+under `/cache/tmp` while the 200 MB `/tmp` tmpfs stayed completely empty —
+the exact workload class that previously ENOSPC'd. Grype was verified to
+resolve its DB to `/cache/grype/db/6/vulnerability.db` (volume, writable;
+never `/app/.cache`) and to stage/catalog the image without any disk error;
+its DB *download* could not be exercised from the verification sandbox
+(`grype.anchore.io` is blocked by that environment's egress policy, as in the
+prior entry) and the target image had to be substituted
+(`mirror.gcr.io/library/node:20` for `ghcr.io/nezreka/soulsync:latest`, whose
+ghcr.io blob host the sandbox also blocks — equivalent size class and code
+path). On the deployed host, rebuilding the image from current `main` and
+recreating the stack is the actionable fix.
+**Why:** The task required confirming the fix with real scans against the
+hardened config (not just unit tests), deciding the tmpfs size question
+explicitly with the RAM cost called out, and documenting the disk/memory
+footprint so deployments can size volumes and limits up front.
+**Plan section affected:** §9.2 (confirmed, not changed), §10.1 (README
+Requirements).
