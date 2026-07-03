@@ -530,6 +530,31 @@ avoids mounting the Docker socket until that feature is actually built, while
 leaving the hardened definitions ready to enable.
 **Plan section affected:** §9.2.
 
+### 2026-07-03 — Phase P1 — First-admin bootstrap via explicit setup endpoint
+**What changed:** §5 says "Bootstrap: first login → `admin`." Implemented as an
+explicit `POST /api/auth/setup` endpoint plus a first-run setup screen in the
+SPA: it creates the first account as `admin` and logs it in, works only while
+the users table is empty, and permanently 409s afterwards.
+**Why:** With local-only auth (OIDC arrives in Phase 5) there are no
+credentials to "log in" with before any account exists, so "first login →
+admin" cannot be taken literally. A self-disabling setup flow is the standard,
+least-surprising materialization and keeps the bootstrap auditable
+(`auth.setup` audit action).
+**Plan section affected:** §5 (Bootstrap).
+
+### 2026-07-03 — Phase P1 — Master key file supports optional multi-version format
+**What changed:** The Docker secret file referenced by `APP_SECRET_KEY_FILE`
+may now contain either a single base64 key (treated as version 1 — the
+documented default) or one `v<N>:<base64>` entry per line. New secrets encrypt
+under the highest version; older versions stay available for decryption and
+for `SecretCipher.rotate()` re-encryption.
+**Why:** §6 requires "support key rotation (re-encrypt under new version)" but
+doesn't define where old and new keys live during a rotation. Encoding
+versions in the existing key file keeps the locked "master key from a Docker
+secret file" rule intact (no second secret, no env vars) while making rotation
+actually operable: add `v2`, restart, re-encrypt, then drop `v1`.
+**Plan section affected:** §6 (Secrets storage).
+
 ### 2026-06-30 — Phase 0 — Branch name `phase/P0`
 **What changed:** Phase 0 work is developed on branch `phase/P0`.
 **Why:** Matches the repo convention in CLAUDE.md § Git & PR conventions
