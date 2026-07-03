@@ -125,23 +125,35 @@ jobs:
             aquasec/trivy:0.71.2 image --input /image.tar \
             --scanners vuln --severity LOW,MEDIUM,HIGH,CRITICAL --no-progress || true
 
-      - name: Trivy — gate on fixable HIGH/CRITICAL
+      # The gate scans Scrye's own attack surface (OS packages incl. git, Python
+      # and JS deps, app code) but SKIPS the bundled trivy/grype/syft binaries:
+      # they are unmodified upstream Go binaries Scrye cannot rebuild, so their
+      # embedded-module / Go-stdlib CVEs track upstream's release cadence, not
+      # Scrye's. They remain visible in the informational report above and are
+      # documented in the README. See docs/PLAN.md § Deviations.
+      - name: Trivy — gate on fixable HIGH/CRITICAL (excl. bundled scanners)
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
             -v "${{ github.workspace }}/ci/trivyignore:/.trivyignore:ro" \
             aquasec/trivy:0.71.2 image --input /image.tar \
             --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL \
+            --skip-files usr/local/bin/trivy \
+            --skip-files usr/local/bin/grype \
+            --skip-files usr/local/bin/syft \
             --ignorefile /.trivyignore --exit-code 1 --no-progress
 
       # Grype pinned to the version Scrye bundles.
-      - name: Grype — gate on fixable High+
+      - name: Grype — gate on fixable High+ (excl. bundled scanners)
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
             -v "${{ github.workspace }}/ci/grype.yaml:/.grype.yaml:ro" \
             anchore/grype:v0.115.0 docker-archive:/image.tar \
-            --only-fixed --fail-on high -c /.grype.yaml
+            --only-fixed --fail-on high -c /.grype.yaml \
+            --exclude '/usr/local/bin/trivy' \
+            --exclude '/usr/local/bin/grype' \
+            --exclude '/usr/local/bin/syft'
 
   # Phase 6: prove the image builds for both target architectures
   # (linux/amd64 + linux/arm64, docs/PLAN.md §9.1). No load/push — a multi-arch
