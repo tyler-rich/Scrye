@@ -1,0 +1,129 @@
+# Scrye — hardened, CIS-aligned Compose stack (locally built image; no registry).
+#
+# Default `docker compose up` starts only the Scrye app. The optional sidecars
+# (shared Trivy-DB cache, read-only Docker socket proxy) are gated behind Compose
+# profiles and are wired up by later phases:
+#   docker compose --profile trivy-server up
+#   docker compose --profile docker-env up      # see the residual-risk note below
+#
+# Before first run, create the master-key secret (NEVER commit it):
+#   mkdir -p docker/secrets && openssl rand -base64 48 > docker/secrets/app_secret_key
+
+services:
+  scrye:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: scrye:0.1.0 # locally built; no registry publishing (locked decision #6)
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - "ALL"
+    networks:
+      - scrye_net
+    ports:
+      - "127.0.0.1:8089:8089" # behind Caddy; never bind 0.0.0.0
+    environment:
+      - SCRYE_DATABASE_PATH=/data/scrye.db
+      - SCRYE_APP_SECRET_KEY_FILE=/run/secrets/app_secret_key
+      # Uncomment when the matching sidecar profile is enabled:
+      # - SCRYE_TRIVY_SERVER_URL=http://trivy-server:4954
+      # - SCRYE_DOCKER_PROXY_URL=http://docker-socket-proxy:2375
+    secrets:
+      - app_secret_key
+    volumes:
+      - scrye_data:/data
+      - scrye_cache:/cache
+    tmpfs:
+      - /tmp:size=200m,mode=1700 # transient registry/git credential files
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8089/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: shared Trivy vulnerability-DB cache (enable with --profile trivy-server).
+  trivy-server:
+    profiles: ["trivy-server"]
+    image: aquasec/trivy:0.71.2@sha256:f5d0e600ecda7449e2a9b272805aef698631d3bb3f3a739a750de2c6819acdc9
+    command: ["server", "--listen", "0.0.0.0:4954"]
+    networks:
+      - scrye_net
+    read_only: true
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - "ALL"
+    volumes:
+      - trivy_cache:/root/.cache/trivy
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: read-only Docker socket proxy for "scan running images"
+  # (enable with --profile docker-env). RESIDUAL RISK: this is the only place a
+  # docker.sock mount is permitted. It is restricted to read endpoints
+  # (POST=0); the Scrye app never mounts the socket directly (locked decision #4,
+  # CIS 5.21/5.22). Anyone able to reach the proxy can enumerate images/containers.
+  docker-socket-proxy:
+    profiles: ["docker-env"]
+    image: tecnativa/docker-socket-proxy:0.3.0@sha256:9e4b9e7517a6b660f2cc903a19b257b1852d5b3344794e3ea334ff00ae677ac2
+    environment:
+      - IMAGES=1
+      - CONTAINERS=1
+      - INFO=1
+      - POST=0
+    networks:
+      - scrye_net
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro # documented residual risk
+    read_only: true
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - "ALL"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  scrye_net:
+    driver: bridge
+
+volumes:
+  scrye_data:
+  scrye_cache:
+  trivy_cache:
+
+secrets:
+  app_secret_key:
+    file: ./secrets/app_secret_key # not committed; lives outside the image
