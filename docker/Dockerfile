@@ -25,7 +25,7 @@ RUN npm run build
 
 
 # --- Stage 2: download + checksum-verify the scanner binaries ----------------
-FROM debian:bookworm-slim@sha256:8a7e7cc04fd3e2bd787f7f24e22d5d119aa590d429b50c95dfe12b3abe52f48b AS scanners
+FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS scanners
 ARG TARGETARCH
 # Pinned, current scanner versions (CLAUDE.md § Dependency hygiene).
 ARG TRIVY_VERSION=0.71.2
