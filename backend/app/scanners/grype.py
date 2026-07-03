@@ -12,34 +12,19 @@ import os
 from typing import Any
 
 from app.core.config import get_settings
-from app.db.models import FindingClass, Scanner, Severity
+from app.db.models import FindingClass, Scanner
 from app.scanners.base import (
+    DESCRIPTION_LIMIT,
     ImageScanner,
     NormalizedFinding,
     ScanExecution,
     ScannerError,
-    _clip,
+    clip,
     resolve_binary,
     run_command,
+    severity_from_string,
     tally_severities,
 )
-
-#: Map a Grype severity string to the normalized enum.
-_SEVERITY_MAP: dict[str, Severity] = {
-    "CRITICAL": Severity.CRITICAL,
-    "HIGH": Severity.HIGH,
-    "MEDIUM": Severity.MEDIUM,
-    "LOW": Severity.LOW,
-    "NEGLIGIBLE": Severity.NEGLIGIBLE,
-    "UNKNOWN": Severity.UNKNOWN,
-}
-
-_DESCRIPTION_LIMIT = 4000
-
-
-def _severity(raw: Any) -> Severity:
-    """Normalize a Grype severity string; default to UNKNOWN."""
-    return _SEVERITY_MAP.get(str(raw).upper(), Severity.UNKNOWN)
 
 
 def build_command(binary: str, target: str) -> list[str]:
@@ -64,7 +49,7 @@ def _fixed_version(fix: Any) -> str | None:
         return None
     versions = fix.get("versions") or []
     if versions:
-        return _clip(", ".join(str(v) for v in versions), 128)
+        return clip(", ".join(str(v) for v in versions), 128)
     return None
 
 
@@ -73,8 +58,8 @@ def _location(artifact: dict[str, Any]) -> str | None:
     for loc in artifact.get("locations") or []:
         path = loc.get("path")
         if path:
-            return _clip(path, 512)
-    return _clip(artifact.get("type"), 512)
+            return clip(path, 512)
+    return clip(artifact.get("type"), 512)
 
 
 def parse_output(raw: bytes) -> tuple[list[NormalizedFinding], str | None]:
@@ -97,7 +82,7 @@ def parse_output(raw: bytes) -> tuple[list[NormalizedFinding], str | None]:
     version = None
     descriptor = document.get("descriptor")
     if isinstance(descriptor, dict):
-        version = _clip(descriptor.get("version"), 32)
+        version = clip(descriptor.get("version"), 32)
 
     findings: list[NormalizedFinding] = []
     for match in document.get("matches") or []:
@@ -107,15 +92,15 @@ def parse_output(raw: bytes) -> tuple[list[NormalizedFinding], str | None]:
         findings.append(
             NormalizedFinding(
                 finding_class=FindingClass.VULNERABILITY.value,
-                severity=_severity(vuln.get("severity")),
-                vuln_id=_clip(vuln.get("id"), 128),
-                pkg_name=_clip(artifact.get("name"), 255),
-                installed_version=_clip(artifact.get("version"), 128),
+                severity=severity_from_string(vuln.get("severity")),
+                vuln_id=clip(vuln.get("id"), 128),
+                pkg_name=clip(artifact.get("name"), 255),
+                installed_version=clip(artifact.get("version"), 128),
                 fixed_version=_fixed_version(vuln.get("fix")),
-                title=_clip(vuln.get("id"), 512),
-                description=_clip(vuln.get("description"), _DESCRIPTION_LIMIT),
+                title=clip(vuln.get("id"), 512),
+                description=clip(vuln.get("description"), DESCRIPTION_LIMIT),
                 location=_location(artifact),
-                primary_url=_clip(vuln.get("dataSource") or (urls[0] if urls else None), 512),
+                primary_url=clip(vuln.get("dataSource") or (urls[0] if urls else None), 512),
             )
         )
     return findings, version

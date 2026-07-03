@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -78,7 +78,6 @@ export function ScanDetailPage() {
   const [severityFilter, setSeverityFilter] = useState<Severity | null>(null);
   const [classFilter, setClassFilter] = useState<FindingClass | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const timer = useRef<number | null>(null);
 
   const loadScan = useCallback(async () => {
     try {
@@ -93,33 +92,46 @@ export function ScanDetailPage() {
   }, [id]);
 
   const loadFindings = useCallback(async () => {
-    const page = await listFindings(id, {
-      severity: severityFilter ?? undefined,
-      finding_class: classFilter ?? undefined,
-      limit: FINDINGS_LIMIT,
-    });
-    setFindings(page.items);
-    setFindingsTotal(page.total);
+    try {
+      const page = await listFindings(id, {
+        severity: severityFilter ?? undefined,
+        finding_class: classFilter ?? undefined,
+        limit: FINDINGS_LIMIT,
+      });
+      setFindings(page.items);
+      setFindingsTotal(page.total);
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof ApiError ? err.message : 'Failed to load findings.');
+    }
   }, [id, severityFilter, classFilter]);
 
   useEffect(() => {
     void loadScan();
   }, [loadScan]);
 
-  // Poll while the scan is active; load results once it settles.
+  // Poll while the scan is active; stop once it reaches a terminal state.
   useEffect(() => {
-    if (!scan) return;
-    if (isActive(scan.status)) {
-      timer.current = window.setInterval(() => void loadScan(), 2500);
-      return () => {
-        if (timer.current) window.clearInterval(timer.current);
-      };
-    }
-    if (scan.status === 'succeeded') {
-      void listArtifacts(id).then(setArtifacts);
-      void loadFindings();
-    }
-  }, [scan, id, loadScan, loadFindings]);
+    if (!scan || !isActive(scan.status)) return;
+    const interval = window.setInterval(() => void loadScan(), 2500);
+    return () => window.clearInterval(interval);
+  }, [scan, loadScan]);
+
+  // Load artifacts once the scan has succeeded (surfacing any fetch error).
+  useEffect(() => {
+    if (scan?.status !== 'succeeded') return;
+    listArtifacts(id)
+      .then(setArtifacts)
+      .catch((err: unknown) =>
+        setError(err instanceof ApiError ? err.message : 'Failed to load artifacts.'),
+      );
+  }, [scan?.status, id]);
+
+  // Load findings once succeeded, and whenever the filters change.
+  useEffect(() => {
+    if (scan?.status !== 'succeeded') return;
+    void loadFindings();
+  }, [scan?.status, loadFindings]);
 
   const cancel = async () => {
     try {
