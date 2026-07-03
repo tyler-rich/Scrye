@@ -19,6 +19,8 @@ dependencies = [
     "cryptography==49.0.0",
     "httpx==0.28.1",
     "python-multipart==0.0.20",
+    "authlib==1.7.2",
+    "pyotp==2.10.0",
 ]
 
 [project.optional-dependencies]

@@ -21,7 +21,10 @@ def setup_admin(client: TestClient, username: str = "admin") -> str:
 class TestBootstrap:
     def test_status_reports_needs_setup(self, client: TestClient) -> None:
         body = client.get("/api/auth/status").json()
-        assert body == {"needs_setup": True, "authenticated": False, "user": None}
+        assert body["needs_setup"] is True
+        assert body["authenticated"] is False
+        assert body["user"] is None
+        assert body["oidc"] == {"enabled": False, "display_name": "OIDC"}
 
     def test_setup_creates_admin_and_logs_in(self, client: TestClient) -> None:
         resp = client.post("/api/auth/setup", json={"username": "Admin", "password": ADMIN_PW})

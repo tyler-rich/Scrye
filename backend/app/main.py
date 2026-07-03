@@ -20,21 +20,29 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
+from app.api.api_tokens import router as api_tokens_router
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
+from app.api.backups import router as backups_router
 from app.api.docker_environments import router as docker_environments_router
 from app.api.filter_presets import router as filter_presets_router
 from app.api.git_credentials import router as git_credentials_router
 from app.api.health import router as health_router
+from app.api.notifications import router as notifications_router
+from app.api.oidc import config_router as oidc_config_router
+from app.api.oidc import login_router as oidc_login_router
 from app.api.registries import router as registries_router
 from app.api.scans import router as scans_router
+from app.api.settings import router as settings_router
 from app.api.users import router as users_router
+from app.auth.mfa import PendingMfaStore
 from app.core.config import Settings, get_settings
 from app.core.crypto import MasterKeyError, get_secret_cipher
 from app.core.logging import configure_logging
 from app.core.ratelimit import SlidingWindowRateLimiter
 from app.db.session import SessionLocal
 from app.workers import InProcessScanWorker
+from app.workers.backup_scheduler import BackupScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +76,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.exception("Scan-worker startup recovery failed; continuing.")
     logger.info("Scan worker ready (max %d concurrent).", settings.max_concurrent_scans)
 
+    backup_scheduler = BackupScheduler(SessionLocal)
+    backup_scheduler.start()
+    app.state.backup_scheduler = backup_scheduler
+    logger.info("Backup scheduler started.")
+
     try:
         yield
     finally:
+        await backup_scheduler.shutdown()
         await worker.shutdown()
-        logger.info("Scan worker stopped.")
+        logger.info("Scan worker and backup scheduler stopped.")
 
 
 def _mount_spa(app: FastAPI, dist_dir: Path) -> None:
@@ -127,6 +141,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.auth_limiter = SlidingWindowRateLimiter(
         settings.auth_rate_limit_attempts, settings.auth_rate_limit_window_seconds
     )
+    app.state.pending_mfa = PendingMfaStore()
 
     if settings.cors_origins:
         app.add_middleware(
@@ -139,6 +154,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(auth_router, prefix="/api")
+    app.include_router(oidc_login_router, prefix="/api")
+    app.include_router(oidc_config_router, prefix="/api")
     app.include_router(users_router, prefix="/api")
     app.include_router(audit_router, prefix="/api")
     app.include_router(scans_router, prefix="/api")
@@ -146,6 +163,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(registries_router, prefix="/api")
     app.include_router(git_credentials_router, prefix="/api")
     app.include_router(docker_environments_router, prefix="/api")
+    app.include_router(settings_router, prefix="/api")
+    app.include_router(notifications_router, prefix="/api")
+    app.include_router(api_tokens_router, prefix="/api")
+    app.include_router(backups_router, prefix="/api")
 
     dist_dir = settings.frontend_dist_dir
     if (dist_dir / "index.html").is_file():

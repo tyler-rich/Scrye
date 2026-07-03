@@ -9,19 +9,28 @@ export interface UserInfo {
   username: string;
   role: Role;
   is_active: boolean;
+  mfa_enabled: boolean;
   created_at: string;
   last_login_at: string | null;
+}
+
+export interface OidcStatus {
+  enabled: boolean;
+  display_name: string;
 }
 
 export interface AuthStatus {
   needs_setup: boolean;
   authenticated: boolean;
   user: UserInfo | null;
+  oidc: OidcStatus;
 }
 
-interface LoginResponse {
-  user: UserInfo;
-  csrf_token: string;
+export interface LoginResponse {
+  user: UserInfo | null;
+  csrf_token: string | null;
+  mfa_required: boolean;
+  mfa_token: string | null;
 }
 
 export function fetchAuthStatus(): Promise<AuthStatus> {
@@ -30,6 +39,13 @@ export function fetchAuthStatus(): Promise<AuthStatus> {
 
 export function login(username: string, password: string): Promise<LoginResponse> {
   return api<LoginResponse>('/api/auth/login', { method: 'POST', body: { username, password } });
+}
+
+export function verifyMfa(mfaToken: string, code: string): Promise<LoginResponse> {
+  return api<LoginResponse>('/api/auth/mfa/verify', {
+    method: 'POST',
+    body: { mfa_token: mfaToken, code },
+  });
 }
 
 export function setupFirstAdmin(username: string, password: string): Promise<LoginResponse> {
