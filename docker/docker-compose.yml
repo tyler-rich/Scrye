@@ -37,7 +37,11 @@ services:
       - scrye_data:/data
       - scrye_cache:/cache
     tmpfs:
-      - /tmp:size=200m,mode=1700 # transient registry/git credential files
+      # Owned by the container uid (1000): a bare tmpfs is root-owned, so a
+      # non-root process cannot write to it. Holds only the transient registry/
+      # git credential files (materialized in-memory, never on disk); the
+      # scanners' large DB/scratch writes go to the /cache volume, not here.
+      - /tmp:size=200m,mode=1700,uid=1000,gid=1000
     deploy:
       resources:
         limits:

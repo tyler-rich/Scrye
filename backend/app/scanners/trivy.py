@@ -22,6 +22,7 @@ from app.scanners.base import (
     clip,
     resolve_binary,
     run_command,
+    scanner_cache_env,
     severity_from_string,
     tally_severities,
 )
@@ -37,13 +38,15 @@ TRIVY_SCANNERS: tuple[str, ...] = ("vuln", "misconfig", "secret", "license")
 TRIVY_SEVERITIES: tuple[str, ...] = ("UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL")
 
 
-def _common_flags(options: dict[str, Any]) -> list[str]:
+def _common_flags(options: dict[str, Any], cache_dir: str | None = None) -> list[str]:
     """Build the flags shared by ``trivy image`` and ``trivy repo``.
 
     Covers output format, scanner selection, severity filter, ``ignore_unfixed``,
-    and the optional shared Trivy-server vuln-DB cache. Selections are re-ordered
-    into canonical order and unknown tokens dropped, so the argv is stable
-    regardless of how options were supplied.
+    an explicit ``--cache-dir`` (so the vuln DB lands on the writable cache
+    volume rather than the read-only default ``$HOME/.cache``), and the optional
+    shared Trivy-server vuln-DB cache. Selections are re-ordered into canonical
+    order and unknown tokens dropped, so the argv is stable regardless of how
+    options were supplied.
     """
     settings = get_settings()
     scanners = options.get("scanners") or list(TRIVY_SCANNERS)
@@ -60,6 +63,8 @@ def _common_flags(options: dict[str, Any]) -> list[str]:
         "--severity",
         ",".join(severities),
     ]
+    if cache_dir:
+        flags += ["--cache-dir", cache_dir]
     if options.get("ignore_unfixed"):
         flags.append("--ignore-unfixed")
     if settings.trivy_server_url:
@@ -67,21 +72,27 @@ def _common_flags(options: dict[str, Any]) -> list[str]:
     return flags
 
 
-def build_command(binary: str, target: str, options: dict[str, Any]) -> list[str]:
+def build_command(
+    binary: str, target: str, options: dict[str, Any], cache_dir: str | None = None
+) -> list[str]:
     """Build the ``trivy image`` argument vector.
 
     Args:
         binary: Resolved Trivy executable path.
         target: The image reference to scan.
         options: Validated scan options (scanners, severity, ignore_unfixed).
+        cache_dir: Optional explicit ``--cache-dir`` (a writable location for the
+            vulnerability DB); omitted from argv when ``None``.
 
     Returns:
         The full argv list.
     """
-    return [binary, "image", *_common_flags(options), target]
+    return [binary, "image", *_common_flags(options, cache_dir), target]
 
 
-def build_repo_command(binary: str, target: str, options: dict[str, Any]) -> list[str]:
+def build_repo_command(
+    binary: str, target: str, options: dict[str, Any], cache_dir: str | None = None
+) -> list[str]:
     """Build the ``trivy repo`` argument vector.
 
     Args:
@@ -89,11 +100,13 @@ def build_repo_command(binary: str, target: str, options: dict[str, Any]) -> lis
         target: The repository clone URL.
         options: Validated scan options; may carry a single ``branch``,
             ``commit``, or ``tag`` to check out.
+        cache_dir: Optional explicit ``--cache-dir`` (a writable location for the
+            vulnerability DB); omitted from argv when ``None``.
 
     Returns:
         The full argv list.
     """
-    argv = [binary, "repo", *_common_flags(options)]
+    argv = [binary, "repo", *_common_flags(options, cache_dir)]
     for flag in ("branch", "commit", "tag"):
         value = options.get(flag)
         if value:
@@ -245,11 +258,15 @@ class TrivyScanner(BaseScanner):
     ) -> ScanExecution:
         """Run ``trivy image`` against ``target`` and normalize the results."""
         binary = resolve_binary(get_settings().trivy_binary)
-        return await self._execute(build_command(binary, target, options), env=env)
+        cache_env = scanner_cache_env()
+        argv = build_command(binary, target, options, cache_env["TRIVY_CACHE_DIR"])
+        return await self._execute(argv, env={**cache_env, **(env or {})})
 
     async def scan_repo(
         self, target: str, options: dict[str, Any], *, env: dict[str, str] | None = None
     ) -> ScanExecution:
         """Run ``trivy repo`` against ``target`` (a clone URL) and normalize it."""
         binary = resolve_binary(get_settings().trivy_binary)
-        return await self._execute(build_repo_command(binary, target, options), env=env)
+        cache_env = scanner_cache_env()
+        argv = build_repo_command(binary, target, options, cache_env["TRIVY_CACHE_DIR"])
+        return await self._execute(argv, env={**cache_env, **(env or {})})

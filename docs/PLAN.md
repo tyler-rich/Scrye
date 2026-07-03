@@ -1133,3 +1133,49 @@ missing/immature wheels while still resolving the interpreter CVEs. The interpre
 current 3.13 patch release clears the specific HIGH findings that motivated the change.
 **Plan section affected:** §0 (#7, new locked runtime), §2 (tech stack), §9.1 (base image),
 §12 (Phase 6 self-scan), CLAUDE.md § Locked decisions #2.
+
+### 2026-07-03 — Phase P6 — Scanner temp/cache dirs pinned to the writable `/cache` volume; `/tmp` tmpfs owned by the app uid
+**What changed:** Two coordinated fixes for `mkdir /tmp/trivy-XXXXXXXXX: permission
+denied` under the hardened Compose config (§9.2). (1) `docker/docker-compose.yml`
+now mounts the `/tmp` tmpfs with `uid=1000,gid=1000` in addition to `mode=1700`.
+(2) A new `SCRYE_SCANNER_CACHE_DIR` setting (default `/cache`) plus a
+`scanner_scratch()` helper in `app/scanners/base.py`: Trivy gets an explicit
+`--cache-dir /cache/trivy`, Grype gets `GRYPE_DB_CACHE_DIR=/cache/grype/db`, and
+all three engines (incl. Syft) get `TMPDIR=/cache/tmp` for the subprocess.
+**Why:** A freshly mounted tmpfs is owned by **root**, and with the numeric
+`user: "1000:1000"` (which leaves `HOME` unset → `$HOME/.cache` resolves under
+the read-only `/`) the non-root process could neither write to `/tmp` (breaking
+Trivy's temp-dir creation *and* the in-memory credential materialization) nor to
+its default cache dir (breaking the vuln-DB download). Confirmed at the mount
+level: `mount -t tmpfs -o size=200m,mode=1700` → owner uid 0, uid-1000 `mkdir`
+fails; adding `uid=1000,gid=1000` → owner uid 1000, succeeds. Routing the large
+databases and temp extraction onto the persistent `/cache` volume also keeps
+them off the small (200 MB) tmpfs and lets the DB survive restarts. §9.2 left
+the tmpfs root-owned and never pointed the scanners at a writable cache — the
+plan pre-dated exercising a real scan under `read_only: true`.
+**Plan section affected:** §9.2 (hardened Compose), §4 (scanner orchestration).
+
+### 2026-07-03 — Phase P6 — Scanner cache redirected via env vars for **every** invocation (incl. probes)
+**What changed:** Generalized the previous fix. `scanner_scratch(engine)` became
+`scanner_cache_env()` in `app/scanners/base.py`, returning a full environment
+overlay — `TMPDIR`, `HOME`, `XDG_CACHE_HOME`, `TRIVY_CACHE_DIR`,
+`GRYPE_DB_CACHE_DIR` — all under the writable `/cache` volume. It is now applied
+not only to the scans but also to the scanner **probes** in
+`app/core/system_info.py` (`trivy --version --format json`, `grype db status`,
+the version probes), which previously ran with no cache env.
+**Why:** After the temp/cache fix, real image scans failed one step further with
+`mkdir /app/.cache: read-only file system`. The numeric `user: "1000:1000"`
+still resolves `HOME=/app` (from the image's `useradd --home-dir /app`), so a
+scanner's default cache is `/app/.cache` on the read-only root. The image/repo
+scan path set `--cache-dir`, but the About-tab DB-freshness probes did not —
+`trivy --version --format json` reads the vuln-DB metadata under the cache dir
+and `grype db status` reads its DB dir, both defaulting to `/app/.cache`. Moving
+to env vars (rather than a per-subcommand flag) covers every invocation
+uniformly. Verified end-to-end against the hardened Compose config: the real
+Trivy DB downloads once to `/cache/trivy` and a real `trivy image` scan of
+`alpine:3.19` reports CVEs; the DB persists across `docker compose down`/`up`
+(offline `--skip-db-update` scan still succeeds). Grype's cache is redirected
+identically (writes to `/cache/grype/db`, never `/app/.cache`); its DB registry
+was unreachable from the CI sandbox's egress policy, so its download step is
+covered by unit tests + the shared mechanism rather than a live pull.
+**Plan section affected:** §9.2 (hardened Compose), §4 (scanner orchestration).
