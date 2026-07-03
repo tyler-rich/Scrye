@@ -777,3 +777,150 @@ Library choice is a routine implementation detail under CLAUDE.md § When to ask
 decide. This supersedes the Phase 2 note that anticipated introducing
 `mantine-datatable` here.
 **Plan section affected:** §2 (Tech stack), §4.4 (history table).
+
+### 2026-07-03 — Phase P5 — Runtime settings stored in a generic `settings` table
+**What changed:** General, authentication-policy, and scanner-default settings are
+persisted as one JSON row per group in a generic `settings(key, value)` table, with a
+typed `SettingsService` (Pydantic models) supplying defaults and validation. §7 lists a
+`settings` table but not its shape.
+**Why:** A small, typed key/value store keeps the runtime-editable, non-secret settings
+in one place while leaving secret-bearing configuration in its own field-encrypted
+columns. Grouping by namespace keeps reads/writes to a single row and lets the Pydantic
+models be the single source of truth for defaults.
+**Plan section affected:** §4.5 (Settings), §7 (data model).
+
+### 2026-07-03 — Phase P5 — Dependencies added: Authlib and pyotp
+**What changed:** `authlib==1.7.2` (OIDC) and `pyotp==2.10.0` (TOTP MFA) were added to
+the pinned runtime dependencies, and `SCRYE_BACKUPS_DIR` was added to the `Settings`
+model (emitted in `.env.example`, default `/data/backups`).
+**Why:** §2 names Authlib and pyotp for auth; both are pinned to current,
+actively-maintained releases per CLAUDE.md § Dependency hygiene. The backups directory
+lives under the existing `/data` volume, so no new mount is required.
+**Plan section affected:** §2 (Tech stack), §11 (config).
+
+### 2026-07-03 — Phase P5 — OIDC uses Authlib's `jose`, isolated behind an import shim
+**What changed:** ID-token validation uses `authlib.jose` (JWKS import + RS256 verify).
+Authlib deprecates that submodule in favor of `joserfc` but keeps it supported until
+Authlib 2.0; rather than add a second JOSE dependency, the import is isolated in
+`app/auth/_jose.py`, which suppresses the one benign deprecation warning. The OIDC login
+flow's per-request `state`/`nonce`/PKCE verifier are persisted in a new
+`oidc_login_flows` table instead of a server-side session middleware, and links live in
+`oidc_identities` (`(issuer, subject)` unique).
+**Why:** Keeping the JOSE dependency surface to just Authlib (as the plan specifies)
+avoids pulling in `joserfc`; a DB-backed flow store avoids adding Starlette session
+middleware and cookie-signing infrastructure just for the OAuth handshake.
+**Plan section affected:** §2 (Tech stack), §5 (OIDC), §7 (data model).
+
+### 2026-07-03 — Phase P5 — OIDC provisioning: username sanitization and admin-group mapping
+**What changed:** On first OIDC login (when `auto_provision` is on) a local account is
+created from the username claim, sanitized to the allowed `[a-z0-9._-]` charset and made
+unique (suffixed with the subject on collision) so an OIDC login can never hijack an
+existing local username. Provisioned users get the configured default role, upgraded to
+`admin` when a configured `admin_group` appears in the groups claim. Auto-provisioned
+accounts get a random (unusable) local password hash.
+**Why:** §5 specifies auto-provisioning and a configurable default role but not the
+collision/sanitization rules; these are security-model details (avoid account takeover,
+keep OIDC users off local password auth) resolved conservatively.
+**Plan section affected:** §5 (Bootstrap/RBAC/OIDC).
+
+### 2026-07-03 — Phase P5 — TOTP MFA: two-step enrollment and in-process login challenge
+**What changed:** MFA is enabled via an explicit enroll → activate handshake (the secret
+is stored encrypted but inactive until a code is confirmed). The password step of an
+MFA-enabled login returns a short-lived challenge token held in an in-process store (the
+same single-container pattern as the auth rate limiter), and the second step
+(`/auth/mfa/verify`) exchanges the token + TOTP code for a session. Enrollment surfaces
+the `otpauth://` provisioning URI and manual key; no QR-image dependency was added.
+**Why:** §5 lists "optional TOTP MFA" without a UX. A two-step, self-disabling enrollment
+is the least-surprising materialization; an in-process challenge store fits the locked
+single-container model (§0.2) and needs no schema. Omitting a QR renderer avoids an extra
+frontend dependency while keeping enrollment usable (manual key + URI).
+**Plan section affected:** §5 (MFA).
+
+### 2026-07-03 — Phase P5 — API tokens: bearer auth, CSRF exemption, and role capping
+**What changed:** Personal API tokens authenticate via `Authorization: Bearer <token>`
+(SHA-256-hashed at rest, prefix retained for display). `AuthContext.session` is now
+optional so token requests resolve without a session; CSRF is enforced only for cookie
+logins (bearer tokens are not sent cross-site automatically, so they are exempt). A
+token's effective role is the lesser of its minted role and the owner's current role.
+**Why:** §5 assigns operators "their own API tokens" but not the transport/CSRF/role
+mechanics; hashing-at-rest mirrors the session-token posture, and capping the effective
+role means downgrading an account also downgrades its tokens.
+**Plan section affected:** §5 (RBAC/API tokens).
+
+### 2026-07-03 — Phase P5 — Notifications: channels + test-send now; event dispatch deferred
+**What changed:** Notification channels (webhook / Discord / SMTP / Matrix) are fully
+manageable with a field-encrypted per-channel secret and a live "send test message"
+action. Event-driven dispatch (e.g. scan-complete alerts) is left to Phase 6, which the
+roadmap already scopes for notifications.
+**Why:** §4.5 places notification *configuration* in the Settings section (Phase 5) while
+§12's Phase 6 covers notifications as a feature; building the configurable, testable
+transport now and wiring triggers in Phase 6 matches both.
+**Plan section affected:** §4.5 (Notifications), §12 (Phase 5/6 split).
+
+### 2026-07-03 — Phase P5 — Scanner DB schedule/offline-import stored but not yet actuated
+**What changed:** The Scanners settings tab persists default severities, ignore-unfixed,
+`.trivyignore`/Grype ignore rules, and a DB auto-update toggle/interval. Actually running
+scheduled scanner-DB updates and offline/air-gapped DB import (both listed in §4.5) are
+deferred to the Phase 6 scanner-DB work; only the configuration is stored in Phase 5.
+**Why:** Keeps Phase 5 focused on the settings surface; scanner-DB lifecycle management is
+naturally part of the Phase 6 scanning polish and would otherwise expand this phase.
+**Plan section affected:** §4.5 (Scanners settings), §12 (Phase 6).
+
+### 2026-07-03 — Phase P5 — Backup bundle is a logical row dump with passphrase re-wrap
+**What changed:** A backup is a logical, per-row JSON dump of the database (not a raw
+SQLite file). Each field-encrypted secret is decrypted under the host master key and
+re-wrapped under a scrypt-derived passphrase key (reusing the AES-256-GCM `SecretCipher`),
+and the whole inner dump is then encrypted under the same passphrase key; restore reverses
+this, re-wrapping secrets under the new host's master key. The secret columns are sourced
+from a single `SECRET_COLUMNS` registry so new encrypted fields become portable
+automatically. Transient/bookkeeping tables (`sessions`, `oidc_login_flows`, `backups`)
+are excluded, and restore requires the bundle's schema version to match the running schema
+(cross-version bundle migration is deferred; §8's "migrate if older" is a future pass).
+**Why:** A logical dump is portable across SQLite on-disk formats and makes the secret
+re-wrap (§8) straightforward. Reusing the existing cipher keeps one audited crypto path.
+Requiring a matching schema keeps v1 restore simple and safe; the migration path can be
+added when a second schema version exists.
+**Plan section affected:** §8 (Backup & restore).
+
+### 2026-07-03 — Phase P5 — Scheduled backups run on an in-process asyncio loop
+**What changed:** Scheduled backups are driven by an in-process `BackupScheduler` asyncio
+task (started in the app lifespan alongside the scan worker), checking a singleton
+`backup_schedules` row on a timer and running due backups in a worker thread. The schedule
+passphrase is field-encrypted so the loop can produce bundles unattended, and retention
+prunes older *scheduled* bundles only.
+**Why:** The locked single-container model (§0.2) rules out an external scheduler; an
+asyncio loop mirrors the existing in-process scan worker. Encrypting the passphrase keeps
+the "no plaintext secrets at rest" rule intact while allowing unattended runs.
+**Plan section affected:** §8 (Scheduled backups), §0.2.
+
+### 2026-07-03 — Phase P5 — Self-service Account page; role-gated Settings tabs
+**What changed:** Password change, MFA management, and session review live on a dedicated
+`/account` page available to every authenticated user, while the operator-and-up
+`/settings` area gates admin-only tabs (general, authentication, users, registries, git,
+Docker, notifications, backups) behind the admin role and shows operators only the
+Scanners, API tokens, and About tabs. API tokens remain a Settings tab per §4.5.
+**Why:** Self-service auth actions apply to all roles (including viewers, who cannot see
+Settings), so they belong on a per-user page; gating the admin tabs avoids showing
+operators panels whose endpoints would 403.
+**Plan section affected:** §4.5 (Settings), §5 (RBAC).
+
+### 2026-07-03 — Phase P5 — Security review hardening: OIDC alg allowlist + scrypt work factor
+**What changed:** Two hardening items from the Phase 5 pre-merge security review were
+applied. (1) `verify_id_token` now pins the accepted ID-token signing algorithms to an
+explicit allowlist — the provider's discovered `id_token_signing_alg_values_supported`
+(with `none` stripped) when advertised, falling back to `["RS256"]` — using a per-call
+`JsonWebToken(<allowlist>)` instead of the library-default decoder, so a token presented
+with an unexpected `alg` (`none`, or an HS/RS confusion attempt) is rejected before its
+claims are trusted. Discovery now captures the advertised algorithm set on `OidcMetadata`.
+(2) The backup passphrase KDF work factor was raised from scrypt `N=2**15` to `N=2**17`
+(r=8, p=1 → ~128 MiB per derivation, per current OWASP guidance) in `core/passphrase.py`,
+and the parameter comment's memory estimate corrected (the prior "~64 MiB" was inaccurate
+at both the old and new N). New tests cover both: real RSA-signed ID-token verification
+(valid RS256 accepted; `none`, HS256-confusion, wrong-audience, expired, and nonce-mismatch
+tokens rejected; discovery parsing of the advertised algs) and the scrypt parameters/
+derivation round-trip.
+**Why:** Both were low-severity, defense-in-depth findings raised in the review — not live
+bugs — accepted for hardening before merge. Explicit algorithm pinning removes any
+reliance on library defaults for JWS `alg` handling; the higher scrypt cost strengthens
+offline brute-force resistance of the portable, passphrase-encrypted backup bundle.
+**Plan section affected:** §5 (OIDC), §8 (Backup & restore).

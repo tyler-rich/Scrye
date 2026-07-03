@@ -24,6 +24,7 @@ os.environ.setdefault("SCRYE_ENVIRONMENT", "development")
 os.environ.setdefault("SCRYE_APP_SECRET_KEY_FILE", str(_KEY_FILE))
 os.environ.setdefault("SCRYE_SESSION_COOKIE_SECURE", "false")
 os.environ.setdefault("SCRYE_ARTIFACTS_DIR", str(_TMP / "artifacts"))
+os.environ.setdefault("SCRYE_BACKUPS_DIR", str(_TMP / "backups"))
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

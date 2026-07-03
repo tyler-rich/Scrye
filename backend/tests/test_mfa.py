@@ -1,0 +1,114 @@
+"""Tests for TOTP MFA enrollment and the two-step login flow."""
+
+from __future__ import annotations
+
+import pyotp
+from fastapi.testclient import TestClient
+
+from tests.test_auth import ADMIN_PW, CSRF, setup_admin
+
+
+def _enroll_and_activate(client: TestClient, csrf: str) -> str:
+    """Enroll and activate MFA for the current user; return the TOTP secret."""
+    enroll = client.post("/api/auth/mfa/enroll", headers={CSRF: csrf})
+    assert enroll.status_code == 200, enroll.text
+    secret = enroll.json()["secret"]
+    assert enroll.json()["otpauth_uri"].startswith("otpauth://totp/")
+    code = pyotp.TOTP(secret).now()
+    resp = client.post("/api/auth/mfa/activate", json={"code": code}, headers={CSRF: csrf})
+    assert resp.status_code == 204, resp.text
+    return secret
+
+
+class TestMfaEnrollment:
+    def test_enroll_activate_sets_flag(self, client: TestClient) -> None:
+        csrf = setup_admin(client)
+        _enroll_and_activate(client, csrf)
+        assert client.get("/api/auth/me").json()["mfa_enabled"] is True
+
+    def test_activate_rejects_wrong_code(self, client: TestClient) -> None:
+        csrf = setup_admin(client)
+        client.post("/api/auth/mfa/enroll", headers={CSRF: csrf})
+        resp = client.post("/api/auth/mfa/activate", json={"code": "000000"}, headers={CSRF: csrf})
+        assert resp.status_code == 400
+        assert client.get("/api/auth/me").json()["mfa_enabled"] is False
+
+    def test_secret_never_returned_after_enrollment(self, client: TestClient) -> None:
+        csrf = setup_admin(client)
+        secret = _enroll_and_activate(client, csrf)
+        # The plaintext secret must not appear in any subsequent read.
+        assert secret not in client.get("/api/auth/me").text
+
+
+class TestMfaLogin:
+    def test_login_requires_second_factor(self, client: TestClient) -> None:
+        csrf = setup_admin(client)
+        secret = _enroll_and_activate(client, csrf)
+        client.cookies.clear()
+
+        first = client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PW})
+        assert first.status_code == 200
+        body = first.json()
+        assert body["mfa_required"] is True
+        assert body["mfa_token"]
+        assert body["user"] is None
+        # No session established yet.
+        assert client.get("/api/auth/me").status_code == 401
+
+        code = pyotp.TOTP(secret).now()
+        second = client.post(
+            "/api/auth/mfa/verify", json={"mfa_token": body["mfa_token"], "code": code}
+        )
+        assert second.status_code == 200
+        assert second.json()["user"]["username"] == "admin"
+        assert client.get("/api/auth/me").status_code == 200
+
+    def test_verify_rejects_bad_code(self, client: TestClient) -> None:
+        csrf = setup_admin(client)
+        _enroll_and_activate(client, csrf)
+        client.cookies.clear()
+        token = client.post(
+            "/api/auth/login", json={"username": "admin", "password": ADMIN_PW}
+        ).json()["mfa_token"]
+        resp = client.post("/api/auth/mfa/verify", json={"mfa_token": token, "code": "000000"})
+        assert resp.status_code == 401
+
+    def test_challenge_token_is_single_use(self, client: TestClient) -> None:
+        csrf = setup_admin(client)
+        secret = _enroll_and_activate(client, csrf)
+        client.cookies.clear()
+        token = client.post(
+            "/api/auth/login", json={"username": "admin", "password": ADMIN_PW}
+        ).json()["mfa_token"]
+        code = pyotp.TOTP(secret).now()
+        first = client.post("/api/auth/mfa/verify", json={"mfa_token": token, "code": code})
+        assert first.status_code == 200
+        client.cookies.clear()
+        again = client.post("/api/auth/mfa/verify", json={"mfa_token": token, "code": code})
+        assert again.status_code == 401
+
+
+class TestMfaDisable:
+    def test_disable_requires_password(self, client: TestClient) -> None:
+        csrf = setup_admin(client)
+        _enroll_and_activate(client, csrf)
+        bad = client.post(
+            "/api/auth/mfa/disable", json={"password": "wrong-password"}, headers={CSRF: csrf}
+        )
+        assert bad.status_code == 403
+        ok = client.post("/api/auth/mfa/disable", json={"password": ADMIN_PW}, headers={CSRF: csrf})
+        assert ok.status_code == 204
+        assert client.get("/api/auth/me").json()["mfa_enabled"] is False
+
+    def test_cannot_disable_when_policy_requires(self, client: TestClient) -> None:
+        csrf = setup_admin(client)
+        _enroll_and_activate(client, csrf)
+        client.put(
+            "/api/settings/authentication",
+            json={"local_login_enabled": True, "mfa_policy": "required_all"},
+            headers={CSRF: csrf},
+        )
+        resp = client.post(
+            "/api/auth/mfa/disable", json={"password": ADMIN_PW}, headers={CSRF: csrf}
+        )
+        assert resp.status_code == 400

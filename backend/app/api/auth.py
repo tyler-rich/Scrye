@@ -23,17 +23,23 @@ from app.api.schemas import (
     AuthStatusOut,
     CredentialsIn,
     LoginOut,
+    MfaActivateIn,
+    MfaDisableIn,
+    MfaEnrollOut,
+    MfaVerifyIn,
     NewUserIn,
+    OidcStatusOut,
     PasswordChangeIn,
     SessionOut,
     UserOut,
 )
-from app.auth import service
+from app.auth import mfa, service
+from app.auth.cookies import clear_session_cookies, set_session_cookies
 from app.auth.deps import AuthContext, client_ip, get_optional_auth, require_auth, require_csrf
 from app.auth.passwords import hash_password, verify_password
+from app.core.app_settings import MfaPolicy, SettingsService
 from app.core.audit import record_audit
-from app.core.config import get_settings
-from app.db.models import AuthSession, Role
+from app.db.models import OIDC_CONFIG_ID, AuthSession, OidcConfig, Role, User
 from app.db.session import get_db
 
 logger = logging.getLogger(__name__)
@@ -52,34 +58,18 @@ def _enforce_rate_limit(request: Request) -> None:
         )
 
 
-def _set_session_cookies(response: Response, token: str, csrf_token: str) -> None:
-    """Attach the session (HttpOnly) and CSRF (readable) cookies."""
-    settings = get_settings()
-    max_age = settings.session_lifetime_hours * 3600
-    response.set_cookie(
-        service.SESSION_COOKIE,
-        token,
-        max_age=max_age,
-        httponly=True,
-        secure=settings.session_cookie_secure,
-        samesite="lax",
-        path="/",
+def _complete_login(
+    db: Session, user: User, request: Request, response: Response, *, action: str
+) -> LoginOut:
+    """Create a session for ``user``, set cookies, audit, and build the response."""
+    token, session = service.create_session(
+        db, user, ip=client_ip(request), user_agent=request.headers.get("user-agent")
     )
-    response.set_cookie(
-        service.CSRF_COOKIE,
-        csrf_token,
-        max_age=max_age,
-        httponly=False,  # the SPA reads this to build the X-CSRF-Token header
-        secure=settings.session_cookie_secure,
-        samesite="lax",
-        path="/",
-    )
-
-
-def _clear_session_cookies(response: Response) -> None:
-    """Expire both auth cookies."""
-    response.delete_cookie(service.SESSION_COOKIE, path="/")
-    response.delete_cookie(service.CSRF_COOKIE, path="/")
+    user.last_login_at = session.created_at
+    record_audit(db, action=action, actor=user, ip=client_ip(request))
+    db.commit()
+    set_session_cookies(response, token, session.csrf_token)
+    return LoginOut(user=UserOut.model_validate(user), csrf_token=session.csrf_token)
 
 
 @router.get("/status", response_model=AuthStatusOut)
@@ -88,10 +78,15 @@ def auth_status(
     auth: AuthContext | None = Depends(get_optional_auth),
 ) -> AuthStatusOut:
     """Report bootstrap and login state for the SPA (public)."""
+    oidc = db.get(OidcConfig, OIDC_CONFIG_ID)
     return AuthStatusOut(
         needs_setup=service.count_users(db) == 0,
         authenticated=auth is not None,
         user=UserOut.model_validate(auth.user) if auth else None,
+        oidc=OidcStatusOut(
+            enabled=bool(oidc and oidc.enabled),
+            display_name=oidc.display_name if oidc else "OIDC",
+        ),
     )
 
 
@@ -114,18 +109,12 @@ def setup_first_admin(
     user = service.create_user(
         db, username=payload.username, password=payload.password, role=Role.ADMIN
     )
-    token, session = service.create_session(
-        db, user, ip=ip, user_agent=request.headers.get("user-agent")
-    )
-    user.last_login_at = session.created_at
+    db.flush()
     record_audit(
         db, action="auth.setup", actor=user, ip=ip, target_type="user", target_id=str(user.id)
     )
-    db.commit()
-
     logger.info("First admin account created: %s", user.username)
-    _set_session_cookies(response, token, session.csrf_token)
-    return LoginOut(user=UserOut.model_validate(user), csrf_token=session.csrf_token)
+    return _complete_login(db, user, request, response, action="auth.login")
 
 
 @router.post("/login", response_model=LoginOut)
@@ -135,9 +124,19 @@ def login(
     response: Response,
     db: Session = Depends(get_db),
 ) -> LoginOut:
-    """Authenticate with username + password and start a session."""
+    """Authenticate with username + password and start a session.
+
+    When local login is disabled by policy, password auth is refused (OIDC only).
+    When the account has MFA enabled, a challenge is returned instead of a
+    session and the caller must complete it via ``/auth/mfa/verify``.
+    """
     _enforce_rate_limit(request)
     ip = client_ip(request)
+
+    if not SettingsService(db).auth().local_login_enabled:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Local login is disabled on this instance."
+        )
 
     user = service.authenticate(db, payload.username, payload.password)
     if user is None:
@@ -150,15 +149,36 @@ def login(
         db.commit()
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password.")
 
-    token, session = service.create_session(
-        db, user, ip=ip, user_agent=request.headers.get("user-agent")
-    )
-    user.last_login_at = session.created_at
-    record_audit(db, action="auth.login", actor=user, ip=ip)
-    db.commit()
+    if user.mfa_enabled:
+        challenge = request.app.state.pending_mfa.issue(user.id)
+        record_audit(db, action="auth.mfa_challenge", actor=user, ip=ip)
+        db.commit()
+        return LoginOut(mfa_required=True, mfa_token=challenge)
 
-    _set_session_cookies(response, token, session.csrf_token)
-    return LoginOut(user=UserOut.model_validate(user), csrf_token=session.csrf_token)
+    return _complete_login(db, user, request, response, action="auth.login")
+
+
+@router.post("/mfa/verify", response_model=LoginOut)
+def verify_mfa(
+    payload: MfaVerifyIn,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> LoginOut:
+    """Complete a password login by submitting the TOTP code (second step)."""
+    _enforce_rate_limit(request)
+    ip = client_ip(request)
+    user_id = request.app.state.pending_mfa.consume(payload.mfa_token)
+    user = db.get(User, user_id) if user_id is not None else None
+    if user is None or not user.is_active or not user.mfa_enabled or not user.mfa_secret_ciphertext:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="MFA challenge is invalid.")
+
+    if not mfa.verify_code(mfa.decrypt_mfa_secret(user.mfa_secret_ciphertext), payload.code):
+        record_audit(db, action="auth.mfa_failed", actor=user, ip=ip)
+        db.commit()
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication code.")
+
+    return _complete_login(db, user, request, response, action="auth.login")
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
@@ -172,7 +192,7 @@ def logout(
     service.revoke_session(auth.session)
     record_audit(db, action="auth.logout", actor=auth.user, ip=client_ip(request))
     db.commit()
-    _clear_session_cookies(response)
+    clear_session_cookies(response)
 
 
 @router.get("/me", response_model=UserOut)
@@ -246,4 +266,80 @@ def revoke_own_session(
         target_type="session",
         target_id=str(session_id),
     )
+    db.commit()
+
+
+def _mfa_required_for(role: Role, policy: MfaPolicy) -> bool:
+    """Return True when policy mandates MFA for a user of ``role``."""
+    if policy is MfaPolicy.REQUIRED_ALL:
+        return True
+    if policy is MfaPolicy.REQUIRED_ADMIN:
+        return role is Role.ADMIN
+    return False
+
+
+@router.post("/mfa/enroll", response_model=MfaEnrollOut)
+def enroll_mfa(
+    request: Request,
+    auth: AuthContext = Depends(require_csrf),
+    db: Session = Depends(get_db),
+) -> MfaEnrollOut:
+    """Begin TOTP enrollment: generate a secret and return its provisioning URI.
+
+    The secret is stored (encrypted) but MFA is not active until a code is
+    confirmed via ``/auth/mfa/activate``; re-enrolling replaces any pending or
+    active secret.
+    """
+    secret = mfa.generate_secret()
+    auth.user.mfa_secret_ciphertext = mfa.encrypt_mfa_secret(secret)
+    auth.user.mfa_enabled = False
+    db.commit()
+    instance = SettingsService(db).general().instance_name
+    return MfaEnrollOut(
+        secret=secret,
+        otpauth_uri=mfa.provisioning_uri(secret, username=auth.user.username, issuer=instance),
+    )
+
+
+@router.post("/mfa/activate", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+def activate_mfa(
+    payload: MfaActivateIn,
+    request: Request,
+    auth: AuthContext = Depends(require_csrf),
+    db: Session = Depends(get_db),
+) -> None:
+    """Confirm enrollment by proving a code, activating MFA for the account."""
+    if not auth.user.mfa_secret_ciphertext:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Start enrollment first.")
+    if not mfa.verify_code(mfa.decrypt_mfa_secret(auth.user.mfa_secret_ciphertext), payload.code):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid authentication code.")
+    auth.user.mfa_enabled = True
+    record_audit(db, action="auth.mfa_enabled", actor=auth.user, ip=client_ip(request))
+    db.commit()
+    logger.info("MFA activated for user %s", auth.user.username)
+
+
+@router.post("/mfa/disable", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+def disable_mfa(
+    payload: MfaDisableIn,
+    request: Request,
+    auth: AuthContext = Depends(require_csrf),
+    db: Session = Depends(get_db),
+) -> None:
+    """Disable MFA after re-authenticating with the current password.
+
+    Refused when the instance policy mandates MFA for the caller's role, so a
+    user cannot opt out of a required control.
+    """
+    if not verify_password(auth.user.password_hash, payload.password):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Password is incorrect.")
+    policy = SettingsService(db).auth().mfa_policy
+    if _mfa_required_for(auth.user.role, policy):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="MFA is required for your role and cannot be disabled.",
+        )
+    auth.user.mfa_enabled = False
+    auth.user.mfa_secret_ciphertext = None
+    record_audit(db, action="auth.mfa_disabled", actor=auth.user, ip=client_ip(request))
     db.commit()

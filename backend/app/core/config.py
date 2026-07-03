@@ -137,6 +137,10 @@ class Settings(BaseSettings):
         default=Path("/data/artifacts"),
         description="Directory holding raw scanner artifacts (JSON output, SBOMs).",
     )
+    backups_dir: Path = Field(
+        default=Path("/data/backups"),
+        description="Directory holding backup bundles (manual and scheduled).",
+    )
     filesystem_scan_roots: list[str] = Field(
         default_factory=list,
         description=(

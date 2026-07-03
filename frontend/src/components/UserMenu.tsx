@@ -1,5 +1,6 @@
 import { Avatar, Badge, Group, Menu, Text, UnstyledButton } from '@mantine/core';
-import { IconChevronDown, IconLogout } from '@tabler/icons-react';
+import { IconChevronDown, IconLogout, IconUserCircle } from '@tabler/icons-react';
+import { Link } from 'react-router-dom';
 
 import { useAuth } from '../auth/AuthContext';
 
@@ -33,6 +34,9 @@ export function UserMenu() {
           </Group>
         </Menu.Label>
         <Menu.Divider />
+        <Menu.Item component={Link} to="/account" leftSection={<IconUserCircle size={14} />}>
+          Account
+        </Menu.Item>
         <Menu.Item
           leftSection={<IconLogout size={14} />}
           onClick={() => {

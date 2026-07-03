@@ -22,9 +22,14 @@ place, on your own infrastructure.
 > across image, repository, filesystem, and SBOM targets with private-registry
 > and git credentials); and **history, reports & exports** — a filterable,
 > sortable, paginated history view with saved presets, scan-to-scan diff, and
-> CSV/Markdown/JSON exports per scan and for a filtered set. OIDC, backup/restore,
-> and the remaining settings are delivered in later phases and are documented here
-> as the intended end state.
+> CSV/Markdown/JSON exports per scan and for a filtered set; and the
+> **settings, OIDC & backup/restore** layer — the full settings section (general,
+> authentication, users & roles, scanners, registries, git providers, Docker
+> environments, notifications, API tokens, backup & restore, about/health),
+> generic **OIDC** login (Authlib) alongside local auth, optional **TOTP MFA**,
+> personal **API tokens**, and passphrase-protected **backup/restore** with
+> scheduled backups. The dashboard, notification dispatch, and scheduled scans
+> arrive in the final phase and are documented here as the intended end state.
 
 ---
 
@@ -220,6 +225,7 @@ Configuration is driven by environment variables (prefix `SCRYE_`). The
 | `SCRYE_MAX_CONCURRENT_SCANS`| `2`                          | Max scans the in-process worker runs at once.                     |
 | `SCRYE_SCAN_TIMEOUT_SECONDS`| `1800`                       | Per-scan wall-clock timeout (seconds).                            |
 | `SCRYE_ARTIFACTS_DIR`       | `/data/artifacts`            | Directory holding raw scanner artifacts (JSON output, SBOMs).     |
+| `SCRYE_BACKUPS_DIR`         | `/data/backups`              | Directory holding backup bundles (manual and scheduled).          |
 | `SCRYE_FILESYSTEM_SCAN_ROOTS` | _(empty)_                  | Comma-separated absolute paths under which filesystem (`dir:`) scans are allowed. Empty disables filesystem scanning. |
 | `SCRYE_FRONTEND_DIST_DIR`   | `/app/frontend/dist`         | Directory of the built SPA served by FastAPI.                     |
 
@@ -279,9 +285,18 @@ secrets can be re-encrypted, after which the old line can be removed.
 - **Export reports** — download a single scan's findings, or a whole filtered
   history set, as **CSV**, **Markdown**, or **JSON** from the Export menu.
 
-**Coming in later phases:** OIDC, backup/restore, and the remaining settings
-(Phase 5); the dashboard, notifications, scheduled scans, and API tokens
-(Phase 6).
+**Settings, OIDC, MFA & backup/restore (Phase 5).** The full **Settings** area
+(admin) covers general options, authentication policy, users & roles, scanner
+defaults/ignore rules, registries, git providers, Docker environments,
+notification channels, API tokens, and backup & restore, plus an about/health
+tab. **Sign-in** supports local accounts and generic **OIDC** (enable it under
+*Settings → Authentication*, then a "Sign in with …" button appears on the login
+screen); any user can enable optional **TOTP MFA** and manage their password,
+API tokens, and sessions from the **Account** page. **Backups** are created and
+restored from *Settings → Backup & restore* (see [Backup & restore](#backup--restore)).
+
+**Coming in the final phase:** the dashboard, notification dispatch, and
+scheduled scans (Phase 6).
 
 Scanner options that stay write-only and secret (registry / git / OIDC
 credentials, API tokens) are entered once and never returned in plaintext — the
@@ -293,11 +308,19 @@ decrypted in memory at scan time.
 ## Security model
 
 - **Field-level encryption.** Stored secrets (registry creds, git tokens, OIDC
-  client secret, API tokens) are encrypted with **AES-256-GCM** (random
-  per-secret nonce, HKDF-derived key, key-version tagged). The database never
-  holds plaintext secrets.
+  client secret, notification secrets, TOTP MFA secrets, and the scheduled-backup
+  passphrase) are encrypted with **AES-256-GCM** (random per-secret nonce,
+  HKDF-derived key, key-version tagged). The database never holds plaintext
+  secrets.
 - **Master key via secret file.** The key comes from a Docker secret file
   (`SCRYE_APP_SECRET_KEY_FILE`) — never an env var or image layer.
+- **Authentication.** Local accounts use argon2id with revocable server-side
+  sessions; generic **OIDC** (Authlib, PKCE + nonce, ID-token signature/claim
+  validation) runs alongside local auth; optional **TOTP MFA** adds a second
+  factor. **API tokens** are bearer credentials stored only as a SHA-256 hash,
+  scoped to a role no higher than their owner's; token auth is exempt from CSRF
+  (bearer headers are not sent cross-site) while cookie sessions require a CSRF
+  token on every state-changing request.
 - **Write-only secret API.** Secret fields accept values on write and return a
   mask (`••••`) plus a timestamp on read. A logging filter redacts secret
   fields.
@@ -320,14 +343,21 @@ decrypted in memory at scan time.
 
 ## Backup & restore
 
-Backups are **portable, passphrase-protected bundles** (SQLite dump + schema
-version + manifest with checksums, optionally stored artifacts). Because secrets
-are encrypted under the host master key (which does not travel), on backup each
-secret is **re-wrapped** under a user-supplied passphrase; on restore you supply
-the passphrase and Scrye **re-encrypts** the secrets under the new host's master
-key. A restore therefore works on a fresh host with only the passphrase — no
-master-key transplant. Scheduled backups to a mounted path with retention are
-supported. _(Delivered in Phase 5.)_
+Backups are **portable, passphrase-protected bundles** (a logical database dump
+plus a manifest with the app/schema version). Because secrets are encrypted under
+the host master key (which does not travel), on backup each secret is
+**re-wrapped** under a user-supplied passphrase (a scrypt-derived AES-256-GCM
+key), and the whole bundle is encrypted under that passphrase too; on restore you
+supply the passphrase and Scrye **re-encrypts** the secrets under the new host's
+master key. A restore therefore works on a fresh host with only the passphrase —
+no master-key transplant.
+
+Manage backups under **Settings → Backup & restore** (admin): create a bundle,
+download or delete stored bundles, restore from an uploaded bundle (a
+**destructive** action that replaces all data and signs you out), and configure
+**scheduled backups** — an interval, a retention count, and an encrypted
+passphrase the in-process scheduler uses to produce bundles unattended. Restore
+in v1 requires the bundle's schema version to match the running installation.
 
 ---
 

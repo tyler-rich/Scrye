@@ -1,0 +1,357 @@
+"""OIDC configuration and the authorization-code login flow (docs/PLAN.md §5).
+
+Two routers live here:
+
+- ``config_router`` (``/oidc``): admin-only CRUD for the singleton OIDC provider
+  configuration. The client secret is write-only and field-encrypted.
+- ``login_router`` (``/auth/oidc``): the public ``login`` → ``callback`` flow.
+  ``login`` records per-request ``state``/``nonce``/PKCE in ``oidc_login_flows``
+  and redirects to the provider; ``callback`` validates the response, links or
+  auto-provisions a local account, and starts a normal session.
+
+Local and OIDC auth run concurrently — enabling OIDC never disables local login.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import secrets
+from datetime import timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.auth import oidc, service
+from app.auth.cookies import set_session_cookies
+from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
+from app.auth.passwords import hash_password
+from app.core.audit import record_audit
+from app.core.crypto import SecretDecryptError
+from app.core.masking import MaskedSecret, masked_secret
+from app.core.secret_store import AAD_OIDC_CLIENT_SECRET, decrypt_secret, encrypt_secret
+from app.core.timeutil import utcnow
+from app.db.models import OIDC_CONFIG_ID, OidcConfig, OidcIdentity, OidcLoginFlow, Role, User
+from app.db.session import get_db
+
+logger = logging.getLogger(__name__)
+
+config_router = APIRouter(prefix="/oidc", tags=["oidc"])
+login_router = APIRouter(prefix="/auth/oidc", tags=["oidc"])
+
+_admin = require_role(Role.ADMIN)
+
+#: Login-screen path the callback redirects to on failure (with an error code).
+_LOGIN_PATH = "/login"
+#: How long an in-progress login flow row stays valid before being purged.
+_FLOW_TTL = timedelta(minutes=10)
+_USERNAME_SANITIZE = re.compile(r"[^a-z0-9._-]+")
+
+
+class OidcConfigOut(BaseModel):
+    """Admin read view of the OIDC configuration (secret masked)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    enabled: bool
+    display_name: str
+    issuer: str | None
+    client_id: str | None
+    client_secret: MaskedSecret
+    scopes: str
+    username_claim: str
+    email_claim: str
+    groups_claim: str | None
+    admin_group: str | None
+    auto_provision: bool
+    default_role: Role
+    callback_path: str = "/api/auth/oidc/callback"
+
+
+class OidcConfigUpdateIn(BaseModel):
+    """Admin payload to update the OIDC configuration (all fields optional)."""
+
+    enabled: bool | None = None
+    display_name: str | None = Field(default=None, min_length=1, max_length=64)
+    issuer: str | None = Field(default=None, max_length=512)
+    client_id: str | None = Field(default=None, max_length=255)
+    client_secret: SecretStr | None = None
+    scopes: str | None = Field(default=None, min_length=1, max_length=255)
+    username_claim: str | None = Field(default=None, min_length=1, max_length=64)
+    email_claim: str | None = Field(default=None, min_length=1, max_length=64)
+    groups_claim: str | None = Field(default=None, max_length=64)
+    admin_group: str | None = Field(default=None, max_length=128)
+    auto_provision: bool | None = None
+    default_role: Role | None = None
+
+
+def _get_or_create_config(db: Session) -> OidcConfig:
+    """Return the singleton OIDC config row, creating a default if absent."""
+    config = db.get(OidcConfig, OIDC_CONFIG_ID)
+    if config is None:
+        config = OidcConfig(id=OIDC_CONFIG_ID)
+        db.add(config)
+        db.flush()
+    return config
+
+
+def _to_out(config: OidcConfig) -> OidcConfigOut:
+    """Build the masked read view of the OIDC config."""
+    return OidcConfigOut(
+        enabled=config.enabled,
+        display_name=config.display_name,
+        issuer=config.issuer,
+        client_id=config.client_id,
+        client_secret=masked_secret(config.secret_updated_at),
+        scopes=config.scopes,
+        username_claim=config.username_claim,
+        email_claim=config.email_claim,
+        groups_claim=config.groups_claim,
+        admin_group=config.admin_group,
+        auto_provision=config.auto_provision,
+        default_role=config.default_role,
+    )
+
+
+@config_router.get("/config", response_model=OidcConfigOut)
+def get_oidc_config(
+    _: AuthContext = Depends(_admin),
+    db: Session = Depends(get_db),
+) -> OidcConfigOut:
+    """Return the OIDC provider configuration (admin; client secret masked)."""
+    return _to_out(_get_or_create_config(db))
+
+
+@config_router.put("/config", response_model=OidcConfigOut)
+def update_oidc_config(
+    payload: OidcConfigUpdateIn,
+    request: Request,
+    auth: AuthContext = Depends(require_csrf),
+    _: AuthContext = Depends(_admin),
+    db: Session = Depends(get_db),
+) -> OidcConfigOut:
+    """Update the OIDC configuration; omitting ``client_secret`` keeps the stored one."""
+    config = _get_or_create_config(db)
+    data = payload.model_dump(exclude_unset=True)
+
+    if "client_secret" in data:
+        secret = payload.client_secret.get_secret_value() if payload.client_secret else ""
+        if secret:
+            config.client_secret_ciphertext = encrypt_secret(secret, aad=AAD_OIDC_CLIENT_SECRET)
+            config.secret_updated_at = utcnow()
+        else:
+            config.client_secret_ciphertext = None
+            config.secret_updated_at = None
+        data.pop("client_secret")
+
+    for field_name, value in data.items():
+        setattr(config, field_name, value)
+
+    if config.enabled and (not config.issuer or not config.client_id):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Issuer and client ID are required to enable OIDC.",
+        )
+
+    config.updated_by_username = auth.user.username
+    record_audit(
+        db,
+        action="settings.oidc_updated",
+        actor=auth.user,
+        ip=client_ip(request),
+        details={"enabled": config.enabled, "issuer": config.issuer},
+    )
+    db.commit()
+    return _to_out(config)
+
+
+def _fail(reason: str) -> RedirectResponse:
+    """Redirect the browser back to the login screen with an error code."""
+    return RedirectResponse(f"{_LOGIN_PATH}?oidc_error={reason}", status_code=status.HTTP_302_FOUND)
+
+
+def _purge_stale_flows(db: Session) -> None:
+    """Delete login-flow rows older than the flow TTL."""
+    cutoff = utcnow() - _FLOW_TTL
+    for row in db.scalars(select(OidcLoginFlow).where(OidcLoginFlow.created_at < cutoff)):
+        db.delete(row)
+
+
+@login_router.get("/login")
+async def oidc_login(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
+    """Start the OIDC login: create a flow and redirect to the provider."""
+    config = db.get(OidcConfig, OIDC_CONFIG_ID)
+    if config is None or not config.enabled or not config.issuer or not config.client_id:
+        return _fail("disabled")
+
+    try:
+        metadata = await oidc.discover(config.issuer)
+    except oidc.OidcError:
+        logger.warning("OIDC discovery failed during login start.")
+        return _fail("discovery")
+
+    _purge_stale_flows(db)
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    verifier, challenge = oidc.generate_pkce_pair()
+    redirect_uri = str(request.url_for("oidc_callback"))
+    db.add(
+        OidcLoginFlow(state=state, nonce=nonce, code_verifier=verifier, redirect_uri=redirect_uri)
+    )
+    db.commit()
+
+    url = oidc.build_authorization_url(
+        metadata,
+        client_id=config.client_id,
+        redirect_uri=redirect_uri,
+        scopes=config.scopes,
+        state=state,
+        nonce=nonce,
+        code_challenge=challenge,
+    )
+    return RedirectResponse(url, status_code=status.HTTP_302_FOUND)
+
+
+def _sanitize_username(raw: str, subject: str) -> str:
+    """Derive a valid local username from a claim value (fallback to subject)."""
+    candidate = _USERNAME_SANITIZE.sub("-", (raw or "").strip().lower()).strip("-.")
+    if len(candidate) < 3:
+        candidate = f"oidc-{subject}".lower()
+        candidate = _USERNAME_SANITIZE.sub("-", candidate).strip("-.")
+    return candidate[:64]
+
+
+def _unique_username(db: Session, base: str, subject: str) -> str:
+    """Return a username not already taken (suffixing with the subject if needed)."""
+    if service.get_user_by_username(db, base) is None:
+        return base
+    suffix = _USERNAME_SANITIZE.sub("", subject.lower())[:8] or secrets.token_hex(4)
+    candidate = f"{base[:55]}-{suffix}"
+    return candidate[:64]
+
+
+def _resolve_role(config: OidcConfig, claims: dict) -> Role:
+    """Pick the role for a provisioned user from the admin-group mapping."""
+    if config.admin_group and config.groups_claim:
+        groups = claims.get(config.groups_claim) or []
+        if isinstance(groups, str):
+            groups = [groups]
+        if config.admin_group in groups:
+            return Role.ADMIN
+    return config.default_role
+
+
+@login_router.get("/callback", name="oidc_callback")
+async def oidc_callback(
+    request: Request,
+    db: Session = Depends(get_db),
+    state: str | None = None,
+    code: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    """Handle the provider redirect: validate, link/provision, start a session."""
+    if error:
+        return _fail("provider")
+    if not state or not code:
+        return _fail("invalid_response")
+
+    _purge_stale_flows(db)
+    flow = db.get(OidcLoginFlow, state)
+    if flow is None:
+        return _fail("expired")
+    redirect_uri = flow.redirect_uri
+    nonce = flow.nonce
+    verifier = flow.code_verifier
+    db.delete(flow)  # one-time use
+    db.commit()
+
+    config = db.get(OidcConfig, OIDC_CONFIG_ID)
+    if config is None or not config.enabled or not config.issuer or not config.client_id:
+        return _fail("disabled")
+
+    client_secret: str | None = None
+    if config.client_secret_ciphertext:
+        try:
+            client_secret = decrypt_secret(
+                config.client_secret_ciphertext, aad=AAD_OIDC_CLIENT_SECRET
+            )
+        except SecretDecryptError:
+            return _fail("config")
+
+    try:
+        metadata = await oidc.discover(config.issuer)
+        tokens = await oidc.exchange_code(
+            metadata,
+            code=code,
+            code_verifier=verifier,
+            redirect_uri=redirect_uri,
+            client_id=config.client_id,
+            client_secret=client_secret,
+        )
+        claims = await oidc.verify_id_token(
+            metadata, tokens["id_token"], client_id=config.client_id, nonce=nonce
+        )
+    except oidc.OidcError:
+        logger.warning("OIDC callback validation failed.")
+        return _fail("validation")
+
+    subject = str(claims["sub"])
+    issuer = str(claims.get("iss") or config.issuer)
+    email = claims.get(config.email_claim)
+    identity = db.scalar(
+        select(OidcIdentity).where(OidcIdentity.issuer == issuer, OidcIdentity.subject == subject)
+    )
+
+    if identity is not None:
+        user = db.get(User, identity.user_id)
+        if user is None or not user.is_active:
+            return _fail("inactive")
+        identity.last_login_at = utcnow()
+        if email:
+            identity.email = str(email)
+    else:
+        if not config.auto_provision:
+            return _fail("not_provisioned")
+        raw_username = str(claims.get(config.username_claim) or email or subject)
+        username = _unique_username(db, _sanitize_username(raw_username, subject), subject)
+        role = _resolve_role(config, claims)
+        user = User(
+            username=username,
+            password_hash=hash_password(secrets.token_urlsafe(32)),  # no usable local password
+            role=role,
+            is_active=True,
+        )
+        db.add(user)
+        db.flush()
+        db.add(
+            OidcIdentity(
+                user_id=user.id,
+                issuer=issuer,
+                subject=subject,
+                email=str(email) if email else None,
+                last_login_at=utcnow(),
+            )
+        )
+        record_audit(
+            db,
+            action="auth.oidc_provisioned",
+            actor=user,
+            ip=client_ip(request),
+            target_type="user",
+            target_id=str(user.id),
+            details={"role": role.value},
+        )
+
+    token, session = service.create_session(
+        db, user, ip=client_ip(request), user_agent=request.headers.get("user-agent")
+    )
+    user.last_login_at = session.created_at
+    record_audit(db, action="auth.oidc_login", actor=user, ip=client_ip(request))
+    db.commit()
+
+    response: Response = RedirectResponse("/", status_code=status.HTTP_302_FOUND)
+    set_session_cookies(response, token, session.csrf_token)
+    return response

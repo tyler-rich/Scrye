@@ -4,6 +4,7 @@ import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { ColorSchemeToggle } from './components/ColorSchemeToggle';
 import { UserMenu } from './components/UserMenu';
 import { useAuth } from './auth/AuthContext';
+import { AccountPage } from './pages/AccountPage';
 import { Dashboard } from './pages/Dashboard';
 import { LoginPage } from './pages/LoginPage';
 import { NewScanPage } from './pages/NewScanPage';
@@ -96,6 +97,7 @@ export function App() {
           <Route path="/scans/diff/:baseId/:compareId" element={<ScanDiffPage />} />
           <Route path="/scans/:scanId" element={<ScanDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/account" element={<AccountPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppShell.Main>
