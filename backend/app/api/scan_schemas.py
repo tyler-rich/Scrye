@@ -127,6 +127,7 @@ class ScanOut(BaseModel):
     scanner_version: str | None
     error: str | None
     created_by_username: str | None
+    tags: list[str] = []
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None

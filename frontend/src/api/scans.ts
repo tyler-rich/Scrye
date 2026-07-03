@@ -34,6 +34,7 @@ export interface Scan {
   scanner_version: string | null;
   error: string | null;
   created_by_username: string | null;
+  tags: string[];
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
@@ -144,4 +145,120 @@ export function listArtifacts(id: number): Promise<Artifact[]> {
 /** Direct browser download URL for a stored artifact (served by FastAPI). */
 export function artifactDownloadUrl(scanId: number, artifactId: number): string {
   return `/api/scans/${scanId}/artifacts/${artifactId}/download`;
+}
+
+// --- Phase 4: history, filters, tags, diff, exports -------------------------
+
+export type ExportFormat = 'json' | 'csv' | 'markdown';
+export type HistorySort =
+  | 'created_at'
+  | 'findings_count'
+  | 'target'
+  | 'status'
+  | 'scanner'
+  | 'severity';
+export type SortOrder = 'asc' | 'desc';
+
+/** The full scan-history filter set (docs/PLAN.md §4.4). */
+export interface HistoryFilters {
+  scanner?: Scanner | null;
+  target_type?: TargetType | null;
+  q?: string | null;
+  status?: ScanStatus | null;
+  created_from?: string | null;
+  created_to?: string | null;
+  initiator?: string | null;
+  highest_severity?: Severity | null;
+  min_severity?: Severity | null;
+  tags?: string[];
+}
+
+export interface HistoryQuery extends HistoryFilters {
+  sort?: HistorySort;
+  order?: SortOrder;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ScanHistoryPage {
+  total: number;
+  items: Scan[];
+}
+
+export interface FilterOptions {
+  initiators: string[];
+  tags: string[];
+}
+
+export interface DiffFinding {
+  finding_class: FindingClass;
+  severity: Severity;
+  vuln_id: string | null;
+  pkg_name: string | null;
+  installed_version: string | null;
+  fixed_version: string | null;
+  title: string | null;
+}
+
+export interface ScanDiff {
+  base_scan_id: number;
+  compare_scan_id: number;
+  target: string;
+  scanner: Scanner;
+  added: DiffFinding[];
+  removed: DiffFinding[];
+  unchanged_count: number;
+  added_count: number;
+  removed_count: number;
+  severity_delta: Record<string, number>;
+}
+
+/** Serialize a set of history filters into URL query params (tags repeat). */
+export function historyFilterParams(filters: HistoryFilters): URLSearchParams {
+  const query = new URLSearchParams();
+  if (filters.scanner) query.set('scanner', filters.scanner);
+  if (filters.target_type) query.set('target_type', filters.target_type);
+  if (filters.q) query.set('q', filters.q);
+  if (filters.status) query.set('status', filters.status);
+  if (filters.created_from) query.set('created_from', filters.created_from);
+  if (filters.created_to) query.set('created_to', filters.created_to);
+  if (filters.initiator) query.set('initiator', filters.initiator);
+  if (filters.highest_severity) query.set('highest_severity', filters.highest_severity);
+  if (filters.min_severity) query.set('min_severity', filters.min_severity);
+  for (const tag of filters.tags ?? []) query.append('tags', tag);
+  return query;
+}
+
+export function listHistory(query: HistoryQuery = {}): Promise<ScanHistoryPage> {
+  const params = historyFilterParams(query);
+  if (query.sort) params.set('sort', query.sort);
+  if (query.order) params.set('order', query.order);
+  if (query.limit !== undefined) params.set('limit', String(query.limit));
+  if (query.offset !== undefined) params.set('offset', String(query.offset));
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return api<ScanHistoryPage>(`/api/scans/history${suffix}`);
+}
+
+export function getFilterOptions(): Promise<FilterOptions> {
+  return api<FilterOptions>('/api/scans/filter-options');
+}
+
+export function setScanTags(id: number, tags: string[]): Promise<Scan> {
+  return api<Scan>(`/api/scans/${id}/tags`, { method: 'PUT', body: { tags } });
+}
+
+export function getScanDiff(baseId: number, compareId: number): Promise<ScanDiff> {
+  return api<ScanDiff>(`/api/scans/${baseId}/diff/${compareId}`);
+}
+
+/** Browser download URL for a single scan's findings export. */
+export function scanExportUrl(id: number, format: ExportFormat): string {
+  return `/api/scans/${id}/export?format=${format}`;
+}
+
+/** Browser download URL for the filtered-history export. */
+export function historyExportUrl(filters: HistoryFilters, format: ExportFormat): string {
+  const params = historyFilterParams(filters);
+  params.set('format', format);
+  return `/api/scans/export?${params.toString()}`;
 }
