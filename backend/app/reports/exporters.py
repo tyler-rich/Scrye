@@ -61,6 +61,27 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
+#: Leading characters that make a spreadsheet interpret a cell as a formula.
+_CSV_INJECTION_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value: str) -> str:
+    """Neutralize spreadsheet formula injection in a single cell value.
+
+    A CSV/report cell whose first character is one of ``= + - @`` or a tab /
+    carriage return is executed as a formula when the file is opened in Excel,
+    Google Sheets, or LibreOffice (CSV injection). Prefixing an apostrophe forces
+    the cell to be read as literal text; the apostrophe is not shown by the
+    spreadsheet, so the visible value is unchanged. Values that do not start with
+    a trigger — including ordinary hyphenated names that merely contain ``-`` —
+    are returned unmodified. Note there is no exception for leading hyphens: a
+    value like ``-rc-tools`` is a genuine trigger and is prefixed.
+    """
+    if value.startswith(_CSV_INJECTION_PREFIXES):
+        return "'" + value
+    return value
+
+
 def _scan_metadata(scan: Scan) -> dict[str, Any]:
     """Build the JSON-serializable metadata dict shared by every scan report."""
     return {
@@ -144,25 +165,32 @@ def _scan_csv(scan: Scan, findings: list[Finding]) -> bytes:
         writer.writerow(
             [
                 finding.id,
-                finding.severity.value,
-                finding.finding_class.value,
-                finding.vuln_id or "",
-                finding.pkg_name or "",
-                finding.installed_version or "",
-                finding.fixed_version or "",
-                finding.title or "",
-                finding.location or "",
-                finding.primary_url or "",
+                _csv_safe(finding.severity.value),
+                _csv_safe(finding.finding_class.value),
+                _csv_safe(finding.vuln_id or ""),
+                _csv_safe(finding.pkg_name or ""),
+                _csv_safe(finding.installed_version or ""),
+                _csv_safe(finding.fixed_version or ""),
+                _csv_safe(finding.title or ""),
+                _csv_safe(finding.location or ""),
+                _csv_safe(finding.primary_url or ""),
             ]
         )
     return buffer.getvalue().encode("utf-8")
 
 
 def _md_escape(value: str | None) -> str:
-    """Escape a value for inclusion in a Markdown table cell."""
+    """Escape a value for a Markdown table cell and neutralize formula injection.
+
+    Escapes the pipe/newline characters that would break a table cell, then
+    applies the same formula-injection guard as the CSV exporter (:func:`_csv_safe`)
+    so a value beginning with ``= + - @`` is inert if the rendered report is later
+    pasted or imported into a spreadsheet.
+    """
     if not value:
         return ""
-    return value.replace("|", "\\|").replace("\n", " ").strip()
+    escaped = value.replace("|", "\\|").replace("\n", " ").strip()
+    return _csv_safe(escaped)
 
 
 def _scan_markdown(scan: Scan, findings: list[Finding]) -> bytes:
@@ -287,11 +315,11 @@ def _history_csv(scans: list[Scan]) -> bytes:
         writer.writerow(
             [
                 scan.id,
-                scan.scanner.value,
-                scan.target_type.value,
-                scan.target,
-                scan.status.value,
-                scan.highest_severity.value if scan.highest_severity else "",
+                _csv_safe(scan.scanner.value),
+                _csv_safe(scan.target_type.value),
+                _csv_safe(scan.target),
+                _csv_safe(scan.status.value),
+                _csv_safe(scan.highest_severity.value if scan.highest_severity else ""),
                 scan.findings_count,
                 counts.get("critical", 0),
                 counts.get("high", 0),
@@ -299,11 +327,11 @@ def _history_csv(scans: list[Scan]) -> bytes:
                 counts.get("low", 0),
                 counts.get("negligible", 0),
                 counts.get("unknown", 0),
-                scan.created_by_username or "",
-                ",".join(scan.tags),
-                _iso(scan.created_at) or "",
-                _iso(scan.started_at) or "",
-                _iso(scan.finished_at) or "",
+                _csv_safe(scan.created_by_username or ""),
+                _csv_safe(",".join(scan.tags)),
+                _csv_safe(_iso(scan.created_at) or ""),
+                _csv_safe(_iso(scan.started_at) or ""),
+                _csv_safe(_iso(scan.finished_at) or ""),
             ]
         )
     return buffer.getvalue().encode("utf-8")
