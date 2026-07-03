@@ -1072,3 +1072,31 @@ own dependencies — these are exactly that (direct/transitive deps we control),
 vendored scanner binaries. Pinning starlette explicitly guarantees the fixed version rather
 than relying on FastAPI's floor.
 **Plan section affected:** §2 (Tech stack pins), CLAUDE.md § Dependency hygiene.
+
+### 2026-07-03 — Phase P6 — Grype gate excludes the CPython interpreter binary
+**What changed:** With the app deps fixed, the Grype gate then failed on the CPython
+interpreter binary (`python 3.12.13`, Grype `binary` type) from the
+`python:3.12-slim-bookworm` base image — a run of HIGH CVEs (CVE-2026-7210, -6100, -4224,
+-3298, -3644, -9669, -4786, …) whose "fixed in" versions are all Python 3.13+/3.14+/3.15+.
+Excluded the `python` binary from the Grype gate (a `package: {type: binary, name: python}`
+ignore in `ci/grype.yaml`) and added an informational Grype run so the finding stays
+visible. The pinned base image was confirmed to already be the latest 3.12-slim-bookworm
+digest, so the CVEs cannot be cleared without leaving Python 3.12.
+**Why:** Python 3.12 is a locked decision (§2); these CVEs are fixed only by moving to
+3.13+, so they are genuinely unfixable-by-us base-image runtime items — the same carve-out
+CLAUDE.md § Dependency hygiene allows ("only genuinely unfixable upstream/OS-level items may
+remain, noted in the README"). Trivy's OS-aware scan still gates the base image, and Grype's
+binary classifier is the only thing that flags the interpreter binary at all.
+**Plan section affected:** §2 (Python 3.12), §12 (Phase 6 self-scan), CLAUDE.md § Dependency
+hygiene.
+
+### 2026-07-03 — Phase P6 — Bundled Trivy bumped 0.71.2 → 0.72.0
+**What changed:** The bundled Trivy version (`docker/Dockerfile` `TRIVY_VERSION`), the
+digest-pinned `trivy-server` sidecar image in `docker/docker-compose.yml`, and the Trivy
+image used by the CI dogfood job were bumped from `0.71.2` to `0.72.0` (the release Trivy's
+own version notice flagged as current).
+**Why:** CLAUDE.md § Dependency hygiene requires pinning to current, actively-maintained
+versions; keeping the bundled binary and the matching `trivy-server` image on the latest
+release continues the Phase 0 convention. Trivy self-verifies the new release against its
+published checksums at build time, so only the version string changed.
+**Plan section affected:** §9.1, §9.2 (bundled/sidecar Trivy version).
