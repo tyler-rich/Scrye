@@ -25,9 +25,62 @@ class TestRedact:
         assert "eyJhbGciOi" not in redact("Authorization: Bearer eyJhbGciOi.abc")
         assert "dXNlcjpwYXNz" not in redact("authorization=Basic dXNlcjpwYXNz")
 
+    def test_prefixed_and_compound_field_names(self) -> None:
+        # The schema stores secrets under compound names (registry_password,
+        # git_token, oidc_client_secret, ...); the value must still be masked.
+        assert redact("registry_password=hunter2") == f"registry_password={REDACTED}"
+        assert redact("git_token=ghp_abcdef123") == f"git_token={REDACTED}"
+        assert redact("oidc_client_secret=s3cr3t") == f"oidc_client_secret={REDACTED}"
+        assert redact("db_password: swordfish") == f"db_password: {REDACTED}"
+        assert redact("user_password=leak") == f"user_password={REDACTED}"
+        assert redact("backup_passphrase=letmein") == f"backup_passphrase={REDACTED}"
+        assert redact('{"git_token": "abc.def"}') == f'{{"git_token": "{REDACTED}"}}'
+        # None of the plaintext values survive.
+        for text in (
+            "registry_password=hunter2",
+            "git_token=ghp_abcdef123",
+            "oidc_client_secret=s3cr3t",
+        ):
+            assert text.split("=", 1)[1] not in redact(text)
+
+    def test_camel_case_field_names(self) -> None:
+        assert redact("registryPassword=camelCaseSecret") == f"registryPassword={REDACTED}"
+        assert redact("apiToken=abc123") == f"apiToken={REDACTED}"
+
     def test_non_secret_text_untouched(self) -> None:
         text = "scan completed for image nginx:1.27 in 4.2s (42 findings)"
         assert redact(text) == text
+
+    def test_keys_not_ending_in_a_secret_suffix_untouched(self) -> None:
+        # The secret word must be the *tail* of the key; unrelated keys that
+        # merely contain a secret word mid-name are left alone.
+        assert redact("secret_info_note=harmless") == "secret_info_note=harmless"
+        assert redact("token_count=42") == "token_count=42"
+        assert redact("duration=4.2s count=42") == "duration=4.2s count=42"
+
+    def test_near_miss_keys_that_end_in_a_non_secret_word(self) -> None:
+        # Keys that carry a secret word but do NOT end in one describe/qualify a
+        # secret rather than being one, so their (non-secret) value is preserved.
+        # `*_hint`, `*_type`, `*_santa`, `*_field` are all metadata, not the value.
+        for text in (
+            "password_hint=reset via email",  # a hint, not the password
+            "token_type=Bearer",  # OAuth token *type*, not the token
+            "secret_santa=alice",  # not a secret at all
+            "not_a_password_field=whatever",  # ends in 'field'
+        ):
+            assert redact(text) == text, f"unexpectedly redacted: {text!r}"
+
+    def test_expiry_style_metadata_is_not_redacted(self) -> None:
+        # `access_token_expiry` names *when a token expires* (a timestamp), not
+        # the token itself — the secret word 'token' is mid-key, not the tail,
+        # so the timestamp value is kept. Contrast with the bare `access_token`,
+        # which is the credential and IS redacted. If a contains-based policy is
+        # ever preferred over this suffix rule, this is the case that flips.
+        assert (
+            redact("access_token_expiry=2026-01-01T00:00:00Z")
+            == "access_token_expiry=2026-01-01T00:00:00Z"
+        )
+        assert redact("access_token=abc.def.ghi") == f"access_token={REDACTED}"
 
 
 class TestRedactionFilter:

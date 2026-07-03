@@ -15,36 +15,45 @@ import re
 
 _CONFIGURED = False
 
-#: Field names whose values must never appear in logs.
+#: Secret-bearing suffixes a field name may *end* with. Matching on the suffix
+#: (rather than the exact word) means prefixed/compound keys that the schema
+#: actually uses — ``registry_password``, ``git_token``, ``oidc_client_secret``,
+#: ``db_password``, ``registryPassword`` — are redacted too, not just the bare
+#: word. Order longest-first so the alternation prefers the most specific match.
 _SECRET_FIELD_NAMES = (
+    "client_secret",
+    "refresh_token",
+    "session_token",
+    "access_token",
+    "private_key",
+    "secret_key",
+    "access_key",
+    "credentials",
+    "credential",
+    "passphrase",
+    "id_token",
+    "csrf_token",
     "password",
     "passwd",
-    "pwd",
-    "secret",
-    "client_secret",
-    "token",
-    "access_token",
-    "refresh_token",
-    "id_token",
-    "session_token",
-    "csrf_token",
     "api_key",
     "apikey",
+    "secret",
+    "token",
     "authorization",
-    "access_key",
-    "secret_key",
-    "private_key",
-    "credential",
-    "credentials",
+    "pwd",
 )
 
 REDACTED = "[REDACTED]"
 
 # key = value / key: value / "key": "value" — with optional quoting around both.
+# The key may carry a prefix joined by word chars / '.' / '-' (or camelCase), so
+# `registry_password`, `git_token`, `oidc_client_secret` redact just like the
+# bare word: `[\w.-]*` before the secret suffix absorbs the prefix, and the
+# suffix must sit at the end of the key (immediately before the separator).
 # Scheme keywords (Bearer/Basic) are excluded from the value so header-style
 # credentials are handled (whole-token) by the bearer pattern below instead.
 _KV_PATTERN = re.compile(
-    r"(?i)([\"']?\b(?:" + "|".join(_SECRET_FIELD_NAMES) + r")\b[\"']?\s*[:=]\s*)"
+    r"(?i)([\"']?\b[\w.-]*(?:" + "|".join(_SECRET_FIELD_NAMES) + r")\b[\"']?\s*[:=]\s*)"
     r"([\"']?)((?!(?:bearer|basic)\b)[^\s\"',;&]+)(\2)"
 )
 # Authorization header style bearer/basic tokens.
