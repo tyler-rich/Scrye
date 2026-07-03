@@ -9,5 +9,6 @@ touching the API layer (Redis/arq is explicitly out of scope for v1).
 
 from app.workers.base import ScanWorker
 from app.workers.inprocess import InProcessScanWorker
+from app.workers.maintenance import MaintenanceScheduler
 
-__all__ = ["InProcessScanWorker", "ScanWorker"]
+__all__ = ["InProcessScanWorker", "MaintenanceScheduler", "ScanWorker"]

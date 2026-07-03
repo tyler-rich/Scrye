@@ -1,0 +1,20 @@
+# Scrye dogfood self-scan — Grype configuration for the CI image scan.
+#
+# The CI "image" job scans Scrye's own image with Grype and gates on FIXABLE
+# findings at HIGH severity or above (`--only-fixed --fail-on high`). Per
+# CLAUDE.md § Dependency hygiene, all fixable findings must be resolved; only
+# genuinely unfixable items may remain (documented in the README).
+#
+# `ignore` is the allowlist for any fixable finding that cannot be resolved
+# immediately. Each entry MUST carry a dated justification comment. Keep it
+# empty unless an exception is genuinely required.
+#
+# Example entry:
+#   ignore:
+#     - vulnerability: CVE-2024-12345  # 2026-07-03: fixed upstream, awaiting base bump
+
+# Suppress Grype's own app-update check and match noise in CI output.
+check-for-app-update: false
+
+# No triaged exceptions at authoring time.
+ignore: []

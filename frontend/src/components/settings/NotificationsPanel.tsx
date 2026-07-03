@@ -6,6 +6,7 @@ import {
   Button,
   Group,
   Modal,
+  MultiSelect,
   NumberInput,
   PasswordInput,
   Select,
@@ -23,10 +24,12 @@ import { ApiError } from '../../api/client';
 import {
   createChannel,
   deleteChannel,
+  EVENT_LABELS,
   listChannels,
   SECRET_OPTIONAL_TYPES,
   testChannel,
   type NotificationChannel,
+  type NotificationEvent,
   type NotificationTestResult,
   type NotificationType,
 } from '../../api/notifications';
@@ -37,6 +40,11 @@ const TYPES: { value: NotificationType; label: string }[] = [
   { value: 'smtp', label: 'SMTP email' },
   { value: 'matrix', label: 'Matrix room' },
 ];
+
+const EVENT_OPTIONS = (Object.keys(EVENT_LABELS) as NotificationEvent[]).map((value) => ({
+  value,
+  label: EVENT_LABELS[value],
+}));
 
 interface FormValues {
   name: string;
@@ -49,6 +57,7 @@ interface FormValues {
   username: string;
   homeserver: string;
   room_id: string;
+  events: NotificationEvent[];
   secret: string;
   enabled: boolean;
 }
@@ -102,6 +111,7 @@ export function NotificationsPanel() {
       username: '',
       homeserver: '',
       room_id: '',
+      events: [],
       secret: '',
       enabled: true,
     },
@@ -117,6 +127,7 @@ export function NotificationsPanel() {
         name: values.name.trim(),
         type: values.type,
         config: buildConfig(values),
+        events: values.events,
         secret: values.secret || null,
         enabled: values.enabled,
       });
@@ -171,6 +182,7 @@ export function NotificationsPanel() {
             <Table.Tr>
               <Table.Th>Name</Table.Th>
               <Table.Th>Type</Table.Th>
+              <Table.Th>Notify on</Table.Th>
               <Table.Th>Status</Table.Th>
               <Table.Th />
             </Table.Tr>
@@ -180,6 +192,21 @@ export function NotificationsPanel() {
               <Table.Tr key={c.id}>
                 <Table.Td>{c.name}</Table.Td>
                 <Table.Td>{c.type}</Table.Td>
+                <Table.Td>
+                  {c.events.length > 0 ? (
+                    <Group gap={4}>
+                      {c.events.map((e) => (
+                        <Badge key={e} variant="outline" size="sm">
+                          {EVENT_LABELS[e]}
+                        </Badge>
+                      ))}
+                    </Group>
+                  ) : (
+                    <Text size="sm" c="dimmed">
+                      —
+                    </Text>
+                  )}
+                </Table.Td>
                 <Table.Td>
                   {tests[c.id] ? (
                     <Badge color={tests[c.id].ok ? 'teal' : 'red'} variant="light">
@@ -216,7 +243,7 @@ export function NotificationsPanel() {
             ))}
             {items.length === 0 && (
               <Table.Tr>
-                <Table.Td colSpan={4}>
+                <Table.Td colSpan={5}>
                   <Text c="dimmed" ta="center" py="md">
                     No notification channels configured.
                   </Text>
@@ -281,6 +308,12 @@ export function NotificationsPanel() {
               label={form.values.type === 'smtp' ? 'SMTP password' : 'Secret / token'}
               description={secretOptional ? 'Optional for unauthenticated webhooks.' : undefined}
               {...form.getInputProps('secret')}
+            />
+            <MultiSelect
+              label="Notify on"
+              description="Events that dispatch a message to this channel."
+              data={EVENT_OPTIONS}
+              {...form.getInputProps('events')}
             />
             <Switch label="Enabled" {...form.getInputProps('enabled', { type: 'checkbox' })} />
             <Group justify="flex-end">

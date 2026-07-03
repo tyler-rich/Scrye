@@ -4,15 +4,24 @@ import { api } from './client';
 import type { MaskedSecret } from './targets';
 
 export type NotificationType = 'webhook' | 'discord' | 'smtp' | 'matrix';
+export type NotificationEvent = 'scan_completed' | 'scan_failed' | 'scan_high_severity';
 
 /** Channel types where a stored secret is optional (the rest require one). */
 export const SECRET_OPTIONAL_TYPES: NotificationType[] = ['webhook'];
+
+/** Human labels for the notification events a channel can subscribe to. */
+export const EVENT_LABELS: Record<NotificationEvent, string> = {
+  scan_completed: 'Scan completed',
+  scan_failed: 'Scan failed',
+  scan_high_severity: 'Critical/High findings',
+};
 
 export interface NotificationChannel {
   id: number;
   name: string;
   type: NotificationType;
   config: Record<string, unknown>;
+  events: NotificationEvent[];
   enabled: boolean;
   secret: MaskedSecret;
   created_by_username: string | null;
@@ -24,6 +33,7 @@ export interface NotificationChannelCreate {
   name: string;
   type: NotificationType;
   config: Record<string, unknown>;
+  events?: NotificationEvent[];
   secret?: string | null;
   enabled?: boolean;
 }

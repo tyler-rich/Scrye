@@ -1,0 +1,19 @@
+# Scrye dogfood self-scan — triaged Trivy exceptions.
+#
+# The CI "image" job scans Scrye's own image with Trivy and gates on FIXABLE
+# HIGH/CRITICAL findings (`--ignore-unfixed --severity HIGH,CRITICAL`). Per
+# CLAUDE.md § Dependency hygiene, all fixable findings must be resolved; only
+# genuinely unfixable upstream/OS-level items may remain and are documented in
+# the README.
+#
+# This file is the allowlist for any *fixable* finding that cannot be resolved
+# immediately (e.g. a fix exists upstream but is not yet in the pinned base
+# image). Each entry MUST carry a dated justification comment. Keep it empty
+# unless an exception is genuinely required — an unexplained id here defeats the
+# purpose of the gate.
+#
+# Format: one vulnerability id per line, e.g.
+#   CVE-2024-12345  # 2026-07-03: fixed upstream in libfoo 1.2.3, awaiting base image bump
+#
+# (No exceptions at authoring time — the pinned base image and scanner versions
+#  were chosen to be free of fixable HIGH/CRITICAL findings.)
