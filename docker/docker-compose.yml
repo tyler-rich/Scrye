@@ -41,6 +41,10 @@ services:
       # non-root process cannot write to it. Holds only the transient registry/
       # git credential files (materialized in-memory, never on disk); the
       # scanners' large DB/scratch writes go to the /cache volume, not here.
+      # Deliberately small: tmpfs is RAM-backed, so its size counts against the
+      # container's memory limit. Don't enlarge it to "fix" a scanner disk-space
+      # error — vuln DBs and image-layer staging belong on /cache (see README
+      # "Requirements" for the measured footprint and /cache sizing guidance).
       - /tmp:size=200m,mode=1700,uid=1000,gid=1000
     deploy:
       resources:

@@ -157,7 +157,29 @@ and one normalized findings model.
 
 - **Docker** 24+ and the **Compose v2** plugin.
 - ~2 GB RAM available to the container for typical scans (configurable limits in
-  Compose); disk for the scanner vulnerability databases (under `/cache`).
+  Compose). This is sufficient for scanning images around 1 GB unpacked,
+  including SBOM generation; raise the Compose memory limit for substantially
+  larger images.
+- **Disk for the `/cache` volume — plan for ≥ 10 GB.** Everything the scanners
+  read and write at scan time lives on this named volume (`scrye_cache`):
+  - **Trivy vulnerability DB:** ~1.2 GB on disk (measured; downloads once,
+    persists across restarts, refreshed incrementally).
+  - **Trivy Java index DB:** up to ~1 GB more, downloaded on demand the first
+    time a Java artifact is scanned.
+  - **Grype vulnerability DB:** ~1.5–2 GB on disk (downloads once, then daily
+    incremental updates).
+  - **Transient image staging:** while an image scan runs, the scanners unpack
+    layer data under `/cache/tmp` — budget roughly the **uncompressed size of
+    the largest image you scan** (measured: a ~330 MB-compressed image staged
+    ~1.1 GB, cleaned up when the scan finished).
+- **The `/tmp` tmpfs stays small (200 MB) on purpose.** tmpfs is **RAM-backed,
+  not disk-backed** — every byte written there is memory charged against the
+  container's limit. `/tmp` holds only transient credential files (a few KB);
+  all large scanner writes (vulnerability DBs, image-layer staging) are
+  deliberately routed to the disk-backed `/cache` volume instead. Do **not**
+  "fix" a disk-space error by enlarging the tmpfs — a multi-GB tmpfs would let
+  image staging consume multiple GB of RAM and OOM the container well before
+  the 2 GB default limit.
 - Optional sidecars: a **Trivy server** (shared vuln-DB cache) and a read-only
   **docker-socket-proxy** (to scan running images).
 - For native (non-container) development: **Python 3.13**, **Node 20+**, and the
