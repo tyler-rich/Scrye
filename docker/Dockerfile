@@ -111,7 +111,11 @@ COPY --chown=1000:1000 backend/ /app/backend/
 COPY --chown=1000:1000 --from=frontend-builder /build/frontend/dist /app/frontend/dist
 COPY --chown=1000:1000 docker/entrypoint.sh /app/entrypoint.sh
 COPY --chown=1000:1000 THIRD_PARTY_LICENSES/ /THIRD_PARTY_LICENSES/
-RUN chmod 0755 /app/entrypoint.sh
+# Strip any CR characters that may have slipped in via a CRLF checkout (e.g. on
+# Windows without .gitattributes honored): a CRLF shebang makes the kernel look
+# for `/bin/sh\r` and the container dies with `no such file or directory`.
+RUN sed -i 's/\r$//' /app/entrypoint.sh \
+    && chmod 0755 /app/entrypoint.sh
 
 WORKDIR /app/backend
 USER 1000:1000
