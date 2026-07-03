@@ -146,6 +146,28 @@ async def test_worker_skips_canceled_scan(db, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_worker_does_not_run_a_scan_canceled_before_claim(db, monkeypatch) -> None:
+    """A scan flipped to CANCELED before the worker claims it must not run."""
+    monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _FakeScanner(_make_execution()))
+    scan_id = _queue_scan(db)
+    # Simulate the cancel endpoint winning the race: the row is CANCELED before
+    # the worker's guarded queued->running update runs.
+    scan = db.get(Scan, scan_id)
+    scan.status = ScanStatus.CANCELED
+    db.commit()
+
+    worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+    await worker.submit(scan_id)
+    await worker.shutdown()
+
+    db.expire_all()
+    settled = db.get(Scan, scan_id)
+    assert settled.status is ScanStatus.CANCELED
+    assert settled.findings_count == 0
+    assert settled.artifacts == []
+
+
+@pytest.mark.asyncio
 async def test_worker_recovery_fails_running_and_requeues_queued(db, monkeypatch) -> None:
     execution = _make_execution()
     monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _FakeScanner(execution))

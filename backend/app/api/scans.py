@@ -11,7 +11,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.scan_schemas import (
@@ -210,20 +210,30 @@ def cancel_scan(
     be canceled.
     """
     scan = _get_scan_or_404(db, scan_id)
-    if scan.status != ScanStatus.QUEUED:
+    # Atomically flip queued -> canceled only if still queued. This races the
+    # worker, which claims a scan with the mirror update (queued -> running);
+    # SQLite serializes the two writes so a cancel can't clobber a scan the
+    # worker already started (and vice versa).
+    canceled = db.execute(
+        update(Scan)
+        .where(Scan.id == scan_id, Scan.status == ScanStatus.QUEUED)
+        .values(status=ScanStatus.CANCELED, finished_at=utcnow())
+    )
+    if canceled.rowcount == 0:
+        db.rollback()
+        db.refresh(scan)
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             detail=f"Only queued scans can be canceled (status is '{scan.status.value}').",
         )
-    scan.status = ScanStatus.CANCELED
-    scan.finished_at = utcnow()
     record_audit(
         db,
         action="scan.canceled",
         actor=auth.user,
         ip=client_ip(request),
         target_type="scan",
-        target_id=str(scan.id),
+        target_id=str(scan_id),
     )
     db.commit()
+    db.refresh(scan)
     return ScanOut.model_validate(scan)

@@ -8,11 +8,34 @@ get its own session handling; Phase 0 only needs request-scoped access.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import Any
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
+
+#: Milliseconds a writer waits on a locked database before erroring. The worker
+#: (event-loop thread) and request handlers (threadpool) can write concurrently,
+#: so a busy timeout lets a contended write retry instead of immediately raising
+#: "database is locked".
+_SQLITE_BUSY_TIMEOUT_MS = 5000
+
+
+def _configure_sqlite(dbapi_connection: Any, _record: Any) -> None:
+    """Apply per-connection SQLite pragmas for safe concurrent access.
+
+    - WAL journaling lets readers run while a writer holds the lock.
+    - ``busy_timeout`` makes contended writes wait rather than fail fast.
+    - ``foreign_keys`` enforces the ON DELETE rules the models declare.
+    """
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute(f"PRAGMA busy_timeout={_SQLITE_BUSY_TIMEOUT_MS}")
+        cursor.execute("PRAGMA foreign_keys=ON")
+    finally:
+        cursor.close()
 
 
 def create_db_engine(settings: Settings | None = None) -> Engine:
@@ -26,13 +49,16 @@ def create_db_engine(settings: Settings | None = None) -> Engine:
     """
     settings = settings or get_settings()
     # check_same_thread=False so the engine can be shared across the worker and
-    # request threads; SQLite write serialization is handled by the worker.
-    return create_engine(
+    # request threads. Concurrent writes are made safe by the WAL + busy_timeout
+    # pragmas applied on each new connection (see _configure_sqlite).
+    new_engine = create_engine(
         settings.database_url,
         echo=False,
         future=True,
         connect_args={"check_same_thread": False},
     )
+    event.listen(new_engine, "connect", _configure_sqlite)
+    return new_engine
 
 
 engine: Engine = create_db_engine()

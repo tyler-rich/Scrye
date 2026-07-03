@@ -11,39 +11,29 @@ import json
 from typing import Any
 
 from app.core.config import get_settings
-from app.db.models import FindingClass, Scanner, Severity
+from app.db.models import FindingClass, Scanner
 from app.scanners.base import (
+    DESCRIPTION_LIMIT,
     ImageScanner,
     NormalizedFinding,
     ScanExecution,
     ScannerError,
-    _clip,
+    clip,
     resolve_binary,
     run_command,
+    severity_from_string,
     tally_severities,
 )
+
+# The ``--scanners`` / ``--severity`` token sets below must stay aligned with the
+# ``TrivyScannerName`` / ``TrivySeverity`` Literals in app.api.scan_schemas, which
+# validate the request; build_command silently drops any token not listed here.
 
 #: Trivy scanner tokens for the ``--scanners`` flag, in canonical order.
 TRIVY_SCANNERS: tuple[str, ...] = ("vuln", "misconfig", "secret", "license")
 
 #: Trivy severity tokens for the ``--severity`` flag, in canonical order.
 TRIVY_SEVERITIES: tuple[str, ...] = ("UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL")
-
-#: Map a Trivy severity string to the normalized enum (Trivy has no NEGLIGIBLE).
-_SEVERITY_MAP: dict[str, Severity] = {
-    "CRITICAL": Severity.CRITICAL,
-    "HIGH": Severity.HIGH,
-    "MEDIUM": Severity.MEDIUM,
-    "LOW": Severity.LOW,
-    "UNKNOWN": Severity.UNKNOWN,
-}
-
-_DESCRIPTION_LIMIT = 4000
-
-
-def _severity(raw: Any) -> Severity:
-    """Normalize a Trivy severity string; default to UNKNOWN."""
-    return _SEVERITY_MAP.get(str(raw).upper(), Severity.UNKNOWN)
 
 
 def build_command(binary: str, target: str, options: dict[str, Any]) -> list[str]:
@@ -117,15 +107,15 @@ def _parse_vulnerabilities(items: Any, target: str | None) -> list[NormalizedFin
         out.append(
             NormalizedFinding(
                 finding_class=FindingClass.VULNERABILITY.value,
-                severity=_severity(item.get("Severity")),
-                vuln_id=_clip(item.get("VulnerabilityID"), 128),
-                pkg_name=_clip(item.get("PkgName"), 255),
-                installed_version=_clip(item.get("InstalledVersion"), 128),
-                fixed_version=_clip(item.get("FixedVersion"), 128),
-                title=_clip(item.get("Title") or item.get("VulnerabilityID"), 512),
-                description=_clip(item.get("Description"), _DESCRIPTION_LIMIT),
-                location=_clip(target, 512),
-                primary_url=_clip(item.get("PrimaryURL"), 512),
+                severity=severity_from_string(item.get("Severity")),
+                vuln_id=clip(item.get("VulnerabilityID"), 128),
+                pkg_name=clip(item.get("PkgName"), 255),
+                installed_version=clip(item.get("InstalledVersion"), 128),
+                fixed_version=clip(item.get("FixedVersion"), 128),
+                title=clip(item.get("Title") or item.get("VulnerabilityID"), 512),
+                description=clip(item.get("Description"), DESCRIPTION_LIMIT),
+                location=clip(target, 512),
+                primary_url=clip(item.get("PrimaryURL"), 512),
             )
         )
     return out
@@ -141,14 +131,12 @@ def _parse_misconfigurations(items: Any, target: str | None) -> list[NormalizedF
         out.append(
             NormalizedFinding(
                 finding_class=FindingClass.MISCONFIGURATION.value,
-                severity=_severity(item.get("Severity")),
-                vuln_id=_clip(item.get("ID") or item.get("AVDID"), 128),
-                title=_clip(item.get("Title"), 512),
-                description=_clip(
-                    item.get("Message") or item.get("Description"), _DESCRIPTION_LIMIT
-                ),
-                location=_clip(target, 512),
-                primary_url=_clip(item.get("PrimaryURL"), 512),
+                severity=severity_from_string(item.get("Severity")),
+                vuln_id=clip(item.get("ID") or item.get("AVDID"), 128),
+                title=clip(item.get("Title"), 512),
+                description=clip(item.get("Message") or item.get("Description"), DESCRIPTION_LIMIT),
+                location=clip(target, 512),
+                primary_url=clip(item.get("PrimaryURL"), 512),
             )
         )
     return out
@@ -165,12 +153,12 @@ def _parse_secrets(items: Any, target: str | None) -> list[NormalizedFinding]:
         out.append(
             NormalizedFinding(
                 finding_class=FindingClass.SECRET.value,
-                severity=_severity(item.get("Severity")),
-                vuln_id=_clip(item.get("RuleID"), 128),
-                title=_clip(item.get("Title") or item.get("Category"), 512),
+                severity=severity_from_string(item.get("Severity")),
+                vuln_id=clip(item.get("RuleID"), 128),
+                title=clip(item.get("Title") or item.get("Category"), 512),
                 # Never store the matched secret value; the category/title is enough.
-                description=_clip(item.get("Category"), _DESCRIPTION_LIMIT),
-                location=_clip(location, 512),
+                description=clip(item.get("Category"), DESCRIPTION_LIMIT),
+                location=clip(location, 512),
             )
         )
     return out
@@ -184,13 +172,13 @@ def _parse_licenses(items: Any, target: str | None) -> list[NormalizedFinding]:
         out.append(
             NormalizedFinding(
                 finding_class=FindingClass.LICENSE.value,
-                severity=_severity(item.get("Severity")),
-                vuln_id=_clip(name, 128),
-                pkg_name=_clip(item.get("PkgName"), 255),
-                title=_clip(name, 512),
-                description=_clip(item.get("Category"), _DESCRIPTION_LIMIT),
-                location=_clip(item.get("FilePath") or target, 512),
-                primary_url=_clip(item.get("Link"), 512),
+                severity=severity_from_string(item.get("Severity")),
+                vuln_id=clip(name, 128),
+                pkg_name=clip(item.get("PkgName"), 255),
+                title=clip(name, 512),
+                description=clip(item.get("Category"), DESCRIPTION_LIMIT),
+                location=clip(item.get("FilePath") or target, 512),
+                primary_url=clip(item.get("Link"), 512),
             )
         )
     return out

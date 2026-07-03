@@ -14,12 +14,13 @@ low concurrency — the locked v1 design).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.artifacts import store_artifact
+from app.core.artifacts import artifact_path, store_artifact
 from app.core.timeutil import utcnow
 from app.db.models import (
     SEVERITY_RANK,
@@ -42,6 +43,12 @@ _RAW_ARTIFACT: dict[Scanner, tuple[str, ArtifactKind]] = {
     Scanner.TRIVY: ("trivy.json", ArtifactKind.RAW_TRIVY_JSON),
     Scanner.GRYPE: ("grype.json", ArtifactKind.RAW_GRYPE_JSON),
 }
+
+#: How long shutdown lets in-flight scans finish before cancelling them. A real
+#: scan runs for minutes, so a graceful stop can't wait it out (the container
+#: stop grace is seconds); scans still running past this are cancelled and
+#: reconciled to ``failed`` by :meth:`InProcessScanWorker.recover` on restart.
+_SHUTDOWN_GRACE_SECONDS = 10
 
 
 def _highest_severity(counts: dict[Severity, int]) -> Severity | None:
@@ -103,10 +110,24 @@ class InProcessScanWorker(ScanWorker):
             await self.submit(scan_id)
 
     async def shutdown(self) -> None:
-        """Stop accepting work and wait for in-flight tasks to finish."""
+        """Stop accepting work; drain briefly, then cancel what's still running.
+
+        Quick scans finish within the grace window; anything still running is
+        cancelled (which kills its scanner subprocess) so the container can stop
+        promptly instead of blocking for the full scan timeout. Cancelled scans
+        are left ``running`` and reconciled to ``failed`` by :meth:`recover` on
+        the next start.
+        """
         self._accepting = False
-        if self._tasks:
-            await asyncio.gather(*list(self._tasks), return_exceptions=True)
+        tasks = list(self._tasks)
+        if not tasks:
+            return
+        _, pending = await asyncio.wait(tasks, timeout=_SHUTDOWN_GRACE_SECONDS)
+        for task in pending:
+            task.cancel()
+        if pending:
+            logger.info("Cancelling %d scan(s) still running at shutdown.", len(pending))
+            await asyncio.gather(*pending, return_exceptions=True)
 
     async def _execute(self, scan_id: int) -> None:
         """Run a single scan end-to-end, holding a concurrency slot."""
@@ -130,9 +151,22 @@ class InProcessScanWorker(ScanWorker):
 
     async def _run(self, session: Session, scan: Scan) -> None:
         """Mark the scan running, invoke the scanner, and persist results."""
-        scan.status = ScanStatus.RUNNING
-        scan.started_at = utcnow()
+        # Atomically claim the scan: transition queued -> running only if it is
+        # still queued. This closes the race with a concurrent cancel (which
+        # flips queued -> canceled the same way) — SQLite serializes the two
+        # writes, so exactly one wins and a cancel is never silently lost.
+        started_at = utcnow()
+        claimed = session.execute(
+            update(Scan)
+            .where(Scan.id == scan.id, Scan.status == ScanStatus.QUEUED)
+            .values(status=ScanStatus.RUNNING, started_at=started_at)
+        )
         session.commit()
+        if claimed.rowcount == 0:
+            session.refresh(scan)
+            logger.info("Scan %d was %s before start; skipping.", scan.id, scan.status.value)
+            return
+        session.refresh(scan)
         logger.info("Scan %d started: %s %s", scan.id, scan.scanner.value, scan.target)
 
         try:
@@ -192,7 +226,15 @@ class InProcessScanWorker(ScanWorker):
         scan.scanner_version = execution.scanner_version
         scan.status = ScanStatus.SUCCEEDED
         scan.finished_at = utcnow()
-        session.commit()
+        try:
+            session.commit()
+        except Exception:
+            # The artifact bytes were already written to disk; if the row that
+            # would own them fails to commit, remove the file so it doesn't
+            # accumulate as an orphan. Re-raise so _execute marks the scan failed.
+            with contextlib.suppress(OSError, ValueError):
+                artifact_path(stored.relative_path).unlink(missing_ok=True)
+            raise
 
     def _fail(self, session: Session, scan_id: int, message: str) -> None:
         """Mark a scan failed with a safe error message (best-effort)."""

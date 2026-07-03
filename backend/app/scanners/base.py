@@ -10,6 +10,7 @@ needed to exercise the worker or the parsers.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -104,6 +105,12 @@ async def run_command(
         proc.kill()
         await proc.wait()
         raise ScannerError(f"Scan timed out after {timeout}s.") from exc
+    except asyncio.CancelledError:
+        # Worker shutdown cancelled us: don't leave the child process orphaned.
+        proc.kill()
+        with contextlib.suppress(ProcessLookupError):
+            await proc.wait()
+        raise
 
     return CommandResult(
         returncode=proc.returncode if proc.returncode is not None else -1,
@@ -147,7 +154,21 @@ def tally_severities(findings: list[NormalizedFinding]) -> dict[Severity, int]:
     return counts
 
 
-def _clip(value: Any, limit: int) -> str | None:
+#: Case-insensitive lookup from a scanner's severity string to the normalized
+#: enum. The six-level superset covers both engines — Trivy simply never emits
+#: NEGLIGIBLE — so both scanners share one mapping and can't drift apart.
+SEVERITY_BY_NAME: dict[str, Severity] = {level.value.upper(): level for level in Severity}
+
+#: Max characters kept for a finding description before clipping.
+DESCRIPTION_LIMIT = 4000
+
+
+def severity_from_string(raw: Any) -> Severity:
+    """Normalize a scanner severity string to the shared enum (default UNKNOWN)."""
+    return SEVERITY_BY_NAME.get(str(raw).upper(), Severity.UNKNOWN)
+
+
+def clip(value: Any, limit: int) -> str | None:
     """Return ``value`` as a stripped string clipped to ``limit`` chars, or None."""
     if value is None:
         return None
