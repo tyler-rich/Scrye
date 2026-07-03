@@ -81,6 +81,27 @@ class Settings(BaseSettings):
         ),
     )
 
+    # --- Auth & sessions ----------------------------------------------------
+    session_lifetime_hours: int = Field(
+        default=168,
+        description="Login session lifetime in hours (default 168 = 7 days).",
+    )
+    session_cookie_secure: bool = Field(
+        default=True,
+        description=(
+            "Set the Secure flag on session cookies. Keep true in production "
+            "(behind TLS-terminating Caddy); set false only for plain-HTTP local dev."
+        ),
+    )
+    auth_rate_limit_attempts: int = Field(
+        default=5,
+        description="Max authentication attempts allowed per client IP per window.",
+    )
+    auth_rate_limit_window_seconds: int = Field(
+        default=60,
+        description="Length of the auth rate-limit window in seconds.",
+    )
+
     # --- Optional sidecars -------------------------------------------------
     trivy_server_url: str | None = Field(
         default=None,
