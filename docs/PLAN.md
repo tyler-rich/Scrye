@@ -1154,3 +1154,28 @@ them off the small (200 MB) tmpfs and lets the DB survive restarts. §9.2 left
 the tmpfs root-owned and never pointed the scanners at a writable cache — the
 plan pre-dated exercising a real scan under `read_only: true`.
 **Plan section affected:** §9.2 (hardened Compose), §4 (scanner orchestration).
+
+### 2026-07-03 — Phase P6 — Scanner cache redirected via env vars for **every** invocation (incl. probes)
+**What changed:** Generalized the previous fix. `scanner_scratch(engine)` became
+`scanner_cache_env()` in `app/scanners/base.py`, returning a full environment
+overlay — `TMPDIR`, `HOME`, `XDG_CACHE_HOME`, `TRIVY_CACHE_DIR`,
+`GRYPE_DB_CACHE_DIR` — all under the writable `/cache` volume. It is now applied
+not only to the scans but also to the scanner **probes** in
+`app/core/system_info.py` (`trivy --version --format json`, `grype db status`,
+the version probes), which previously ran with no cache env.
+**Why:** After the temp/cache fix, real image scans failed one step further with
+`mkdir /app/.cache: read-only file system`. The numeric `user: "1000:1000"`
+still resolves `HOME=/app` (from the image's `useradd --home-dir /app`), so a
+scanner's default cache is `/app/.cache` on the read-only root. The image/repo
+scan path set `--cache-dir`, but the About-tab DB-freshness probes did not —
+`trivy --version --format json` reads the vuln-DB metadata under the cache dir
+and `grype db status` reads its DB dir, both defaulting to `/app/.cache`. Moving
+to env vars (rather than a per-subcommand flag) covers every invocation
+uniformly. Verified end-to-end against the hardened Compose config: the real
+Trivy DB downloads once to `/cache/trivy` and a real `trivy image` scan of
+`alpine:3.19` reports CVEs; the DB persists across `docker compose down`/`up`
+(offline `--skip-db-update` scan still succeeds). Grype's cache is redirected
+identically (writes to `/cache/grype/db`, never `/app/.cache`); its DB registry
+was unreachable from the CI sandbox's egress policy, so its download step is
+covered by unit tests + the shared mechanism rather than a live pull.
+**Plan section affected:** §9.2 (hardened Compose), §4 (scanner orchestration).

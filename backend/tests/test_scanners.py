@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from app.core import system_info
 from app.db.models import FindingClass, Severity
 from app.scanners import base, grype, syft, trivy
 
@@ -305,11 +306,13 @@ def test_syft_resolve_format_defaults_and_validates() -> None:
 
 # --- Scanner cache/scratch redirection (hardened read-only-rootfs runtime) ----
 #
-# Regression guard for the `mkdir /tmp/trivy-XXXXXXXXX: permission denied`
-# failure: under the hardened Compose config the container runs as a non-root
-# uid on a read-only root FS with a small tmpfs /tmp, so the scanners must write
-# their vulnerability DB and temp extraction to the writable /cache volume, never
-# to the default $HOME/.cache or the shared /tmp.
+# Regression guard for two runtime failures under the hardened Compose config
+# (non-root uid, read-only root FS, small tmpfs /tmp):
+#   * `mkdir /tmp/trivy-XXXXXXXXX: permission denied` (temp dir on the tmpfs), and
+#   * `mkdir /app/.cache: read-only file system` (default $HOME/.cache on the
+#     read-only root — hit by scans AND the version/DB-status probes).
+# Every scanner invocation must be pointed at the writable /cache volume via the
+# cache env overlay, never fall back to $HOME/.cache or the shared /tmp.
 
 
 class _CapturingRun:
@@ -326,7 +329,7 @@ class _CapturingRun:
         return base.CommandResult(returncode=0, stdout=self.stdout, stderr=b"", argv=argv)
 
 
-def _patch_scanner_cache(monkeypatch, cache_root):
+def _patch_scanner_cache(monkeypatch, cache_root, *modules):
     """Point every scanner's cache volume + binary paths at test-safe values."""
     from app.core import config
 
@@ -336,20 +339,31 @@ def _patch_scanner_cache(monkeypatch, cache_root):
         grype_binary="/usr/local/bin/grype",
         syft_binary="/usr/local/bin/syft",
     )
-    for module in (base, trivy, grype, syft):
+    for module in (base, trivy, grype, syft, *modules):
         monkeypatch.setattr(module, "get_settings", lambda: settings)
     return settings
 
 
-def test_scanner_scratch_creates_dirs_off_the_shared_tmp(monkeypatch, tmp_path) -> None:
+def _assert_points_at_cache(env: dict, cache_root) -> None:
+    """Assert an env overlay redirects every cache/temp location onto the volume."""
+    assert env["TMPDIR"] == str(cache_root / "tmp")
+    assert env["HOME"] == str(cache_root)
+    assert env["XDG_CACHE_HOME"] == str(cache_root)
+    assert env["TRIVY_CACHE_DIR"] == str(cache_root / "trivy")
+    assert env["GRYPE_DB_CACHE_DIR"] == str(cache_root / "grype" / "db")
+    # None of these fall back to a read-only default like /app/.cache or /root.
+    for value in (env["TMPDIR"], env["TRIVY_CACHE_DIR"], env["GRYPE_DB_CACHE_DIR"]):
+        assert Path(value).is_relative_to(cache_root)
+
+
+def test_scanner_cache_env_creates_dirs_and_redirects_all_caches(monkeypatch, tmp_path) -> None:
     _patch_scanner_cache(monkeypatch, tmp_path)
-    cache_dir, overlay = base.scanner_scratch("trivy")
-    assert cache_dir == tmp_path / "trivy"
-    assert cache_dir.is_dir()
-    assert overlay["TMPDIR"] == str(tmp_path / "tmp")
+    overlay = base.scanner_cache_env()
+    _assert_points_at_cache(overlay, tmp_path)
+    # The volume subdirectories are created on demand (the volume starts empty).
     assert (tmp_path / "tmp").is_dir()
-    # Scratch resolves onto the configured cache volume, not a default location.
-    assert Path(overlay["TMPDIR"]).parent == tmp_path
+    assert (tmp_path / "trivy").is_dir()
+    assert (tmp_path / "grype").is_dir()
 
 
 def test_trivy_command_includes_cache_dir_when_given() -> None:
@@ -368,8 +382,9 @@ async def test_trivy_image_scan_redirects_db_cache_and_tmpdir(monkeypatch, tmp_p
 
     await trivy.TrivyScanner().scan_image("alpine:3.19", {})
 
+    # Both the explicit flag and the env var point at the writable volume.
     assert run.argv[run.argv.index("--cache-dir") + 1] == str(tmp_path / "trivy")
-    assert run.env["TMPDIR"] == str(tmp_path / "tmp")
+    _assert_points_at_cache(run.env, tmp_path)
 
 
 @pytest.mark.asyncio
@@ -381,7 +396,7 @@ async def test_trivy_repo_scan_redirects_db_cache_and_tmpdir(monkeypatch, tmp_pa
     await trivy.TrivyScanner().scan_repo("https://github.com/org/repo.git", {})
 
     assert run.argv[run.argv.index("--cache-dir") + 1] == str(tmp_path / "trivy")
-    assert run.env["TMPDIR"] == str(tmp_path / "tmp")
+    _assert_points_at_cache(run.env, tmp_path)
 
 
 @pytest.mark.asyncio
@@ -392,8 +407,7 @@ async def test_grype_scan_redirects_db_cache_and_tmpdir(monkeypatch, tmp_path) -
 
     await grype.GrypeScanner().scan_image("alpine:3.19", {})
 
-    assert run.env["GRYPE_DB_CACHE_DIR"] == str(tmp_path / "grype" / "db")
-    assert run.env["TMPDIR"] == str(tmp_path / "tmp")
+    _assert_points_at_cache(run.env, tmp_path)
     # The update-check suppression is preserved alongside the new overlay.
     assert run.env["GRYPE_CHECK_FOR_APP_UPDATE"] == "false"
 
@@ -419,4 +433,46 @@ async def test_syft_sbom_redirects_tmpdir(monkeypatch, tmp_path) -> None:
 
     await syft.generate_sbom("alpine:3.19")
 
-    assert run.env["TMPDIR"] == str(tmp_path / "tmp")
+    _assert_points_at_cache(run.env, tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_trivy_db_probe_uses_writable_cache(monkeypatch, tmp_path) -> None:
+    """The About/dashboard DB-freshness probe must not touch the read-only root.
+
+    This is the `mkdir /app/.cache: read-only file system` regression: the probe
+    runs `trivy --version --format json`, which reads the vuln-DB metadata under
+    the cache dir.
+    """
+    _patch_scanner_cache(monkeypatch, tmp_path, system_info)
+    run = _CapturingRun(json.dumps({"Version": "0.72.0"}).encode())
+    monkeypatch.setattr(system_info, "run_command", run)
+
+    await system_info._probe_trivy_db()
+
+    assert run.env["TRIVY_CACHE_DIR"] == str(tmp_path / "trivy")
+    assert run.env["XDG_CACHE_HOME"] == str(tmp_path)
+    assert run.env["HOME"] == str(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_grype_db_probe_uses_writable_cache(monkeypatch, tmp_path) -> None:
+    _patch_scanner_cache(monkeypatch, tmp_path, system_info)
+    run = _CapturingRun(json.dumps({"built": "2026-07-03T00:00:00Z"}).encode())
+    monkeypatch.setattr(system_info, "run_command", run)
+
+    await system_info._probe_grype_db()
+
+    assert run.env["GRYPE_DB_CACHE_DIR"] == str(tmp_path / "grype" / "db")
+    assert run.env["XDG_CACHE_HOME"] == str(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_version_probe_uses_writable_cache(monkeypatch, tmp_path) -> None:
+    _patch_scanner_cache(monkeypatch, tmp_path, system_info)
+    run = _CapturingRun(b'{"Version":"0.72.0"}')
+    monkeypatch.setattr(system_info, "run_command", run)
+
+    await system_info._probe_scanner("trivy", "/usr/local/bin/trivy")
+
+    assert run.env["TRIVY_CACHE_DIR"] == str(tmp_path / "trivy")
