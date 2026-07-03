@@ -1,0 +1,64 @@
+[project]
+name = "scrye"
+version = "0.1.0"
+description = "Self-hosted, browser-based web UI unifying the Trivy and Grype scanners."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Scrye contributors" }]
+
+# Pinned to specific, current, actively-maintained versions (see CLAUDE.md
+# § Dependency hygiene). Bump deliberately, never float to `latest`.
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "pydantic==2.10.4",
+    "pydantic-settings==2.7.1",
+    "sqlalchemy==2.0.36",
+    "alembic==1.14.0",
+    "argon2-cffi==25.1.0",
+    "cryptography==49.0.0",
+    "httpx==0.28.1",
+    "python-multipart==0.0.20",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.1",
+    "ruff==0.8.6",
+    "black==24.10.0",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, isort, pep8-naming, pyupgrade, flake8-bugbear, docstrings.
+select = ["E", "F", "I", "N", "UP", "B", "D"]
+# D203/D213 conflict with D211/D212; pick the common pair. D413 (blank line
+# after the last docstring section) is purely cosmetic. B008 is the standard
+# FastAPI dependency-injection idiom (Depends() in argument defaults).
+ignore = ["D203", "D213", "D413", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests and migrations don't need full docstring coverage.
+"tests/*" = ["D"]
+"alembic/*" = ["D"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

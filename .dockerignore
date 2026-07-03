@@ -1,0 +1,57 @@
+# Keep the build context small and free of secrets / local cruft.
+
+# Secrets & runtime data (NEVER send to the build context)
+secrets/
+docker/secrets/
+**/app_secret_key
+*.key
+*.pem
+.env
+.env.*
+!.env.example
+
+# Application data / runtime
+data/
+cache/
+backups/
+uploads/
+artifacts/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Python
+**/__pycache__/
+*.py[cod]
+**/.venv/
+**/venv/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Node / frontend (deps + build reinstalled inside the image)
+**/node_modules/
+frontend/dist/
+.vite/
+*.tsbuildinfo
+
+# VCS / CI / docs not needed at build time
+.git/
+.github/
+docs/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
