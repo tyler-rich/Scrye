@@ -23,22 +23,28 @@ from app import __version__
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.scans import router as scans_router
 from app.api.users import router as users_router
 from app.core.config import Settings, get_settings
 from app.core.crypto import MasterKeyError, get_secret_cipher
 from app.core.logging import configure_logging
 from app.core.ratelimit import SlidingWindowRateLimiter
+from app.db.session import SessionLocal
+from app.workers import InProcessScanWorker
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Validate the master key at startup.
+    """Validate the master key and start the scan worker at startup.
 
     In production a missing/invalid key file is a fatal misconfiguration —
     failing fast beats discovering it on the first secret write. Development
     setups get a warning so the API can run before a key has been generated.
+
+    The in-process scan worker is created here and reconciles any scans left
+    mid-flight by a previous process before accepting new work.
     """
     settings = get_settings()
     try:
@@ -49,7 +55,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.warning("Master key unavailable (dev mode, continuing): %s", exc)
         else:
             raise RuntimeError(f"Refusing to start without a valid master key: {exc}") from exc
-    yield
+
+    worker = InProcessScanWorker(SessionLocal, settings.max_concurrent_scans)
+    app.state.scan_worker = worker
+    try:
+        await worker.recover()
+    except Exception:  # noqa: BLE001 - startup recovery must not crash the app
+        logger.exception("Scan-worker startup recovery failed; continuing.")
+    logger.info("Scan worker ready (max %d concurrent).", settings.max_concurrent_scans)
+
+    try:
+        yield
+    finally:
+        await worker.shutdown()
+        logger.info("Scan worker stopped.")
 
 
 def _mount_spa(app: FastAPI, dist_dir: Path) -> None:
@@ -118,6 +137,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router, prefix="/api")
     app.include_router(users_router, prefix="/api")
     app.include_router(audit_router, prefix="/api")
+    app.include_router(scans_router, prefix="/api")
 
     dist_dir = settings.frontend_dist_dir
     if (dist_dir / "index.html").is_file():
