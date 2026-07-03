@@ -25,6 +25,16 @@ everyone.
 The repo is split into `backend/` (FastAPI) and `frontend/` (React + Vite). You
 can run them natively side by side, or use Compose for an integrated stack.
 
+> **Windows contributors — line endings.** Shell scripts (`*.sh`, notably
+> `docker/entrypoint.sh`) **must** stay LF-only. A CRLF checkout writes a
+> `#!/bin/sh\r` shebang, and the Linux kernel then looks for an interpreter
+> literally named `/bin/sh\r`, so the container dies at start with
+> `exec /app/entrypoint.sh: no such file or directory`. The repo's
+> `.gitattributes` pins these files to `eol=lf` and the image build strips any
+> stray CRs as a backstop, so a normal `git clone` is fine. Just don't let your
+> editor or a global `core.autocrlf=true` rewrite them — if a script ever comes
+> back with `\r\n`, run `git add --renormalize .` to restore LF.
+
 ### Backend (FastAPI)
 
 ```bash
