@@ -22,6 +22,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -140,8 +141,38 @@ class Scan(Base):
     artifacts: Mapped[list[Artifact]] = relationship(
         back_populates="scan", cascade="all, delete-orphan"
     )
+    tag_rows: Mapped[list[ScanTag]] = relationship(
+        back_populates="scan", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (Index("ix_scans_scanner_status_created", "scanner", "status", "created_at"),)
+
+    @property
+    def tags(self) -> list[str]:
+        """Return this scan's labels as a sorted list of strings (history filter)."""
+        return sorted(row.tag for row in self.tag_rows)
+
+
+class ScanTag(Base):
+    """A free-form label attached to a scan for history filtering (docs/PLAN.md §4.4).
+
+    Tags live in their own table (rather than a JSON column on ``scans``) so the
+    history view can filter by tag with an indexed SQL predicate and enumerate
+    the distinct tag set for the filter UI.
+    """
+
+    __tablename__ = "scan_tags"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("scans.id", ondelete="CASCADE"), index=True)
+    tag: Mapped[str] = mapped_column(String(64))
+
+    scan: Mapped[Scan] = relationship(back_populates="tag_rows")
+
+    __table_args__ = (
+        UniqueConstraint("scan_id", "tag", name="uq_scan_tags_scan_tag"),
+        Index("ix_scan_tags_tag", "tag"),
+    )
 
 
 class Finding(Base):

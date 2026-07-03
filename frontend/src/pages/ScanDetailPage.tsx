@@ -9,9 +9,11 @@ import {
   Center,
   Group,
   Loader,
+  Menu,
   Select,
   Stack,
   Table,
+  TagsInput,
   Text,
   Title,
 } from '@mantine/core';
@@ -25,8 +27,11 @@ import {
   isActive,
   listArtifacts,
   listFindings,
+  scanExportUrl,
+  setScanTags,
   SEVERITY_ORDER,
   type Artifact,
+  type ExportFormat,
   type Finding,
   type FindingClass,
   type Scan,
@@ -38,6 +43,11 @@ import { useAuth } from '../auth/AuthContext';
 
 const FINDINGS_LIMIT = 500;
 const FINDING_CLASSES: FindingClass[] = ['vulnerability', 'misconfiguration', 'secret', 'license'];
+const EXPORT_FORMATS: { value: ExportFormat; label: string }[] = [
+  { value: 'csv', label: 'CSV' },
+  { value: 'markdown', label: 'Markdown' },
+  { value: 'json', label: 'JSON' },
+];
 
 function formatWhen(iso: string | null): string {
   return iso ? new Date(`${iso}Z`).toLocaleString() : '—';
@@ -77,12 +87,15 @@ export function ScanDetailPage() {
   const [findingsTotal, setFindingsTotal] = useState(0);
   const [severityFilter, setSeverityFilter] = useState<Severity | null>(null);
   const [classFilter, setClassFilter] = useState<FindingClass | null>(null);
+  const [tagDraft, setTagDraft] = useState<string[]>([]);
+  const [savingTags, setSavingTags] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadScan = useCallback(async () => {
     try {
       const s = await getScan(id);
       setScan(s);
+      setTagDraft(s.tags);
       setError(null);
       return s;
     } catch (err: unknown) {
@@ -90,6 +103,20 @@ export function ScanDetailPage() {
       return null;
     }
   }, [id]);
+
+  const saveTags = async () => {
+    setSavingTags(true);
+    try {
+      const updated = await setScanTags(id, tagDraft);
+      setScan(updated);
+      setTagDraft(updated.tags);
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update tags.');
+    } finally {
+      setSavingTags(false);
+    }
+  };
 
   const loadFindings = useCallback(async () => {
     try {
@@ -173,11 +200,30 @@ export function ScanDetailPage() {
               {scan.target}
             </Text>
           </div>
-          {scan.status === 'queued' && canOperate && (
-            <Button variant="light" color="red" onClick={() => void cancel()}>
-              Cancel
-            </Button>
-          )}
+          <Group gap="xs">
+            {scan.status === 'succeeded' && (
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target>
+                  <Button variant="default" leftSection={<IconDownload size={16} />}>
+                    Export
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Label>Export findings</Menu.Label>
+                  {EXPORT_FORMATS.map((fmt) => (
+                    <Menu.Item key={fmt.value} component="a" href={scanExportUrl(id, fmt.value)}>
+                      {fmt.label}
+                    </Menu.Item>
+                  ))}
+                </Menu.Dropdown>
+              </Menu>
+            )}
+            {scan.status === 'queued' && canOperate && (
+              <Button variant="light" color="red" onClick={() => void cancel()}>
+                Cancel
+              </Button>
+            )}
+          </Group>
         </Group>
       </div>
 
@@ -227,6 +273,38 @@ export function ScanDetailPage() {
               </Text>
             )}
           </Group>
+        </Stack>
+      </Card>
+
+      <Card withBorder radius="md" padding="lg">
+        <Stack gap="sm">
+          <Title order={4}>Tags</Title>
+          {canOperate ? (
+            <Group align="flex-end" gap="sm">
+              <TagsInput
+                flex={1}
+                placeholder="Add a tag and press Enter"
+                value={tagDraft}
+                onChange={setTagDraft}
+                clearable
+              />
+              <Button variant="light" onClick={() => void saveTags()} loading={savingTags}>
+                Save tags
+              </Button>
+            </Group>
+          ) : scan.tags.length > 0 ? (
+            <Group gap={4}>
+              {scan.tags.map((tag) => (
+                <Badge key={tag} variant="outline" color="gray">
+                  {tag}
+                </Badge>
+              ))}
+            </Group>
+          ) : (
+            <Text size="sm" c="dimmed">
+              No tags.
+            </Text>
+          )}
         </Stack>
       </Card>
 

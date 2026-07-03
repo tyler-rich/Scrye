@@ -3,6 +3,7 @@
 from app.db.models.audit import AuditLog
 from app.db.models.auth_session import AuthSession
 from app.db.models.docker_environment import DockerEnvironment
+from app.db.models.filter_preset import FilterPreset
 from app.db.models.git_credential import GitCredential, GitProvider
 from app.db.models.registry import (
     CREDENTIAL_HELPERS,
@@ -19,6 +20,7 @@ from app.db.models.scan import (
     Scan,
     Scanner,
     ScanStatus,
+    ScanTag,
     Severity,
     TargetType,
 )
@@ -34,6 +36,7 @@ __all__ = [
     "AuditLog",
     "AuthSession",
     "DockerEnvironment",
+    "FilterPreset",
     "Finding",
     "FindingClass",
     "GitCredential",
@@ -43,6 +46,7 @@ __all__ = [
     "Role",
     "Scan",
     "ScanStatus",
+    "ScanTag",
     "Scanner",
     "Severity",
     "TargetType",

@@ -710,3 +710,70 @@ id/name keeps that metadata admin-only while preserving the scan-launch selectio
 flow. Supersedes the operator-read decision logged in the 2026-07-03 “Runtime deps
 … and read scope” entry above.
 **Plan section affected:** §5 (RBAC).
+
+### 2026-07-03 — Phase P4 — History exposed via a dedicated `/scans/history` endpoint
+**What changed:** The filtered/sorted/paginated history view is a new
+`GET /api/scans/history` endpoint returning a `{total, items}` envelope, plus
+`GET /api/scans/filter-options` for the distinct initiators/tags that populate the
+filter controls. The pre-existing `GET /api/scans` (a plain newest-first list with
+basic scanner/status filters) is left unchanged.
+**Why:** §4.4 requires a full history view with a total count for pagination; the
+simple list endpoint returns a bare array and is still used elsewhere. Adding a
+separate endpoint avoids changing the existing contract while giving history its
+own richer shape. Endpoint layout is a routine implementation detail under
+CLAUDE.md § When to ask vs. decide.
+**Plan section affected:** §4.4 (Scan history).
+
+### 2026-07-03 — Phase P4 — Scan tags modeled as a `scan_tags` table, set by operators
+**What changed:** §4.4 lists "tags" in the history filter set but §7 defines no tag
+storage. Tags are stored in a new indexed `scan_tags(scan_id, tag)` association
+table (rather than a JSON column on `scans`) so history can filter by tag with an
+indexed SQL predicate and enumerate the distinct tag set. Tags are replaced as a
+set via `PUT /api/scans/{id}/tags` (operator role, CSRF-guarded); values are
+trimmed, lowercased, de-duplicated, and capped (≤20 tags, ≤64 chars each). Tag
+filtering is conjunctive (a scan must carry *all* requested tags).
+**Why:** A relational table keeps tag filtering index-friendly and lets the UI list
+all known tags; making tags an operator action mirrors the existing "operators
+launch scans" split. The exact storage/RBAC shape is unspecified by the plan, so
+these are recorded decisions.
+**Plan section affected:** §4.4 (tags), §7 (data model).
+
+### 2026-07-03 — Phase P4 — Saved filter presets are owner-scoped
+**What changed:** §4.4 requires "saved filter presets" but §7 lists no table. Presets
+live in a new `filter_presets(owner_id, name, filters JSON)` table and are
+**per-user**: every `/api/filter-presets` endpoint operates only on the caller's own
+presets, any authenticated user (viewer+) may manage their own, and writes are
+CSRF-guarded. `(owner_id, name)` is unique.
+**Why:** Private, per-user presets are the least-surprising default and carry no
+cross-user exposure. Scope and storage are unspecified by the plan, so logged here.
+**Plan section affected:** §4.4 (saved filter presets), §7 (data model).
+
+### 2026-07-03 — Phase P4 — Export scope semantics and diff constraints
+**What changed:** Exports (§4.3) are split by scope: a **per-scan** export
+(`GET /api/scans/{id}/export`) renders that scan's normalized findings (CSV = one
+row per finding; JSON = scan metadata + findings; Markdown = summary grouped by
+severity), while a **filtered-history** export (`GET /api/scans/export`) renders the
+matching scan set (CSV = one row per scan; JSON = filters + scan summaries; Markdown
+= a summary table). The scan **diff** (`GET /api/scans/{id}/diff/{other_id}`) requires
+both scans to share the same scanner *and* target, matches findings by
+`(class, vuln_id, package)` (falling back to title/location when there is no vuln id),
+and reports added/removed/unchanged plus a per-severity delta.
+**Why:** §4.3 says CSV is "one row per finding" and Markdown is "summary + findings
+grouped by severity" — that describes the per-scan report; a history export naturally
+summarizes at the scan level instead. §4.4's "compare two scans of the same target"
+is enforced by the same-target/same-scanner check; the identity key is the scanners'
+own dedupe convention so version churn isn't counted as change.
+**Plan section affected:** §4.3 (exports), §4.4 (scan diff).
+
+### 2026-07-03 — Phase P4 — History view uses the base Mantine `Table`, not `mantine-datatable`
+**What changed:** The Phase 4 history view (filters, saved presets, sortable columns,
+pagination, per-row compare selection, exports) is built with the base Mantine
+`Table` plus `Pagination`/`Select`/`MultiSelect`, continuing the Phase 2 decision to
+not add `mantine-datatable` (listed in §2/§4.4). No new frontend dependency was added.
+**Why:** The base components already deliver the required sortable/paginated/filterable
+history with saved presets, and avoiding the extra dependency keeps the bundle and
+lockfile lean and consistent with the rest of the app (which uses base `Table`).
+Library choice is a routine implementation detail under CLAUDE.md § When to ask vs.
+decide. This supersedes the Phase 2 note that anticipated introducing
+`mantine-datatable` here.
+**Plan section affected:** §2 (Tech stack), §4.4 (history table).

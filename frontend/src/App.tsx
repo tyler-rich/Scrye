@@ -8,6 +8,7 @@ import { Dashboard } from './pages/Dashboard';
 import { LoginPage } from './pages/LoginPage';
 import { NewScanPage } from './pages/NewScanPage';
 import { ScanDetailPage } from './pages/ScanDetailPage';
+import { ScanDiffPage } from './pages/ScanDiffPage';
 import { ScansPage } from './pages/ScansPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SetupPage } from './pages/SetupPage';
@@ -92,6 +93,7 @@ export function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/scans" element={<ScansPage />} />
           <Route path="/scans/new" element={<NewScanPage />} />
+          <Route path="/scans/diff/:baseId/:compareId" element={<ScanDiffPage />} />
           <Route path="/scans/:scanId" element={<ScanDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
