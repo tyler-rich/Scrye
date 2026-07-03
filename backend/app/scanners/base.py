@@ -15,8 +15,10 @@ import os
 import shutil
 from abc import ABC
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from app.core.config import get_settings
 from app.db.models import Scanner, Severity
 
 
@@ -145,6 +147,40 @@ def resolve_binary(name_or_path: str) -> str:
             "Install it or set the corresponding *_BINARY setting."
         )
     return resolved
+
+
+def scanner_scratch(engine: str) -> tuple[Path, dict[str, str]]:
+    """Return an engine's writable cache directory and a scratch env overlay.
+
+    Under the hardened runtime the container runs as a **non-root uid** on a
+    **read-only root filesystem**, and ``/tmp`` is a small owner-only tmpfs.
+    That makes a scanner's default cache location (``$HOME/.cache`` — which
+    resolves under the read-only ``/`` when the numeric ``user:`` leaves ``HOME``
+    unset) unwritable, and the tmpfs is both too small for a multi-hundred-MB
+    vulnerability DB and, unless its ownership matches the app uid, unwritable at
+    all — the ``mkdir /tmp/trivy-XXXXXXXXX: permission denied`` failure.
+
+    Point each engine at a private subdirectory of the persistent, writable
+    cache volume for its database, and redirect the subprocess ``TMPDIR`` to a
+    sibling scratch dir on that same volume so large temporary extraction never
+    lands on the tiny tmpfs (and the DB survives restarts instead of being
+    re-downloaded every run). Both directories are created if missing — the
+    cache volume starts empty.
+
+    Args:
+        engine: Short engine name (``"trivy"`` / ``"grype"`` / ``"syft"``), used
+            as the per-engine cache subdirectory name.
+
+    Returns:
+        ``(cache_dir, env_overlay)`` where ``cache_dir`` is the engine's cache
+        directory and ``env_overlay`` sets ``TMPDIR`` to the shared scratch dir.
+    """
+    base = get_settings().scanner_cache_dir
+    cache_dir = base / engine
+    tmp_dir = base / "tmp"
+    for path in (cache_dir, tmp_dir):
+        path.mkdir(parents=True, exist_ok=True)
+    return cache_dir, {"TMPDIR": str(tmp_dir)}
 
 
 def tally_severities(findings: list[NormalizedFinding]) -> dict[Severity, int]:
