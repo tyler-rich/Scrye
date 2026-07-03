@@ -122,7 +122,7 @@ jobs:
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
-            aquasec/trivy:0.71.2 image --input /image.tar \
+            aquasec/trivy:0.72.0 image --input /image.tar \
             --scanners vuln --severity LOW,MEDIUM,HIGH,CRITICAL --no-progress || true
 
       # The gate scans Scrye's own attack surface (OS packages incl. git, Python
@@ -136,15 +136,28 @@ jobs:
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
             -v "${{ github.workspace }}/ci/trivyignore:/.trivyignore:ro" \
-            aquasec/trivy:0.71.2 image --input /image.tar \
+            aquasec/trivy:0.72.0 image --input /image.tar \
             --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL \
             --skip-files usr/local/bin/trivy \
             --skip-files usr/local/bin/grype \
             --skip-files usr/local/bin/syft \
             --ignorefile /.trivyignore --exit-code 1 --no-progress
 
-      # Grype pinned to the version Scrye bundles.
-      - name: Grype — gate on fixable High+ (excl. bundled scanners)
+      # Grype informational report (does not fail the build) — keeps the excluded
+      # base-image / bundled-binary findings visible in the CI output.
+      - name: Grype — full report (informational)
+        run: |
+          docker run --rm \
+            -v /tmp/scrye-image.tar:/image.tar:ro \
+            anchore/grype:v0.115.0 docker-archive:/image.tar -o table || true
+
+      # Grype gate. In addition to the bundled scanner binaries, this excludes the
+      # CPython interpreter binary (`python`) from the base image: its CVEs are
+      # fixed only in Python 3.13+/3.14+, but Scrye is pinned to Python 3.12
+      # (locked decision §2), so they are unfixable-by-us base-image runtime items
+      # (the ignore lives in ci/grype.yaml). Trivy's OS-aware scan still gates the
+      # base image. See docs/PLAN.md § Deviations.
+      - name: Grype — gate on fixable High+ (excl. bundled + base runtime)
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \

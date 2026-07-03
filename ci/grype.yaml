@@ -6,25 +6,36 @@
 # surface must be resolved; only genuinely unfixable-by-us items may remain
 # (documented in the README).
 #
-# The bundled trivy/grype/syft binaries are unmodified upstream Go binaries that
-# Scrye cannot rebuild, so their embedded-module / Go-stdlib CVEs track upstream
-# releases, not Scrye. They are excluded from the GATE here (by package
-# location) and via `--exclude` on the command line, but remain visible in the
-# informational report. The gate still covers OS packages (incl. git), Python
-# and JS dependencies, and the app itself.
+# Two classes of finding are excluded from the GATE (they stay visible in the
+# informational Grype report):
 #
-# To triage a genuinely-fixable finding that cannot be resolved immediately, add
-# a `vulnerability:` entry below with a dated justification comment.
+# 1. The bundled trivy/grype/syft binaries — unmodified upstream Go binaries
+#    Scrye cannot rebuild; their embedded-module / Go-stdlib CVEs track upstream
+#    releases, not Scrye. Excluded by package location (and via `--exclude`).
+#
+# 2. The CPython interpreter binary (`python`, type binary) from the
+#    `python:3.12-slim-bookworm` base image. Grype's binary classifier matches it
+#    against CPython CVEs whose fixes land only in Python 3.13+/3.14+/3.15+; Scrye
+#    is pinned to Python 3.12 (locked decision §2), so these are unfixable-by-us
+#    base-image runtime items. Trivy's OS-aware scan still gates the base image.
+#
+# The gate still covers OS packages (incl. git), Python and JS dependencies, and
+# the app itself. To triage a genuinely-fixable finding that cannot be resolved
+# immediately, add a `vulnerability:` entry with a dated justification comment.
 
 # Suppress Grype's own app-update check and match noise in CI output.
 check-for-app-update: false
 
 ignore:
-  # Bundled upstream scanner binaries — see the note above.
+  # Bundled upstream scanner binaries — see note (1) above.
   - package:
       location: "**/usr/local/bin/trivy"
   - package:
       location: "**/usr/local/bin/grype"
   - package:
       location: "**/usr/local/bin/syft"
+  # CPython interpreter binary from the base image — see note (2) above.
+  - package:
+      type: binary
+      name: python
   # (No triaged CVE exceptions at authoring time.)

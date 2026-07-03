@@ -438,13 +438,23 @@ dependencies, and application code (the whole image filesystem is scanned, so
 the bundled `THIRD_PARTY_LICENSES/` directory is covered too). No publish/registry
 step runs in CI.
 
-The **bundled `trivy`/`grype`/`syft` binaries** are unmodified upstream Go
-binaries: Scrye ships them as-is and cannot rebuild them, so CVEs in their
-embedded Go modules or the Go standard library they were compiled with track
-upstream's release cadence rather than anything Scrye controls. Those binaries
-are therefore **excluded from the CI gate** (they are still shown in the
-informational scan report); keeping the pinned scanner versions current is how
-those are addressed. Everything else in the image is gated as above.
+Two classes of finding are **excluded from the gate** (they still appear in the
+informational scan report), because they are not fixable by Scrye within its
+constraints:
+
+- The **bundled `trivy`/`grype`/`syft` binaries** — unmodified upstream Go
+  binaries Scrye ships as-is and cannot rebuild, so CVEs in their embedded Go
+  modules or Go standard library track upstream's release cadence. Keeping the
+  pinned scanner versions current is how those are addressed.
+- The **CPython interpreter binary** from the `python:3.12-slim-bookworm` base
+  image. Grype's binary classifier matches it against CPython CVEs whose fixes
+  land only in Python 3.13+/3.14+; Scrye is pinned to **Python 3.12** (a locked
+  decision), and the base image is already the latest 3.12 build, so these are
+  upstream base-image runtime items. Trivy's OS-aware scan still gates the base
+  image itself.
+
+Everything else — OS packages (including `git`), Python and JS dependencies, and
+the application code — is gated as above.
 
 ---
 

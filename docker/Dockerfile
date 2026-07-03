@@ -28,7 +28,7 @@ RUN npm run build
 FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS scanners
 ARG TARGETARCH
 # Pinned, current scanner versions (CLAUDE.md § Dependency hygiene).
-ARG TRIVY_VERSION=0.71.2
+ARG TRIVY_VERSION=0.72.0
 ARG GRYPE_VERSION=0.115.0
 ARG SYFT_VERSION=1.46.0
 
