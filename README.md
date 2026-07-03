@@ -76,7 +76,10 @@ and one normalized findings model.
 ## Integrations
 
 - **Trivy**, **Grype**, **Syft** — official binaries, orchestrated and parsed
-  from their JSON output (Scrye never reimplements scanner logic).
+  from their JSON output (Scrye never reimplements scanner logic). All three
+  are Apache-2.0; their license and notice files are bundled unmodified in
+  the image at `/THIRD_PARTY_LICENSES` (see
+  [`THIRD_PARTY_LICENSES/`](THIRD_PARTY_LICENSES/README.md) in this repo).
 - **OIDC** — generic, validated against Pocket ID.
 - **Docker** — image enumeration via a **read-only** `docker-socket-proxy`
   sidecar (the app never mounts the Docker socket itself).
