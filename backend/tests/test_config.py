@@ -16,8 +16,9 @@ def test_database_url_derived_from_path() -> None:
 
 def test_master_key_default_is_a_secret_file_path() -> None:
     """The master key is referenced by file path, never an inline value."""
-    settings = Settings()
-    assert settings.app_secret_key_file == Path("/run/secrets/app_secret_key")
+    # Read the field default directly: the test env overrides the env var.
+    default = Settings.model_fields["app_secret_key_file"].default
+    assert default == Path("/run/secrets/app_secret_key")
 
 
 def test_env_example_excludes_master_key() -> None:
