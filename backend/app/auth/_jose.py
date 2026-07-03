@@ -18,7 +18,7 @@ import authlib.deprecate  # noqa: F401 - import installs the filter we override 
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", DeprecationWarning)
-    from authlib.jose import JsonWebKey, jwt
+    from authlib.jose import JsonWebKey, JsonWebToken, jwt
     from authlib.jose.errors import JoseError
 
-__all__ = ["JoseError", "JsonWebKey", "jwt"]
+__all__ = ["JoseError", "JsonWebKey", "JsonWebToken", "jwt"]
