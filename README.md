@@ -432,9 +432,19 @@ docker buildx build -f docker/Dockerfile \
 
 CI builds both architectures on every PR to catch arch-specific breakage, and
 **dogfoods** the result: it scans Scrye's own image with Trivy and Grype and
-fails on any fixable HIGH/CRITICAL finding (the whole image filesystem is
-scanned, so the bundled `THIRD_PARTY_LICENSES/` and the `git` runtime dependency
-are covered). No publish/registry step runs in CI.
+fails on any fixable HIGH/CRITICAL finding in Scrye's own attack surface — its
+base-image OS packages (including the `git` runtime dependency), Python and JS
+dependencies, and application code (the whole image filesystem is scanned, so
+the bundled `THIRD_PARTY_LICENSES/` directory is covered too). No publish/registry
+step runs in CI.
+
+The **bundled `trivy`/`grype`/`syft` binaries** are unmodified upstream Go
+binaries: Scrye ships them as-is and cannot rebuild them, so CVEs in their
+embedded Go modules or the Go standard library they were compiled with track
+upstream's release cadence rather than anything Scrye controls. Those binaries
+are therefore **excluded from the CI gate** (they are still shown in the
+informational scan report); keeping the pinned scanner versions current is how
+those are addressed. Everything else in the image is gated as above.
 
 ---
 

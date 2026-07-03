@@ -1040,3 +1040,20 @@ CI, which surfaced the bad digest (`… : not found`) — no earlier phase built
 so the error went unnoticed. The two python stages and the node stage were already
 correct. Pinning to the current debian index digest keeps §9.1's digest-pinning intact.
 **Plan section affected:** §9.1 (image), §12 (Phase 6 CI).
+
+### 2026-07-03 — Phase P6 — Dogfood gate excludes the bundled scanner binaries
+**What changed:** The CI dogfood gate skips the bundled `trivy`/`grype`/`syft` binaries
+(`--skip-files` for Trivy, `--exclude` + a `package.location` ignore for Grype) while
+still scanning them in the informational report and still gating on everything else in
+the image. The first successful image build's scan flagged 7 fixable HIGH findings, all
+inside those binaries' embedded Go modules / Go stdlib (containerd, oras-go, docker/docker,
+crypto/x509, net/textproto); none were in Scrye's own OS packages, Python/JS deps, or app.
+**Why:** Those are unmodified upstream Go binaries Scrye bundles under Apache-2.0 and
+cannot rebuild — their embedded-dependency CVEs are fixed only when Aqua/Anchore cut a new
+release built against a patched Go, so they are "genuinely unfixable upstream items" from
+Scrye's side (CLAUDE.md § Dependency hygiene). Gating on them would make CI perpetually red
+on the newest Go-stdlib CVE regardless of Scrye's own hygiene. Keeping them visible in the
+informational report and keeping the pinned scanner versions current is how they are
+tracked; the gate stays meaningful for Scrye's actual attack surface — including the `git`
+runtime dependency and `THIRD_PARTY_LICENSES/`, which remain fully gated.
+**Plan section affected:** §9.1, §12 (Phase 6 self-scan), CLAUDE.md § Dependency hygiene.
