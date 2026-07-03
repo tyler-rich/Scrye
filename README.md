@@ -14,13 +14,17 @@ place, on your own infrastructure.
 
 > **Project status — early, actively building.** Scrye is being built in phases
 > (see the [Roadmap](#roadmap)). Shipped so far: the application skeleton
-> (FastAPI + React/Mantine SPA, SQLite/Alembic, hardened CIS-aligned image) and
-> the **auth & secrets foundation** — local accounts (argon2id) with revocable
+> (FastAPI + React/Mantine SPA, SQLite/Alembic, hardened CIS-aligned image); the
+> **auth & secrets foundation** — local accounts (argon2id) with revocable
 > server-side sessions, first-run admin bootstrap, RBAC (viewer/operator/admin),
 > CSRF protection, auth rate limiting, an audit log, and the AES-256-GCM
-> field-encryption module for stored secrets. Scanning, history, and the rest of
-> the features below are delivered in later phases and are documented here as
-> the intended end state.
+> field-encryption module for stored secrets; **core scanning** (Trivy/Grype
+> across image, repository, filesystem, and SBOM targets with private-registry
+> and git credentials); and **history, reports & exports** — a filterable,
+> sortable, paginated history view with saved presets, scan-to-scan diff, and
+> CSV/Markdown/JSON exports per scan and for a filtered set. OIDC, backup/restore,
+> and the remaining settings are delivered in later phases and are documented here
+> as the intended end state.
 
 ---
 
@@ -265,9 +269,19 @@ secrets can be re-encrypted, after which the old line can be removed.
   a severity summary, and a normalized findings table; every completed scan
   stores the scanner's original JSON (and any generated SBOM) verbatim as the
   source of truth, downloadable from the scan detail page.
+- **Browse & filter history** — the **Scan history** page filters by scanner,
+  target type, target full-text search, status, date range, initiator, highest
+  severity, severity threshold, and tags, with sortable columns and pagination.
+  Save a filter set as a **preset** to recall it later, and tag any scan for
+  grouping (operator role).
+- **Diff two scans** — select two scans of the same target and compare them to
+  see **new vs. fixed** findings and the per-severity change over time.
+- **Export reports** — download a single scan's findings, or a whole filtered
+  history set, as **CSV**, **Markdown**, or **JSON** from the Export menu.
 
-**Coming in later phases:** history, scan diff, and CSV/Markdown/JSON exports
-(Phase 4); OIDC, backup/restore, and the remaining settings (Phase 5).
+**Coming in later phases:** OIDC, backup/restore, and the remaining settings
+(Phase 5); the dashboard, notifications, scheduled scans, and API tokens
+(Phase 6).
 
 Scanner options that stay write-only and secret (registry / git / OIDC
 credentials, API tokens) are entered once and never returned in plaintext — the

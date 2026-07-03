@@ -19,13 +19,22 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     UploadFile,
     status,
 )
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
 
+from app.api.history_schemas import (
+    DiffFindingOut,
+    FilterOptionsOut,
+    ScanDiffOut,
+    ScanHistoryPage,
+    ScanTagsIn,
+)
+from app.api.scan_filters import HistoryFilters, history_filters
 from app.api.scan_schemas import (
     ArtifactOut,
     FindingOut,
@@ -38,6 +47,7 @@ from app.core.artifacts import artifact_path, store_artifact
 from app.core.audit import record_audit
 from app.core.timeutil import utcnow
 from app.db.models import (
+    SEVERITY_RANK,
     Artifact,
     ArtifactKind,
     Finding,
@@ -48,10 +58,12 @@ from app.db.models import (
     Scan,
     Scanner,
     ScanStatus,
+    ScanTag,
     Severity,
     TargetType,
 )
 from app.db.session import get_db
+from app.reports import ExportFormat, diff_findings, export_history, export_scan
 from app.scanners.targets import TargetError, resolve_filesystem_path
 
 logger = logging.getLogger(__name__)
@@ -73,6 +85,24 @@ _ALLOWED_SCANNERS: dict[TargetType, set[Scanner]] = {
 _UPLOADED_SBOM_FILENAME = "uploaded-sbom.json"
 #: Maximum accepted uploaded-SBOM size (SBOMs are JSON; 25 MiB is generous).
 _MAX_SBOM_UPLOAD_BYTES = 25 * 1024 * 1024
+#: Maximum number of scans a single filtered-history export will emit.
+_MAX_HISTORY_EXPORT_SCANS = 5000
+
+#: SQL expression ranking a scan's highest severity for severity-aware sorting.
+_HIGHEST_SEVERITY_RANK = case(
+    *((Scan.highest_severity == sev.value, rank) for sev, rank in SEVERITY_RANK.items()),
+    else_=-1,
+)
+
+#: Sortable history columns → their ORM sort expression.
+_SORT_COLUMNS: dict[str, object] = {
+    "created_at": Scan.created_at,
+    "findings_count": Scan.findings_count,
+    "target": Scan.target,
+    "status": Scan.status,
+    "scanner": Scan.scanner,
+    "severity": _HIGHEST_SEVERITY_RANK,
+}
 
 
 def _get_scan_or_404(db: Session, scan_id: int) -> Scan:
@@ -257,6 +287,80 @@ def list_scans(
     return [ScanOut.model_validate(s) for s in scans]
 
 
+@router.get("/history", response_model=ScanHistoryPage)
+def list_history(
+    _: AuthContext = Depends(_viewer),
+    db: Session = Depends(get_db),
+    filters: HistoryFilters = Depends(history_filters),
+    sort: str = Query(default="created_at", description="Sort column."),
+    order: str = Query(default="desc", pattern="^(asc|desc)$", description="Sort direction."),
+    limit: int = Query(default=25, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> ScanHistoryPage:
+    """Return a filtered, sorted, paginated page of scan history (docs/PLAN.md §4.4).
+
+    Supports the full filter set — scanner, target type, target full-text search,
+    status, date range, initiator, highest severity, severity-threshold presence,
+    and tags — plus sorting and a total count for pagination.
+    """
+    if sort not in _SORT_COLUMNS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unknown sort column '{sort}'.",
+        )
+    base = filters.apply(select(Scan))
+    total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
+
+    column = _SORT_COLUMNS[sort]
+    direction = column.desc() if order == "desc" else column.asc()
+    # A stable secondary key keeps pagination deterministic across equal values.
+    stmt = base.order_by(direction, Scan.id.desc()).limit(limit).offset(offset)
+    scans = db.scalars(stmt).all()
+    return ScanHistoryPage(total=total, items=[ScanOut.model_validate(s) for s in scans])
+
+
+@router.get("/filter-options", response_model=FilterOptionsOut)
+def history_filter_options(
+    _: AuthContext = Depends(_viewer),
+    db: Session = Depends(get_db),
+) -> FilterOptionsOut:
+    """List the distinct initiators and tags for populating history filters."""
+    initiators = db.scalars(
+        select(Scan.created_by_username)
+        .where(Scan.created_by_username.is_not(None))
+        .distinct()
+        .order_by(Scan.created_by_username)
+    ).all()
+    tags = db.scalars(select(ScanTag.tag).distinct().order_by(ScanTag.tag)).all()
+    return FilterOptionsOut(initiators=list(initiators), tags=list(tags))
+
+
+@router.get("/export")
+def export_history_view(
+    fmt: ExportFormat = Query(default=ExportFormat.JSON, alias="format"),
+    _: AuthContext = Depends(_viewer),
+    db: Session = Depends(get_db),
+    filters: HistoryFilters = Depends(history_filters),
+) -> Response:
+    """Export the filtered history result set as CSV, Markdown, or JSON.
+
+    The export follows the same filters as the history view (newest first) and is
+    capped at a generous row limit to keep a single download bounded.
+    """
+    stmt = (
+        filters.apply(select(Scan))
+        .order_by(Scan.created_at.desc(), Scan.id.desc())
+        .limit(_MAX_HISTORY_EXPORT_SCANS)
+    )
+    scans = list(db.scalars(stmt).all())
+    result = export_history(scans, fmt, filters=filters.as_metadata())
+    return Response(
+        content=result.content,
+        media_type=result.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{result.filename}"'},
+    )
+
+
 @router.get("/{scan_id}", response_model=ScanOut)
 def get_scan(
     scan_id: int,
@@ -370,6 +474,112 @@ def cancel_scan(
         ip=client_ip(request),
         target_type="scan",
         target_id=str(scan_id),
+    )
+    db.commit()
+    db.refresh(scan)
+    return ScanOut.model_validate(scan)
+
+
+def _scan_findings(db: Session, scan_id: int) -> list[Finding]:
+    """Fetch every normalized finding for a scan, ordered by id."""
+    return list(
+        db.scalars(select(Finding).where(Finding.scan_id == scan_id).order_by(Finding.id)).all()
+    )
+
+
+@router.get("/{scan_id}/export")
+def export_scan_view(
+    scan_id: int,
+    fmt: ExportFormat = Query(default=ExportFormat.JSON, alias="format"),
+    _: AuthContext = Depends(_viewer),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Export a single scan's findings as CSV, Markdown, or JSON (docs/PLAN.md §4.3)."""
+    scan = _get_scan_or_404(db, scan_id)
+    findings = _scan_findings(db, scan_id)
+    result = export_scan(scan, findings, fmt)
+    return Response(
+        content=result.content,
+        media_type=result.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{result.filename}"'},
+    )
+
+
+@router.get("/{scan_id}/diff/{other_scan_id}", response_model=ScanDiffOut)
+def diff_scans(
+    scan_id: int,
+    other_scan_id: int,
+    _: AuthContext = Depends(_viewer),
+    db: Session = Depends(get_db),
+) -> ScanDiffOut:
+    """Diff two scans of the same target: new vs. fixed findings (docs/PLAN.md §4.4).
+
+    ``scan_id`` is the base (older) scan and ``other_scan_id`` is the comparison
+    (newer) scan. Both must share the same scanner and target so the diff is
+    meaningful; ``added`` are findings new in the comparison scan and ``removed``
+    are findings fixed since the base scan.
+    """
+    if scan_id == other_scan_id:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Cannot diff a scan against itself."
+        )
+    base = _get_scan_or_404(db, scan_id)
+    compare = _get_scan_or_404(db, other_scan_id)
+    if base.scanner != compare.scanner or base.target != compare.target:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Scans must share the same scanner and target to be diffed.",
+        )
+
+    diff = diff_findings(_scan_findings(db, scan_id), _scan_findings(db, other_scan_id))
+    return ScanDiffOut(
+        base_scan_id=base.id,
+        compare_scan_id=compare.id,
+        target=base.target,
+        scanner=base.scanner.value,
+        added=[DiffFindingOut.model_validate(f) for f in diff.added],
+        removed=[DiffFindingOut.model_validate(f) for f in diff.removed],
+        unchanged_count=diff.unchanged_count,
+        added_count=diff.added_count,
+        removed_count=diff.removed_count,
+        severity_delta=diff.severity_delta,
+    )
+
+
+@router.put("/{scan_id}/tags", response_model=ScanOut)
+def set_scan_tags(
+    scan_id: int,
+    payload: ScanTagsIn,
+    request: Request,
+    auth: AuthContext = Depends(require_csrf),
+    _: AuthContext = Depends(_operator),
+    db: Session = Depends(get_db),
+) -> ScanOut:
+    """Replace the full set of tags on a scan (docs/PLAN.md §4.4).
+
+    Tags are free-form labels used to filter scan history. Setting them requires
+    the ``operator`` role and is CSRF-guarded; the incoming list is trimmed,
+    lowercased, and de-duplicated by the request schema.
+    """
+    scan = _get_scan_or_404(db, scan_id)
+    existing = {row.tag: row for row in scan.tag_rows}
+    desired = set(payload.tags)
+
+    for tag, row in existing.items():
+        if tag not in desired:
+            db.delete(row)
+    for tag in desired:
+        if tag not in existing:
+            db.add(ScanTag(scan_id=scan.id, tag=tag))
+
+    record_audit(
+        db,
+        action="scan.tagged",
+        actor=auth.user,
+        ip=client_ip(request),
+        target_type="scan",
+        target_id=str(scan_id),
+        details={"tags": sorted(desired)},
     )
     db.commit()
     db.refresh(scan)
