@@ -1,0 +1,253 @@
+"""Portable, passphrase-protected backup & restore (docs/PLAN.md §8).
+
+A backup is a **logical dump** of the database (one JSON record per row, per
+table) rather than a raw SQLite file, which keeps it independent of the on-disk
+format and lets restore re-insert into a freshly-migrated schema.
+
+The portability trick (plan §8): every stored secret is master-key-encrypted, so
+it cannot travel as-is to a host with a different master key. On backup each
+secret is decrypted under the host master key and **re-wrapped** under a
+passphrase-derived key; the whole inner dump is then encrypted under that same
+passphrase key. On restore the reverse happens — secrets are re-wrapped under the
+new host's master key — so a restore needs only the passphrase, never a
+master-key transplant.
+
+The set of secret columns is sourced from
+:data:`app.core.secret_store.SECRET_COLUMNS`, so any new field-encrypted column
+becomes portable the moment it is registered there.
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+from dataclasses import dataclass
+from datetime import datetime
+
+from sqlalchemy import DateTime, select, text
+from sqlalchemy.orm import Session
+
+from app import __version__
+from app.core.crypto import SecretDecryptError, get_secret_cipher
+from app.core.passphrase import (
+    AAD_BUNDLE,
+    SCRYPT_N,
+    SCRYPT_P,
+    SCRYPT_R,
+    new_salt,
+    passphrase_cipher,
+)
+from app.core.secret_store import SECRET_COLUMNS
+from app.core.timeutil import utcnow
+from app.db.base import Base
+
+#: Bundle format identifier and version, stored in the envelope.
+BUNDLE_FORMAT = "scrye-backup"
+BUNDLE_FORMAT_VERSION = 1
+
+#: Tables excluded from a backup: transient/host-specific state and the backup
+#: bookkeeping itself (its files don't travel inside a bundle).
+_EXCLUDED_TABLES: frozenset[str] = frozenset(
+    {"sessions", "oidc_login_flows", "backups", "alembic_version"}
+)
+
+#: Map of ``(table, column)`` -> AAD for the field-encrypted secret columns.
+_SECRET_MAP: dict[tuple[str, str], str] = {
+    (table, column): aad for table, column, aad in SECRET_COLUMNS
+}
+
+
+class BackupError(RuntimeError):
+    """Raised when a backup cannot be built or a restore cannot be applied."""
+
+
+@dataclass(frozen=True)
+class RestoreSummary:
+    """Non-sensitive summary of a completed restore."""
+
+    tables: int
+    rows: int
+    app_version: str
+
+
+def _schema_version(db: Session) -> str:
+    """Return the current Alembic schema revision, or ``""`` if unmanaged."""
+    try:
+        value = db.execute(text("SELECT version_num FROM alembic_version")).scalar()
+    except Exception:  # noqa: BLE001 - a missing table just means "unknown"
+        return ""
+    return str(value) if value else ""
+
+
+def _backup_tables() -> list:
+    """Return the metadata tables included in a backup, in FK-safe order."""
+    return [t for t in Base.metadata.sorted_tables if t.name not in _EXCLUDED_TABLES]
+
+
+def build_bundle(db: Session, passphrase: str) -> bytes:
+    """Build an encrypted backup bundle for the whole database.
+
+    Args:
+        db: Active database session (read-only use).
+        passphrase: The user-supplied backup passphrase.
+
+    Returns:
+        The bundle bytes (a UTF-8 JSON envelope) ready to write to disk.
+
+    Raises:
+        BackupError: If a stored secret cannot be decrypted for re-wrapping.
+    """
+    if not passphrase:
+        raise BackupError("A backup passphrase is required.")
+    master = get_secret_cipher()
+    salt = new_salt()
+    pass_cipher = passphrase_cipher(passphrase, salt)
+
+    tables: dict[str, dict] = {}
+    for table in _backup_tables():
+        rows: list[dict] = []
+        for record in db.execute(select(table)).mappings():
+            row: dict = {}
+            for column in table.columns:
+                value = record[column.name]
+                aad = _SECRET_MAP.get((table.name, column.name))
+                if aad is not None and value:
+                    try:
+                        plaintext = master.decrypt(value, aad=aad)
+                    except SecretDecryptError as exc:
+                        raise BackupError(
+                            f"Cannot re-wrap secret {table.name}.{column.name}: "
+                            "it could not be decrypted under the current master key."
+                        ) from exc
+                    value = pass_cipher.encrypt(plaintext, aad=aad)
+                elif isinstance(value, datetime):
+                    value = value.isoformat()
+                row[column.name] = value
+            rows.append(row)
+        tables[table.name] = {"rows": rows}
+
+    inner = json.dumps({"tables": tables}, separators=(",", ":"))
+    payload = pass_cipher.encrypt(inner, aad=AAD_BUNDLE)
+    envelope = {
+        "format": BUNDLE_FORMAT,
+        "format_version": BUNDLE_FORMAT_VERSION,
+        "app_version": __version__,
+        "schema_version": _schema_version(db),
+        "created_at": utcnow().isoformat(),
+        "kdf": {
+            "algo": "scrypt",
+            "n": SCRYPT_N,
+            "r": SCRYPT_R,
+            "p": SCRYPT_P,
+            "salt": base64.b64encode(salt).decode("ascii"),
+        },
+        "payload": payload,
+    }
+    return json.dumps(envelope).encode("utf-8")
+
+
+def _load_envelope(data: bytes) -> dict:
+    """Parse and validate the outer bundle envelope."""
+    try:
+        envelope = json.loads(data.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise BackupError("Backup file is not a valid Scrye bundle.") from exc
+    if not isinstance(envelope, dict) or envelope.get("format") != BUNDLE_FORMAT:
+        raise BackupError("Backup file is not a Scrye backup bundle.")
+    if envelope.get("format_version") != BUNDLE_FORMAT_VERSION:
+        raise BackupError("Unsupported backup format version.")
+    return envelope
+
+
+def read_manifest(data: bytes) -> dict:
+    """Return the bundle's non-secret manifest fields (for pre-restore display)."""
+    envelope = _load_envelope(data)
+    return {
+        "app_version": envelope.get("app_version"),
+        "schema_version": envelope.get("schema_version"),
+        "created_at": envelope.get("created_at"),
+    }
+
+
+def restore_bundle(db: Session, data: bytes, passphrase: str) -> RestoreSummary:
+    """Restore a backup bundle into the current database (destructive).
+
+    Every managed table is cleared and repopulated from the bundle, with each
+    secret re-wrapped under the host master key. The bundle's schema version must
+    match the running schema (cross-version migration of a bundle is not
+    supported in v1).
+
+    Args:
+        db: Active database session; the whole restore runs in its transaction.
+        data: The uploaded bundle bytes.
+        passphrase: The passphrase the bundle was created with.
+
+    Returns:
+        A :class:`RestoreSummary` describing what was imported.
+
+    Raises:
+        BackupError: On a bad passphrase, format/version mismatch, or corrupt data.
+    """
+    envelope = _load_envelope(data)
+    current_schema = _schema_version(db)
+    bundle_schema = envelope.get("schema_version") or ""
+    if bundle_schema and current_schema and bundle_schema != current_schema:
+        raise BackupError(
+            "Backup schema version does not match this installation "
+            f"({bundle_schema} vs {current_schema}); restore is not supported across versions."
+        )
+
+    kdf = envelope.get("kdf") or {}
+    try:
+        salt = base64.b64decode(kdf["salt"])
+    except (KeyError, ValueError, TypeError) as exc:
+        raise BackupError("Backup bundle is missing its key-derivation salt.") from exc
+    pass_cipher = passphrase_cipher(passphrase, salt)
+
+    try:
+        inner_json = pass_cipher.decrypt(envelope["payload"], aad=AAD_BUNDLE)
+    except SecretDecryptError as exc:
+        raise BackupError("Incorrect passphrase or corrupt backup bundle.") from exc
+    try:
+        inner = json.loads(inner_json)
+        tables_data: dict = inner["tables"]
+    except (ValueError, KeyError) as exc:
+        raise BackupError("Backup bundle payload is malformed.") from exc
+
+    master = get_secret_cipher()
+    managed = _backup_tables()
+
+    # Clear managed tables (plus transient session state) in reverse FK order.
+    for table in reversed(Base.metadata.sorted_tables):
+        if table.name in _EXCLUDED_TABLES and table.name not in {"sessions", "oidc_login_flows"}:
+            continue
+        db.execute(table.delete())
+
+    total_rows = 0
+    for table in managed:
+        payload_rows = (tables_data.get(table.name) or {}).get("rows", [])
+        for row in payload_rows:
+            values: dict = {}
+            for column in table.columns:
+                if column.name not in row:
+                    continue
+                value = row[column.name]
+                aad = _SECRET_MAP.get((table.name, column.name))
+                if aad is not None and value:
+                    try:
+                        plaintext = pass_cipher.decrypt(value, aad=aad)
+                    except SecretDecryptError as exc:
+                        raise BackupError(
+                            f"Cannot restore secret {table.name}.{column.name}: "
+                            "the bundle is corrupt or the passphrase is wrong."
+                        ) from exc
+                    value = master.encrypt(plaintext, aad=aad)
+                elif isinstance(column.type, DateTime) and isinstance(value, str):
+                    value = datetime.fromisoformat(value)
+                values[column.name] = value
+            db.execute(table.insert().values(**values))
+            total_rows += 1
+
+    return RestoreSummary(
+        tables=len(managed), rows=total_rows, app_version=str(envelope.get("app_version") or "")
+    )

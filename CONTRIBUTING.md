@@ -129,14 +129,19 @@ scrye/
 │   │   ├── main.py      # FastAPI app: API + SPA serving, startup key check,
 │   │   │                #   scan-worker lifecycle
 │   │   ├── api/         # routers: health, auth, users, audit, scans,
-│   │   │                #   registries, git_credentials, docker_environments
-│   │   ├── auth/        # passwords (argon2id), sessions, RBAC/CSRF deps
+│   │   │                #   registries, git_credentials, docker_environments,
+│   │   │                #   settings, oidc, notifications, api_tokens, backups
+│   │   ├── auth/        # passwords (argon2id), sessions, RBAC/CSRF+token deps,
+│   │   │                #   OIDC client, TOTP MFA, API-token minting
 │   │   ├── core/        # config, crypto (AES-GCM envelope), secret_store,
-│   │   │                #   logging/redaction, masking, rate limiting, audit
-│   │   │                #   helper, artifact store, docker_proxy, registry_check
+│   │   │                #   app_settings, passphrase KDF, notifications,
+│   │   │                #   system_info, logging/redaction, masking, rate
+│   │   │                #   limiting, audit helper, artifact store, proxies
 │   │   ├── scanners/    # Trivy/Grype/Syft orchestration + JSON normalization,
 │   │   │                #   credential materialization, target resolution
-│   │   ├── workers/     # in-process async scan worker (interface + impl)
+│   │   ├── backup/      # portable bundle build/restore + secret re-wrap,
+│   │   │                #   on-disk store, scheduled-backup logic
+│   │   ├── workers/     # in-process async scan worker + backup scheduler
 │   │   └── db/          # SQLAlchemy base + session + models/
 │   ├── alembic/         # migration environment + versions
 │   ├── scripts/         # dev helpers (.env.example generator)
@@ -146,8 +151,8 @@ scrye/
 │   ├── src/
 │   │   ├── theme.ts     # teal Mantine theme
 │   │   ├── auth/        # AuthContext (login state + actions)
-│   │   ├── pages/       # dashboard, login, setup, scans (list/new/detail),
-│   │   │                #   settings (registries / git / docker environments)
+│   │   ├── pages/       # dashboard, login, setup, account, scans
+│   │   │                #   (list/new/detail), settings (all tabs)
 │   │   ├── components/  # shared components (toggle, user menu, badges),
 │   │   │                #   settings/ panels
 │   │   └── api/         # API client (CSRF-aware fetch + multipart upload)

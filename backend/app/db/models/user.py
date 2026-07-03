@@ -41,6 +41,10 @@ class User(Base):
         default=Role.VIEWER,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    #: Whether TOTP multi-factor authentication is active for this account.
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: Encrypted TOTP shared secret (ciphertext token only; never plaintext).
+    mfa_secret_ciphertext: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

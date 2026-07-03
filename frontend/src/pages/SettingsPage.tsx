@@ -1,12 +1,32 @@
 import { Stack, Tabs, Text, Title } from '@mantine/core';
-import { IconBrandDocker, IconGitBranch, IconServer2 } from '@tabler/icons-react';
+import {
+  IconAdjustments,
+  IconBell,
+  IconBrandDocker,
+  IconDatabaseExport,
+  IconGitBranch,
+  IconInfoCircle,
+  IconKey,
+  IconLock,
+  IconServer2,
+  IconSettings,
+  IconUsers,
+} from '@tabler/icons-react';
 
+import { AboutPanel } from '../components/settings/AboutPanel';
+import { ApiTokensPanel } from '../components/settings/ApiTokensPanel';
+import { AuthenticationPanel } from '../components/settings/AuthenticationPanel';
+import { BackupsPanel } from '../components/settings/BackupsPanel';
 import { DockerEnvironmentsPanel } from '../components/settings/DockerEnvironmentsPanel';
+import { GeneralPanel } from '../components/settings/GeneralPanel';
 import { GitCredentialsPanel } from '../components/settings/GitCredentialsPanel';
+import { NotificationsPanel } from '../components/settings/NotificationsPanel';
 import { RegistriesPanel } from '../components/settings/RegistriesPanel';
+import { ScannersPanel } from '../components/settings/ScannersPanel';
+import { UsersPanel } from '../components/settings/UsersPanel';
 import { useAuth } from '../auth/AuthContext';
 
-/** Settings area: registries, git credentials, and Docker environments. */
+/** Full settings area (docs/PLAN.md §4.5). Admin tabs are gated by role. */
 export function SettingsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -17,32 +37,104 @@ export function SettingsPage() {
         <Title order={2}>Settings</Title>
         <Text c="dimmed">
           {isAdmin
-            ? 'Manage credentials and scan targets.'
-            : 'View configured credentials and targets (admin required to edit).'}
+            ? 'Configure the instance, authentication, credentials, and backups.'
+            : 'View instance configuration and manage your API tokens.'}
         </Text>
       </div>
 
-      <Tabs defaultValue="registries" keepMounted={false}>
+      <Tabs
+        defaultValue={isAdmin ? 'general' : 'scanners'}
+        keepMounted={false}
+        orientation="vertical"
+      >
         <Tabs.List>
-          <Tabs.Tab value="registries" leftSection={<IconServer2 size={16} />}>
-            Registries
+          {isAdmin && (
+            <>
+              <Tabs.Tab value="general" leftSection={<IconSettings size={16} />}>
+                General
+              </Tabs.Tab>
+              <Tabs.Tab value="authentication" leftSection={<IconLock size={16} />}>
+                Authentication
+              </Tabs.Tab>
+              <Tabs.Tab value="users" leftSection={<IconUsers size={16} />}>
+                Users &amp; roles
+              </Tabs.Tab>
+            </>
+          )}
+          <Tabs.Tab value="scanners" leftSection={<IconAdjustments size={16} />}>
+            Scanners
           </Tabs.Tab>
-          <Tabs.Tab value="git" leftSection={<IconGitBranch size={16} />}>
-            Git providers
+          {isAdmin && (
+            <>
+              <Tabs.Tab value="registries" leftSection={<IconServer2 size={16} />}>
+                Registries
+              </Tabs.Tab>
+              <Tabs.Tab value="git" leftSection={<IconGitBranch size={16} />}>
+                Git providers
+              </Tabs.Tab>
+              <Tabs.Tab value="docker" leftSection={<IconBrandDocker size={16} />}>
+                Docker environments
+              </Tabs.Tab>
+              <Tabs.Tab value="notifications" leftSection={<IconBell size={16} />}>
+                Notifications
+              </Tabs.Tab>
+            </>
+          )}
+          <Tabs.Tab value="tokens" leftSection={<IconKey size={16} />}>
+            API tokens
           </Tabs.Tab>
-          <Tabs.Tab value="docker" leftSection={<IconBrandDocker size={16} />}>
-            Docker environments
+          {isAdmin && (
+            <Tabs.Tab value="backups" leftSection={<IconDatabaseExport size={16} />}>
+              Backup &amp; restore
+            </Tabs.Tab>
+          )}
+          <Tabs.Tab value="about" leftSection={<IconInfoCircle size={16} />}>
+            About
           </Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="registries" pt="md">
-          <RegistriesPanel />
+        {isAdmin && (
+          <>
+            <Tabs.Panel value="general" pl="lg">
+              <GeneralPanel />
+            </Tabs.Panel>
+            <Tabs.Panel value="authentication" pl="lg">
+              <AuthenticationPanel />
+            </Tabs.Panel>
+            <Tabs.Panel value="users" pl="lg">
+              <UsersPanel />
+            </Tabs.Panel>
+          </>
+        )}
+        <Tabs.Panel value="scanners" pl="lg">
+          <ScannersPanel />
         </Tabs.Panel>
-        <Tabs.Panel value="git" pt="md">
-          <GitCredentialsPanel />
+        {isAdmin && (
+          <>
+            <Tabs.Panel value="registries" pl="lg">
+              <RegistriesPanel />
+            </Tabs.Panel>
+            <Tabs.Panel value="git" pl="lg">
+              <GitCredentialsPanel />
+            </Tabs.Panel>
+            <Tabs.Panel value="docker" pl="lg">
+              <DockerEnvironmentsPanel />
+            </Tabs.Panel>
+            <Tabs.Panel value="notifications" pl="lg">
+              <NotificationsPanel />
+            </Tabs.Panel>
+          </>
+        )}
+        <Tabs.Panel value="tokens" pl="lg">
+          <ApiTokensPanel />
         </Tabs.Panel>
-        <Tabs.Panel value="docker" pt="md">
-          <DockerEnvironmentsPanel />
+        {isAdmin && (
+          <Tabs.Panel value="backups" pl="lg">
+            <BackupsPanel />
+          </Tabs.Panel>
+        )}
+        <Tabs.Panel value="about" pl="lg">
+          <AboutPanel />
         </Tabs.Panel>
       </Tabs>
     </Stack>

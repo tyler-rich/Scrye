@@ -18,6 +18,26 @@ from app.core.crypto import get_secret_cipher
 AAD_REGISTRY_SECRET = "registries.secret"
 #: AAD tag binding a git access-token blob to its field.
 AAD_GIT_TOKEN = "git_credentials.token"
+#: AAD tag binding the OIDC client secret blob to its field.
+AAD_OIDC_CLIENT_SECRET = "oidc.client_secret"
+#: AAD tag binding a notification-channel secret blob to its field.
+AAD_NOTIFICATION_SECRET = "notifications.secret"
+#: AAD tag binding a user's TOTP MFA secret blob to its field.
+AAD_MFA_SECRET = "auth.mfa_secret"
+#: AAD tag binding the scheduled-backup passphrase blob to its field.
+AAD_BACKUP_PASSPHRASE = "backup.passphrase"
+
+#: Every stored-secret column and its AAD, in ``(table, column, aad)`` form.
+#: The backup re-wrap machinery (docs/PLAN.md §8) walks this so a new secret
+#: field is portable across hosts the moment it is added here.
+SECRET_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("registries", "secret_ciphertext", AAD_REGISTRY_SECRET),
+    ("git_credentials", "token_ciphertext", AAD_GIT_TOKEN),
+    ("oidc_config", "client_secret_ciphertext", AAD_OIDC_CLIENT_SECRET),
+    ("notification_channels", "secret_ciphertext", AAD_NOTIFICATION_SECRET),
+    ("users", "mfa_secret_ciphertext", AAD_MFA_SECRET),
+    ("backup_schedules", "passphrase_ciphertext", AAD_BACKUP_PASSPHRASE),
+)
 
 
 def encrypt_secret(plaintext: str, *, aad: str) -> str:
