@@ -1057,3 +1057,18 @@ informational report and keeping the pinned scanner versions current is how they
 tracked; the gate stays meaningful for Scrye's actual attack surface — including the `git`
 runtime dependency and `THIRD_PARTY_LICENSES/`, which remain fully gated.
 **Plan section affected:** §9.1, §12 (Phase 6 self-scan), CLAUDE.md § Dependency hygiene.
+
+### 2026-07-03 — Phase P6 — Dogfood-driven dependency bumps (FastAPI/Starlette/multipart)
+**What changed:** With the scanner binaries excluded, the dogfood gate correctly flagged six
+fixable HIGH CVEs in Scrye's own Python deps: `python-multipart` 0.0.20 (CVE-2026-24486,
+CVE-2026-42561, CVE-2026-53539) and `starlette` 0.41.3 (CVE-2025-62727, CVE-2026-48818,
+CVE-2026-54283). Resolved by bumping `python-multipart` → `0.0.32`, adding an explicit
+`starlette==1.3.1` pin (the version that fixes all three, previously an unpinned FastAPI
+transitive), and bumping `fastapi` `0.115.6` → `0.139.0` (the release whose
+`starlette>=0.46.0` constraint permits 1.3.1). All 325 backend tests pass on the new
+versions; no application code changed.
+**Why:** CLAUDE.md § Dependency hygiene requires resolving all fixable findings in Scrye's
+own dependencies — these are exactly that (direct/transitive deps we control), unlike the
+vendored scanner binaries. Pinning starlette explicitly guarantees the fixed version rather
+than relying on FastAPI's floor.
+**Plan section affected:** §2 (Tech stack pins), CLAUDE.md § Dependency hygiene.

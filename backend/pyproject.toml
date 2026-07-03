@@ -9,7 +9,10 @@ authors = [{ name = "Scrye contributors" }]
 # Pinned to specific, current, actively-maintained versions (see CLAUDE.md
 # § Dependency hygiene). Bump deliberately, never float to `latest`.
 dependencies = [
-    "fastapi==0.115.6",
+    "fastapi==0.139.0",
+    # Pinned explicitly (a FastAPI transitive dep) to the version that fixes
+    # CVE-2025-62727 / CVE-2026-48818 / CVE-2026-54283; FastAPI 0.139 allows it.
+    "starlette==1.3.1",
     "uvicorn[standard]==0.34.0",
     "pydantic==2.10.4",
     "pydantic-settings==2.7.1",
@@ -18,7 +21,7 @@ dependencies = [
     "argon2-cffi==25.1.0",
     "cryptography==49.0.0",
     "httpx==0.28.1",
-    "python-multipart==0.0.20",
+    "python-multipart==0.0.32",
     "authlib==1.7.2",
     "pyotp==2.10.0",
 ]
