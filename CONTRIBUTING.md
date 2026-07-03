@@ -40,6 +40,8 @@ pip install -e ".[dev]"
 export SCRYE_DATABASE_PATH="$PWD/scrye.dev.db"
 export SCRYE_ENVIRONMENT=development
 export SCRYE_CORS_ORIGINS=http://localhost:5173
+# Local dev runs over plain HTTP, so cookies can't carry the Secure flag:
+export SCRYE_SESSION_COOKIE_SECURE=false
 
 # Apply migrations
 alembic upgrade head
@@ -94,10 +96,20 @@ container on <http://127.0.0.1:8089>.
 
 ### Seeding a first admin user
 
-First-run admin bootstrap is implemented in **Phase 1**. Once available, the
-first account created on a fresh database is promoted to `admin`; subsequent
-OIDC users default to `viewer` (configurable). This section will be expanded
-when the auth layer lands.
+On a fresh database Scrye shows a one-time **setup screen**: open the app in a
+browser and create the first account — it becomes `admin` and is signed in
+immediately. The underlying endpoint works exactly once:
+
+```bash
+curl -X POST http://localhost:8089/api/auth/setup \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "admin", "password": "<a strong passphrase, 12+ chars>"}'
+```
+
+Once any account exists the endpoint (and screen) permanently return
+409/redirect to login. Additional users are created by an admin via
+`POST /api/users` or the UI (later phase). OIDC users (Phase 5) will default to
+`viewer`.
 
 ---
 
@@ -114,10 +126,12 @@ scrye/
 │   └── PLAN.md          # detailed build specification + deviation log
 ├── backend/
 │   ├── app/
-│   │   ├── main.py      # FastAPI app: API + SPA serving
-│   │   ├── api/         # routers (health, and more per phase)
-│   │   ├── core/        # config, logging (security/crypto in Phase 1)
-│   │   └── db/          # SQLAlchemy base + session
+│   │   ├── main.py      # FastAPI app: API + SPA serving, startup key check
+│   │   ├── api/         # routers: health, auth, users, audit
+│   │   ├── auth/        # passwords (argon2id), sessions, RBAC/CSRF deps
+│   │   ├── core/        # config, crypto (AES-GCM envelope), logging/redaction,
+│   │   │                #   masking, rate limiting, audit helper
+│   │   └── db/          # SQLAlchemy base + session + models/
 │   ├── alembic/         # migration environment + versions
 │   ├── scripts/         # dev helpers (.env.example generator)
 │   ├── tests/           # pytest suite
@@ -125,9 +139,10 @@ scrye/
 ├── frontend/
 │   ├── src/
 │   │   ├── theme.ts     # teal Mantine theme
-│   │   ├── pages/       # route pages
-│   │   ├── components/  # shared components
-│   │   └── api/         # API client
+│   │   ├── auth/        # AuthContext (login state + actions)
+│   │   ├── pages/       # dashboard, login, first-run setup
+│   │   ├── components/  # shared components (toggle, user menu)
+│   │   └── api/         # API client (CSRF-aware fetch wrapper)
 │   ├── vite.config.ts
 │   └── package.json
 └── docker/

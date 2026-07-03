@@ -1,0 +1,80 @@
+"""Shared API schemas for auth and user management.
+
+Read models never expose password hashes or any secret material.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.db.models import Role
+
+#: Validation bounds for local credentials.
+USERNAME_PATTERN = r"^[a-zA-Z0-9._-]+$"
+PASSWORD_MIN_LENGTH = 12
+PASSWORD_MAX_LENGTH = 128
+
+
+class UserOut(BaseModel):
+    """Public view of a user account (no credential material)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    role: Role
+    is_active: bool
+    created_at: datetime
+    last_login_at: datetime | None
+
+
+class CredentialsIn(BaseModel):
+    """Username + password payload for login."""
+
+    username: str = Field(min_length=3, max_length=64, pattern=USERNAME_PATTERN)
+    password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
+
+
+class NewUserIn(BaseModel):
+    """Payload for creating an account (setup or admin user management)."""
+
+    username: str = Field(min_length=3, max_length=64, pattern=USERNAME_PATTERN)
+    password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+
+
+class AuthStatusOut(BaseModel):
+    """Public bootstrap/auth state used by the SPA on load."""
+
+    needs_setup: bool
+    authenticated: bool
+    user: UserOut | None
+
+
+class LoginOut(BaseModel):
+    """Successful login/setup response."""
+
+    user: UserOut
+    csrf_token: str
+
+
+class SessionOut(BaseModel):
+    """One of the caller's login sessions."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+    last_seen_at: datetime
+    expires_at: datetime
+    ip: str | None
+    user_agent: str | None
+    current: bool = False
+
+
+class PasswordChangeIn(BaseModel):
+    """Change-own-password payload."""
+
+    current_password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
+    new_password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)

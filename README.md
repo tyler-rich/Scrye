@@ -13,12 +13,14 @@ place, on your own infrastructure.
 ![Build](https://img.shields.io/badge/build-local-informational)
 
 > **Project status — early, actively building.** Scrye is being built in phases
-> (see the [Roadmap](#roadmap)). **Phase 0 (this scaffold)** ships the
-> application skeleton: a FastAPI backend serving a React + Mantine SPA, a
-> SQLite + SQLAlchemy + Alembic baseline, a `/healthz` endpoint, and a hardened,
-> CIS-aligned container image. Scanning, auth, history, and the rest of the
-> features below are delivered in later phases and are documented here as the
-> intended end state.
+> (see the [Roadmap](#roadmap)). Shipped so far: the application skeleton
+> (FastAPI + React/Mantine SPA, SQLite/Alembic, hardened CIS-aligned image) and
+> the **auth & secrets foundation** — local accounts (argon2id) with revocable
+> server-side sessions, first-run admin bootstrap, RBAC (viewer/operator/admin),
+> CSRF protection, auth rate limiting, an audit log, and the AES-256-GCM
+> field-encryption module for stored secrets. Scanning, history, and the rest of
+> the features below are delivered in later phases and are documented here as
+> the intended end state.
 
 ---
 
@@ -163,7 +165,12 @@ access.
 Persistent data lives in the `scrye_data` volume (SQLite database) and the
 `scrye_cache` volume (scanner databases).
 
-> First-run admin bootstrap and login arrive in **Phase 1**.
+**First run:** open the app in your browser — while no accounts exist, Scrye
+shows a one-time setup screen that creates the first account as **admin** and
+signs it in (the setup endpoint permanently disables itself once any account
+exists). Additional users are created by an admin, with roles: **viewer**
+(read/export), **operator** (viewer + launch scans + own API tokens), or
+**admin** (everything, incl. settings/users/credentials).
 
 ### Optional sidecars
 
@@ -194,6 +201,10 @@ Configuration is driven by environment variables (prefix `SCRYE_`). The
 | `SCRYE_CORS_ORIGINS`        | _(empty)_                    | Comma-separated dev CORS origins (e.g. `http://localhost:5173`).  |
 | `SCRYE_DATABASE_PATH`       | `/data/scrye.db`             | SQLite database file path.                                        |
 | `SCRYE_APP_SECRET_KEY_FILE` | `/run/secrets/app_secret_key`| Path to the Docker secret file holding the **master key**.        |
+| `SCRYE_SESSION_LIFETIME_HOURS` | `168`                     | Login session lifetime (hours).                                   |
+| `SCRYE_SESSION_COOKIE_SECURE` | `true`                     | `Secure` flag on session cookies (disable only for plain-HTTP dev). |
+| `SCRYE_AUTH_RATE_LIMIT_ATTEMPTS` | `5`                     | Max auth attempts per client IP per window.                       |
+| `SCRYE_AUTH_RATE_LIMIT_WINDOW_SECONDS` | `60`              | Auth rate-limit window length (seconds).                          |
 | `SCRYE_TRIVY_SERVER_URL`    | _(unset)_                    | Optional Trivy server URL (shared vuln-DB cache).                 |
 | `SCRYE_DOCKER_PROXY_URL`    | _(unset)_                    | Optional read-only docker-socket-proxy URL.                       |
 | `SCRYE_FRONTEND_DIST_DIR`   | `/app/frontend/dist`         | Directory of the built SPA served by FastAPI.                     |
@@ -204,7 +215,13 @@ The application **master key** is **never** an environment variable or baked
 into an image layer. It is read at runtime from the Docker secret file pointed
 to by `SCRYE_APP_SECRET_KEY_FILE` (default `/run/secrets/app_secret_key`).
 Generate it once with `openssl rand -base64 48` and provide it as a Docker
-secret. Stored credentials are encrypted with a key derived from it.
+secret. Stored credentials are encrypted with a key derived from it. In
+production the app **refuses to start** without a valid key file.
+
+**Key rotation:** the key file may hold multiple versions, one per line, as
+`v<N>:<base64>` entries (a plain single-line key is version 1). New secrets are
+encrypted under the highest version; older versions remain readable so existing
+secrets can be re-encrypted, after which the old line can be removed.
 
 ---
 
@@ -269,11 +286,13 @@ supported. _(Delivered in Phase 5.)_
 
 Build order (see [`docs/PLAN.md`](./docs/PLAN.md) §12):
 
-- **Phase 0 — Scaffold** ✅ _(this release)_ — repo structure, FastAPI + SPA
-  skeleton, SQLite/SQLAlchemy/Alembic baseline, `/healthz`, teal theme +
-  light/dark toggle, hardened Dockerfile, base docs.
-- **Phase 1** — local auth + sessions + RBAC + bootstrap; envelope encryption +
-  write-only secret API + log redaction; audit log.
+- **Phase 0 — Scaffold** ✅ — repo structure, FastAPI + SPA skeleton,
+  SQLite/SQLAlchemy/Alembic baseline, `/healthz`, teal theme + light/dark
+  toggle, hardened Dockerfile, base docs.
+- **Phase 1 — Auth & secrets foundation** ✅ _(this release)_ — local auth
+  (argon2id) + revocable sessions + RBAC + first-admin bootstrap; AES-256-GCM
+  envelope encryption with master-key rotation; write-only secret pattern + log
+  redaction; CSRF + auth rate limiting; audit log.
 - **Phase 2** — core scanning (Trivy image + Grype image), async worker,
   normalized findings, scan detail + raw artifacts.
 - **Phase 3** — Trivy repo + git creds; Grype filesystem/SBOM; Syft SBOM;

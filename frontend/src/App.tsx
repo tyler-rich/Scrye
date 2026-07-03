@@ -1,14 +1,34 @@
-import { AppShell, Group, Text, Title } from '@mantine/core';
+import { AppShell, Center, Group, Loader, Text, Title } from '@mantine/core';
 
 import { ColorSchemeToggle } from './components/ColorSchemeToggle';
+import { UserMenu } from './components/UserMenu';
+import { useAuth } from './auth/AuthContext';
 import { Dashboard } from './pages/Dashboard';
+import { LoginPage } from './pages/LoginPage';
+import { SetupPage } from './pages/SetupPage';
 
 /**
- * Application shell for the Phase 0 skeleton: a header with the brand and the
- * light/dark toggle, plus the placeholder dashboard. Routing and the full
- * navigation arrive in later phases.
+ * Application shell. Renders the bootstrap/setup screen on a fresh install,
+ * the login screen when signed out, and the app (header + dashboard) once
+ * authenticated. Routing and full navigation arrive in later phases.
  */
 export function App() {
+  const { loading, needsSetup, user } = useAuth();
+
+  if (loading) {
+    return (
+      <Center mih="100vh">
+        <Loader color="teal" />
+      </Center>
+    );
+  }
+  if (needsSetup) {
+    return <SetupPage />;
+  }
+  if (!user) {
+    return <LoginPage />;
+  }
+
   return (
     <AppShell header={{ height: 56 }} padding="md">
       <AppShell.Header>
@@ -21,7 +41,10 @@ export function App() {
               Trivy + Grype, unified
             </Text>
           </Group>
-          <ColorSchemeToggle />
+          <Group gap="sm">
+            <ColorSchemeToggle />
+            <UserMenu />
+          </Group>
         </Group>
       </AppShell.Header>
 
