@@ -1028,3 +1028,15 @@ cannot be bumped immediately) is the practical, low-churn enforcement of that ru
 still surfacing everything.
 **Plan section affected:** §9.1 (multi-arch build), §12 (Phase 6 self-scanning CI),
 CLAUDE.md § Dependency hygiene.
+
+### 2026-07-03 — Phase P6 — Fix wrong `debian:bookworm-slim` base digest
+**What changed:** The `scanners` build stage in `docker/Dockerfile` pinned
+`debian:bookworm-slim` to `sha256:8a7e7cc0…`, which is actually the
+`python:3.12-slim-bookworm` manifest digest (a copy-paste error latent since Phase 0).
+Corrected it to the real `debian:bookworm-slim` multi-arch index digest
+`sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df`.
+**Why:** The new Phase 6 CI image job is the first time the image is actually built in
+CI, which surfaced the bad digest (`… : not found`) — no earlier phase built the image,
+so the error went unnoticed. The two python stages and the node stage were already
+correct. Pinning to the current debian index digest keeps §9.1's digest-pinning intact.
+**Plan section affected:** §9.1 (image), §12 (Phase 6 CI).
