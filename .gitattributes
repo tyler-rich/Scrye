@@ -1,0 +1,19 @@
+# Normalize line endings across platforms.
+#
+# Shell scripts must be checked out with LF regardless of the contributor's
+# `core.autocrlf` setting — a CRLF entrypoint makes the Linux kernel look for
+# an interpreter literally named `/bin/sh\r`, so the container fails to start
+# with `exec /app/entrypoint.sh: no such file or directory`.
+* text=auto eol=lf
+
+*.sh text eol=lf
+docker/entrypoint.sh text eol=lf
+
+# Binary assets — leave untouched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
