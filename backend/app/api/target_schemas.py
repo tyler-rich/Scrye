@@ -15,6 +15,20 @@ from pydantic import BaseModel, Field, SecretStr, field_validator, model_validat
 from app.core.masking import MaskedSecret
 from app.db.models import SECRET_BEARING_AUTH_TYPES, GitProvider, RegistryAuthType
 
+
+class CredentialOption(BaseModel):
+    """Minimal selection view of a credential for launching a scan.
+
+    Operators pick a registry or git credential by name when starting a scan but
+    have no need for its host, username, or any other detail — this exposes only
+    the id and label, so credential metadata stays admin-only (docs/PLAN.md §14,
+    Phase 3 Security Review #5).
+    """
+
+    id: int
+    name: str
+
+
 # --- Registries --------------------------------------------------------------
 
 

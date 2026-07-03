@@ -31,10 +31,9 @@ import {
   type TrivySeverity,
 } from '../api/scans';
 import {
-  listGitCredentials,
-  listRegistries,
-  type GitCredential,
-  type Registry,
+  listGitCredentialOptions,
+  listRegistryOptions,
+  type CredentialOption,
 } from '../api/targets';
 import { useAuth } from '../auth/AuthContext';
 
@@ -90,15 +89,15 @@ export function NewScanPage() {
 
   const [targetType, setTargetType] = useState<TargetType>('image');
   const [scanner, setScanner] = useState<Scanner>('trivy');
-  const [registries, setRegistries] = useState<Registry[]>([]);
-  const [gitCredentials, setGitCredentials] = useState<GitCredential[]>([]);
+  const [registries, setRegistries] = useState<CredentialOption[]>([]);
+  const [gitCredentials, setGitCredentials] = useState<CredentialOption[]>([]);
   const [sbomFile, setSbomFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const loadTargets = useCallback(async () => {
     try {
-      const [regs, creds] = await Promise.all([listRegistries(), listGitCredentials()]);
+      const [regs, creds] = await Promise.all([listRegistryOptions(), listGitCredentialOptions()]);
       setRegistries(regs);
       setGitCredentials(creds);
     } catch {

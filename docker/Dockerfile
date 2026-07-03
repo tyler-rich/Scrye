@@ -86,8 +86,12 @@ RUN pip install .
 FROM python:3.12-slim-bookworm@sha256:8a7e7cc04fd3e2bd787f7f24e22d5d119aa590d429b50c95dfe12b3abe52f48b AS runtime
 
 # ca-certificates: scanner DB downloads + TLS. curl: container HEALTHCHECK.
+# git: authenticated clone of generic-host private repos into tmpfs, so the
+# credential is delivered via GIT_ASKPASS instead of an argv-visible clone URL
+# (docs/PLAN.md §14, Phase 3 Security Review #2). Versions track the
+# digest-pinned base image, consistent with the other apt packages here.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && apt-get install -y --no-install-recommends ca-certificates curl git \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 scrye \
     && useradd --uid 1000 --gid 1000 --no-create-home --home-dir /app --shell /usr/sbin/nologin scrye \

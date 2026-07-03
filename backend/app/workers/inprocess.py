@@ -22,6 +22,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.artifacts import artifact_path, store_artifact
+from app.core.config import get_settings
 from app.core.logging import redact
 from app.core.timeutil import utcnow
 from app.db.models import (
@@ -30,6 +31,7 @@ from app.db.models import (
     ArtifactKind,
     Finding,
     FindingClass,
+    GitProvider,
     Scan,
     Scanner,
     ScanStatus,
@@ -37,7 +39,13 @@ from app.db.models import (
     TargetType,
 )
 from app.scanners import BaseScanner, ScanExecution, ScannerError, get_scanner, syft
-from app.scanners.credentials import docker_config_env, git_clone_auth
+from app.scanners.credentials import (
+    REPO_REF_KEYS,
+    docker_config_env,
+    generic_repo_checkout,
+    git_env_token,
+    is_http_url,
+)
 from app.scanners.syft import SbomResult
 from app.scanners.targets import (
     TargetError,
@@ -252,13 +260,30 @@ class InProcessScanWorker(ScanWorker):
     async def _scan_repo(
         self, session: Session, scanner: BaseScanner, scan: Scan, options: dict
     ) -> ScanExecution:
-        """Scan a git repository, authenticating a private clone if configured."""
+        """Scan a git repository, authenticating a private clone if configured.
+
+        Public repos and hosted providers (GitHub/GitLab) let Trivy clone the
+        remote directly — the token, if any, rides in Trivy's native env vars and
+        never touches argv. A generic private host is cloned locally first (see
+        :func:`generic_repo_checkout`) so its credential stays off the process
+        argv, then Trivy scans the local checkout.
+        """
         auth = resolve_git_auth(session, options)
-        if auth is not None:
-            clone_url, overlay = git_clone_auth(scan.target, auth)
-        else:
-            clone_url, overlay = scan.target, {}
-        return await scanner.scan_repo(clone_url, options, env=overlay or None)
+        if auth is None:
+            return await scanner.scan_repo(scan.target, options, env=None)
+        if auth.provider is not GitProvider.GENERIC:
+            overlay = git_env_token(auth)
+            return await scanner.scan_repo(scan.target, options, env=overlay or None)
+        if not is_http_url(scan.target):
+            # A non-HTTP generic target (e.g. ssh://) carries no URL credential to
+            # inject; let Trivy clone it with its own mechanisms.
+            return await scanner.scan_repo(scan.target, options, env=None)
+
+        timeout = get_settings().scan_timeout_seconds
+        # The ref is already materialized by our clone; don't re-pass it to Trivy.
+        local_options = {k: v for k, v in options.items() if k not in REPO_REF_KEYS}
+        async with generic_repo_checkout(scan.target, auth, options, timeout=timeout) as checkout:
+            return await scanner.scan_repo(checkout, local_options, env=None)
 
     async def _maybe_sbom(
         self, source: str, options: dict, env: dict[str, str] | None
