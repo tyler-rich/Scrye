@@ -248,9 +248,11 @@ secrets can be re-encrypted, after which the old line can be removed.
   SBOM** to also produce a Syft SBOM artifact.
 - **Repository scans (Trivy)** — target type **Repository**, enter an HTTPS
   clone URL, and optionally set a branch / commit / tag. For a private repo,
-  select a **git credential** (Settings → Git providers): GitHub/GitLab use the
-  provider token env vars, and a generic host uses a transient credential-in-URL
-  that is never stored or logged.
+  select a **git credential** (Settings → Git providers): GitHub/GitLab use
+  Trivy's provider token env vars, and a generic host is cloned into tmpfs with
+  the system `git` binary via a transient `GIT_ASKPASS` helper — so the
+  credential never appears in the process argument list, and is never stored or
+  logged.
 - **Filesystem scans (Grype)** — target type **Filesystem**, enter an absolute
   path. Filesystem scanning is off by default; an admin must allow paths via
   `SCRYE_FILESYSTEM_SCAN_ROOTS`, and targets outside those roots are rejected.

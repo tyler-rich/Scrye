@@ -90,16 +90,37 @@ def test_registry_credential_helper_takes_no_secret(client: TestClient) -> None:
 
 def test_registry_rbac_and_csrf(client: TestClient) -> None:
     admin_csrf = _setup_admin(client)
+    # Seed a registry as admin so the operator has something to select.
+    client.post(
+        "/api/registries",
+        headers={CSRF: admin_csrf},
+        json={
+            "name": "ghcr",
+            "registry_host": "ghcr.io",
+            "auth_type": "username_password",
+            "username": "alice",
+            "secret": REGISTRY_SECRET,
+        },
+    )
     op_csrf = _make_operator(client, admin_csrf)
 
-    # Operators may list but not create.
-    assert client.get("/api/registries").status_code == 200
+    # Operators may NOT read the full metadata list (host/username are credential
+    # material) and may not create.
+    assert client.get("/api/registries").status_code == 403
     denied = client.post(
         "/api/registries",
         headers={CSRF: op_csrf},
         json={"name": "n", "registry_host": "h", "auth_type": "token", "secret": "s"},
     )
     assert denied.status_code == 403
+
+    # Operators CAN read the minimal id/name selection list — and it exposes
+    # nothing beyond id + name (no host, username, auth type, or secret).
+    options = client.get("/api/registries/options")
+    assert options.status_code == 200
+    assert options.json() == [{"id": 1, "name": "ghcr"}]
+    assert "ghcr.io" not in options.text
+    assert "alice" not in options.text
 
     # Missing CSRF is rejected for admins too.
     no_csrf = client.post(
@@ -188,14 +209,29 @@ def test_git_credential_masks_token(client: TestClient) -> None:
 
 def test_git_credential_rbac(client: TestClient) -> None:
     admin_csrf = _setup_admin(client)
+    client.post(
+        "/api/git-credentials",
+        headers={CSRF: admin_csrf},
+        json={"name": "gh", "provider": "github", "username": "deploy", "token": "t0ken"},
+    )
     op_csrf = _make_operator(client, admin_csrf)
-    assert client.get("/api/git-credentials").status_code == 200
+
+    # Operators may NOT read the full metadata list, nor create.
+    assert client.get("/api/git-credentials").status_code == 403
     denied = client.post(
         "/api/git-credentials",
         headers={CSRF: op_csrf},
-        json={"name": "gh", "provider": "github", "token": "t"},
+        json={"name": "gh2", "provider": "github", "token": "t"},
     )
     assert denied.status_code == 403
+
+    # Operators CAN read the minimal id/name selection list, and nothing more:
+    # provider, username, and token are all absent.
+    options = client.get("/api/git-credentials/options")
+    assert options.status_code == 200
+    assert options.json() == [{"id": 1, "name": "gh"}]
+    assert "github" not in options.text
+    assert "deploy" not in options.text
 
 
 # --- Docker environments -----------------------------------------------------

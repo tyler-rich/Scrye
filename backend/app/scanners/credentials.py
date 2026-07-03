@@ -14,10 +14,15 @@ Two mechanisms:
   ``credHelpers`` entry for ECR/GCR/ACR) into tmpfs, yields
   ``{"DOCKER_CONFIG": <dir>}`` for the subprocess environment, and shreds the
   directory on exit.
-- **Private git repositories** (Trivy ``repo`` scans) authenticate via the
-  provider's documented env token, or — for a generic host — a credential
-  embedded in the HTTPS clone URL. :func:`git_clone_auth` returns the (possibly
-  rewritten) URL plus any env overlay; the credential is never written to disk.
+- **Private git repositories** (Trivy ``repo`` scans) authenticate by provider.
+  GitHub/GitLab use Trivy's native ``GITHUB_TOKEN`` / ``GITLAB_TOKEN`` env vars
+  (:func:`git_env_token`); the token rides in the child environment, never in
+  argv. A **generic** host has no such env channel — and Trivy clones with
+  ``go-git``, which ignores ``GIT_ASKPASS`` / credential helpers / ``.netrc`` —
+  so :func:`generic_repo_checkout` clones it ourselves with the system ``git``
+  binary: the credential is delivered through a transient tmpfs ``GIT_ASKPASS``
+  helper (never in argv, never persisted), and Trivy then scans the local
+  checkout. See docs/PLAN.md §14 (Phase 3 Security Review #2 resolution).
 """
 
 from __future__ import annotations
@@ -28,12 +33,13 @@ import json
 import os
 import shutil
 import tempfile
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import quote, urlparse, urlunparse
+from urllib.parse import urlparse
 
 from app.db.models import CREDENTIAL_HELPERS, GitProvider, RegistryAuthType
+from app.scanners.base import ScannerError, run_command
 
 #: Default username when a token-auth registry has no explicit username.
 _DEFAULT_TOKEN_USERNAME = "token"
@@ -130,39 +136,143 @@ def docker_config_env(auth: RegistryAuth) -> Iterator[dict[str, str]]:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def _embed_git_credentials(url: str, username: str | None, token: str) -> str:
-    """Return ``url`` with ``username:token`` (or ``token``) embedded as userinfo.
-
-    Only HTTPS/HTTP URLs are rewritten; any other scheme is returned unchanged
-    (SSH and similar do not carry HTTP userinfo).
-    """
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        return url
-    safe_token = quote(token, safe="")
-    userinfo = f"{quote(username, safe='')}:{safe_token}" if username else safe_token
-    host = parsed.hostname
-    if parsed.port:
-        host = f"{host}:{parsed.port}"
-    return urlunparse(parsed._replace(netloc=f"{userinfo}@{host}"))
+def is_http_url(url: str) -> bool:
+    """Return True when ``url`` uses an ``http``/``https`` scheme."""
+    return urlparse(url).scheme in {"http", "https"}
 
 
-def git_clone_auth(url: str, auth: GitAuth) -> tuple[str, dict[str, str]]:
-    """Resolve git authentication for a private ``trivy repo`` clone.
+def git_env_token(auth: GitAuth) -> dict[str, str]:
+    """Return Trivy's native token env overlay for a hosted git provider.
+
+    GitHub/GitLab clones authenticate through the ``GITHUB_TOKEN`` /
+    ``GITLAB_TOKEN`` variables Trivy reads — the token stays in the child
+    environment and never touches the process argv. Generic hosts have no such
+    variable and are handled by :func:`generic_repo_checkout` instead, so this
+    returns an empty overlay for them.
 
     Args:
-        url: The clean HTTPS repository URL (as stored and displayed).
         auth: The resolved git credential.
 
     Returns:
-        A tuple ``(clone_url, env_overlay)``. For GitHub/GitLab the URL is
-        unchanged and the token is supplied via the provider's env var; for a
-        generic host the credential is embedded in the returned URL and the env
-        overlay is empty. The returned URL may contain the token, so callers
-        must not log or store it — pass the original ``url`` for display.
+        ``{"GITHUB_TOKEN": ...}`` / ``{"GITLAB_TOKEN": ...}``, or ``{}``.
     """
     if auth.provider is GitProvider.GITHUB:
-        return url, {"GITHUB_TOKEN": auth.token}
+        return {"GITHUB_TOKEN": auth.token}
     if auth.provider is GitProvider.GITLAB:
-        return url, {"GITLAB_TOKEN": auth.token}
-    return _embed_git_credentials(url, auth.username, auth.token), {}
+        return {"GITLAB_TOKEN": auth.token}
+    return {}
+
+
+#: GIT_ASKPASS helper. It carries no secret itself — it echoes the credential
+#: from the clone subprocess's own environment (which git passes to the askpass
+#: child), so the token never appears in argv, in the script file, or in the
+#: parent process environment. git *execs* this program, so the file must be
+#: executable (0700), not a plain 0600 data file.
+_ASKPASS_SCRIPT = (
+    "#!/bin/sh\n"
+    'case "$1" in\n'
+    "  Username*) printf '%s' \"$SCRYE_GIT_USERNAME\" ;;\n"
+    "  Password*) printf '%s' \"$SCRYE_GIT_PASSWORD\" ;;\n"
+    "esac\n"
+)
+
+#: Per-scan option keys that select a git ref. Our clone materializes the ref
+#: directly, so they are stripped before Trivy scans the local checkout.
+REPO_REF_KEYS = ("branch", "commit", "tag")
+
+
+async def _run_git_clone(
+    url: str, options: dict, checkout: Path, *, env: dict[str, str], timeout: int
+) -> None:
+    """Clone ``url`` into ``checkout`` at the requested ref, credential off-argv.
+
+    The clean ``url`` (no embedded credential) is the only URL on argv; the
+    credential reaches ``git`` solely through ``env`` (the ``GIT_ASKPASS`` helper
+    and its ``SCRYE_GIT_*`` inputs).
+
+    Raises:
+        ScannerError: If ``git`` is missing, the clone/checkout fails, or it
+            times out. The message is operator-safe and never echoes git's
+            stderr (which can contain the request URL).
+    """
+    ref = options.get("branch") or options.get("tag")
+    commit = options.get("commit")
+    argv = ["git", "clone", "--quiet"]
+    if not commit:
+        # Shallow-clone the tip (optionally of a named branch/tag). A specific
+        # commit may not be at any tip, so that case clones fully then checks out.
+        argv += ["--depth", "1"]
+        if ref:
+            argv += ["--branch", str(ref)]
+    argv += ["--", url, str(checkout)]
+
+    result = await run_command(argv, timeout=timeout, env=env)
+    if result.returncode != 0:
+        raise ScannerError(
+            "Failed to clone the private repository. Check the URL, ref, and credential."
+        )
+    if commit:
+        checked_out = await run_command(
+            ["git", "-C", str(checkout), "checkout", "--quiet", str(commit)],
+            timeout=timeout,
+            env=env,
+        )
+        if checked_out.returncode != 0:
+            raise ScannerError("Failed to check out the requested commit in the repository.")
+
+
+@contextlib.asynccontextmanager
+async def generic_repo_checkout(
+    url: str, auth: GitAuth, options: dict, *, timeout: int
+) -> AsyncIterator[str]:
+    """Clone a generic-host private repo into tmpfs and yield the checkout path.
+
+    Materializes a transient ``GIT_ASKPASS`` helper (mode ``0700``) in a fresh
+    tmpfs directory, clones ``url`` with the system ``git`` binary — the
+    credential travels only in the clone subprocess environment, never in argv —
+    checks out the requested ref, and yields the local checkout for Trivy to
+    scan. The whole directory (helper + checkout) is shredded and removed on
+    exit, including when the clone or the subsequent scan raises or is cancelled.
+
+    Args:
+        url: The clean HTTPS repository URL (as stored and displayed).
+        auth: The resolved generic-host git credential.
+        options: The scan options (read for the branch/commit/tag ref).
+        timeout: Per-operation wall-clock timeout in seconds.
+
+    Yields:
+        The absolute path of the local checkout.
+    """
+    tmpdir = Path(tempfile.mkdtemp(prefix="scrye-gitclone-"))
+    script_path = tmpdir / "askpass.sh"
+    checkout = tmpdir / "checkout"
+    try:
+        # 0700: git *execs* the askpass helper, so it must be executable; still
+        # owner-only, never group/world readable or executable.
+        fd = os.open(script_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o700)
+        with os.fdopen(fd, "w") as handle:
+            handle.write(_ASKPASS_SCRIPT)
+
+        # Mirror the historical URL-userinfo semantics: with a username, it is the
+        # basic-auth user and the token is the password; without one, the token
+        # itself is the user (as `https://<token>@host` did) and the password is
+        # empty. Delivered via env only — never argv.
+        if auth.username:
+            git_username, git_password = auth.username, auth.token
+        else:
+            git_username, git_password = auth.token, ""
+        env = {
+            "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+            "GIT_ASKPASS": str(script_path),
+            "GIT_TERMINAL_PROMPT": "0",  # never fall through to an interactive prompt
+            "GIT_CONFIG_GLOBAL": "/dev/null",  # ignore any ambient credential.helper
+            "GIT_CONFIG_SYSTEM": "/dev/null",
+            "SCRYE_GIT_USERNAME": git_username,
+            "SCRYE_GIT_PASSWORD": git_password,
+        }
+        await _run_git_clone(url, options, checkout, env=env, timeout=timeout)
+        yield str(checkout)
+    finally:
+        _shred_file(script_path)
+        with contextlib.suppress(OSError):
+            shutil.rmtree(tmpdir, ignore_errors=True)
