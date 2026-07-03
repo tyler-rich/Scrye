@@ -22,6 +22,7 @@ from app.scanners.base import (
     clip,
     resolve_binary,
     run_command,
+    scanner_scratch,
     severity_from_string,
     tally_severities,
 )
@@ -134,8 +135,13 @@ class GrypeScanner(BaseScanner):
         """
         binary = resolve_binary(get_settings().grype_binary)
         argv = build_command(binary, reference)
+        # Point Grype's DB cache and temp extraction at the writable cache volume:
+        # under the hardened runtime the default $HOME/.cache is on the read-only
+        # root FS and the tmpfs /tmp is too small for Grype's vulnerability DB.
+        cache_dir, scratch = scanner_scratch("grype")
+        overlay = {**scratch, "GRYPE_DB_CACHE_DIR": str(cache_dir / "db"), **(env or {})}
         result = await run_command(
-            argv, timeout=get_settings().scan_timeout_seconds, env=scan_env(env)
+            argv, timeout=get_settings().scan_timeout_seconds, env=scan_env(overlay)
         )
         if result.returncode != 0:
             detail = result.stderr.decode("utf-8", "replace").strip() or "no error output"

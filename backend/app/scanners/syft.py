@@ -16,6 +16,7 @@ from app.scanners.base import (
     build_env,
     resolve_binary,
     run_command,
+    scanner_scratch,
 )
 
 #: SBOM output formats Scrye offers, in canonical order (default first).
@@ -81,8 +82,11 @@ async def generate_sbom(
     sbom_format = resolve_format(fmt)
     binary = resolve_binary(get_settings().syft_binary)
     argv = build_command(binary, source, sbom_format)
+    # Redirect Syft's image-layer extraction off the tiny owner-only tmpfs /tmp
+    # onto the writable cache volume (same permission constraint as the scanners).
+    _cache_dir, scratch = scanner_scratch("syft")
     result = await run_command(
-        argv, timeout=get_settings().scan_timeout_seconds, env=build_env(env)
+        argv, timeout=get_settings().scan_timeout_seconds, env=build_env(scratch, env)
     )
     if result.returncode != 0:
         detail = result.stderr.decode("utf-8", "replace").strip() or "no error output"

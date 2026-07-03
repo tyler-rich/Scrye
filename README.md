@@ -361,6 +361,15 @@ decrypted in memory at scan time.
   runs as a **non-root** user with `cap_drop: ALL`, `no-new-privileges`, a
   **read-only** root filesystem + tmpfs, resource limits, a healthcheck, and
   loopback-only port binding.
+- **Writable scratch under a read-only root.** The only writable paths are the
+  `/data` and `/cache` volumes and a small `/tmp` tmpfs. The tmpfs is mounted
+  **owned by the container's uid** (`uid=1000,gid=1000`) — a bare tmpfs is
+  root-owned, so a non-root process could not write to it — and holds only the
+  in-memory credential files. The scanners' vulnerability databases and their
+  (multi-hundred-MB) temporary extraction are pointed at the persistent `/cache`
+  volume via each engine's cache dir and `TMPDIR`, so they never rely on the
+  read-only default `$HOME/.cache` or overflow the tmpfs, and the DB survives
+  restarts instead of re-downloading every scan.
 - **Docker socket residual risk.** "Scan running images" uses a **read-only**
   `docker-socket-proxy` restricted to read endpoints (`POST=0`). The Scrye app
   **never** mounts `/var/run/docker.sock`. The proxy is the only place the

@@ -133,6 +133,17 @@ class Settings(BaseSettings):
         default=1800,
         description="Per-scan wall-clock timeout in seconds (default 1800 = 30 minutes).",
     )
+    scanner_cache_dir: Path = Field(
+        default=Path("/cache"),
+        description=(
+            "Writable directory (a persistent volume) for scanner vulnerability "
+            "databases and scratch space. Under the hardened runtime the "
+            "container runs as a non-root uid on a read-only root filesystem, so "
+            "a scanner's default cache ($HOME/.cache) is unwritable and the small "
+            "tmpfs /tmp cannot hold a vulnerability DB; Trivy/Grype/Syft are "
+            "pointed here for their cache dir and TMPDIR instead."
+        ),
+    )
     artifacts_dir: Path = Field(
         default=Path("/data/artifacts"),
         description="Directory holding raw scanner artifacts (JSON output, SBOMs).",
