@@ -1352,5 +1352,10 @@ and `backend/app/api/dashboard.py`: the old diff key silently under/over-
 reported change for non-vulnerability classes, target identity ignored the
 target type, and malformed-but-valid scanner JSON crashed undiagnosably with
 no raw artifact stored. All fixes ship with regression tests.
+**Known limitation (future improvement):** two SBOM uploads with an identical
+filename *and* target type still collapse into one target identity, since the
+filename is all the identity the scan row carries. A real fix would key SBOM
+targets on a content hash (e.g. the SHA-256 of the uploaded SBOM, already
+computed for its artifact) rather than the filename.
 **Plan section affected:** §4.3/§4.4 (diff identity/constraints), §4.6
 (dashboard grouping), §4 (scanner orchestration/parsing).
