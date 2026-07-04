@@ -1,0 +1,116 @@
+# Scrye — Docker Hub publishing.
+#
+# Two independent publishing paths (CLAUDE.md locked decision §6):
+#
+#   1. Tagged main releases — a push of a semver tag (v*.*.*) builds the
+#      multi-arch image and pushes it as securedbytyler/scrye:<version> (the tag
+#      without its leading "v") and securedbytyler/scrye:latest. The release job
+#      refuses to run unless the tagged commit is reachable from main, so only
+#      real releases cut from main ever reach :<version>/:latest.
+#
+#   2. dev continuous build — when a pull request is MERGED into dev, the
+#      multi-arch image is built and pushed as the single moving tag
+#      securedbytyler/scrye:dev, always overwritten. This is NOT a versioned or
+#      stable tag; it just mirrors the state of dev after each merged PR. It does
+#      NOT fire on other pushes to the dev ref (e.g. conflict-resolution commits
+#      on an open, unmerged PR) or on PRs that are closed without merging.
+#
+# The multi-arch build itself is defined once in .github/actions/build-image and
+# reused by both jobs (and by ci.yml's build-only check). Credentials come from
+# the DOCKERHUB_USERNAME / DOCKERHUB_TOKEN repository secrets.
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  # The :dev tag publishes only when a pull request is actually merged into dev,
+  # never on a bare push to the dev ref. types:[closed] fires on both merge and
+  # close-without-merge; the merged==true gate lives on the dev job below.
+  pull_request:
+    types: [closed]
+    branches:
+      - dev
+
+# Least privilege: reading the repo is all either job needs. Registry auth is
+# handled with the Docker Hub secrets, not the GITHUB_TOKEN.
+permissions:
+  contents: read
+
+# Serialize builds per ref. Distinct release tags have distinct refs so they
+# never cancel each other; each merged-PR :dev build runs under its own PR ref.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Tagged release → Docker Hub (:<version> + :latest)
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history to verify the tag is on main)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # A tag can be pushed from any commit; a release must come from main.
+      # Fetch main and confirm the tagged commit is an ancestor of its tip
+      # before building anything.
+      - name: Verify the tagged commit is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            echo "::error::Tag ${GITHUB_REF_NAME} points at a commit that is not on main; refusing to publish a release."
+            exit 1
+          fi
+
+      # securedbytyler/scrye:<version> uses the tag without its leading "v"
+      # (v1.4.0 -> 1.4.0).
+      - name: Derive the version from the tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (:<version> + :latest)
+        uses: ./.github/actions/build-image
+        with:
+          push: "true"
+          tags: |
+            securedbytyler/scrye:${{ steps.version.outputs.version }}
+            securedbytyler/scrye:latest
+
+  dev:
+    name: dev branch → Docker Hub (:dev continuous build)
+    # Only when a PR is genuinely merged into dev. types:[closed] also fires when
+    # a PR is closed without merging, so gate on merged==true; base.ref is pinned
+    # to dev as belt-and-suspenders alongside the on: pull_request branch filter.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'dev'
+    runs-on: ubuntu-latest
+    steps:
+      # Build the merge commit that actually landed on dev (the PR result), not
+      # the ephemeral refs/pull/N/merge preview ref.
+      - name: Checkout the merged commit on dev
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (:dev)
+        uses: ./.github/actions/build-image
+        with:
+          push: "true"
+          tags: securedbytyler/scrye:dev

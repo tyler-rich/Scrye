@@ -2,8 +2,10 @@
 #
 # This is the CI baseline all future phases build on: add new jobs/steps here as
 # the app grows (e.g. the Phase 6 dogfood self-scan that runs Trivy + Grype
-# against Scrye's own image). Per CLAUDE.md locked decisions, there is NO
-# publish/registry job — the image is built locally only.
+# against Scrye's own image). CI itself never publishes — it lints, tests, and
+# proves the image builds for both architectures. Registry publishing to Docker
+# Hub lives in the separate publish.yml workflow, gated on tagged main releases
+# and dev-branch pushes (CLAUDE.md locked decision §6).
 name: CI
 
 on:
@@ -170,26 +172,29 @@ jobs:
   # Phase 6: prove the image builds for both target architectures
   # (linux/amd64 + linux/arm64, docs/PLAN.md §9.1). No load/push — a multi-arch
   # build cannot be loaded into the local daemon, so this only verifies both
-  # platforms build cleanly (the arm64 scanner-download path included).
+  # platforms build cleanly (the arm64 scanner-download path included). Uses the
+  # shared build action that publish.yml also drives, so the build invocation
+  # stays defined in exactly one place.
+  #
+  # Gated to main pushes and PRs whose base is main. The arm64 leg runs the whole
+  # Dockerfile under QEMU emulation, so on a cold `type=gha` cache it takes hours;
+  # only main-scoped runs reliably restore a warm arm64 cache, whereas dev-based
+  # PRs would rebuild from scratch every time. Multi-arch buildability stays
+  # continuously proven for dev anyway: publish.yml builds amd64+arm64 on every
+  # push to dev (the :dev tag) and on release tags. dev PRs still get the fast
+  # amd64-only `image` build + dogfood self-scan above. See docs/PLAN.md
+  # § Deviations.
   image-multiarch:
     name: Image — multi-arch build check
     runs-on: ubuntu-latest
+    # Skip on dev-based PRs (see note above); run on main pushes and PRs to main.
+    if: github.event_name != 'pull_request' || github.event.pull_request.base.ref == 'main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up QEMU (arm64 emulation)
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build image (amd64 + arm64)
-        uses: docker/build-push-action@v6
+      - name: Build image (amd64 + arm64, no push)
+        uses: ./.github/actions/build-image
         with:
-          context: .
-          file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          push: "false"
