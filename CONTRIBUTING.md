@@ -255,6 +255,29 @@ plaintext never appears in logs or API reads.
 
 ---
 
+## Releasing
+
+CI (`.github/workflows/ci.yml`) never publishes — it only lints, tests, and proves the image
+builds for both architectures. Publishing to Docker Hub (`securedbytyler/scrye`) is handled by
+`.github/workflows/publish.yml`, which authenticates with the `DOCKERHUB_USERNAME` /
+`DOCKERHUB_TOKEN` repository secrets and has two independent paths:
+
+- **Tagged releases (stable).** Push a semantic-version tag `v*.*.*` on a commit that is on
+  `main` (e.g. `git tag v1.4.0 && git push origin v1.4.0`). This builds the multi-arch
+  (amd64/arm64) image and pushes it as `securedbytyler/scrye:<version>` (the tag without its
+  leading `v`, so `v1.4.0` → `securedbytyler/scrye:1.4.0`) **and** `securedbytyler/scrye:latest`.
+  The job refuses to run if the tagged commit is not on `main`, so `:latest` and `:<version>`
+  always come from a real release.
+
+- **`:dev` (continuous build, not a release).** Every push to the `dev` branch builds the
+  multi-arch image and pushes the single **moving** tag `securedbytyler/scrye:dev`, always
+  overwritten. This is **not** a stable release and **not** a version — it just mirrors the
+  current state of `dev` so you can pull and test HEAD-of-dev (`docker pull
+  securedbytyler/scrye:dev`) without cutting a tagged release. Do not treat `:dev` as
+  production-ready; use a `:<version>` tag (or `:latest`) for that.
+
+---
+
 ## Reporting security issues
 
 **Please do not open public issues for security vulnerabilities.** Report them
