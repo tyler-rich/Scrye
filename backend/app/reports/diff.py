@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-from app.db.models import SEVERITY_RANK, Finding, Severity
+from app.db.models import SEVERITY_RANK, Finding, FindingClass, Severity
 
 
 def finding_key(finding: Finding) -> tuple[str, str, str, str]:
@@ -20,17 +20,20 @@ def finding_key(finding: Finding) -> tuple[str, str, str, str]:
 
     Vulnerabilities are identified by ``(class, vuln_id, package)`` — the same
     convention the scanners use to dedupe — so a package upgrade that keeps the
-    CVE still counts as the *same* finding. Findings without a vuln id
-    (misconfigurations, secrets, licenses) fall back to their title/location so
-    they still match sensibly.
+    CVE still counts as the *same* finding. Every other class keeps its location
+    in the key: Trivy sets ``vuln_id`` for misconfigurations, secrets, and
+    licenses too (the check/rule ID or license name), and one rule commonly
+    fires in many files — dropping the location there would collapse distinct
+    per-file occurrences into a single diff entry and under/over-report change.
     """
     cls = finding.finding_class.value
     ident = (finding.vuln_id or finding.title or "").strip().lower()
     pkg = (finding.pkg_name or "").strip().lower()
     location = (finding.location or "").strip().lower()
-    # For vuln findings the location rarely disambiguates and is often unset, so
-    # only fold it in when there is no vuln id to key on.
-    loc_component = "" if finding.vuln_id else location
+    # For vuln findings a CVE id is a global identity and the location rarely
+    # disambiguates (and is often unset), so only drop it in that case.
+    is_identified_vuln = finding.finding_class is FindingClass.VULNERABILITY and finding.vuln_id
+    loc_component = "" if is_identified_vuln else location
     return (cls, ident, pkg, loc_component)
 
 
