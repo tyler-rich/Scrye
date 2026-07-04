@@ -5,6 +5,7 @@ import type { Scan } from './scans';
 
 export interface TargetPosture {
   scanner: string;
+  target_type: string;
   target: string;
   critical: number;
   high: number;

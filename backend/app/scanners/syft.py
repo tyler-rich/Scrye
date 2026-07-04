@@ -12,8 +12,8 @@ from dataclasses import dataclass
 
 from app.core.config import get_settings
 from app.scanners.base import (
-    ScannerError,
     build_env,
+    check_success,
     resolve_binary,
     run_command,
     scanner_cache_env,
@@ -89,9 +89,7 @@ async def generate_sbom(
     result = await run_command(
         argv, timeout=get_settings().scan_timeout_seconds, env=build_env(scanner_cache_env(), env)
     )
-    if result.returncode != 0:
-        detail = result.stderr.decode("utf-8", "replace").strip() or "no error output"
-        raise ScannerError(f"Syft exited with code {result.returncode}: {detail}")
+    check_success(result, "Syft")
     return SbomResult(
         raw_output=result.stdout,
         sbom_format=sbom_format,

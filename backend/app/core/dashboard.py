@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.timeutil import utcnow
 from app.db.models import Scan, ScanStatus, Severity
@@ -36,6 +36,7 @@ class TargetPosture:
     """The current open findings for one scanned target."""
 
     scanner: str
+    target_type: str
     target: str
     critical: int
     high: int
@@ -64,15 +65,19 @@ def _count_by(db: Session, column) -> dict[str, int]:
 
 
 def latest_succeeded_scans(db: Session) -> list[Scan]:
-    """Return the latest succeeded scan per (scanner, target).
+    """Return the latest succeeded scan per (scanner, target type, target).
 
-    ``max(id)`` stands in for "most recent" since ids increase with creation, so
-    this needs no correlated timestamp subquery.
+    The target *type* is part of the identity: the same target string can name
+    unrelated things across types (an image ref vs. a filesystem path vs. an
+    uploaded SBOM filename), and folding them together would silently drop one
+    target's posture from the aggregates. ``max(id)`` stands in for "most
+    recent" since ids increase with creation, so this needs no correlated
+    timestamp subquery.
     """
     latest_ids = (
         select(func.max(Scan.id))
         .where(Scan.status == ScanStatus.SUCCEEDED)
-        .group_by(Scan.scanner, Scan.target)
+        .group_by(Scan.scanner, Scan.target_type, Scan.target)
     )
     return list(db.scalars(select(Scan).where(Scan.id.in_(latest_ids))).all())
 
@@ -109,6 +114,7 @@ def compute_dashboard(db: Session, *, now: datetime | None = None) -> DashboardD
     postures = [
         TargetPosture(
             scanner=s.scanner.value,
+            target_type=s.target_type.value,
             target=s.target,
             critical=(s.severity_counts or {}).get(Severity.CRITICAL.value, 0),
             high=(s.severity_counts or {}).get(Severity.HIGH.value, 0),
@@ -141,10 +147,18 @@ def compute_dashboard(db: Session, *, now: datetime | None = None) -> DashboardD
 
 
 def recent_scans(db: Session) -> list[Scan]:
-    """Return the most-recent scans for the dashboard's recent-scans widget."""
+    """Return the most-recent scans for the dashboard's recent-scans widget.
+
+    Tags are eager-loaded because the API serializes them (``ScanOut.tags``);
+    without this each scan would lazy-load its tag rows one query at a time,
+    on the event loop, after the aggregation batch has already returned.
+    """
     return list(
         db.scalars(
-            select(Scan).order_by(Scan.created_at.desc(), Scan.id.desc()).limit(_RECENT_SCANS)
+            select(Scan)
+            .options(selectinload(Scan.tag_rows))
+            .order_by(Scan.created_at.desc(), Scan.id.desc())
+            .limit(_RECENT_SCANS)
         ).all()
     )
 
