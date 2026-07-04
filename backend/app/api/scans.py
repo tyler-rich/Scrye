@@ -25,7 +25,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from sqlalchemy import case, func, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only, selectinload
 
 from app.api.history_schemas import (
     DiffFindingOut,
@@ -349,6 +349,9 @@ def export_history_view(
     """
     stmt = (
         filters.apply(select(Scan))
+        # Every exporter reads scan.tags; eager-load them in one query instead
+        # of one lazy SELECT per exported scan (the cap allows thousands).
+        .options(selectinload(Scan.tag_rows))
         .order_by(Scan.created_at.desc(), Scan.id.desc())
         .limit(_MAX_HISTORY_EXPORT_SCANS)
     )
@@ -480,10 +483,37 @@ def cancel_scan(
     return ScanOut.model_validate(scan)
 
 
+#: Finding columns the export/diff paths actually read. ``description`` (up to
+#: 4 kB per row) is deliberately absent: neither the exporters nor the diff
+#: serialize it, and fetching it for every finding of a large scan is the bulk
+#: of the query's payload.
+_REPORT_FINDING_COLUMNS = (
+    Finding.scan_id,
+    Finding.finding_class,
+    Finding.severity,
+    Finding.vuln_id,
+    Finding.pkg_name,
+    Finding.installed_version,
+    Finding.fixed_version,
+    Finding.title,
+    Finding.location,
+    Finding.primary_url,
+)
+
+
 def _scan_findings(db: Session, scan_id: int) -> list[Finding]:
-    """Fetch every normalized finding for a scan, ordered by id."""
+    """Fetch a scan's findings for export/diff, ordered by id.
+
+    Only the columns those paths read are selected (see
+    :data:`_REPORT_FINDING_COLUMNS`); anything else stays lazily loadable.
+    """
     return list(
-        db.scalars(select(Finding).where(Finding.scan_id == scan_id).order_by(Finding.id)).all()
+        db.scalars(
+            select(Finding)
+            .options(load_only(*_REPORT_FINDING_COLUMNS))
+            .where(Finding.scan_id == scan_id)
+            .order_by(Finding.id)
+        ).all()
     )
 
 
@@ -525,10 +555,17 @@ def diff_scans(
         )
     base = _get_scan_or_404(db, scan_id)
     compare = _get_scan_or_404(db, other_scan_id)
-    if base.scanner != compare.scanner or base.target != compare.target:
+    # The target type is part of the identity: the same target string can name
+    # unrelated things across types (image ref / filesystem path / uploaded SBOM
+    # filename), and a cross-type diff would compare unrelated scans.
+    if (
+        base.scanner != compare.scanner
+        or base.target_type != compare.target_type
+        or base.target != compare.target
+    ):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Scans must share the same scanner and target to be diffed.",
+            detail="Scans must share the same scanner, target type, and target to be diffed.",
         )
 
     diff = diff_findings(_scan_findings(db, scan_id), _scan_findings(db, other_scan_id))

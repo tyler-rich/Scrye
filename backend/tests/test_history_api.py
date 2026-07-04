@@ -296,6 +296,21 @@ def test_diff_rejects_different_targets(client: TestClient) -> None:
     assert client.get(f"/api/scans/{a}/diff/{b}").status_code == 422
 
 
+def test_diff_rejects_same_target_string_across_target_types(client: TestClient) -> None:
+    """The same target string can name unrelated things across target types.
+
+    E.g. a Grype image scan of ``app`` vs. a filesystem scan whose path prints
+    as ``app`` — diffing them would compare unrelated scans, so the identity
+    check must include the target type, not just scanner + target string.
+    """
+    _setup_admin(client)
+    a = _insert_scan(scanner=Scanner.GRYPE, target_type=TargetType.IMAGE, target="app")
+    b = _insert_scan(scanner=Scanner.GRYPE, target_type=TargetType.FILESYSTEM, target="app")
+    resp = client.get(f"/api/scans/{a}/diff/{b}")
+    assert resp.status_code == 422
+    assert "target type" in resp.json()["detail"]
+
+
 def test_diff_rejects_self(client: TestClient) -> None:
     _setup_admin(client)
     a = _insert_scan(target="app:1")
