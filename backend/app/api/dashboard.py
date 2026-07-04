@@ -7,21 +7,24 @@ recent scans, and failed-scan alerts. Read-only; requires the ``viewer`` role.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api.scan_schemas import ScanOut
 from app.auth.deps import AuthContext, require_role
 from app.core.dashboard import (
+    DashboardData,
     compute_dashboard,
     failed_scan_alerts,
     recent_scans,
 )
 from app.core.system_info import scanner_db_status
-from app.db.models import Role
+from app.db.models import Role, Scan
 from app.db.session import get_db
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -33,6 +36,7 @@ class TargetPostureOut(BaseModel):
     """Open critical/high posture for one target."""
 
     scanner: str
+    target_type: str
     target: str
     critical: int
     high: int
@@ -77,14 +81,28 @@ class DashboardOut(BaseModel):
     schedules_total: int
 
 
+def _load_dashboard_data(db: Session) -> tuple[DashboardData, list[Scan], list[Scan]]:
+    """Run every synchronous dashboard DB query in one batch.
+
+    Grouped into a single function so the whole batch runs in one threadpool
+    hop (the session is used by exactly one thread at a time) instead of
+    blocking the event loop with synchronous aggregation queries.
+    """
+    return compute_dashboard(db), recent_scans(db), failed_scan_alerts(db)
+
+
 @router.get("", response_model=DashboardOut)
 async def get_dashboard(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
 ) -> DashboardOut:
     """Return the aggregate dashboard widgets (docs/PLAN.md §4.6)."""
-    data = compute_dashboard(db)
-    db_status = await scanner_db_status()
+    # DB aggregation happens off the event loop, concurrently with the
+    # (subprocess-backed, TTL-cached) scanner-DB freshness probes.
+    (data, recent, failed), db_status = await asyncio.gather(
+        run_in_threadpool(_load_dashboard_data, db),
+        scanner_db_status(),
+    )
     return DashboardOut(
         total_scans=data.total_scans,
         scans_by_status=data.scans_by_status,
@@ -93,7 +111,7 @@ async def get_dashboard(
         open_high=data.open_high,
         scans_over_time=data.scans_over_time,
         top_vulnerable_targets=[TargetPostureOut(**vars(p)) for p in data.top_vulnerable_targets],
-        recent_scans=[ScanOut.model_validate(s) for s in recent_scans(db)],
+        recent_scans=[ScanOut.model_validate(s) for s in recent],
         failed_alerts=[
             FailedAlertOut(
                 id=s.id,
@@ -103,7 +121,7 @@ async def get_dashboard(
                 created_at=s.created_at,
                 finished_at=s.finished_at,
             )
-            for s in failed_scan_alerts(db)
+            for s in failed
         ],
         scanner_db=[ScannerDbOut(**vars(info)) for info in db_status],
         schedules_enabled=data.schedules_enabled,

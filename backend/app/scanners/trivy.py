@@ -18,14 +18,24 @@ from app.scanners.base import (
     NormalizedFinding,
     ScanExecution,
     ScannerError,
+    ScannerOutputError,
     build_env,
+    check_success,
     clip,
+    load_json_output,
+    object_entries,
     resolve_binary,
     run_command,
     scanner_cache_env,
     severity_from_string,
     tally_severities,
 )
+
+#: Engine name used in operator-facing error messages.
+_ENGINE = "Trivy"
+
+#: Timeout for the lightweight ``trivy --version`` probe (not the scan itself).
+_VERSION_PROBE_TIMEOUT_SECONDS = 10
 
 # The ``--scanners`` / ``--severity`` token sets below must stay aligned with the
 # ``TrivyScannerName`` / ``TrivySeverity`` Literals in app.api.scan_schemas, which
@@ -127,27 +137,30 @@ def parse_output(raw: bytes) -> list[NormalizedFinding]:
         The normalized findings across every result class.
 
     Raises:
-        ScannerError: If the output is not valid JSON.
+        ScannerOutputError: If the output is not valid JSON, or is valid JSON of
+            the wrong shape (non-object document, non-array ``Results``,
+            non-object entries). The raw bytes ride on the error so the worker
+            can persist them for diagnosis.
     """
     try:
-        document = json.loads(raw or b"{}")
-    except json.JSONDecodeError as exc:
-        raise ScannerError(f"Trivy produced output that is not valid JSON: {exc}.") from exc
-
-    findings: list[NormalizedFinding] = []
-    for result in document.get("Results") or []:
-        target = result.get("Target")
-        findings.extend(_parse_vulnerabilities(result.get("Vulnerabilities"), target))
-        findings.extend(_parse_misconfigurations(result.get("Misconfigurations"), target))
-        findings.extend(_parse_secrets(result.get("Secrets"), target))
-        findings.extend(_parse_licenses(result.get("Licenses"), target))
-    return findings
+        document = load_json_output(raw, _ENGINE)
+        findings: list[NormalizedFinding] = []
+        for result in object_entries(document.get("Results"), "Results", _ENGINE):
+            target = result.get("Target")
+            findings.extend(_parse_vulnerabilities(result.get("Vulnerabilities"), target))
+            findings.extend(_parse_misconfigurations(result.get("Misconfigurations"), target))
+            findings.extend(_parse_secrets(result.get("Secrets"), target))
+            findings.extend(_parse_licenses(result.get("Licenses"), target))
+        return findings
+    except ScannerOutputError as exc:
+        exc.raw_output = raw
+        raise
 
 
 def _parse_vulnerabilities(items: Any, target: str | None) -> list[NormalizedFinding]:
     """Normalize a Trivy result's ``Vulnerabilities`` array."""
     out: list[NormalizedFinding] = []
-    for item in items or []:
+    for item in object_entries(items, "Vulnerabilities", _ENGINE):
         out.append(
             NormalizedFinding(
                 finding_class=FindingClass.VULNERABILITY.value,
@@ -168,7 +181,7 @@ def _parse_vulnerabilities(items: Any, target: str | None) -> list[NormalizedFin
 def _parse_misconfigurations(items: Any, target: str | None) -> list[NormalizedFinding]:
     """Normalize a Trivy result's ``Misconfigurations`` array (only failures)."""
     out: list[NormalizedFinding] = []
-    for item in items or []:
+    for item in object_entries(items, "Misconfigurations", _ENGINE):
         # Trivy reports PASS/FAIL/EXCEPTION statuses; only failures are findings.
         if str(item.get("Status", "")).upper() not in {"", "FAIL"}:
             continue
@@ -189,7 +202,7 @@ def _parse_misconfigurations(items: Any, target: str | None) -> list[NormalizedF
 def _parse_secrets(items: Any, target: str | None) -> list[NormalizedFinding]:
     """Normalize a Trivy result's ``Secrets`` array."""
     out: list[NormalizedFinding] = []
-    for item in items or []:
+    for item in object_entries(items, "Secrets", _ENGINE):
         start = item.get("StartLine")
         location = target
         if target and start is not None:
@@ -211,7 +224,7 @@ def _parse_secrets(items: Any, target: str | None) -> list[NormalizedFinding]:
 def _parse_licenses(items: Any, target: str | None) -> list[NormalizedFinding]:
     """Normalize a Trivy result's ``Licenses`` array."""
     out: list[NormalizedFinding] = []
-    for item in items or []:
+    for item in object_entries(items, "Licenses", _ENGINE):
         name = item.get("Name")
         out.append(
             NormalizedFinding(
@@ -228,6 +241,30 @@ def _parse_licenses(items: Any, target: str | None) -> list[NormalizedFinding]:
     return out
 
 
+async def probe_version(binary: str, env: dict[str, str] | None) -> str | None:
+    """Return the Trivy engine version via ``trivy --version --format json``.
+
+    Trivy's scan report carries no engine version (its ``SchemaVersion`` is the
+    report format, not the binary), so — unlike Grype's ``descriptor`` block —
+    the version must come from a separate probe. Best-effort: any failure
+    returns ``None`` rather than failing the scan the version annotates.
+    """
+    try:
+        result = await run_command(
+            [binary, "--version", "--format", "json"],
+            timeout=_VERSION_PROBE_TIMEOUT_SECONDS,
+            env=build_env(env),
+        )
+        if result.returncode != 0:
+            return None
+        payload = json.loads(result.stdout or b"{}")
+    except (ScannerError, OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return clip(payload.get("Version"), 32)
+
+
 class TrivyScanner(BaseScanner):
     """Scans images and git repositories with Trivy (all selected scanners)."""
 
@@ -239,12 +276,11 @@ class TrivyScanner(BaseScanner):
         Raises:
             ScannerError: If the binary is missing, times out, or exits non-zero.
         """
+        version = await probe_version(argv[0], env)
         result = await run_command(
             argv, timeout=get_settings().scan_timeout_seconds, env=build_env(env)
         )
-        if result.returncode != 0:
-            detail = result.stderr.decode("utf-8", "replace").strip() or "no error output"
-            raise ScannerError(f"Trivy exited with code {result.returncode}: {detail}")
+        check_success(result, _ENGINE)
 
         findings = parse_output(result.stdout)
         return ScanExecution(
@@ -252,6 +288,7 @@ class TrivyScanner(BaseScanner):
             findings=findings,
             severity_counts=tally_severities(findings),
             command=argv,
+            scanner_version=version,
         )
 
     async def scan_image(

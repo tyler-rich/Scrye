@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import platform
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -176,6 +177,28 @@ async def _probe_grype_db() -> ScannerDbInfo:
     )
 
 
+#: How long a scanner-DB freshness probe result is reused before re-probing.
+#: The DB updates at most a few times a day, so a short TTL keeps the dashboard
+#: honest while stopping every page load from spawning two scanner subprocesses.
+_DB_STATUS_TTL_SECONDS = 60.0
+
+#: Cached ``(monotonic timestamp, result)`` of the last successful probe pair.
+_db_status_cache: tuple[float, list[ScannerDbInfo]] | None = None
+
+
 async def scanner_db_status() -> list[ScannerDbInfo]:
-    """Probe both scanners' vulnerability-DB freshness concurrently."""
-    return list(await asyncio.gather(_probe_trivy_db(), _probe_grype_db()))
+    """Probe both scanners' vulnerability-DB freshness, with a short TTL cache.
+
+    The probes spawn subprocesses, so results are cached for
+    :data:`_DB_STATUS_TTL_SECONDS` rather than re-probing on every dashboard
+    request. Concurrent cache misses may probe in parallel (there is
+    deliberately no lock — an asyncio primitive would pin itself to one event
+    loop, and a duplicate probe pair is harmless and bounded).
+    """
+    global _db_status_cache
+    cached = _db_status_cache
+    if cached is not None and time.monotonic() - cached[0] < _DB_STATUS_TTL_SECONDS:
+        return cached[1]
+    infos = list(await asyncio.gather(_probe_trivy_db(), _probe_grype_db()))
+    _db_status_cache = (time.monotonic(), infos)
+    return infos

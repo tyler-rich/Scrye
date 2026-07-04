@@ -1315,3 +1315,47 @@ rate-limit/audit spoofing), so they are shipped as a hotfix rather than folded i
 a later phase. Every fix preserves the locked decisions (single-container, field
 encryption, CIS posture) and adds no new schema or session concept.
 **Plan section affected:** §4.5, §5, §9.2, §11 (`SCRYE_FORWARDED_ALLOW_IPS`).
+
+### 2026-07-04 — Post-P6 — Scanner/report review fixes: diff identity and dashboard grouping revised
+**What changed:** A code review of the scanner, report, and dashboard backend
+revised two previously logged decisions and hardened the parsers:
+- **Diff finding identity (supersedes the Phase P4 "Export scope semantics and
+  diff constraints" entry in part):** the identity key drops the location only
+  for **vulnerability** findings that carry a vuln id. Trivy sets `vuln_id`
+  for misconfigurations, secrets, and licenses too (the check/rule ID or
+  license name), and one rule commonly fires in many files — the old
+  "no location whenever vuln_id is set" rule collapsed those distinct per-file
+  occurrences into a single diff key. The diff endpoint additionally requires
+  both scans to share the same **target type** (not just scanner + target
+  string), since the same string can name unrelated things across types.
+- **Dashboard "open" posture (supersedes the Phase P6 "Dashboard open posture"
+  entry in part):** the latest-succeeded-scan grouping is now per
+  `(scanner, target_type, target)` for the same reason; `target_type` is
+  included in the top-vulnerable-targets payload.
+- **Parser hardening (§4):** shared `load_json_output` / `check_success` /
+  shape-guard helpers in `scanners/base.py` make valid-JSON-of-the-wrong-shape
+  scanner output fail as a diagnosable `ScannerOutputError` (instead of an
+  unguarded `AttributeError`), and the worker now persists the raw output as
+  the scan's artifact even when parsing fails. Grype's string-typed
+  `urls`/`fix.versions` are rejected instead of producing garbage, its
+  `fix.state: wont-fix` is surfaced in `fixed_version`, and Trivy scans now
+  record the engine version via a best-effort `trivy --version` probe (the
+  Trivy report JSON carries no engine version, unlike Grype's descriptor).
+- **Exports/dashboard hygiene:** Markdown exports escape the report heading,
+  initiator, tags, and history filter values and flatten `\r`; history-CSV
+  severity columns derive from the shared enum; the scanner-DB freshness probes
+  are TTL-cached and the dashboard's synchronous DB aggregation runs off the
+  event loop; export/diff queries eager-load tags and stop fetching unused
+  finding descriptions.
+**Why:** Review findings on `backend/app/scanners/`, `backend/app/reports/`,
+and `backend/app/api/dashboard.py`: the old diff key silently under/over-
+reported change for non-vulnerability classes, target identity ignored the
+target type, and malformed-but-valid scanner JSON crashed undiagnosably with
+no raw artifact stored. All fixes ship with regression tests.
+**Known limitation (future improvement):** two SBOM uploads with an identical
+filename *and* target type still collapse into one target identity, since the
+filename is all the identity the scan row carries. A real fix would key SBOM
+targets on a content hash (e.g. the SHA-256 of the uploaded SBOM, already
+computed for its artifact) rather than the filename.
+**Plan section affected:** §4.3/§4.4 (diff identity/constraints), §4.6
+(dashboard grouping), §4 (scanner orchestration/parsing).

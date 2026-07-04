@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import os
 import shutil
 from abc import ABC
@@ -27,6 +28,22 @@ class ScannerError(RuntimeError):
     The message is safe to surface to operators and to store on the scan row —
     it never contains secret material (image scans carry no credentials).
     """
+
+
+class ScannerOutputError(ScannerError):
+    """Raised when a scanner ran but emitted output we cannot parse.
+
+    Covers both invalid JSON and valid JSON of the wrong shape (a top-level
+    null/array, a string where an object is expected, ...). The raw stdout
+    bytes ride along so the worker can still persist them as the scan's raw
+    artifact — without that, a malformed-output failure leaves nothing on disk
+    to diagnose.
+    """
+
+    def __init__(self, message: str, raw_output: bytes = b"") -> None:
+        """Store the operator-safe message and the raw scanner stdout."""
+        super().__init__(message)
+        self.raw_output = raw_output
 
 
 @dataclass(frozen=True)
@@ -231,6 +248,97 @@ def clip(value: Any, limit: int) -> str | None:
     if not text:
         return None
     return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def check_success(result: CommandResult, engine: str) -> None:
+    """Raise a :class:`ScannerError` when a scanner subprocess exited non-zero.
+
+    Shared by every engine so the "exited with code N: <stderr>" message stays
+    uniform (the stderr detail is operator-safe; repo-scan errors are further
+    redacted by the worker before storage).
+    """
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", "replace").strip() or "no error output"
+        raise ScannerError(f"{engine} exited with code {result.returncode}: {detail}")
+
+
+def _wrong_shape(engine: str, detail: str) -> ScannerOutputError:
+    """Build the uniform wrong-shape error for ``engine``."""
+    return ScannerOutputError(f"{engine} produced JSON of an unexpected shape: {detail}.")
+
+
+def load_json_output(raw: bytes, engine: str) -> dict[str, Any]:
+    """Parse scanner stdout into a top-level JSON object.
+
+    Empty output is treated as an empty report. Invalid JSON *and* valid JSON
+    that is not an object (``null``, an array, a bare string...) both raise
+    :class:`ScannerOutputError` carrying ``raw``, so the failure is a
+    diagnosable scan error instead of an ``AttributeError`` deep in a parser.
+    """
+    try:
+        document = json.loads(raw or b"{}")
+    except json.JSONDecodeError as exc:
+        raise ScannerOutputError(
+            f"{engine} produced output that is not valid JSON: {exc}.", raw
+        ) from exc
+    if not isinstance(document, dict):
+        raise ScannerOutputError(
+            f"{engine} produced JSON of an unexpected shape: expected a top-level "
+            f"object, got {type(document).__name__}.",
+            raw,
+        )
+    return document
+
+
+def object_entries(value: Any, field_name: str, engine: str) -> list[dict[str, Any]]:
+    """Validate an optional array-of-objects field and return its entries.
+
+    ``None`` (absent/null) means "no entries". Anything that is not a list of
+    objects raises :class:`ScannerOutputError` rather than crashing later on a
+    ``.get`` against a non-dict entry.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise _wrong_shape(engine, f"{field_name!r} should be an array, got {type(value).__name__}")
+    for entry in value:
+        if not isinstance(entry, dict):
+            raise _wrong_shape(
+                engine, f"{field_name!r} entries should be objects, got {type(entry).__name__}"
+            )
+    return value
+
+
+def object_field(value: Any, field_name: str, engine: str) -> dict[str, Any]:
+    """Validate an optional object field; ``None`` becomes an empty dict."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise _wrong_shape(
+            engine, f"{field_name!r} should be an object, got {type(value).__name__}"
+        )
+    return value
+
+
+def string_entries(value: Any, field_name: str, engine: str) -> list[str]:
+    """Validate an optional array-of-strings field; scalar entries are coerced.
+
+    Guards against a string (or object) where an array is expected — iterating
+    a string would silently yield per-character garbage (e.g. a ``fix.versions``
+    of ``"1.2.3"`` rendering as ``1, ., 2, ., 3``) instead of failing.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise _wrong_shape(engine, f"{field_name!r} should be an array, got {type(value).__name__}")
+    out: list[str] = []
+    for entry in value:
+        if not isinstance(entry, str | int | float):
+            raise _wrong_shape(
+                engine, f"{field_name!r} entries should be strings, got {type(entry).__name__}"
+            )
+        out.append(str(entry))
+    return out
 
 
 def inherited_env() -> dict[str, str]:
