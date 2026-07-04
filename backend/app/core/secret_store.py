@@ -1,10 +1,18 @@
 """Field-secret helpers for stored credentials (docs/PLAN.md §6).
 
 Thin wrappers over :mod:`app.core.crypto` that bind each stored secret to a
-stable **associated-data** (AAD) tag naming its resource and field. Encrypt and
-decrypt for a given field must use the same tag, so centralizing the tags here
-keeps the two call sites from drifting (a mismatch fails authentication rather
-than silently returning the wrong plaintext).
+stable **associated-data** (AAD) tag naming its resource **type and field**
+(e.g. ``registries.secret``). Encrypt and decrypt for a given field must use the
+same tag, so centralizing the tags here keeps the two call sites from drifting (a
+mismatch fails authentication rather than silently returning the wrong
+plaintext).
+
+Scope note: the AAD binds the *column*, not the *row*. It therefore detects a
+ciphertext moved between different fields, but not one relocated between two rows
+of the same table. That residual requires DB **write** access, which is outside
+the documented threat model (§6 protects against DB **read**); row-binding the
+AAD is a possible future hardening but would require re-encrypting every existing
+secret under the new tag.
 
 Plaintext rules (unchanged from the crypto module): decrypt only at scan time,
 never log the result, never return it from the API.

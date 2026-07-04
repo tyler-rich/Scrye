@@ -67,12 +67,21 @@ class LoginOut(BaseModel):
     On a completed login, ``user`` and ``csrf_token`` are set. When the account
     has MFA enabled, the first step instead returns ``mfa_required=True`` plus a
     short-lived ``mfa_token`` to submit with the TOTP code.
+
+    When a mandatory-MFA policy applies to the role but the account has not yet
+    enrolled, the response additionally sets ``enrollment_required=True`` and
+    carries the one-time enrollment material (``mfa_secret`` + ``otpauth_uri``):
+    the caller scans it and submits a code to the same ``/auth/mfa/verify`` step,
+    which activates MFA and completes the login. Access is not granted until then.
     """
 
     user: UserOut | None = None
     csrf_token: str | None = None
     mfa_required: bool = False
     mfa_token: str | None = None
+    enrollment_required: bool = False
+    mfa_secret: str | None = None
+    otpauth_uri: str | None = None
 
 
 class MfaVerifyIn(BaseModel):
@@ -80,6 +89,17 @@ class MfaVerifyIn(BaseModel):
 
     mfa_token: str = Field(min_length=1, max_length=128)
     code: str = Field(min_length=6, max_length=10)
+
+
+class MfaEnrollIn(BaseModel):
+    """Begin authenticated MFA (re-)enrollment.
+
+    ``current_password`` is required only when the account already has MFA active,
+    because starting re-enrollment deactivates it — the same password re-auth that
+    disabling MFA requires, so a session alone cannot strip the second factor.
+    """
+
+    current_password: str | None = Field(default=None, max_length=PASSWORD_MAX_LENGTH)
 
 
 class MfaEnrollOut(BaseModel):

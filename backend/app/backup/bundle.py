@@ -191,7 +191,13 @@ def restore_bundle(db: Session, data: bytes, passphrase: str) -> RestoreSummary:
     envelope = _load_envelope(data)
     current_schema = _schema_version(db)
     bundle_schema = envelope.get("schema_version") or ""
-    if bundle_schema and current_schema and bundle_schema != current_schema:
+    # Fail closed: a versioned (migration-managed) installation must not restore a
+    # bundle that records no schema version — its compatibility cannot be
+    # confirmed, and restoring it could corrupt the database. (An unversioned DB,
+    # e.g. a freshly metadata-created one, has nothing to compare against.)
+    if current_schema and not bundle_schema:
+        raise BackupError("Backup bundle does not record a schema version; refusing to restore.")
+    if current_schema and bundle_schema and bundle_schema != current_schema:
         raise BackupError(
             "Backup schema version does not match this installation "
             f"({bundle_schema} vs {current_schema}); restore is not supported across versions."

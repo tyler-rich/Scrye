@@ -8,7 +8,6 @@ for storage as the source-of-truth artifact.
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
 from app.core.config import get_settings
@@ -20,6 +19,7 @@ from app.scanners.base import (
     ScanExecution,
     ScannerError,
     clip,
+    inherited_env,
     resolve_binary,
     run_command,
     scanner_cache_env,
@@ -42,7 +42,8 @@ def build_command(binary: str, reference: str) -> list[str]:
     Returns:
         The full argv list.
     """
-    return [binary, reference, "-o", "json"]
+    # `--` terminates flag parsing so a reference can never be read as an option.
+    return [binary, "-o", "json", "--", reference]
 
 
 def scan_env(overlay: dict[str, str] | None = None) -> dict[str, str]:
@@ -52,7 +53,7 @@ def scan_env(overlay: dict[str, str] | None = None) -> dict[str, str]:
     still auto-updates; offline/air-gapped DB import is a later phase) and layers
     on any credential overlay (e.g. a transient ``DOCKER_CONFIG``).
     """
-    env = dict(os.environ)
+    env = inherited_env()
     env.update(_UPDATE_CHECK_ENV)
     if overlay:
         env.update(overlay)

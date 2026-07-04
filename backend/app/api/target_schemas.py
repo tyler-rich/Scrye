@@ -9,6 +9,7 @@ returned on read. Read models expose a :class:`~app.core.masking.MaskedSecret`
 from __future__ import annotations
 
 from datetime import datetime
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
@@ -176,6 +177,14 @@ class DockerEnvironmentCreateIn(BaseModel):
             raise ValueError("Value must not be empty.")
         return stripped
 
+    @field_validator("proxy_url")
+    @classmethod
+    def _check_proxy_scheme(cls, value: str) -> str:
+        """Require an http/https proxy URL (bounds the SSRF surface)."""
+        if urlparse(value.strip()).scheme not in {"http", "https"}:
+            raise ValueError("Docker proxy URL must be an http(s) URL.")
+        return value
+
 
 class DockerEnvironmentUpdateIn(BaseModel):
     """Payload to update a Docker environment (all fields optional)."""
@@ -184,6 +193,14 @@ class DockerEnvironmentUpdateIn(BaseModel):
     proxy_url: str | None = Field(default=None, min_length=1, max_length=512)
     risk_acknowledged: bool | None = None
     enabled: bool | None = None
+
+    @field_validator("proxy_url")
+    @classmethod
+    def _check_proxy_scheme(cls, value: str | None) -> str | None:
+        """Require an http/https proxy URL when one is provided."""
+        if value is not None and urlparse(value.strip()).scheme not in {"http", "https"}:
+            raise ValueError("Docker proxy URL must be an http(s) URL.")
+        return value
 
 
 class DockerEnvironmentOut(BaseModel):

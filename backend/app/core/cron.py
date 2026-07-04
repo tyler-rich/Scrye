@@ -14,16 +14,19 @@ maintenance scheduler's tick — so seconds are ignored.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 #: Inclusive (min, max) legal value for each cron field, in field order.
+#: Day-of-week accepts 7 as an alias for Sunday (0), per Vixie/POSIX crontab;
+#: it is normalized to 0 after parsing.
 _FIELD_BOUNDS: tuple[tuple[int, int], ...] = (
     (0, 59),  # minute
     (0, 23),  # hour
     (1, 31),  # day of month
     (1, 12),  # month
-    (0, 6),  # day of week (0 = Sunday)
+    (0, 7),  # day of week (0 or 7 = Sunday)
 )
 _FIELD_NAMES = ("minute", "hour", "day-of-month", "month", "day-of-week")
 
@@ -36,6 +39,24 @@ class CronError(ValueError):
     """Raised when a cron expression is malformed."""
 
 
+def _is_restricted(field: str) -> bool:
+    """Return True if a day field constrains matching (Vixie OR/AND semantics).
+
+    A field is *unrestricted* when it derives its whole range from ``*`` — that is
+    ``*`` itself or a pure step over the full range (``*/n``). Only then does the
+    "both dom and dow restricted → OR" rule treat it as a wildcard. An explicit
+    value, list, or range (including ``a-b/n``) is restricted. This matches Vixie
+    cron's "star bit", so e.g. ``0 0 */2 * 0`` correctly ANDs (even days that are
+    also Sundays) instead of firing on every even day or Sunday.
+    """
+    field = field.strip()
+    return field != "*" and _STEP_STAR_RE.fullmatch(field) is None
+
+
+#: A pure step over the full range (``*/n``) — treated as unrestricted like ``*``.
+_STEP_STAR_RE = re.compile(r"\*/\d+")
+
+
 def _parse_field(spec: str, low: int, high: int, name: str) -> frozenset[int]:
     """Parse one cron field into the set of matching integers."""
     values: set[int] = set()
@@ -43,8 +64,9 @@ def _parse_field(spec: str, low: int, high: int, name: str) -> frozenset[int]:
         part = part.strip()
         if not part:
             raise CronError(f"Empty term in {name} field.")
+        has_step = "/" in part
         step = 1
-        if "/" in part:
+        if has_step:
             base, _, step_str = part.partition("/")
             try:
                 step = int(step_str)
@@ -65,9 +87,13 @@ def _parse_field(spec: str, low: int, high: int, name: str) -> frozenset[int]:
                 raise CronError(f"Invalid range in {name} field: {part!r}.") from exc
         else:
             try:
-                start = end = int(base)
+                start = int(base)
             except ValueError as exc:
                 raise CronError(f"Invalid value in {name} field: {part!r}.") from exc
+            # Vixie semantics: a bare value with a step (`N/step`) means `N-max/step`
+            # (e.g. `5/15` in the minute field = 5,20,35,50); without a step it is
+            # the single value N.
+            end = high if has_step else start
 
         if start > end or start < low or end > high:
             raise CronError(f"{name} value out of range ({low}-{high}): {part!r}.")
@@ -98,14 +124,18 @@ class CronExpression:
             _parse_field(field, low, high, name)
             for field, (low, high), name in zip(fields, _FIELD_BOUNDS, _FIELD_NAMES, strict=True)
         ]
+        # Normalize day-of-week 7 (Sunday alias) to 0 so it matches weekday math.
+        days_of_week = parsed[4]
+        if 7 in days_of_week:
+            days_of_week = (days_of_week - {7}) | {0}
         return cls(
             minutes=parsed[0],
             hours=parsed[1],
             days_of_month=parsed[2],
             months=parsed[3],
-            days_of_week=parsed[4],
-            dom_restricted=fields[2] != "*",
-            dow_restricted=fields[4] != "*",
+            days_of_week=days_of_week,
+            dom_restricted=_is_restricted(fields[2]),
+            dow_restricted=_is_restricted(fields[4]),
             raw=expression.strip(),
         )
 

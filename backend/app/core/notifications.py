@@ -54,10 +54,15 @@ async def _send_webhook(channel: NotificationChannel, message: str, secret: str 
 
 
 async def _send_discord(channel: NotificationChannel, message: str, secret: str | None) -> None:
-    """POST a message to a Discord webhook URL."""
-    url = channel.config.get("url")
+    """POST a message to a Discord webhook URL.
+
+    The webhook URL embeds its authentication token, so it is stored as the
+    field-encrypted ``secret``; ``config['url']`` is only a fallback for legacy
+    rows created before the URL was encrypted.
+    """
+    url = secret or channel.config.get("url")
     if not url:
-        raise ValueError("Discord channel has no webhook 'url' configured.")
+        raise ValueError("Discord channel has no webhook URL configured.")
     async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as http:
         response = await http.post(url, json={"content": message})
         response.raise_for_status()
@@ -72,10 +77,13 @@ async def _send_matrix(channel: NotificationChannel, message: str, secret: str |
     if not secret:
         raise ValueError("Matrix channel needs an access token.")
     url = f"{homeserver}/_matrix/client/v3/rooms/{room_id}/send/m.room.message"
+    # Pass the access token in the Authorization header, never as a URL query
+    # parameter: query-string auth is deprecated by the Matrix spec (v1.1+) and
+    # would leak the token into homeserver/proxy access logs and error URLs.
     async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as http:
         response = await http.post(
             url,
-            params={"access_token": secret},
+            headers={"Authorization": f"Bearer {secret}"},
             json={"msgtype": "m.text", "body": message},
         )
         response.raise_for_status()

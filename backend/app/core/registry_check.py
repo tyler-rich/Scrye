@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import httpx
 
@@ -45,9 +46,20 @@ def _parse_challenge(header: str) -> dict[str, str]:
 async def _bearer_token(
     client: httpx.AsyncClient, challenge: dict[str, str], auth: tuple[str, str]
 ) -> str | None:
-    """Fetch a bearer token from the challenge realm, or ``None`` on failure."""
+    """Fetch a bearer token from the challenge realm, or ``None`` on failure.
+
+    The realm URL comes from the probed registry's own ``Www-Authenticate``
+    header, so it is untrusted: the stored credential is sent to it as Basic auth.
+    Refuse to forward the credential unless the realm is an ``https`` URL — this
+    stops a malicious/typo'd registry from harvesting the credential in cleartext
+    over ``http`` or redirecting it to an attacker/internal endpoint (the client
+    is created with ``follow_redirects=False`` so a credentialed request is never
+    silently bounced cross-host).
+    """
     realm = challenge.get("realm")
     if not realm:
+        return None
+    if urlparse(realm).scheme != "https":
         return None
     params = {k: challenge[k] for k in ("service", "scope") if challenge.get(k)}
     response = await client.get(realm, params=params, auth=auth)
@@ -76,7 +88,7 @@ async def check_registry(*, registry_host: str, username: str | None, secret: st
     url = f"{base}/v2/"
     auth = (username or "", secret)
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS, follow_redirects=False) as client:
             response = await client.get(url, auth=auth)
             if response.status_code == 200:
                 return RegistryCheck(True, "Registry reachable and credentials accepted.")

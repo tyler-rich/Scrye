@@ -122,7 +122,7 @@ jobs:
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
-            aquasec/trivy:0.72.0 image --input /image.tar \
+            aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --input /image.tar \
             --scanners vuln --severity LOW,MEDIUM,HIGH,CRITICAL --no-progress || true
 
       # The gate scans Scrye's own attack surface (OS packages incl. git, Python
@@ -136,7 +136,7 @@ jobs:
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
             -v "${{ github.workspace }}/ci/trivyignore:/.trivyignore:ro" \
-            aquasec/trivy:0.72.0 image --input /image.tar \
+            aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --input /image.tar \
             --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL \
             --skip-files usr/local/bin/trivy \
             --skip-files usr/local/bin/grype \
@@ -149,7 +149,7 @@ jobs:
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
-            anchore/grype:v0.115.0 docker-archive:/image.tar -o table || true
+            anchore/grype:v0.115.0@sha256:decd87500a90c1e4faa1706f77b0b2cbc1d2f9364e976f1898ce9037de09cc3a docker-archive:/image.tar -o table || true
 
       # Grype gate. Excludes only the bundled trivy/grype/syft binaries (see the
       # Trivy gate note above); the base-image CPython interpreter is no longer
@@ -161,7 +161,7 @@ jobs:
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
             -v "${{ github.workspace }}/ci/grype.yaml:/.grype.yaml:ro" \
-            anchore/grype:v0.115.0 docker-archive:/image.tar \
+            anchore/grype:v0.115.0@sha256:decd87500a90c1e4faa1706f77b0b2cbc1d2f9364e976f1898ce9037de09cc3a docker-archive:/image.tar \
             --only-fixed --fail-on high -c /.grype.yaml \
             --exclude '/usr/local/bin/trivy' \
             --exclude '/usr/local/bin/grype' \
