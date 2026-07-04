@@ -87,7 +87,7 @@ def build_command(
     Returns:
         The full argv list.
     """
-    return [binary, "image", *_common_flags(options, cache_dir), target]
+    return [binary, "image", *_common_flags(options, cache_dir), "--", target]
 
 
 def build_repo_command(
@@ -112,7 +112,8 @@ def build_repo_command(
         if value:
             argv += [f"--{flag}", str(value)]
             break  # Trivy accepts only one ref selector; first set wins.
-    argv.append(target)
+    # `--` terminates flag parsing so a target can never be read as an option.
+    argv += ["--", target]
     return argv
 
 

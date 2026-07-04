@@ -96,4 +96,9 @@ class OidcLoginFlow(Base):
     nonce: Mapped[str] = mapped_column(String(64))
     code_verifier: Mapped[str] = mapped_column(String(128))
     redirect_uri: Mapped[str] = mapped_column(String(512))
+    #: SHA-256 hash of a random token stored in an HttpOnly cookie on the browser
+    #: that started the flow. The callback must present the matching cookie, so a
+    #: flow (state/code) cannot be completed in a *different* browser — this binds
+    #: the flow to its initiator and defeats OIDC login-CSRF / session fixation.
+    browser_binding: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

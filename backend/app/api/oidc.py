@@ -14,6 +14,8 @@ Local and OIDC auth run concurrently — enabling OIDC never disables local logi
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import re
 import secrets
@@ -30,6 +32,7 @@ from app.auth.cookies import set_session_cookies
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.auth.passwords import hash_password
 from app.core.audit import record_audit
+from app.core.config import get_settings
 from app.core.crypto import SecretDecryptError
 from app.core.masking import MaskedSecret, masked_secret
 from app.core.secret_store import AAD_OIDC_CLIENT_SECRET, decrypt_secret, encrypt_secret
@@ -49,6 +52,16 @@ _LOGIN_PATH = "/login"
 #: How long an in-progress login flow row stays valid before being purged.
 _FLOW_TTL = timedelta(minutes=10)
 _USERNAME_SANITIZE = re.compile(r"[^a-z0-9._-]+")
+
+#: Cookie carrying the per-flow browser-binding token (see OidcLoginFlow).
+_BINDING_COOKIE = "scrye_oidc_binding"
+#: The binding cookie is only needed on the OIDC login/callback path.
+_BINDING_COOKIE_PATH = "/api/auth/oidc"
+
+
+def _hash_binding(value: str) -> str:
+    """Hash a browser-binding token for at-rest storage on the flow row."""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 class OidcConfigOut(BaseModel):
@@ -198,8 +211,18 @@ async def oidc_login(request: Request, db: Session = Depends(get_db)) -> Redirec
     nonce = secrets.token_urlsafe(32)
     verifier, challenge = oidc.generate_pkce_pair()
     redirect_uri = str(request.url_for("oidc_callback"))
+    # Bind the flow to this browser: a random token goes in an HttpOnly cookie and
+    # only its hash is stored on the flow, so the callback (which SameSite=Lax
+    # allows the cookie on) must come from the same browser that started the login.
+    binding = secrets.token_urlsafe(32)
     db.add(
-        OidcLoginFlow(state=state, nonce=nonce, code_verifier=verifier, redirect_uri=redirect_uri)
+        OidcLoginFlow(
+            state=state,
+            nonce=nonce,
+            code_verifier=verifier,
+            redirect_uri=redirect_uri,
+            browser_binding=_hash_binding(binding),
+        )
     )
     db.commit()
 
@@ -212,7 +235,17 @@ async def oidc_login(request: Request, db: Session = Depends(get_db)) -> Redirec
         nonce=nonce,
         code_challenge=challenge,
     )
-    return RedirectResponse(url, status_code=status.HTTP_302_FOUND)
+    response = RedirectResponse(url, status_code=status.HTTP_302_FOUND)
+    response.set_cookie(
+        _BINDING_COOKIE,
+        binding,
+        max_age=int(_FLOW_TTL.total_seconds()),
+        httponly=True,
+        secure=get_settings().session_cookie_secure,
+        samesite="lax",
+        path=_BINDING_COOKIE_PATH,
+    )
+    return response
 
 
 def _sanitize_username(raw: str, subject: str) -> str:
@@ -262,11 +295,23 @@ async def oidc_callback(
     flow = db.get(OidcLoginFlow, state)
     if flow is None:
         return _fail("expired")
+    # Enforce the browser binding: the callback must carry the cookie set when the
+    # flow was started, so a flow initiated in the attacker's browser cannot be
+    # completed in the victim's (OIDC login-CSRF / session fixation).
+    binding_cookie = request.cookies.get(_BINDING_COOKIE)
+    binding_ok = (
+        bool(flow.browser_binding)
+        and bool(binding_cookie)
+        and hmac.compare_digest(flow.browser_binding, _hash_binding(binding_cookie or ""))
+    )
     redirect_uri = flow.redirect_uri
     nonce = flow.nonce
     verifier = flow.code_verifier
     db.delete(flow)  # one-time use
     db.commit()
+    if not binding_ok:
+        logger.warning("OIDC callback rejected: browser binding missing or mismatched.")
+        return _fail("expired")
 
     config = db.get(OidcConfig, OIDC_CONFIG_ID)
     if config is None or not config.enabled or not config.issuer or not config.client_id:
@@ -312,6 +357,23 @@ async def oidc_callback(
         identity.last_login_at = utcnow()
         if email:
             identity.email = str(email)
+        # Keep the IdP authoritative for role when group mapping is configured:
+        # re-apply the group→role mapping on every login so removing a user from
+        # the admin group at the IdP downgrades them here too, instead of leaving
+        # a stale admin. Only active when both group claim and admin group are set.
+        if config.groups_claim and config.admin_group:
+            mapped_role = _resolve_role(config, claims)
+            if user.role != mapped_role:
+                record_audit(
+                    db,
+                    action="auth.oidc_role_synced",
+                    actor=user,
+                    ip=client_ip(request),
+                    target_type="user",
+                    target_id=str(user.id),
+                    details={"from": user.role.value, "to": mapped_role.value},
+                )
+                user.role = mapped_role
     else:
         if not config.auto_provision:
             return _fail("not_provisioned")
@@ -354,4 +416,5 @@ async def oidc_callback(
 
     response: Response = RedirectResponse("/", status_code=status.HTTP_302_FOUND)
     set_session_cookies(response, token, session.csrf_token)
+    response.delete_cookie(_BINDING_COOKIE, path=_BINDING_COOKIE_PATH)
     return response

@@ -27,7 +27,13 @@ export const listSessions = () => api<SessionInfo[]>('/api/auth/sessions');
 export const revokeSession = (id: number) =>
   api<void>(`/api/auth/sessions/${id}`, { method: 'DELETE' });
 
-export const enrollMfa = () => api<MfaEnrollment>('/api/auth/mfa/enroll', { method: 'POST' });
+export const enrollMfa = (currentPassword?: string) =>
+  api<MfaEnrollment>('/api/auth/mfa/enroll', {
+    method: 'POST',
+    // current_password is only required when re-enrolling while MFA is active;
+    // the account page only enrolls from the disabled state, so it is omitted.
+    body: { current_password: currentPassword ?? null },
+  });
 export const activateMfa = (code: string) =>
   api<void>('/api/auth/mfa/activate', { method: 'POST', body: { code } });
 export const disableMfa = (password: string) =>

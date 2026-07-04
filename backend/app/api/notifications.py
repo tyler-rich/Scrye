@@ -44,6 +44,40 @@ def _clean_events(events: list[NotificationEvent] | None) -> list[str]:
     return [e.value for e in NotificationEvent if e.value in selected]
 
 
+#: Placeholder returned for a Discord webhook URL on read (the URL is the secret).
+_URL_MASK = "••••••"
+
+
+def _masked_config(channel: NotificationChannel) -> dict[str, Any]:
+    """Return the channel config with the Discord webhook URL masked.
+
+    A Discord webhook URL embeds its auth token, so it is treated as a write-only
+    secret: new rows keep it in the encrypted ``secret`` (not in config), and any
+    legacy row that still carries ``config['url']`` shows a mask on read rather
+    than the token.
+    """
+    config = dict(channel.config or {})
+    if channel.type is NotificationType.DISCORD and config.get("url"):
+        config["url"] = _URL_MASK
+    return config
+
+
+def _extract_discord_url(payload_config: dict[str, Any], secret_value: str) -> tuple[dict, str]:
+    """Move a Discord webhook URL out of config into the encrypted secret.
+
+    The Discord webhook URL is the whole credential, so it is stored
+    field-encrypted rather than in the plaintext ``config`` column. An explicit
+    ``secret`` wins; otherwise ``config['url']`` becomes the secret (a masked
+    placeholder from a read round-trip is ignored). The returned config never
+    carries ``url``.
+    """
+    config = dict(payload_config or {})
+    url = config.pop("url", None)
+    if url == _URL_MASK:
+        url = None
+    return config, (secret_value or (url or ""))
+
+
 class NotificationChannelOut(BaseModel):
     """Masked read view of a notification channel."""
 
@@ -95,7 +129,7 @@ def _to_out(channel: NotificationChannel) -> NotificationChannelOut:
         id=channel.id,
         name=channel.name,
         type=channel.type,
-        config=channel.config or {},
+        config=_masked_config(channel),
         events=[NotificationEvent(e) for e in (channel.events or [])],
         enabled=channel.enabled,
         secret=masked_secret(channel.secret_updated_at),
@@ -145,6 +179,11 @@ def create_channel(
         raise HTTPException(status.HTTP_409_CONFLICT, detail="A channel with that name exists.")
 
     secret_value = payload.secret.get_secret_value() if payload.secret else ""
+    config = payload.config
+    if payload.type is NotificationType.DISCORD:
+        # The Discord webhook URL is the credential: store it encrypted, not in
+        # the plaintext config column.
+        config, secret_value = _extract_discord_url(payload.config, secret_value)
     if not secret_value and payload.type not in SECRET_OPTIONAL_TYPES:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -154,7 +193,7 @@ def create_channel(
     channel = NotificationChannel(
         name=payload.name,
         type=payload.type,
-        config=payload.config,
+        config=config,
         events=_clean_events(payload.events),
         enabled=payload.enabled,
         created_by_id=auth.user.id,
@@ -200,7 +239,18 @@ def update_channel(
         channel.name = payload.name
         changes["name"] = payload.name
     if payload.config is not None:
-        channel.config = payload.config
+        if channel.type is NotificationType.DISCORD:
+            # Keep the Discord webhook URL out of the plaintext config: route a
+            # newly-supplied URL into the encrypted secret; a masked round-trip
+            # (empty url_secret) leaves the stored secret untouched.
+            new_config, url_secret = _extract_discord_url(payload.config, "")
+            channel.config = new_config
+            if url_secret:
+                channel.secret_ciphertext = encrypt_secret(url_secret, aad=AAD_NOTIFICATION_SECRET)
+                channel.secret_updated_at = utcnow()
+                changes["secret"] = "updated"
+        else:
+            channel.config = payload.config
         changes["config"] = "updated"
     if payload.events is not None:
         channel.events = _clean_events(payload.events)

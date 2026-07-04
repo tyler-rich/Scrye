@@ -87,6 +87,13 @@ services:
         limits:
           cpus: "1.0"
           memory: 1G
+    healthcheck:
+      # The trivy binary is the image entrypoint; `version` is a cheap liveness probe.
+      test: ["CMD", "trivy", "version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
     logging:
       driver: json-file
@@ -116,6 +123,21 @@ services:
       - "no-new-privileges:true"
     cap_drop:
       - "ALL"
+    deploy:
+      # The highest-risk service (the only docker.sock mount) is capped so a
+      # runaway/wedged proxy can't exhaust host resources (CIS baseline).
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+    healthcheck:
+      # The alpine/busybox image ships wget; /info is an allowed read endpoint
+      # (INFO=1), so a 200 confirms both the proxy and the docker socket are live.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:2375/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     restart: unless-stopped
     logging:
       driver: json-file

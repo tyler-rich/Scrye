@@ -7,7 +7,7 @@ at the version pinned in `docker/Dockerfile`.
 
 | Project | Version pinned  | Source                                     |
 |---------|-----------------|---------------------------------------------|
-| Trivy   | v0.71.2         | https://github.com/aquasecurity/trivy       |
+| Trivy   | v0.72.0         | https://github.com/aquasecurity/trivy       |
 | Grype   | v0.115.0        | https://github.com/anchore/grype            |
 | Syft    | v1.46.0         | https://github.com/anchore/syft             |
 

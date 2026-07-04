@@ -1221,3 +1221,57 @@ explicitly with the RAM cost called out, and documenting the disk/memory
 footprint so deployments can size volumes and limits up front.
 **Plan section affected:** §9.2 (confirmed, not changed), §10.1 (README
 Requirements).
+
+### 2026-07-04 — Post-P6 — Full-repo security audit remediation
+**What changed:** A comprehensive security audit of the integrated codebase
+surfaced a set of issues; the fixes touch several plan areas and are recorded
+here together:
+- **Scanner argv option-injection (§4):** scan `target`/`branch`/`commit`/`tag`
+  now reject a leading `-`, and the Trivy/Grype/Syft argv builders insert a `--`
+  end-of-options terminator before the positional, so an operator-supplied value
+  can never be parsed as a scanner flag (e.g. `trivy image --reset`).
+- **Third "hardened path" bug (§9.2):** the generic-host private `git clone`
+  checkout now materializes under the writable `/cache` scratch volume instead of
+  the 200 MB RAM-backed `/tmp` tmpfs (a large repo previously risked `ENOSPC`/OOM);
+  the tiny `GIT_ASKPASS` credential helper stays in tmpfs.
+- **MFA policy enforcement (§5):** a `required_all`/`required_admin` policy is now
+  enforced at login for un-enrolled accounts via a forced-enrollment challenge
+  (password success returns enrollment material + a challenge token; the login
+  only completes once a TOTP code activates MFA — no full session before then).
+  Re-enrolling while MFA is active now requires the current password, so a session
+  alone cannot strip the second factor.
+- **OIDC (§5):** the login flow is bound to the initiating browser via an HttpOnly
+  cookie whose hash is stored on `oidc_login_flows.browser_binding` (migration
+  0008), defeating login-CSRF/session-fixation; and when group→role mapping is
+  configured, the role is re-applied on every login so an IdP admin-group removal
+  downgrades the account here too.
+- **Secrets/logging (§6):** the log-redaction filter now masks quoted multi-word
+  secret values, covers exception tracebacks, and is attached to uvicorn's
+  non-propagating loggers; uvicorn runs with `--proxy-headers` so the auth rate
+  limiter and audit log see the real client IP behind Caddy; the Discord webhook
+  URL (which embeds its token) is stored field-encrypted and masked on read; the
+  Matrix access token moves from a URL query parameter to an Authorization header;
+  a malformed secret token now raises `SecretDecryptError` instead of leaking a
+  low-level error; and the registry-probe refuses to forward the stored credential
+  to a non-HTTPS bearer realm (and no longer follows credentialed redirects).
+- **Cron (§4.6):** day-of-week `7` is accepted as Sunday, `N/step` extends to the
+  field maximum, and `*/step` in the day fields is treated as unrestricted for the
+  Vixie OR/AND rule.
+- **Hardening/hygiene (§9.1/§9.2):** the socket-proxy sidecar gains resource
+  limits + a healthcheck and `trivy-server` gains a healthcheck; CI dogfood scanner
+  images are digest-pinned; the `THIRD_PARTY_LICENSES` Trivy version is corrected to
+  0.72.0; the Docker-environment proxy URL is constrained to http(s); scheduled-
+  backup passphrases get the same minimum length as manual ones; and scanner
+  subprocesses no longer inherit Scrye's `SCRYE_*` config vars.
+**Intentionally deferred (documented, not fixed):** binding each secret's AAD to
+its **row** id (not just its column) — it would invalidate every existing
+ciphertext and needs a key-available re-encryption migration, and the threat (DB
+*write*) is outside §6's DB-*read* model; and the backup restore continues to derive
+the passphrase key from the module scrypt constants rather than the envelope's
+advertised parameters (a compatibility seam, not a live bug).
+**Why:** Re-verifying CLAUDE.md's hard security rules across the full, integrated
+app (not per-phase) turned up these gaps; each fix keeps a locked decision intact
+(single-container, field-encryption, CIS posture, no registry publishing) and ships
+with tests. The MFA-enforcement UX and OIDC browser-binding are security-model
+choices resolved conservatively (no user lockout; no new session concept).
+**Plan section affected:** §4, §4.6, §5, §6, §9.1, §9.2, §7 (oidc_login_flows).
