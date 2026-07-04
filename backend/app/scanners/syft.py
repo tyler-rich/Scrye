@@ -60,7 +60,8 @@ def build_command(binary: str, source: str, sbom_format: str) -> list[str]:
     Returns:
         The full argv list.
     """
-    return [binary, "--quiet", "-o", sbom_format, source]
+    # `--` terminates flag parsing so a source can never be read as an option.
+    return [binary, "--quiet", "-o", sbom_format, "--", source]
 
 
 async def generate_sbom(

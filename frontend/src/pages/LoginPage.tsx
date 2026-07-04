@@ -37,6 +37,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [enroll, setEnroll] = useState<{ secret: string; uri: string | null } | null>(null);
   const [code, setCode] = useState('');
 
   useEffect(() => {
@@ -63,6 +64,9 @@ export function LoginPage() {
       const result = await login(username.trim(), password);
       if (result.mfa_required && result.mfa_token) {
         setMfaToken(result.mfa_token);
+        if (result.enrollment_required && result.mfa_secret) {
+          setEnroll({ secret: result.mfa_secret, uri: result.otpauth_uri ?? null });
+        }
       }
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : 'Login failed — is the server reachable?');
@@ -105,9 +109,24 @@ export function LoginPage() {
 
           {mfaToken ? (
             <Stack gap="md">
-              <Text size="sm">
-                Enter the 6-digit code from your authenticator app to finish signing in.
-              </Text>
+              {enroll ? (
+                <Stack gap="xs">
+                  <Text size="sm">
+                    This account requires multi-factor authentication. Add the key below to your
+                    authenticator app, then enter the 6-digit code to finish signing in.
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Manual key
+                  </Text>
+                  <Text size="sm" ff="monospace" style={{ wordBreak: 'break-all' }}>
+                    {enroll.secret}
+                  </Text>
+                </Stack>
+              ) : (
+                <Text size="sm">
+                  Enter the 6-digit code from your authenticator app to finish signing in.
+                </Text>
+              )}
               <PinInput
                 length={6}
                 oneTimeCode
@@ -123,6 +142,7 @@ export function LoginPage() {
                 variant="subtle"
                 onClick={() => {
                   setMfaToken(null);
+                  setEnroll(null);
                   setCode('');
                 }}
               >

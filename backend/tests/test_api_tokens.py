@@ -94,3 +94,15 @@ class TestApiTokenAuthorization:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 201
+
+    def test_session_only_endpoints_dont_500_under_bearer_auth(self, client: TestClient) -> None:
+        csrf = setup_admin(client)
+        token = client.post("/api/api-tokens", json={"name": "ci"}, headers={CSRF: csrf}).json()[
+            "token"
+        ]
+        bare = TestClient(client.app)
+        headers = {"Authorization": f"Bearer {token}"}
+        # These endpoints assume a cookie session; a bearer token has none, and
+        # must not trigger an unhandled 500 (auth.session is None).
+        assert bare.get("/api/auth/sessions", headers=headers).status_code == 200
+        assert bare.post("/api/auth/logout", headers=headers).status_code == 204

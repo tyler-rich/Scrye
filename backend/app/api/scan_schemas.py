@@ -77,10 +77,26 @@ class ScanCreateIn(BaseModel):
     @field_validator("target")
     @classmethod
     def _strip_target(cls, value: str) -> str:
-        """Trim surrounding whitespace and reject an empty reference."""
+        """Trim surrounding whitespace and reject an empty or option-like reference."""
         stripped = value.strip()
         if not stripped:
             raise ValueError("Target must not be empty.")
+        if stripped.startswith("-"):
+            # A leading '-' would be parsed by the scanner CLI as a flag rather
+            # than a positional target (argv option injection); no legitimate
+            # image ref, repo URL, or path begins with '-'.
+            raise ValueError("Target must not begin with '-'.")
+        return stripped
+
+    @field_validator("branch", "commit", "tag")
+    @classmethod
+    def _reject_option_like_ref(cls, value: str | None) -> str | None:
+        """Reject a git ref that would be parsed as a CLI flag (leading '-')."""
+        if value is None:
+            return value
+        stripped = value.strip()
+        if stripped.startswith("-"):
+            raise ValueError("A git ref must not begin with '-'.")
         return stripped
 
     def to_options(self) -> dict[str, object]:

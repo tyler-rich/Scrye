@@ -180,7 +180,14 @@ def test_trivy_parse_rejects_non_json() -> None:
 
 
 def test_grype_command_requests_json() -> None:
-    assert grype.build_command("grype", "alpine:3.19") == ["grype", "alpine:3.19", "-o", "json"]
+    # `--` terminates flag parsing so a reference can never be read as an option.
+    assert grype.build_command("grype", "alpine:3.19") == [
+        "grype",
+        "-o",
+        "json",
+        "--",
+        "alpine:3.19",
+    ]
 
 
 def test_grype_env_disables_update_check() -> None:
@@ -280,8 +287,14 @@ def test_trivy_repo_command_tag_selector() -> None:
 
 
 def test_grype_command_accepts_dir_and_sbom_references() -> None:
-    assert grype.build_command("grype", "dir:/srv/app") == ["grype", "dir:/srv/app", "-o", "json"]
-    assert grype.build_command("grype", "sbom:/tmp/s.json")[1] == "sbom:/tmp/s.json"
+    assert grype.build_command("grype", "dir:/srv/app") == [
+        "grype",
+        "-o",
+        "json",
+        "--",
+        "dir:/srv/app",
+    ]
+    assert grype.build_command("grype", "sbom:/tmp/s.json")[-1] == "sbom:/tmp/s.json"
 
 
 def test_grype_scan_env_layers_overlay_over_update_check() -> None:
@@ -295,7 +308,7 @@ def test_grype_scan_env_layers_overlay_over_update_check() -> None:
 
 def test_syft_command_and_default_format() -> None:
     argv = syft.build_command("syft", "alpine:3.19", "cyclonedx-json")
-    assert argv == ["syft", "--quiet", "-o", "cyclonedx-json", "alpine:3.19"]
+    assert argv == ["syft", "--quiet", "-o", "cyclonedx-json", "--", "alpine:3.19"]
 
 
 def test_syft_resolve_format_defaults_and_validates() -> None:

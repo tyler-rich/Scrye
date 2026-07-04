@@ -202,7 +202,14 @@ class SecretCipher:
         def _unb64(part: str) -> bytes:
             return base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))
 
-        return int(match.group(1)), _unb64(match.group(2)), _unb64(match.group(3))
+        try:
+            return int(match.group(1)), _unb64(match.group(2)), _unb64(match.group(3))
+        except (binascii.Error, ValueError) as exc:
+            # A token that matches the shape but carries malformed base64 (e.g. a
+            # corrupted/truncated blob) must surface as SecretDecryptError, the
+            # error every caller already handles — not a raw binascii.Error that
+            # would 500 a registry test or crash backup creation.
+            raise SecretDecryptError("Stored secret token is malformed.") from exc
 
     def key_version(self, token: str) -> int:
         """Return the key version a stored token was encrypted under."""

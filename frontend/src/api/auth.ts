@@ -31,6 +31,12 @@ export interface LoginResponse {
   csrf_token: string | null;
   mfa_required: boolean;
   mfa_token: string | null;
+  /** Set when a mandatory-MFA policy requires this account to enroll before access. */
+  enrollment_required?: boolean;
+  /** One-time TOTP secret (manual entry key) for forced enrollment. */
+  mfa_secret?: string | null;
+  /** otpauth:// provisioning URI for forced enrollment. */
+  otpauth_uri?: string | null;
 }
 
 export function fetchAuthStatus(): Promise<AuthStatus> {

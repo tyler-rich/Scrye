@@ -98,7 +98,7 @@ class ScheduleUpdateIn(BaseModel):
     enabled: bool | None = None
     interval_hours: int | None = Field(default=None, ge=1, le=720)
     retention_count: int | None = Field(default=None, ge=1, le=365)
-    passphrase: SecretStr | None = None
+    passphrase: SecretStr | None = Field(default=None, min_length=_MIN_PASSPHRASE_LEN)
 
 
 def _backup_filename() -> str:

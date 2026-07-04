@@ -233,8 +233,21 @@ def clip(value: Any, limit: int) -> str | None:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+def inherited_env() -> dict[str, str]:
+    """Return the parent environment with Scrye's own config vars removed.
+
+    Scanner subprocesses have no need for Scrye's ``SCRYE_*`` configuration (which
+    names the master-key secret file, the database path, sidecar URLs, etc.).
+    Dropping them keeps a bundled binary — or a scanner plugin / template code
+    path — from reading the application's config surface, while preserving the
+    generic environment (``PATH``, ``HOME``, TLS/proxy vars, locale) the scanners
+    genuinely rely on for network and filesystem access.
+    """
+    return {name: value for name, value in os.environ.items() if not name.startswith("SCRYE_")}
+
+
 def build_env(*overlays: dict[str, str] | None) -> dict[str, str] | None:
-    """Merge environment overlays onto the process env.
+    """Merge environment overlays onto the (Scrye-config-stripped) process env.
 
     Returns ``None`` when no overlay contributes anything, so the caller can let
     the child simply inherit the parent environment.
@@ -244,11 +257,11 @@ def build_env(*overlays: dict[str, str] | None) -> dict[str, str] | None:
             order (later ones win).
 
     Returns:
-        The full child environment, or ``None`` if every overlay was empty.
+        The child environment, or ``None`` if every overlay was empty.
     """
     if not any(overlays):
         return None
-    env = dict(os.environ)
+    env = inherited_env()
     for overlay in overlays:
         if overlay:
             env.update(overlay)
