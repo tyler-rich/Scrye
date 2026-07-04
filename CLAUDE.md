@@ -56,7 +56,14 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 - CSRF protection on state-changing endpoints; rate-limit auth endpoints; maintain an audit log.
 
 ## Git & PR conventions
-- One branch per phase, named `phase/PX` (e.g. `phase/P0`); one PR per phase against `main`.
+- **Branching model:** `main` is protected and receives only tagged releases. `dev` is the
+  integration branch for day-to-day work and external contributions. Feature/fix branches (e.g.
+  `phase/PX` during the phased build, or a descriptive name for later work) are created **from
+  `dev`** and PR'd **into `dev`** by default — not `main`. Promotion from `dev` to `main` is a
+  separate, deliberate PR that only happens when the user explicitly requests it to cut a release
+  (see `CONTRIBUTING.md` § Releasing). Everything else in this section — git identity, no
+  attribution footers, CI-green, deviations logging — applies the same way, just against `dev` as
+  the usual PR target instead of `main`.
 - **CI is created in Phase 0 and is the gate for every PR thereafter, including Phase 0's own.**
   `.github/workflows/ci.yml` runs on every pull request and push to `main`: lint the backend
   (`ruff` + `black --check`) and frontend (ESLint + Prettier), and run `pytest` plus any frontend
