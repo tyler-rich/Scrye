@@ -1,0 +1,99 @@
+# Scrye — Docker Hub publishing.
+#
+# Two independent publishing paths (CLAUDE.md locked decision §6):
+#
+#   1. Tagged main releases — a push of a semver tag (v*.*.*) builds the
+#      multi-arch image and pushes it as <dockerhub-user>/scrye:<version> (the tag
+#      without its leading "v") and <dockerhub-user>/scrye:latest. The release job
+#      refuses to run unless the tagged commit is reachable from main, so only
+#      real releases cut from main ever reach :<version>/:latest.
+#
+#   2. dev continuous build — every push to the dev branch builds the multi-arch
+#      image and pushes the single moving tag <dockerhub-user>/scrye:dev, always
+#      overwritten. This is NOT a versioned or stable tag; it just mirrors the
+#      current state of dev for testing.
+#
+# The multi-arch build itself is defined once in .github/actions/build-image and
+# reused by both jobs (and by ci.yml's build-only check). Credentials come from
+# the DOCKERHUB_USERNAME / DOCKERHUB_TOKEN repository secrets.
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+    branches:
+      - dev
+
+# Least privilege: reading the repo is all either job needs. Registry auth is
+# handled with the Docker Hub secrets, not the GITHUB_TOKEN.
+permissions:
+  contents: read
+
+# Serialize builds per ref. Distinct release tags have distinct refs so they
+# never cancel each other; a newer dev push supersedes an in-flight one.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Tagged release → Docker Hub (:<version> + :latest)
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history to verify the tag is on main)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # A tag can be pushed from any commit; a release must come from main.
+      # Fetch main and confirm the tagged commit is an ancestor of its tip
+      # before building anything.
+      - name: Verify the tagged commit is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            echo "::error::Tag ${GITHUB_REF_NAME} points at a commit that is not on main; refusing to publish a release."
+            exit 1
+          fi
+
+      # <dockerhub-user>/scrye:<version> uses the tag without its leading "v"
+      # (v1.4.0 -> 1.4.0).
+      - name: Derive the version from the tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (:<version> + :latest)
+        uses: ./.github/actions/build-image
+        with:
+          push: "true"
+          tags: |
+            <dockerhub-user>/scrye:${{ steps.version.outputs.version }}
+            <dockerhub-user>/scrye:latest
+
+  dev:
+    name: dev branch → Docker Hub (:dev continuous build)
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (:dev)
+        uses: ./.github/actions/build-image
+        with:
+          push: "true"
+          tags: <dockerhub-user>/scrye:dev
