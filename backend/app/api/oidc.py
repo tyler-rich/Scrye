@@ -24,7 +24,7 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth import oidc, service
@@ -53,10 +53,30 @@ _LOGIN_PATH = "/login"
 _FLOW_TTL = timedelta(minutes=10)
 _USERNAME_SANITIZE = re.compile(r"[^a-z0-9._-]+")
 
-#: Cookie carrying the per-flow browser-binding token (see OidcLoginFlow).
-_BINDING_COOKIE = "scrye_oidc_binding"
-#: The binding cookie is only needed on the OIDC login/callback path.
-_BINDING_COOKIE_PATH = "/api/auth/oidc"
+#: Bare name of the per-flow browser-binding cookie (see OidcLoginFlow).
+_BINDING_COOKIE_BARE = "scrye_oidc_binding"
+#: ``__Host-`` prefixed variant. The prefix is browser-enforced: such a cookie
+#: MUST be ``Secure``, have ``Path=/``, and carry NO ``Domain`` attribute, so a
+#: sibling subdomain (e.g. another ``*.home.platform934.dev`` host) can never
+#: plant it for the parent domain — closing the cookie-fixation gap the plain
+#: host cookie left open. Requires TLS, so it is only usable when the session
+#: cookie is itself ``Secure``; over plain-HTTP dev we fall back to the bare name.
+_BINDING_COOKIE_HOST = f"__Host-{_BINDING_COOKIE_BARE}"
+
+
+def _binding_cookie() -> tuple[str, str, bool]:
+    """Return ``(name, path, secure)`` for the browser-binding cookie.
+
+    Uses a ``__Host-`` prefixed, root-path, ``Secure`` cookie in production
+    (behind TLS) so no sibling subdomain can set it; falls back to a plain
+    host cookie only when ``Secure`` is unavailable (local HTTP dev), where a
+    ``__Host-`` cookie would be rejected by the browser outright.
+    """
+    secure = get_settings().session_cookie_secure
+    if secure:
+        # __Host- mandates Path=/ and Secure, and forbids Domain.
+        return _BINDING_COOKIE_HOST, "/", True
+    return _BINDING_COOKIE_BARE, "/api/auth/oidc", False
 
 
 def _hash_binding(value: str) -> str:
@@ -236,14 +256,15 @@ async def oidc_login(request: Request, db: Session = Depends(get_db)) -> Redirec
         code_challenge=challenge,
     )
     response = RedirectResponse(url, status_code=status.HTTP_302_FOUND)
+    cookie_name, cookie_path, cookie_secure = _binding_cookie()
     response.set_cookie(
-        _BINDING_COOKIE,
+        cookie_name,
         binding,
         max_age=int(_FLOW_TTL.total_seconds()),
         httponly=True,
-        secure=get_settings().session_cookie_secure,
+        secure=cookie_secure,
         samesite="lax",
-        path=_BINDING_COOKIE_PATH,
+        path=cookie_path,
     )
     return response
 
@@ -266,15 +287,63 @@ def _unique_username(db: Session, base: str, subject: str) -> str:
     return candidate[:64]
 
 
+def _groups_claim_present(config: OidcConfig, claims: dict) -> bool:
+    """Return True if the configured groups claim is actually present in the token.
+
+    Distinguishes "the IdP did not deliver groups in this token" (claim key
+    absent — common, since many IdPs ship groups only via the UserInfo endpoint
+    or behind a specific scope) from "the IdP delivered an explicit, possibly
+    empty, group set". Only the latter is authoritative for role mapping.
+    """
+    return bool(config.groups_claim) and config.groups_claim in claims
+
+
 def _resolve_role(config: OidcConfig, claims: dict) -> Role:
-    """Pick the role for a provisioned user from the admin-group mapping."""
-    if config.admin_group and config.groups_claim:
+    """Pick the role for a *newly provisioned* user from the admin-group mapping.
+
+    When group mapping isn't configured or the groups claim is absent, this
+    falls back to ``default_role`` — safe for a brand-new account (it grants the
+    least privilege), but never used to *change* an existing user's role (see
+    :func:`_synced_role`, which preserves the current role on an absent claim).
+    """
+    if config.admin_group and _groups_claim_present(config, claims):
         groups = claims.get(config.groups_claim) or []
         if isinstance(groups, str):
             groups = [groups]
         if config.admin_group in groups:
             return Role.ADMIN
     return config.default_role
+
+
+def _synced_role(config: OidcConfig, claims: dict) -> Role | None:
+    """Return the role an *existing* user should be synced to, or None to preserve.
+
+    Returns ``None`` — meaning "leave the user's current role untouched" — unless
+    group→role mapping is configured AND the groups claim is present in this
+    token. This prevents an IdP that simply omits groups from the ID token (e.g.
+    it exposes them only via UserInfo) from silently demoting an established
+    admin to ``default_role`` on their next login.
+    """
+    if not (config.admin_group and _groups_claim_present(config, claims)):
+        return None
+    groups = claims.get(config.groups_claim) or []
+    if isinstance(groups, str):
+        groups = [groups]
+    return Role.ADMIN if config.admin_group in groups else config.default_role
+
+
+def _other_active_admin_exists(db: Session, user: User) -> bool:
+    """Return True if an active admin other than ``user`` exists.
+
+    Used as a last-admin guard so an OIDC role sync can never leave the instance
+    with zero administrators (a lockout that would require DB surgery to undo).
+    """
+    count = db.scalar(
+        select(func.count())
+        .select_from(User)
+        .where(User.role == Role.ADMIN, User.is_active.is_(True), User.id != user.id)
+    )
+    return bool(count)
 
 
 @login_router.get("/callback", name="oidc_callback")
@@ -298,7 +367,8 @@ async def oidc_callback(
     # Enforce the browser binding: the callback must carry the cookie set when the
     # flow was started, so a flow initiated in the attacker's browser cannot be
     # completed in the victim's (OIDC login-CSRF / session fixation).
-    binding_cookie = request.cookies.get(_BINDING_COOKIE)
+    cookie_name, cookie_path, _ = _binding_cookie()
+    binding_cookie = request.cookies.get(cookie_name)
     binding_ok = (
         bool(flow.browser_binding)
         and bool(binding_cookie)
@@ -311,7 +381,9 @@ async def oidc_callback(
     db.commit()
     if not binding_ok:
         logger.warning("OIDC callback rejected: browser binding missing or mismatched.")
-        return _fail("expired")
+        failure = _fail("expired")
+        failure.delete_cookie(cookie_name, path=cookie_path)
+        return failure
 
     config = db.get(OidcConfig, OIDC_CONFIG_ID)
     if config is None or not config.enabled or not config.issuer or not config.client_id:
@@ -360,10 +432,20 @@ async def oidc_callback(
         # Keep the IdP authoritative for role when group mapping is configured:
         # re-apply the group→role mapping on every login so removing a user from
         # the admin group at the IdP downgrades them here too, instead of leaving
-        # a stale admin. Only active when both group claim and admin group are set.
-        if config.groups_claim and config.admin_group:
-            mapped_role = _resolve_role(config, claims)
-            if user.role != mapped_role:
+        # a stale admin. `_synced_role` returns None when the groups claim is
+        # absent from *this* token, in which case we preserve the current role
+        # rather than demoting on a claim the IdP simply did not include here.
+        mapped_role = _synced_role(config, claims)
+        if mapped_role is not None and user.role != mapped_role:
+            demoting_admin = user.role is Role.ADMIN and mapped_role is not Role.ADMIN
+            if demoting_admin and not _other_active_admin_exists(db, user):
+                # Last-admin guard: never let an OIDC sync remove the final admin
+                # (which would lock everyone out of settings/user management).
+                logger.warning(
+                    "OIDC role sync skipped for user %s: refusing to demote the last admin.",
+                    user.id,
+                )
+            else:
                 record_audit(
                     db,
                     action="auth.oidc_role_synced",
@@ -407,6 +489,15 @@ async def oidc_callback(
             details={"role": role.value},
         )
 
+    # ACCEPTED LIMITATION — the mandatory-MFA policy (required_all /
+    # required_admin) enforced on the local /auth/login path is intentionally
+    # NOT applied here: MFA for OIDC logins is delegated to the identity
+    # provider, which performs its own (often stronger) second-factor step
+    # before issuing the ID token. Scrye has no local TOTP challenge in the OIDC
+    # handshake, and provisioned OIDC accounts carry no usable local password,
+    # so there is no second factor to enforce at this layer. Operators who
+    # require MFA for OIDC users must enforce it at the IdP. See docs/PLAN.md
+    # § Deviations (2026-07-04 post-P6 hotfix) and the README security model.
     token, session = service.create_session(
         db, user, ip=client_ip(request), user_agent=request.headers.get("user-agent")
     )
@@ -416,5 +507,5 @@ async def oidc_callback(
 
     response: Response = RedirectResponse("/", status_code=status.HTTP_302_FOUND)
     set_session_cookies(response, token, session.csrf_token)
-    response.delete_cookie(_BINDING_COOKIE, path=_BINDING_COOKIE_PATH)
+    response.delete_cookie(cookie_name, path=cookie_path)
     return response
