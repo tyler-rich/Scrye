@@ -337,11 +337,14 @@ def enroll_mfa(
     confirmed via ``/auth/mfa/activate``; re-enrolling replaces any pending or
     active secret.
 
-    Starting re-enrollment deactivates a currently-active second factor, so — like
-    disabling MFA — it requires re-authenticating with the current password. This
-    stops a session alone (without the password) from stripping MFA.
+    Re-enrolling requires re-authenticating with the current password whenever a
+    secret **already exists** — whether it is active (``mfa_enabled``) or still a
+    pending, not-yet-activated secret. This closes the window where a session
+    alone (stolen cookie + CSRF token, no password) could overwrite a pending
+    secret and make the victim enroll the attacker's authenticator. The password
+    is only skipped for a genuine first-time enrollment with no prior secret.
     """
-    if auth.user.mfa_enabled:
+    if auth.user.mfa_secret_ciphertext:
         if not payload.current_password or not verify_password(
             auth.user.password_hash, payload.current_password
         ):

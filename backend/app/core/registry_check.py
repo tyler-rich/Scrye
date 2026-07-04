@@ -85,6 +85,15 @@ async def check_registry(*, registry_host: str, username: str | None, secret: st
         A :class:`RegistryCheck` describing the outcome; never raises.
     """
     base = _normalize_base(registry_host)
+    # Refuse to send the stored credential over cleartext http. `_normalize_base`
+    # already defaults a scheme-less host to https; this rejects an explicit
+    # `http://` host so a probe never leaks Basic-auth credentials in cleartext
+    # (consistent with the Docker-environment proxy-URL validator).
+    if urlparse(base).scheme != "https":
+        return RegistryCheck(
+            False,
+            "Registry probe requires an https URL; refusing to send credentials over http.",
+        )
     url = f"{base}/v2/"
     auth = (username or "", secret)
     try:
