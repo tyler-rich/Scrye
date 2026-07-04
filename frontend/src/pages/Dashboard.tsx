@@ -183,13 +183,13 @@ export function Dashboard() {
                 </Table.Thead>
                 <Table.Tbody>
                   {state.data.top_vulnerable_targets.map((t) => (
-                    <Table.Tr key={`${t.scanner}:${t.target}`}>
+                    <Table.Tr key={`${t.scanner}:${t.target_type}:${t.target}`}>
                       <Table.Td>
                         <Text size="sm" style={{ wordBreak: 'break-all' }}>
                           {t.target}
                         </Text>
                         <Text size="xs" c="dimmed">
-                          {t.scanner}
+                          {t.scanner} · {t.target_type}
                         </Text>
                       </Table.Td>
                       <Table.Td>

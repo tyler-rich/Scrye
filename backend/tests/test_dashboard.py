@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.core import system_info
 from app.core.dashboard import compute_dashboard, failed_scan_alerts
 from app.core.timeutil import utcnow
 from app.db.models import Scan, Scanner, ScanStatus, TargetType
@@ -20,6 +22,7 @@ def _add_scan(
     target: str,
     status: ScanStatus,
     scanner: Scanner = Scanner.TRIVY,
+    target_type: TargetType = TargetType.IMAGE,
     counts: dict[str, int] | None = None,
     findings: int = 0,
     age_days: int = 0,
@@ -27,7 +30,7 @@ def _add_scan(
     created = utcnow() - timedelta(days=age_days)
     scan = Scan(
         scanner=scanner,
-        target_type=TargetType.IMAGE,
+        target_type=target_type,
         target=target,
         status=status,
         options={},
@@ -64,6 +67,57 @@ class TestComputeDashboard:
         assert targets["repo"].critical == 1
         assert targets["other"].high == 3
 
+    def test_open_posture_keeps_target_types_distinct(self, db: Session) -> None:
+        """The same target string under different target types is two identities.
+
+        Grype scans images, filesystems, and SBOMs; a shared name (e.g. two
+        unrelated things both called ``sbom.json``/``app``) must not collapse
+        into one "latest scan", silently dropping the other's findings from the
+        aggregates.
+        """
+        _add_scan(
+            db,
+            target="app",
+            target_type=TargetType.IMAGE,
+            scanner=Scanner.GRYPE,
+            status=ScanStatus.SUCCEEDED,
+            counts={"critical": 2},
+            findings=2,
+        )
+        _add_scan(
+            db,
+            target="app",
+            target_type=TargetType.FILESYSTEM,
+            scanner=Scanner.GRYPE,
+            status=ScanStatus.SUCCEEDED,
+            counts={"critical": 3},
+            findings=3,
+        )
+        data = compute_dashboard(db)
+        # Both identities contribute; neither shadows the other.
+        assert data.open_critical == 5
+        postures = {(p.target_type, p.target): p for p in data.top_vulnerable_targets}
+        assert postures[("image", "app")].critical == 2
+        assert postures[("filesystem", "app")].critical == 3
+
+    def test_latest_scan_still_wins_within_one_target_type(self, db: Session) -> None:
+        _add_scan(
+            db,
+            target="app",
+            target_type=TargetType.IMAGE,
+            status=ScanStatus.SUCCEEDED,
+            counts={"critical": 9},
+        )
+        _add_scan(
+            db,
+            target="app",
+            target_type=TargetType.IMAGE,
+            status=ScanStatus.SUCCEEDED,
+            counts={"critical": 1},
+        )
+        data = compute_dashboard(db)
+        assert data.open_critical == 1
+
     def test_time_series_length_and_shape(self, db: Session) -> None:
         _add_scan(db, target="a", status=ScanStatus.SUCCEEDED)
         data = compute_dashboard(db)
@@ -96,6 +150,56 @@ class TestDashboardEndpoint:
         assert body["open_critical"] == 2
         assert len(body["scans_over_time"]) == 30
         assert any(a["target"] == "img2" for a in body["failed_alerts"])
+        # Postures carry the target type (part of the target's identity).
+        assert body["top_vulnerable_targets"][0]["target_type"] == "image"
         # Scanner DB freshness is present (binaries absent in tests → unavailable).
         names = {info["name"] for info in body["scanner_db"]}
         assert names == {"trivy", "grype"}
+
+
+class TestScannerDbStatusCache:
+    @pytest.mark.asyncio
+    async def test_probe_results_are_cached_within_ttl(self, monkeypatch) -> None:
+        """One dashboard load must not spawn scanner subprocesses per request."""
+        calls = {"n": 0}
+
+        async def _fake_probe_trivy() -> system_info.ScannerDbInfo:
+            calls["n"] += 1
+            return system_info.ScannerDbInfo(name="trivy", available=True)
+
+        async def _fake_probe_grype() -> system_info.ScannerDbInfo:
+            return system_info.ScannerDbInfo(name="grype", available=True)
+
+        monkeypatch.setattr(system_info, "_probe_trivy_db", _fake_probe_trivy)
+        monkeypatch.setattr(system_info, "_probe_grype_db", _fake_probe_grype)
+        monkeypatch.setattr(system_info, "_db_status_cache", None)
+
+        first = await system_info.scanner_db_status()
+        second = await system_info.scanner_db_status()
+
+        assert calls["n"] == 1  # second call served from the TTL cache
+        assert first == second
+
+    @pytest.mark.asyncio
+    async def test_expired_cache_reprobes(self, monkeypatch) -> None:
+        calls = {"n": 0}
+
+        async def _fake_probe() -> system_info.ScannerDbInfo:
+            calls["n"] += 1
+            return system_info.ScannerDbInfo(name="x", available=True)
+
+        monkeypatch.setattr(system_info, "_probe_trivy_db", _fake_probe)
+        monkeypatch.setattr(system_info, "_probe_grype_db", _fake_probe)
+        monkeypatch.setattr(system_info, "_db_status_cache", None)
+
+        await system_info.scanner_db_status()
+        # Backdate the cache entry past the TTL to force a re-probe.
+        stamp, infos = system_info._db_status_cache
+        monkeypatch.setattr(
+            system_info,
+            "_db_status_cache",
+            (stamp - system_info._DB_STATUS_TTL_SECONDS - 1, infos),
+        )
+        await system_info.scanner_db_status()
+
+        assert calls["n"] == 4  # two probes per miss, two misses
