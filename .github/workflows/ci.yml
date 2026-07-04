@@ -175,9 +175,20 @@ jobs:
   # platforms build cleanly (the arm64 scanner-download path included). Uses the
   # shared build action that publish.yml also drives, so the build invocation
   # stays defined in exactly one place.
+  #
+  # Gated to main pushes and PRs whose base is main. The arm64 leg runs the whole
+  # Dockerfile under QEMU emulation, so on a cold `type=gha` cache it takes hours;
+  # only main-scoped runs reliably restore a warm arm64 cache, whereas dev-based
+  # PRs would rebuild from scratch every time. Multi-arch buildability stays
+  # continuously proven for dev anyway: publish.yml builds amd64+arm64 on every
+  # push to dev (the :dev tag) and on release tags. dev PRs still get the fast
+  # amd64-only `image` build + dogfood self-scan above. See docs/PLAN.md
+  # § Deviations.
   image-multiarch:
     name: Image — multi-arch build check
     runs-on: ubuntu-latest
+    # Skip on dev-based PRs (see note above); run on main pushes and PRs to main.
+    if: github.event_name != 'pull_request' || github.event.pull_request.base.ref == 'main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4

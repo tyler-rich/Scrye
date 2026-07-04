@@ -1395,6 +1395,15 @@ refactored to consume it, so the build is defined in exactly one place and not
 duplicated between CI and publishing. Credentials come from the pre-configured
 `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets; `ci.yml` still never
 publishes. `CONTRIBUTING.md` gains a "Releasing" section documenting both paths.
+Separately, `ci.yml`'s `image-multiarch` build-check is now **gated to main
+pushes and PRs whose base is `main`** (`if: github.event_name != 'pull_request'
+|| github.event.pull_request.base.ref == 'main'`). Its arm64 leg builds the
+whole Dockerfile under QEMU emulation, which on a cold `type=gha` cache takes
+multiple hours; only main-scoped runs reliably restore a warm arm64 cache, so
+`dev`-based PRs would rebuild from scratch every time. Multi-arch buildability
+stays continuously proven for `dev` by `publish.yml` (which builds amd64+arm64
+on every push to `dev` and on release tags), and `dev` PRs still run the fast
+amd64-only image build + dogfood self-scan, so no coverage is lost.
 **Why:** Explicit user instruction this session, superseding the earlier
 "local-build-only / publish-on-tagged-releases-only" state of §0.6 to add the
 `dev` continuous-build path for testing dev without a release.
