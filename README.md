@@ -401,16 +401,39 @@ decrypted in memory at scan time.
   socket is mounted (read-only); anyone who can reach it can _enumerate_ images
   and containers, so enable that profile deliberately and keep it on the
   internal network.
-- **Trusted reverse-proxy hops.** The app runs behind Caddy and honors
-  `X-Forwarded-For` (via uvicorn `--proxy-headers`) so the auth rate limiter and
-  audit log see the **real** client IP. The trust boundary is
-  `SCRYE_FORWARDED_ALLOW_IPS` — only `X-Forwarded-*` from these addresses is
-  believed. It defaults to the Docker bridge range Caddy connects from
-  (`172.16.0.0/12`) and **must never be `*`**: a wildcard trusts every hop, so a
-  client could prepend a forged `X-Forwarded-For` that the app then treats as the
-  source (bypassing the rate limiter and forging audit IPs). For other
-  topologies set it to the reverse proxy's exact container IP/CIDR (or the
-  specific Docker subnet it sits on); do **not** include the client LAN range.
+- **Trusted reverse-proxy hops (`SCRYE_FORWARDED_ALLOW_IPS` — required per
+  deployment).** Scrye honors `X-Forwarded-For` (via uvicorn `--proxy-headers`)
+  so the auth rate limiter and audit log see the **real** client IP. The
+  client-selection logic is **proxy-agnostic** — it works identically behind any
+  proxy that sets/appends `X-Forwarded-For` (Caddy, **nginx**, **Traefik**,
+  HAProxy, …). uvicorn trusts the header only when the connecting peer is in
+  `SCRYE_FORWARDED_ALLOW_IPS`, then takes the first address that is **not** in
+  that set (the client the proxy appended), discarding any spoofed leftmost
+  entry.
+
+  **`SCRYE_FORWARDED_ALLOW_IPS` must be set to the IP/CIDR your reverse proxy
+  actually connects from.** The shipped default (`172.16.0.0/12`) assumes Caddy
+  running as a Docker container on the default bridge network. If you use nginx,
+  Traefik, a host-networked proxy, or any other topology, you must set this to
+  match your actual setup — otherwise the rate-limiter and audit-log fix will not
+  take effect correctly. It is deployment-specific; nothing else in the code
+  assumes Caddy or that subnet.
+
+  **Fail-safe on mismatch.** If the configured value does not include the real
+  connecting peer, the app **fails safe**: `X-Forwarded-For` is ignored entirely
+  and the raw proxy IP is used, so a client can never spoof its address — the
+  only cost is that per-client IPs (and thus per-client rate-limit buckets and
+  accurate audit IPs) do not take effect until you set it correctly. Conversely,
+  **never set it to `*`** and never include the client LAN range — that trusts
+  every upstream hop and re-opens the spoofing hole.
+
+  Examples:
+  - Caddy as a Docker container (default): `SCRYE_FORWARDED_ALLOW_IPS=172.16.0.0/12`
+    (or tighten to Caddy's exact container IP).
+  - Host-networked nginx (proxying to Scrye's published `127.0.0.1:8089`):
+    `SCRYE_FORWARDED_ALLOW_IPS=127.0.0.1`.
+  - Traefik in its own Docker network (e.g. subnet `10.89.0.0/24`):
+    `SCRYE_FORWARDED_ALLOW_IPS=10.89.0.0/24` (or Traefik's exact container IP).
 - **OIDC login-CSRF binding.** Each OIDC login is bound to the browser that
   started it: a random token is stored in an `HttpOnly` cookie (a `__Host-`
   prefixed, host-locked, `Secure` cookie in production, so no sibling subdomain

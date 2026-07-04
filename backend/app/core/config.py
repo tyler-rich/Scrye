@@ -61,12 +61,20 @@ class Settings(BaseSettings):
     forwarded_allow_ips: str = Field(
         default="172.16.0.0/12",
         description=(
-            "Trusted upstream hops for uvicorn --forwarded-allow-ips (consumed by "
-            "docker/entrypoint.sh). Only X-Forwarded-* from these addresses is "
-            "honored, so the real client IP drives the auth rate limiter and audit "
-            "log. Default trusts the Docker bridge range Caddy connects from; set "
-            "it to the reverse proxy's exact IP/CIDR for other topologies. Never "
-            "set it to '*' — that lets any client spoof X-Forwarded-For."
+            "REQUIRED per-deployment: the IP/CIDR your reverse proxy actually "
+            "connects to Scrye from (uvicorn --forwarded-allow-ips, consumed by "
+            "docker/entrypoint.sh). Only X-Forwarded-For from these addresses is "
+            "trusted, so the real client IP drives the auth rate limiter and audit "
+            "log. Works with any proxy that sets X-Forwarded-For (Caddy, nginx, "
+            "Traefik, ...) — the logic is proxy-agnostic; only this value is "
+            "deployment-specific. The default 172.16.0.0/12 assumes Caddy as a "
+            "Docker container on the default bridge network; set it to your proxy's "
+            "real source, e.g. 127.0.0.1 for a host-networked nginx, or the proxy's "
+            "Docker subnet for Traefik. If it does NOT match the connecting peer, "
+            "the app FAILS SAFE (X-Forwarded-For is ignored and the raw proxy IP is "
+            "used — no spoofing, but per-client IPs won't take effect). Never set it "
+            "to '*': that trusts every hop and lets any client spoof "
+            "X-Forwarded-For. Do not include the client LAN range."
         ),
     )
     cors_origins: list[str] = Field(
