@@ -25,6 +25,7 @@ from app.api.schemas import (
     LoginOut,
     MfaActivateIn,
     MfaDisableIn,
+    MfaEnrollIn,
     MfaEnrollOut,
     MfaVerifyIn,
     NewUserIn,
@@ -150,10 +151,34 @@ def login(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password.")
 
     if user.mfa_enabled:
-        challenge = request.app.state.pending_mfa.issue(user.id)
+        challenge = request.app.state.pending_mfa.issue(user.id, mfa.PURPOSE_VERIFY)
         record_audit(db, action="auth.mfa_challenge", actor=user, ip=ip)
         db.commit()
         return LoginOut(mfa_required=True, mfa_token=challenge)
+
+    policy = SettingsService(db).auth().mfa_policy
+    if _mfa_required_for(user.role, policy):
+        # Mandatory MFA for this role, but the account never enrolled: force
+        # enrollment before granting access rather than minting a full session.
+        # Reuse any pending secret so repeated logins show the same key; the
+        # login only completes once a code is verified (see verify_mfa).
+        if user.mfa_secret_ciphertext:
+            secret = mfa.decrypt_mfa_secret(user.mfa_secret_ciphertext)
+        else:
+            secret = mfa.generate_secret()
+            user.mfa_secret_ciphertext = mfa.encrypt_mfa_secret(secret)
+            user.mfa_enabled = False
+        challenge = request.app.state.pending_mfa.issue(user.id, mfa.PURPOSE_ENROLL)
+        record_audit(db, action="auth.mfa_enrollment_required", actor=user, ip=ip)
+        db.commit()
+        instance = SettingsService(db).general().instance_name
+        return LoginOut(
+            mfa_required=True,
+            enrollment_required=True,
+            mfa_token=challenge,
+            mfa_secret=secret,
+            otpauth_uri=mfa.provisioning_uri(secret, username=user.username, issuer=instance),
+        )
 
     return _complete_login(db, user, request, response, action="auth.login")
 
@@ -165,18 +190,35 @@ def verify_mfa(
     response: Response,
     db: Session = Depends(get_db),
 ) -> LoginOut:
-    """Complete a password login by submitting the TOTP code (second step)."""
+    """Complete a password login by submitting the TOTP code (second step).
+
+    Handles both a normal ``verify`` challenge (existing enrolled account) and an
+    ``enroll`` challenge (policy-forced first enrollment): the latter activates
+    MFA once the code proves the newly-issued secret, then completes the login.
+    """
     _enforce_rate_limit(request)
     ip = client_ip(request)
-    user_id = request.app.state.pending_mfa.consume(payload.mfa_token)
-    user = db.get(User, user_id) if user_id is not None else None
-    if user is None or not user.is_active or not user.mfa_enabled or not user.mfa_secret_ciphertext:
+    resolved = request.app.state.pending_mfa.consume(payload.mfa_token)
+    if resolved is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="MFA challenge is invalid.")
+    user_id, purpose = resolved
+    user = db.get(User, user_id)
+    if user is None or not user.is_active or not user.mfa_secret_ciphertext:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="MFA challenge is invalid.")
+    # A verify challenge requires an already-active second factor; an enroll
+    # challenge is what turns it on.
+    if purpose == mfa.PURPOSE_VERIFY and not user.mfa_enabled:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="MFA challenge is invalid.")
 
     if not mfa.verify_code(mfa.decrypt_mfa_secret(user.mfa_secret_ciphertext), payload.code):
         record_audit(db, action="auth.mfa_failed", actor=user, ip=ip)
         db.commit()
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication code.")
+
+    if purpose == mfa.PURPOSE_ENROLL and not user.mfa_enabled:
+        user.mfa_enabled = True
+        record_audit(db, action="auth.mfa_enabled", actor=user, ip=ip)
+        db.commit()
 
     return _complete_login(db, user, request, response, action="auth.login")
 
@@ -189,7 +231,9 @@ def logout(
     db: Session = Depends(get_db),
 ) -> None:
     """Revoke the current session and clear cookies."""
-    service.revoke_session(auth.session)
+    # Bearer-token callers reach here with no session; there is nothing to revoke.
+    if auth.session is not None:
+        service.revoke_session(auth.session)
     record_audit(db, action="auth.logout", actor=auth.user, ip=client_ip(request))
     db.commit()
     clear_session_cookies(response)
@@ -212,7 +256,8 @@ def change_password(
     if not verify_password(auth.user.password_hash, payload.current_password):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Current password is incorrect.")
     auth.user.password_hash = hash_password(payload.new_password)
-    revoked = service.revoke_all_sessions(db, auth.user, except_session_id=auth.session.id)
+    except_id = auth.session.id if auth.session is not None else None
+    revoked = service.revoke_all_sessions(db, auth.user, except_session_id=except_id)
     record_audit(
         db,
         action="auth.password_changed",
@@ -234,12 +279,13 @@ def list_own_sessions(
         .where(AuthSession.user_id == auth.user.id, AuthSession.revoked_at.is_(None))
         .order_by(AuthSession.last_seen_at.desc())
     ).all()
+    current_session_id = auth.session.id if auth.session is not None else None
     out = []
     for row in rows:
         if not row.is_valid:
             continue
         view = SessionOut.model_validate(row)
-        view.current = row.id == auth.session.id
+        view.current = row.id == current_session_id
         out.append(view)
     return out
 
@@ -280,6 +326,7 @@ def _mfa_required_for(role: Role, policy: MfaPolicy) -> bool:
 
 @router.post("/mfa/enroll", response_model=MfaEnrollOut)
 def enroll_mfa(
+    payload: MfaEnrollIn,
     request: Request,
     auth: AuthContext = Depends(require_csrf),
     db: Session = Depends(get_db),
@@ -289,7 +336,19 @@ def enroll_mfa(
     The secret is stored (encrypted) but MFA is not active until a code is
     confirmed via ``/auth/mfa/activate``; re-enrolling replaces any pending or
     active secret.
+
+    Starting re-enrollment deactivates a currently-active second factor, so — like
+    disabling MFA — it requires re-authenticating with the current password. This
+    stops a session alone (without the password) from stripping MFA.
     """
+    if auth.user.mfa_enabled:
+        if not payload.current_password or not verify_password(
+            auth.user.password_hash, payload.current_password
+        ):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Re-enrolling MFA requires your current password.",
+            )
     secret = mfa.generate_secret()
     auth.user.mfa_secret_ciphertext = mfa.encrypt_mfa_secret(secret)
     auth.user.mfa_enabled = False

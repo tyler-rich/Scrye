@@ -38,8 +38,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
+from app.core.config import get_settings
 from app.db.models import CREDENTIAL_HELPERS, GitProvider, RegistryAuthType
-from app.scanners.base import ScannerError, run_command
+from app.scanners.base import SCRATCH_SUBDIR, ScannerError, run_command
 
 #: Default username when a token-auth registry has no explicit username.
 _DEFAULT_TOKEN_USERNAME = "token"
@@ -225,14 +226,22 @@ async def _run_git_clone(
 async def generic_repo_checkout(
     url: str, auth: GitAuth, options: dict, *, timeout: int
 ) -> AsyncIterator[str]:
-    """Clone a generic-host private repo into tmpfs and yield the checkout path.
+    """Clone a generic-host private repo and yield the checkout path.
 
     Materializes a transient ``GIT_ASKPASS`` helper (mode ``0700``) in a fresh
-    tmpfs directory, clones ``url`` with the system ``git`` binary — the
-    credential travels only in the clone subprocess environment, never in argv —
-    checks out the requested ref, and yields the local checkout for Trivy to
-    scan. The whole directory (helper + checkout) is shredded and removed on
-    exit, including when the clone or the subsequent scan raises or is cancelled.
+    RAM-backed **tmpfs** directory (the credential never touches disk), clones
+    ``url`` with the system ``git`` binary — the credential travels only in the
+    clone subprocess environment, never in argv — checks out the requested ref,
+    and yields the local checkout for Trivy to scan. Both directories are shredded
+    and removed on exit, including when the clone or the subsequent scan raises or
+    is cancelled.
+
+    The **checkout** is placed on the writable ``/cache`` scratch volume, not the
+    tmpfs ``/tmp``: a repository working tree can be arbitrarily large, and the
+    tmpfs is a small (200 MB) RAM-backed mount whose size counts against the
+    container memory limit, so a large clone there would ``ENOSPC`` / risk an OOM
+    (the same hardened-runtime constraint that routes the scanner caches to
+    ``/cache``). The tiny credential helper stays in tmpfs.
 
     Args:
         url: The clean HTTPS repository URL (as stored and displayed).
@@ -243,9 +252,14 @@ async def generic_repo_checkout(
     Yields:
         The absolute path of the local checkout.
     """
-    tmpdir = Path(tempfile.mkdtemp(prefix="scrye-gitclone-"))
-    script_path = tmpdir / "askpass.sh"
-    checkout = tmpdir / "checkout"
+    # Credential helper: RAM-backed tmpfs (default temp dir), never disk.
+    cred_dir = Path(tempfile.mkdtemp(prefix="scrye-gitcred-"))
+    script_path = cred_dir / "askpass.sh"
+    # Checkout: the disk-backed cache volume, sized for large working trees.
+    scratch_root = get_settings().scanner_cache_dir / SCRATCH_SUBDIR
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    clone_dir = Path(tempfile.mkdtemp(prefix="scrye-gitclone-", dir=scratch_root))
+    checkout = clone_dir / "checkout"
     try:
         # 0700: git *execs* the askpass helper, so it must be executable; still
         # owner-only, never group/world readable or executable.
@@ -275,4 +289,6 @@ async def generic_repo_checkout(
     finally:
         _shred_file(script_path)
         with contextlib.suppress(OSError):
-            shutil.rmtree(tmpdir, ignore_errors=True)
+            shutil.rmtree(cred_dir, ignore_errors=True)
+        with contextlib.suppress(OSError):
+            shutil.rmtree(clone_dir, ignore_errors=True)

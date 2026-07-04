@@ -50,18 +50,34 @@ REDACTED = "[REDACTED]"
 # `registry_password`, `git_token`, `oidc_client_secret` redact just like the
 # bare word: `[\w.-]*` before the secret suffix absorbs the prefix, and the
 # suffix must sit at the end of the key (immediately before the separator).
-# Scheme keywords (Bearer/Basic) are excluded from the value so header-style
-# credentials are handled (whole-token) by the bearer pattern below instead.
+# The value is matched in three forms so a *quoted* value containing spaces (e.g.
+# an SMTP password or backup passphrase rendered in a dict/JSON repr) is redacted
+# whole, not silently skipped: a double-quoted run, a single-quoted run, or an
+# unquoted run up to the next whitespace/separator. Scheme keywords (Bearer/Basic)
+# are excluded from the unquoted form so header-style credentials are handled
+# (whole-token) by the bearer pattern below instead.
 _KV_PATTERN = re.compile(
     r"(?i)([\"']?\b[\w.-]*(?:" + "|".join(_SECRET_FIELD_NAMES) + r")\b[\"']?\s*[:=]\s*)"
-    r"([\"']?)((?!(?:bearer|basic)\b)[^\s\"',;&]+)(\2)"
+    r"(?:\"([^\"]*)\"|'([^']*)'|((?!(?:bearer|basic)\b)[^\s\"',;&]+))"
 )
 # Authorization header style bearer/basic tokens.
 _BEARER_PATTERN = re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+")
 # URL userinfo credentials: https://user:token@host -> https://[REDACTED]@host.
 # Covers transient credential-embedded git clone URLs (docs/PLAN.md §4.1) so a
-# token can never surface through a logged URL or a stored scanner error.
-_URL_USERINFO_PATTERN = re.compile(r"(?i)\b(https?://)[^/\s@]+@")
+# token can never surface through a logged URL or a stored scanner error. Greedy
+# up to the last '@' before the path so a literal '@' inside the userinfo can't
+# leave a trailing fragment exposed.
+_URL_USERINFO_PATTERN = re.compile(r"(?i)\b(https?://)[^\s/]+@")
+
+
+def _kv_replacement(match: re.Match[str]) -> str:
+    """Rebuild a matched key/value pair with the value masked, quotes preserved."""
+    key = match.group(1)
+    if match.group(2) is not None:  # double-quoted value
+        return f'{key}"{REDACTED}"'
+    if match.group(3) is not None:  # single-quoted value
+        return f"{key}'{REDACTED}'"
+    return f"{key}{REDACTED}"  # unquoted value
 
 
 def strip_url_credentials(text: str) -> str:
@@ -84,14 +100,21 @@ def redact(text: str) -> str:
     # (which would leave the token itself exposed).
     text = _BEARER_PATTERN.sub(rf"\g<1> {REDACTED}", text)
     text = strip_url_credentials(text)
-    return _KV_PATTERN.sub(rf"\g<1>\g<2>{REDACTED}\g<4>", text)
+    return _KV_PATTERN.sub(_kv_replacement, text)
 
 
 class SecretRedactionFilter(logging.Filter):
-    """Logging filter that redacts secret values from every record."""
+    """Logging filter that redacts secret values from every record.
+
+    Redacts the rendered message **and** any attached exception traceback /
+    stack info — the stdlib ``Formatter`` appends those from ``exc_info`` /
+    ``stack_info`` separately from the message, so a secret embedded in an
+    exception string (e.g. an ``httpx``/``smtplib`` error carrying a webhook URL
+    or SMTP password) would otherwise bypass message-only redaction.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        """Render the record's message, redact it, and always keep the record."""
+        """Redact the record's message and traceback; always keep the record."""
         try:
             message = record.getMessage()
         except (TypeError, ValueError):
@@ -101,7 +124,21 @@ class SecretRedactionFilter(logging.Filter):
         if redacted != message or record.args:
             record.msg = redacted
             record.args = None
+        if record.exc_info:
+            # Pre-format the traceback now and redact it; setting exc_text makes
+            # the handler's Formatter reuse this (already-masked) text verbatim.
+            exc_text = record.exc_text or logging.Formatter().formatException(record.exc_info)
+            record.exc_text = redact(exc_text)
+        if record.stack_info:
+            record.stack_info = redact(record.stack_info)
         return True
+
+
+#: Loggers that configure their own handlers with ``propagate=False`` (so records
+#: never reach the root handlers our filter is attached to). uvicorn's access
+#: logger in particular emits full request lines — query strings can carry an
+#: OIDC ``code``/``state`` or a token — so it must be filtered directly.
+_INDEPENDENT_LOGGERS = ("uvicorn", "uvicorn.access", "uvicorn.error")
 
 
 def configure_logging(level: str = "INFO") -> None:
@@ -121,4 +158,12 @@ def configure_logging(level: str = "INFO") -> None:
     redaction = SecretRedactionFilter()
     for handler in logging.getLogger().handlers:
         handler.addFilter(redaction)
+    # Cover loggers that don't propagate to root (notably uvicorn.access): attach
+    # to both the logger (applies regardless of when its handlers are added) and
+    # any handlers it already has.
+    for name in _INDEPENDENT_LOGGERS:
+        independent = logging.getLogger(name)
+        independent.addFilter(redaction)
+        for handler in independent.handlers:
+            handler.addFilter(redaction)
     _CONFIGURED = True

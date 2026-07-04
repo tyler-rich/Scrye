@@ -31,6 +31,22 @@ class TestNotificationCrud:
         assert WEBHOOK_SECRET not in resp.text
         assert body["secret"]["value"] != WEBHOOK_SECRET
 
+    def test_discord_url_is_encrypted_and_masked(self, client: TestClient) -> None:
+        csrf = setup_admin(client)
+        webhook = "https://discord.com/api/webhooks/123/super-secret-token"
+        resp = client.post(
+            "/api/notifications",
+            json={"name": "disc", "type": "discord", "config": {"url": webhook}},
+            headers={CSRF: csrf},
+        )
+        assert resp.status_code == 201, resp.text
+        # The webhook token (the credential) is never returned in full, and the
+        # secret is recorded as set (it moved into the encrypted secret column).
+        assert "super-secret-token" not in resp.text
+        assert resp.json()["secret"]["is_set"] is True
+        listing = client.get("/api/notifications", headers={CSRF: csrf})
+        assert "super-secret-token" not in listing.text
+
     def test_smtp_requires_secret(self, client: TestClient) -> None:
         csrf = setup_admin(client)
         resp = client.post(

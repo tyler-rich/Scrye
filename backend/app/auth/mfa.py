@@ -51,11 +51,18 @@ def decrypt_mfa_secret(token: str) -> str:
     return decrypt_secret(token, aad=AAD_MFA_SECRET)
 
 
+#: Challenge purposes. ``verify`` completes an existing enrolled login; ``enroll``
+#: completes a policy-forced first-time enrollment (see ``api/auth.py``).
+PURPOSE_VERIFY = "verify"
+PURPOSE_ENROLL = "enroll"
+
+
 @dataclass
 class _PendingChallenge:
     """A password-verified login awaiting its TOTP code."""
 
     user_id: int
+    purpose: str
     expires_at: float
 
 
@@ -71,22 +78,22 @@ class PendingMfaStore:
         """Initialize an empty challenge store."""
         self._pending: dict[str, _PendingChallenge] = {}
 
-    def issue(self, user_id: int) -> str:
+    def issue(self, user_id: int, purpose: str = PURPOSE_VERIFY) -> str:
         """Create a challenge for ``user_id`` and return its opaque token."""
         self._prune()
         token = secrets.token_urlsafe(32)
         self._pending[token] = _PendingChallenge(
-            user_id=user_id, expires_at=time.monotonic() + _CHALLENGE_TTL_SECONDS
+            user_id=user_id, purpose=purpose, expires_at=time.monotonic() + _CHALLENGE_TTL_SECONDS
         )
         return token
 
-    def consume(self, token: str) -> int | None:
-        """Return the user id for a valid challenge and delete it, else ``None``."""
+    def consume(self, token: str) -> tuple[int, str] | None:
+        """Return ``(user_id, purpose)`` for a valid challenge and delete it, else ``None``."""
         self._prune()
         challenge = self._pending.pop(token, None)
         if challenge is None or challenge.expires_at <= time.monotonic():
             return None
-        return challenge.user_id
+        return challenge.user_id, challenge.purpose
 
     def _prune(self) -> None:
         """Drop expired challenges."""
