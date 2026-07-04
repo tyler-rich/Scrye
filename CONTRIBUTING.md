@@ -124,6 +124,17 @@ auto-provisioned (when enabled) with the configured default role.
 
 ---
 
+## Branching model
+
+- **`main`** is protected and only ever receives tagged releases — it does not take direct
+  commits or day-to-day PRs.
+- **`dev`** is the integration branch. Fork or branch from `dev`, and open pull requests
+  **against `dev`**, not `main`.
+- A release is a separate, deliberate step: `dev` is promoted to `main` via its own PR, then
+  `main` is tagged. See § Releasing below.
+
+---
+
 ## Project layout
 
 ```
@@ -212,8 +223,9 @@ scrye/
 
 - [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`,
   `docs:`, `chore:`, …). Small, reviewable changes.
-- One branch per phase, named `phase/PX` (e.g. `phase/P0`); one PR per phase
-  against `main`.
+- Branch from `dev`; one PR per change against `dev` (see § Branching model above). During the
+  phased build, branches are named `phase/PX` (e.g. `phase/P0`); afterwards, use a short
+  descriptive branch name.
 - Update docs in the same PR as the code they describe.
 - Commit messages and PR descriptions carry **no AI-attribution footers**.
 - Any divergence from `docs/PLAN.md` is recorded in that file's
@@ -242,7 +254,7 @@ plaintext never appears in logs or API reads.
 
 ## Pull request process
 
-1. Fork (or branch) and create a `phase/PX` (or descriptive) branch.
+1. Fork (or branch) from `dev` and create a `phase/PX` (or descriptive) branch.
 2. Make your change with tests and updated docs.
 3. Ensure the checklist holds:
    - [ ] `ruff` + `black` clean (Python), ESLint + Prettier clean (TypeScript)
@@ -251,7 +263,21 @@ plaintext never appears in logs or API reads.
    - [ ] Docs updated (README / CONTRIBUTING / `.env.example` as applicable)
    - [ ] No secrets, keys, or tokens committed
    - [ ] Any plan deviations logged in `docs/PLAN.md`
-4. Open the PR against `main` with a clear summary of what changed.
+4. Open the PR against `dev` (not `main` — see § Branching model above) with a clear summary of
+   what changed.
+
+---
+
+## Releasing
+
+`main` is protected and only ever moves via a deliberate, maintainer-initiated release — it is
+never a target for routine contribution PRs.
+
+1. When `dev` is in a releasable state, the maintainer opens a **promotion PR** from `dev` into
+   `main`. This PR must pass the same CI gate as any other before it can merge.
+2. Once the promotion PR merges, `main` is **tagged** (e.g. `v0.x.0`) to mark the release.
+3. Contributors don't need to do anything differently for this — keep branching from and PR'ing
+   into `dev` as usual; release promotion is handled separately by the maintainer.
 
 ---
 
