@@ -401,6 +401,31 @@ decrypted in memory at scan time.
   socket is mounted (read-only); anyone who can reach it can _enumerate_ images
   and containers, so enable that profile deliberately and keep it on the
   internal network.
+- **Trusted reverse-proxy hops.** The app runs behind Caddy and honors
+  `X-Forwarded-For` (via uvicorn `--proxy-headers`) so the auth rate limiter and
+  audit log see the **real** client IP. The trust boundary is
+  `SCRYE_FORWARDED_ALLOW_IPS` — only `X-Forwarded-*` from these addresses is
+  believed. It defaults to the Docker bridge range Caddy connects from
+  (`172.16.0.0/12`) and **must never be `*`**: a wildcard trusts every hop, so a
+  client could prepend a forged `X-Forwarded-For` that the app then treats as the
+  source (bypassing the rate limiter and forging audit IPs). For other
+  topologies set it to the reverse proxy's exact container IP/CIDR (or the
+  specific Docker subnet it sits on); do **not** include the client LAN range.
+- **OIDC login-CSRF binding.** Each OIDC login is bound to the browser that
+  started it: a random token is stored in an `HttpOnly` cookie (a `__Host-`
+  prefixed, host-locked, `Secure` cookie in production, so no sibling subdomain
+  under a shared parent domain can plant it) and only its hash is kept on the
+  flow row, so an authorization-code flow cannot be completed in a different
+  browser (defeating login-CSRF / session fixation).
+- **MFA scope for OIDC (accepted limitation).** The mandatory-MFA policy
+  (`required_all` / `required_admin`) is enforced on **local** password login.
+  **OIDC logins delegate the second factor to the identity provider** — Scrye has
+  no local TOTP challenge in the OIDC handshake and provisioned OIDC accounts
+  carry no usable local password. If you require MFA for OIDC users, enforce it
+  at the IdP (e.g. Pocket ID). When group→role mapping is configured, an OIDC
+  login re-applies it, but an **absent** groups claim (e.g. an IdP that ships
+  groups only via UserInfo) preserves the user's current role rather than
+  demoting them, and an OIDC sync can never remove the last admin.
 
 ---
 

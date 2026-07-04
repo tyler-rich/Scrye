@@ -1275,3 +1275,43 @@ app (not per-phase) turned up these gaps; each fix keeps a locked decision intac
 with tests. The MFA-enforcement UX and OIDC browser-binding are security-model
 choices resolved conservatively (no user lockout; no new session concept).
 **Plan section affected:** §4, §4.6, §5, §6, §9.1, §9.2, §7 (oidc_login_flows).
+
+### 2026-07-04 — Post-P6 — Security-audit hotfix (follow-up to the merge above)
+**What changed:** An independent review of the merged audit-remediation surfaced
+two High and four Medium/Low defects it had introduced or left open; this hotfix
+closes them (all with regression tests):
+- **OIDC role sync — admin demotion/lockout (§5, High):** `_synced_role` now
+  distinguishes "groups claim absent from this token" (common — many IdPs deliver
+  groups via UserInfo or a specific scope, not the default ID token) from "user
+  not in the admin group". An absent claim **preserves** the user's current role
+  instead of resetting it to `default_role`, and a new last-admin guard refuses to
+  demote the final active admin via OIDC sync. Provisioning of *new* users keeps
+  the conservative `default_role` fallback.
+- **Reverse-proxy IP trust (§9.2, High):** `docker/entrypoint.sh` no longer
+  defaults `--forwarded-allow-ips` to `*` (which trusts any upstream hop and lets a
+  client spoof `X-Forwarded-For`, bypassing the auth rate limiter and forging audit
+  IPs). It defaults to the Docker bridge range `172.16.0.0/12`, overridable via the
+  new `SCRYE_FORWARDED_ALLOW_IPS` setting (added to the `Settings` model so it is
+  emitted in `.env.example`), and is documented for other topologies.
+- **OIDC MFA scope (§5, Medium):** documented as an accepted limitation (OIDC
+  delegates the second factor to the IdP; Scrye has no local TOTP step in the OIDC
+  handshake) in code, this file, and the README security model. Not gated at this
+  layer to avoid locking out OIDC accounts that have no local password.
+- **OIDC binding cookie (§5, Medium):** the browser-binding cookie is now a
+  `__Host-` prefixed, root-path, `Secure` cookie under TLS, so a sibling subdomain
+  on the shared parent domain (`*.your-domain.tld`) cannot plant it; it falls
+  back to the plain host name only over plain-HTTP dev (where `__Host-` is rejected)
+  and is cleared on the binding-failure path too.
+- **MFA re-enroll gate (§5, Medium):** `/auth/mfa/enroll` requires the current
+  password whenever a secret already exists — **including the pending, not-yet-
+  activated window**, not just active MFA — closing the gap where a session-only
+  attacker could overwrite a pending secret. The password is skipped only for a
+  genuine first enrollment with no prior secret.
+- **Registry probe scheme (§4.5, Low):** `check_registry` refuses to send the
+  stored credential to an `http://` host (fails closed before any request),
+  consistent with the Docker-environment proxy-URL validator.
+**Why:** #1 and #2 were exploitable on a running instance (silent admin lockout;
+rate-limit/audit spoofing), so they are shipped as a hotfix rather than folded into
+a later phase. Every fix preserves the locked decisions (single-container, field
+encryption, CIS posture) and adds no new schema or session concept.
+**Plan section affected:** §4.5, §5, §9.2, §11 (`SCRYE_FORWARDED_ALLOW_IPS`).

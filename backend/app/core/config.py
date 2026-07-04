@@ -58,6 +58,17 @@ class Settings(BaseSettings):
         default=8089,
         description="Port the API server listens on inside the container.",
     )
+    forwarded_allow_ips: str = Field(
+        default="172.16.0.0/12",
+        description=(
+            "Trusted upstream hops for uvicorn --forwarded-allow-ips (consumed by "
+            "docker/entrypoint.sh). Only X-Forwarded-* from these addresses is "
+            "honored, so the real client IP drives the auth rate limiter and audit "
+            "log. Default trusts the Docker bridge range Caddy connects from; set "
+            "it to the reverse proxy's exact IP/CIDR for other topologies. Never "
+            "set it to '*' — that lets any client spoof X-Forwarded-For."
+        ),
+    )
     cors_origins: list[str] = Field(
         default_factory=list,
         description=(

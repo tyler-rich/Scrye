@@ -39,3 +39,21 @@ def test_cache_volume_is_mounted_for_scanner_databases() -> None:
     # The writable, persistent cache volume is where the scanners' vuln DBs and
     # temp extraction land instead of the read-only $HOME/.cache or the tmpfs.
     assert "scrye_cache:/cache" in text, "the /cache volume must be mounted for scanner caches"
+
+
+ENTRYPOINT = Path(__file__).resolve().parents[2] / "docker" / "entrypoint.sh"
+
+
+def test_forwarded_allow_ips_default_is_not_wildcard() -> None:
+    # Security hotfix: uvicorn --forwarded-allow-ips must NOT default to "*".
+    # Trusting every upstream hop lets a client spoof X-Forwarded-For (bypassing
+    # the auth rate limiter and forging audit-log IPs). The default must be a
+    # bounded trusted range (the Docker bridge Caddy connects from), overridable
+    # via SCRYE_FORWARDED_ALLOW_IPS.
+    text = ENTRYPOINT.read_text(encoding="utf-8")
+    assert "--forwarded-allow-ips" in text, "entrypoint must set --forwarded-allow-ips"
+    assert '"${SCRYE_FORWARDED_ALLOW_IPS:-*}"' not in text, (
+        "the forwarded-allow-ips default must not be the wildcard '*' — it enables "
+        "X-Forwarded-For spoofing behind the reverse proxy"
+    )
+    assert "SCRYE_FORWARDED_ALLOW_IPS" in text, "the trusted range must stay operator-overridable"

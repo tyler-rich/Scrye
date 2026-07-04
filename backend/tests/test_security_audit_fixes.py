@@ -20,6 +20,7 @@ import pytest
 from pydantic import ValidationError
 
 import app.backup.bundle as bundle
+import app.core.registry_check as registry_check
 import app.scanners.credentials as credentials
 from app.api.scan_schemas import ScanCreateIn
 from app.core.config import get_settings
@@ -162,6 +163,22 @@ def test_bearer_token_refuses_non_https_realm() -> None:
 def test_bearer_token_missing_realm() -> None:
     client = _RecordingClient()
     assert asyncio.run(_bearer_token(client, {}, ("user", "secret"))) is None
+
+
+def test_check_registry_refuses_http_host(monkeypatch) -> None:
+    # Hotfix: an admin-configured http:// registry host must not have credentials
+    # sent to it in cleartext — the probe fails closed before any request.
+    def _boom(*args, **kwargs):  # pragma: no cover - must never be reached
+        raise AssertionError("no HTTP client should be created for an http:// host")
+
+    monkeypatch.setattr(registry_check.httpx, "AsyncClient", _boom)
+    result = asyncio.run(
+        registry_check.check_registry(
+            registry_host="http://internal-registry.local", username="u", secret="s"
+        )
+    )
+    assert result.ok is False
+    assert "https" in result.detail.lower()
 
 
 # --- Backup restore fails closed on an unversioned bundle --------------------
