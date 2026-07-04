@@ -11,6 +11,7 @@ from app.scanners.base import (
     NormalizedFinding,
     ScanExecution,
     ScannerError,
+    ScannerOutputError,
     get_scanner,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "NormalizedFinding",
     "ScanExecution",
     "ScannerError",
+    "ScannerOutputError",
     "get_scanner",
 ]

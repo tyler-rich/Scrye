@@ -170,10 +170,80 @@ def test_trivy_parse_handles_empty_and_null_results() -> None:
 
 
 def test_trivy_parse_rejects_non_json() -> None:
-    import pytest
-
     with pytest.raises(base.ScannerError):
         trivy.parse_output(b"not json at all")
+
+
+# --- Wrong-shape output: valid JSON that is not a Trivy/Grype report ----------
+#
+# Regression guards: these inputs previously escaped the JSON-decode guard and
+# crashed with an unguarded AttributeError (bypassing ScannerError handling and
+# skipping raw-output persistence). They must fail as a diagnosable
+# ScannerOutputError that carries the raw bytes for the worker to store.
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"null",  # top-level null
+        b"[]",  # top-level array
+        b'"a string"',  # top-level scalar
+        b"42",
+        json.dumps({"Results": "not-a-list"}).encode(),
+        json.dumps({"Results": {"Target": "x"}}).encode(),
+        json.dumps({"Results": ["not-a-dict"]}).encode(),
+        json.dumps({"Results": [{"Vulnerabilities": "oops"}]}).encode(),
+        json.dumps({"Results": [{"Vulnerabilities": ["not-a-dict"]}]}).encode(),
+        json.dumps({"Results": [{"Misconfigurations": 7}]}).encode(),
+        json.dumps({"Results": [{"Secrets": {"RuleID": "x"}}]}).encode(),
+        json.dumps({"Results": [{"Licenses": [42]}]}).encode(),
+    ],
+)
+def test_trivy_parse_rejects_wrong_shape_json(raw: bytes) -> None:
+    with pytest.raises(base.ScannerOutputError) as excinfo:
+        trivy.parse_output(raw)
+    # The raw output rides on the error so the worker can persist it.
+    assert excinfo.value.raw_output == raw
+    # The error is a ScannerError (handled by the worker's failure path).
+    assert isinstance(excinfo.value, base.ScannerError)
+
+
+def test_trivy_parse_attaches_raw_even_for_invalid_json() -> None:
+    with pytest.raises(base.ScannerOutputError) as excinfo:
+        trivy.parse_output(b"not json at all")
+    assert excinfo.value.raw_output == b"not json at all"
+
+
+# --- Shared base helpers (load_json_output / check_success / shape guards) ----
+
+
+def test_load_json_output_defaults_empty_output_to_empty_report() -> None:
+    assert base.load_json_output(b"", "Trivy") == {}
+    assert base.load_json_output(b"{}", "Trivy") == {}
+
+
+def test_load_json_output_names_the_engine_in_errors() -> None:
+    with pytest.raises(base.ScannerOutputError, match="Grype"):
+        base.load_json_output(b"[]", "Grype")
+
+
+def test_check_success_raises_with_stderr_detail() -> None:
+    result = base.CommandResult(returncode=3, stdout=b"", stderr=b"boom", argv=["trivy"])
+    with pytest.raises(base.ScannerError, match="Trivy exited with code 3: boom"):
+        base.check_success(result, "Trivy")
+
+
+def test_check_success_passes_on_zero_exit() -> None:
+    base.check_success(base.CommandResult(returncode=0, stdout=b"{}", stderr=b""), "Trivy")
+
+
+def test_string_entries_rejects_scalar_where_list_expected() -> None:
+    with pytest.raises(base.ScannerOutputError, match="fix.versions"):
+        base.string_entries("1.2.3", "fix.versions", "Grype")
+
+
+def test_string_entries_coerces_scalar_items() -> None:
+    assert base.string_entries(["1.2.3", 4], "fix.versions", "Grype") == ["1.2.3", "4"]
 
 
 # --- Grype: command building + parsing ---------------------------------------
@@ -248,6 +318,91 @@ def test_grype_parse_handles_empty_document() -> None:
     findings, version = grype.parse_output(b"{}")
     assert findings == []
     assert version is None
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"null",  # top-level null
+        b"[]",  # top-level array
+        b'"a string"',
+        json.dumps({"matches": "not-a-list"}).encode(),
+        json.dumps({"matches": ["not-a-dict"]}).encode(),
+        json.dumps({"matches": [{"vulnerability": "oops"}]}).encode(),
+        json.dumps({"matches": [{"vulnerability": {}, "artifact": "oops"}]}).encode(),
+        json.dumps({"descriptor": "grype 0.115.0"}).encode(),
+        json.dumps({"matches": [{"artifact": {"locations": [42]}}]}).encode(),
+        json.dumps({"matches": [{"artifact": {"locations": "somewhere"}}]}).encode(),
+    ],
+)
+def test_grype_parse_rejects_wrong_shape_json(raw: bytes) -> None:
+    with pytest.raises(base.ScannerOutputError) as excinfo:
+        grype.parse_output(raw)
+    assert excinfo.value.raw_output == raw
+
+
+def test_grype_parse_rejects_string_urls_instead_of_first_char_garbage() -> None:
+    # A string `urls` previously indexed its first *character* into primary_url.
+    raw = json.dumps(
+        {"matches": [{"vulnerability": {"id": "CVE-1", "urls": "https://x"}, "artifact": {}}]}
+    ).encode()
+    with pytest.raises(base.ScannerOutputError, match="urls"):
+        grype.parse_output(raw)
+
+
+def test_grype_parse_rejects_string_fix_versions_instead_of_per_char_join() -> None:
+    # A string `fix.versions` previously joined per character ("1, ., 2, ., 3").
+    raw = json.dumps(
+        {
+            "matches": [
+                {
+                    "vulnerability": {"id": "CVE-1", "fix": {"versions": "1.2.3"}},
+                    "artifact": {},
+                }
+            ]
+        }
+    ).encode()
+    with pytest.raises(base.ScannerOutputError, match="fix.versions"):
+        grype.parse_output(raw)
+
+
+def test_grype_parse_surfaces_wont_fix_state() -> None:
+    # `fix.state: wont-fix` is a vendor decision — it must be distinguishable
+    # from "no fix data at all" (which stays None, as with not-fixed/unknown).
+    raw = json.dumps(
+        {
+            "matches": [
+                {
+                    "vulnerability": {
+                        "id": "CVE-WF",
+                        "severity": "High",
+                        "fix": {"versions": [], "state": "wont-fix"},
+                    },
+                    "artifact": {"name": "libbar", "version": "1.0"},
+                }
+            ]
+        }
+    ).encode()
+    findings, _ = grype.parse_output(raw)
+    assert findings[0].fixed_version == "wont-fix"
+
+
+def test_grype_parse_listed_fix_versions_take_precedence_over_state() -> None:
+    raw = json.dumps(
+        {
+            "matches": [
+                {
+                    "vulnerability": {
+                        "id": "CVE-F",
+                        "fix": {"versions": ["2.0", "2.1"], "state": "fixed"},
+                    },
+                    "artifact": {},
+                }
+            ]
+        }
+    ).encode()
+    findings, _ = grype.parse_output(raw)
+    assert findings[0].fixed_version == "2.0, 2.1"
 
 
 def test_tally_severities_counts_every_level() -> None:
@@ -489,3 +644,56 @@ async def test_version_probe_uses_writable_cache(monkeypatch, tmp_path) -> None:
     await system_info._probe_scanner("trivy", "/usr/local/bin/trivy")
 
     assert run.env["TRIVY_CACHE_DIR"] == str(tmp_path / "trivy")
+
+
+# --- Trivy scanner_version (recorded like Grype's descriptor version) ---------
+
+
+class _VersionAwareRun:
+    """``run_command`` stub answering the version probe and the scan separately."""
+
+    def __init__(self, scan_stdout: bytes, version_stdout: bytes | None) -> None:
+        self.scan_stdout = scan_stdout
+        self.version_stdout = version_stdout
+        self.calls: list[list[str]] = []
+
+    async def __call__(self, argv, *, timeout, env=None) -> base.CommandResult:
+        self.calls.append(argv)
+        if "--version" in argv:
+            if self.version_stdout is None:
+                return base.CommandResult(returncode=1, stdout=b"", stderr=b"probe broke")
+            return base.CommandResult(returncode=0, stdout=self.version_stdout, stderr=b"")
+        return base.CommandResult(returncode=0, stdout=self.scan_stdout, stderr=b"")
+
+
+@pytest.mark.asyncio
+async def test_trivy_scan_records_scanner_version(monkeypatch, tmp_path) -> None:
+    # Trivy's report JSON carries no engine version (unlike Grype's descriptor),
+    # so the scanner must record it via a `trivy --version` probe.
+    _patch_scanner_cache(monkeypatch, tmp_path)
+    run = _VersionAwareRun(
+        scan_stdout=json.dumps({"Results": []}).encode(),
+        version_stdout=json.dumps({"Version": "0.72.0"}).encode(),
+    )
+    monkeypatch.setattr(trivy, "run_command", run)
+
+    execution = await trivy.TrivyScanner().scan_image("alpine:3.19", {})
+
+    assert execution.scanner_version == "0.72.0"
+    # The probe ran alongside — not instead of — the scan itself.
+    assert any("image" in argv for argv in run.calls)
+
+
+@pytest.mark.asyncio
+async def test_trivy_version_probe_failure_does_not_fail_the_scan(monkeypatch, tmp_path) -> None:
+    _patch_scanner_cache(monkeypatch, tmp_path)
+    run = _VersionAwareRun(
+        scan_stdout=json.dumps({"Results": []}).encode(),
+        version_stdout=None,  # probe exits non-zero
+    )
+    monkeypatch.setattr(trivy, "run_command", run)
+
+    execution = await trivy.TrivyScanner().scan_image("alpine:3.19", {})
+
+    assert execution.scanner_version is None
+    assert execution.findings == []

@@ -39,7 +39,14 @@ from app.db.models import (
     Severity,
     TargetType,
 )
-from app.scanners import BaseScanner, ScanExecution, ScannerError, get_scanner, syft
+from app.scanners import (
+    BaseScanner,
+    ScanExecution,
+    ScannerError,
+    ScannerOutputError,
+    get_scanner,
+    syft,
+)
 from app.scanners.credentials import (
     REPO_REF_KEYS,
     docker_config_env,
@@ -210,6 +217,10 @@ class InProcessScanWorker(ScanWorker):
         try:
             execution, sbom = await self._dispatch(session, scan)
         except ScannerError as exc:
+            # A parse failure carries the raw scanner output; persist it so the
+            # malformed output stays diagnosable even though the scan failed.
+            if isinstance(exc, ScannerOutputError) and exc.raw_output:
+                self._store_failure_output(session, scan, exc.raw_output)
             # ScannerError/TargetError messages are operator-safe, but repo scans
             # can surface a scanner stderr that echoes a credential-embedded URL;
             # redact() strips URL userinfo before the message is stored/logged.
@@ -398,6 +409,39 @@ class InProcessScanWorker(ScanWorker):
                 with contextlib.suppress(OSError, ValueError):
                     artifact_path(relative_path).unlink(missing_ok=True)
             raise
+
+    def _store_failure_output(self, session: Session, scan: Scan, raw: bytes) -> None:
+        """Persist the raw output attached to a parse failure (best-effort).
+
+        A :class:`ScannerOutputError` means the subprocess ran but produced
+        output the parser rejected; storing those bytes as the scan's raw
+        artifact is what makes the failure diagnosable. Failures here are
+        logged, never raised — the scan is being marked failed regardless.
+        """
+        filename, kind = _RAW_ARTIFACT[scan.scanner]
+        try:
+            stored = store_artifact(scan.id, filename, raw)
+        except OSError:
+            logger.exception("Could not write raw output for failed scan %d.", scan.id)
+            return
+        try:
+            session.add(
+                Artifact(
+                    scan_id=scan.id,
+                    kind=kind,
+                    filename=filename,
+                    content_type="application/json",
+                    relative_path=stored.relative_path,
+                    size_bytes=stored.size_bytes,
+                    sha256=stored.sha256,
+                )
+            )
+            session.commit()
+        except Exception:  # noqa: BLE001 - never mask the scan's own failure
+            logger.exception("Could not record raw-output artifact for scan %d.", scan.id)
+            session.rollback()
+            with contextlib.suppress(OSError, ValueError):
+                artifact_path(stored.relative_path).unlink(missing_ok=True)
 
     def _fail(self, session: Session, scan_id: int, message: str) -> None:
         """Mark a scan failed with a safe, secret-redacted error message."""
