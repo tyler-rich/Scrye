@@ -180,22 +180,31 @@ def _scan_csv(scan: Scan, findings: list[Finding]) -> bytes:
 
 
 def _md_escape(value: str | None) -> str:
-    """Escape a value for a Markdown table cell and neutralize formula injection.
+    r"""Escape a value for a Markdown table cell and neutralize formula injection.
 
-    Escapes the pipe/newline characters that would break a table cell, then
-    applies the same formula-injection guard as the CSV exporter (:func:`_csv_safe`)
-    so a value beginning with ``= + - @`` is inert if the rendered report is later
-    pasted or imported into a spreadsheet.
+    Escapes the pipe characters that would break a table cell and flattens all
+    line breaks (``\r\n``, ``\n``, and bare ``\r`` — a lone carriage return
+    splits a row just like a newline in most renderers), then applies the same
+    formula-injection guard as the CSV exporter (:func:`_csv_safe`) so a value
+    beginning with ``= + - @`` is inert if the rendered report is later pasted
+    or imported into a spreadsheet.
     """
     if not value:
         return ""
-    escaped = value.replace("|", "\\|").replace("\n", " ").strip()
-    return _csv_safe(escaped)
+    escaped = value.replace("|", "\\|")
+    for line_break in ("\r\n", "\n", "\r"):
+        escaped = escaped.replace(line_break, " ")
+    return _csv_safe(escaped.strip())
 
 
 def _scan_markdown(scan: Scan, findings: list[Finding]) -> bytes:
-    """Serialize a scan to a readable Markdown report grouped by severity."""
-    lines: list[str] = [f"# Scrye scan report — {scan.target}", ""]
+    """Serialize a scan to a readable Markdown report grouped by severity.
+
+    Every operator-supplied value (target, initiator, tags) goes through
+    :func:`_md_escape` so an embedded newline or pipe cannot break out of its
+    heading, bullet, or table cell and inject report structure.
+    """
+    lines: list[str] = [f"# Scrye scan report — {_md_escape(scan.target)}", ""]
     lines.append(f"- **Scan ID:** {scan.id}")
     lines.append(f"- **Scanner:** {scan.scanner.value}")
     lines.append(f"- **Target type:** {scan.target_type.value}")
@@ -204,9 +213,9 @@ def _scan_markdown(scan: Scan, findings: list[Finding]) -> bytes:
         lines.append(f"- **Highest severity:** {scan.highest_severity.value}")
     lines.append(f"- **Findings:** {scan.findings_count}")
     if scan.created_by_username:
-        lines.append(f"- **Initiated by:** {scan.created_by_username}")
+        lines.append(f"- **Initiated by:** {_md_escape(scan.created_by_username)}")
     if scan.tags:
-        lines.append(f"- **Tags:** {', '.join(scan.tags)}")
+        lines.append(f"- **Tags:** {_md_escape(', '.join(scan.tags))}")
     if scan.finished_at:
         lines.append(f"- **Finished:** {_iso(scan.finished_at)}")
     lines.append("")
@@ -273,6 +282,10 @@ def export_scan(scan: Scan, findings: list[Finding], fmt: ExportFormat) -> Expor
 # --- Filtered-history exporters ----------------------------------------------
 
 
+#: Per-severity count columns, worst first — derived from the shared enum so the
+#: header and rows can never drift from the severity model (or each other).
+_HISTORY_SEVERITY_COLUMNS = [severity.value for severity in _SEVERITY_ORDER]
+
 _HISTORY_CSV_COLUMNS = [
     "scan_id",
     "scanner",
@@ -281,12 +294,7 @@ _HISTORY_CSV_COLUMNS = [
     "status",
     "highest_severity",
     "findings_count",
-    "critical",
-    "high",
-    "medium",
-    "low",
-    "negligible",
-    "unknown",
+    *_HISTORY_SEVERITY_COLUMNS,
     "initiator",
     "tags",
     "created_at",
@@ -321,12 +329,7 @@ def _history_csv(scans: list[Scan]) -> bytes:
                 _csv_safe(scan.status.value),
                 _csv_safe(scan.highest_severity.value if scan.highest_severity else ""),
                 scan.findings_count,
-                counts.get("critical", 0),
-                counts.get("high", 0),
-                counts.get("medium", 0),
-                counts.get("low", 0),
-                counts.get("negligible", 0),
-                counts.get("unknown", 0),
+                *(counts.get(column, 0) for column in _HISTORY_SEVERITY_COLUMNS),
                 _csv_safe(scan.created_by_username or ""),
                 _csv_safe(",".join(scan.tags)),
                 _csv_safe(_iso(scan.created_at) or ""),
@@ -342,7 +345,12 @@ def _history_markdown(scans: list[Scan], filters: dict[str, Any] | None) -> byte
     lines: list[str] = ["# Scrye scan history", ""]
     active = {k: v for k, v in (filters or {}).items() if v not in (None, "", [])}
     if active:
-        lines.append("**Filters:** " + ", ".join(f"{k}={v}" for k, v in active.items()))
+        # Filter values carry user input (e.g. the target search text) — escape
+        # them so a crafted value cannot inject Markdown structure. Keys are
+        # internal filter names and need no escaping.
+        lines.append(
+            "**Filters:** " + ", ".join(f"{k}={_md_escape(str(v))}" for k, v in active.items())
+        )
         lines.append("")
     lines.append(f"**Matching scans:** {len(scans)}")
     lines.append("")

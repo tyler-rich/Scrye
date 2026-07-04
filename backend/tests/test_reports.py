@@ -184,6 +184,84 @@ def test_diff_matches_ignoring_package_version_churn(db: Session) -> None:
     assert diff.unchanged_count == 1
 
 
+def test_diff_vulnerability_identity_ignores_location(db: Session) -> None:
+    base = _scan(db)
+    compare = _scan(db)
+    db.flush()
+    # Same CVE + package at a different location → still the same finding (a
+    # CVE id is a global identity; the location rarely disambiguates).
+    base_findings = [_finding(base.id, vuln_id="CVE-X", location="layer-a")]
+    compare_findings = [_finding(compare.id, vuln_id="CVE-X", location="layer-b")]
+    diff = diff_findings(base_findings, compare_findings)
+    assert diff.added_count == 0 and diff.removed_count == 0
+    assert diff.unchanged_count == 1
+
+
+def _secret(scan_id: int, location: str) -> Finding:
+    """Build a Trivy-style secret finding: the rule ID lands in vuln_id."""
+    return _finding(
+        scan_id,
+        finding_class=FindingClass.SECRET,
+        severity=Severity.CRITICAL,
+        vuln_id="aws-access-key-id",
+        pkg_name=None,
+        installed_version=None,
+        fixed_version=None,
+        title="AWS Access Key ID",
+        location=location,
+    )
+
+
+def test_diff_keeps_per_file_occurrences_of_one_rule_distinct(db: Session) -> None:
+    """Non-vulnerability classes must not collapse on their shared rule ID.
+
+    Trivy sets vuln_id for secrets/misconfigs/licenses too (the rule/check ID),
+    and one rule commonly fires in many files. Dropping the location from their
+    identity collapsed distinct occurrences into one diff key, silently
+    under-reporting fixes and new hits.
+    """
+    base = _scan(db, target="repo")
+    compare = _scan(db, target="repo")
+    db.flush()
+
+    # Base: the same secret rule fires in two files. Compare: one was removed.
+    base_findings = [_secret(base.id, "config/a.yaml:12"), _secret(base.id, "config/b.yaml:3")]
+    compare_findings = [_secret(compare.id, "config/a.yaml:12")]
+
+    diff = diff_findings(base_findings, compare_findings)
+    assert diff.unchanged_count == 1
+    assert diff.removed_count == 1
+    assert diff.removed[0].location == "config/b.yaml:3"
+    assert diff.added_count == 0
+
+
+def test_diff_misconfiguration_rule_across_files(db: Session) -> None:
+    base = _scan(db, target="repo")
+    compare = _scan(db, target="repo")
+    db.flush()
+
+    def _misconfig(scan_id: int, location: str) -> Finding:
+        return _finding(
+            scan_id,
+            finding_class=FindingClass.MISCONFIGURATION,
+            vuln_id="DS002",
+            pkg_name=None,
+            title="Image user should not be root",
+            location=location,
+        )
+
+    base_findings = [_misconfig(base.id, "Dockerfile")]
+    compare_findings = [
+        _misconfig(compare.id, "Dockerfile"),
+        _misconfig(compare.id, "dev.Dockerfile"),
+    ]
+    diff = diff_findings(base_findings, compare_findings)
+    # The new per-file occurrence of the same check registers as added.
+    assert diff.added_count == 1
+    assert diff.added[0].location == "dev.Dockerfile"
+    assert diff.unchanged_count == 1
+
+
 # --- CSV / spreadsheet formula-injection prevention --------------------------
 
 
@@ -253,3 +331,80 @@ def test_markdown_export_neutralizes_formula_injection(db: Session) -> None:
     text = export_scan(scan, [finding], ExportFormat.MARKDOWN).content.decode()
     assert "'=cmd" in text
     assert "normalpkg" in text  # untouched
+
+
+# --- Markdown structure-injection prevention ----------------------------------
+
+
+def test_markdown_report_heading_escapes_target(db: Session) -> None:
+    # A newline in the target would break out of the H1 and inject its own
+    # heading line; a pipe is escaped like any cell content.
+    scan = _scan(db, target="img:1\n# fake heading | evil")
+    db.flush()
+    text = export_scan(scan, [], ExportFormat.MARKDOWN).content.decode()
+    assert "\n# fake heading" not in text
+    assert text.splitlines()[0].startswith("# Scrye scan report — img:1 ")
+    assert "\\|" in text.splitlines()[0]
+
+
+def test_markdown_report_escapes_initiator_and_tags(db: Session) -> None:
+    scan = _scan(db, created_by_username="user\nname|x")
+    db.add(ScanTag(scan_id=scan.id, tag="tag|pipe"))
+    db.flush()
+    text = export_scan(scan, [], ExportFormat.MARKDOWN).content.decode()
+    initiated = next(line for line in text.splitlines() if "Initiated by" in line)
+    assert initiated == "- **Initiated by:** user name\\|x"
+    tags = next(line for line in text.splitlines() if "Tags" in line)
+    assert "tag\\|pipe" in tags
+
+
+def test_markdown_escape_strips_carriage_returns(db: Session) -> None:
+    # A bare \r splits a row in most renderers just like \n; both are flattened.
+    scan = _scan(db)
+    finding = _finding(scan.id, title="line1\r\nline2\rline3", vuln_id="CVE-CR")
+    db.add(finding)
+    db.flush()
+    text = export_scan(scan, [finding], ExportFormat.MARKDOWN).content.decode()
+    assert "line1 line2 line3" in text
+    assert "\r" not in text
+
+
+def test_history_markdown_escapes_filter_values(db: Session) -> None:
+    scan = _scan(db)
+    db.flush()
+    filters = {"target_search": "evil|\n# injected heading"}
+    text = export_history([scan], ExportFormat.MARKDOWN, filters=filters).content.decode()
+    assert "\n# injected heading" not in text
+    filters_line = next(line for line in text.splitlines() if line.startswith("**Filters:**"))
+    assert "target_search=evil\\| # injected heading" in filters_line
+
+
+def test_history_markdown_escapes_target_cells(db: Session) -> None:
+    scan = _scan(db, target="img\r\nwith|pipe")
+    db.flush()
+    text = export_history([scan], ExportFormat.MARKDOWN).content.decode()
+    assert "img with\\|pipe" in text
+    assert "\r" not in text
+
+
+# --- Severity columns are derived from the shared enum ------------------------
+
+
+def test_history_csv_severity_columns_derive_from_enum(db: Session) -> None:
+    scan = _scan(db, severity_counts={"critical": 2, "negligible": 1})
+    db.flush()
+    rows = list(csv.reader(io.StringIO(export_history([scan], ExportFormat.CSV).content.decode())))
+    header, row = rows[0], rows[1]
+    # One count column per Severity level, worst first, between the fixed columns.
+    start = header.index("findings_count") + 1
+    assert header[start : start + 6] == [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "negligible",
+        "unknown",
+    ]
+    assert row[header.index("critical")] == "2"
+    assert row[header.index("negligible")] == "1"
+    assert row[header.index("high")] == "0"
