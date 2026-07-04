@@ -295,12 +295,16 @@ builds for both architectures. Publishing to Docker Hub (`<dockerhub-user>/scrye
   The job refuses to run if the tagged commit is not on `main`, so `:latest` and `:<version>`
   always come from a real release.
 
-- **`:dev` (continuous build, not a release).** Every push to the `dev` branch builds the
-  multi-arch image and pushes the single **moving** tag `<dockerhub-user>/scrye:dev`, always
-  overwritten. This is **not** a stable release and **not** a version — it just mirrors the
-  current state of `dev` so you can pull and test HEAD-of-dev (`docker pull
-  <dockerhub-user>/scrye:dev`) without cutting a tagged release. Do not treat `:dev` as
-  production-ready; use a `:<version>` tag (or `:latest`) for that.
+- **`:dev` (continuous build, not a release).** Each time a pull request is **merged into
+  `dev`**, the multi-arch image is built and pushed as the single **moving** tag
+  `<dockerhub-user>/scrye:dev`, always overwritten. The workflow triggers on
+  `pull_request: types: [closed]` (base `dev`) gated on `pull_request.merged == true`, so it
+  fires **only on an actual merge** — not on other pushes to the `dev` ref (e.g. conflict-
+  resolution commits on an open PR) and not on PRs closed without merging. This is **not** a
+  stable release and **not** a version — it just mirrors the state of `dev` after each merge so
+  you can pull and test HEAD-of-dev (`docker pull <dockerhub-user>/scrye:dev`) without cutting a
+  tagged release. Do not treat `:dev` as production-ready; use a `:<version>` tag (or `:latest`)
+  for that.
 
 ---
 

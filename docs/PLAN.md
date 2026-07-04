@@ -28,11 +28,14 @@ These were decided and are not open for re-litigation during the build:
    - **Tagged main releases:** pushing a semver tag `v*.*.*` builds the multi-arch (amd64/arm64)
      image and pushes `<dockerhub-user>/scrye:<version>` (tag minus the leading `v`) **and**
      `<dockerhub-user>/scrye:latest`. Runs **only** when the tagged commit is on `main`.
-   - **dev continuous build:** every push to `dev` builds the multi-arch image and pushes the
-     single **moving** tag `<dockerhub-user>/scrye:dev` (always overwritten — not a version, not
-     `latest`), for testing the current state of `dev` without cutting a release.
-   `latest`/`:<version>` come only from tagged main releases; `:dev` only from `dev` pushes. No
-   other registries or tags. (Originally locked to local-build-only; revised — see § Deviations.)
+   - **dev continuous build:** each time a pull request is **merged into `dev`** the multi-arch
+     image is built and pushed as the single **moving** tag `<dockerhub-user>/scrye:dev` (always
+     overwritten — not a version, not `latest`), mirroring `dev` after each merge for testing
+     without cutting a release. It does **not** fire on bare pushes to the `dev` ref (e.g.
+     conflict-resolution commits on an open PR) or on PRs closed without merging.
+   `latest`/`:<version>` come only from tagged main releases; `:dev` only from PRs merged into
+   `dev`. No other registries or tags. (Originally locked to local-build-only; revised — see
+   § Deviations.)
 7. **Backend runtime:** **Python 3.13.** (Originally locked to Python 3.12; revised to 3.13 in
    Phase 6 to resolve Grype-flagged CPython interpreter CVEs whose fixes are only available in
    3.13+ — see § Deviations for the full rationale.)
@@ -1384,10 +1387,14 @@ triggers:
   fetches `main` and fails unless the tagged commit is an ancestor of `main`'s
   tip, so `:<version>`/`:latest` can only ever come from a real release cut from
   `main`.
-- **dev continuous build** (`on: push: branches: dev`) builds the multi-arch
+- **dev continuous build** (`on: pull_request: types: [closed]` with base `dev`,
+  gated on `github.event.pull_request.merged == true`) builds the multi-arch
   image and pushes the single **moving** tag `<dockerhub-user>/scrye:dev`, always
-  overwritten — not a version, not `latest`. It exists only to test the current
-  state of `dev` without cutting a release.
+  overwritten — not a version, not `latest`. It fires **only when a PR is merged
+  into `dev`** — not on every push touching the `dev` ref (e.g. conflict-
+  resolution commits on an open PR) and not on PRs closed without merging — and
+  builds the merged commit (`merge_commit_sha`). It exists only to test the
+  current state of `dev` without cutting a release.
 The multi-arch build invocation (QEMU + Buildx + `docker/build-push-action`
 against `docker/Dockerfile`) was extracted into a reusable composite action at
 `.github/actions/build-image`, and `ci.yml`'s `image-multiarch` build-check was
@@ -1402,11 +1409,18 @@ whole Dockerfile under QEMU emulation, which on a cold `type=gha` cache takes
 multiple hours; only main-scoped runs reliably restore a warm arm64 cache, so
 `dev`-based PRs would rebuild from scratch every time. Multi-arch buildability
 stays continuously proven for `dev` by `publish.yml` (which builds amd64+arm64
-on every push to `dev` and on release tags), and `dev` PRs still run the fast
-amd64-only image build + dogfood self-scan, so no coverage is lost.
+on each PR merged into `dev` and on release tags), and `dev` PRs still run the
+fast amd64-only image build + dogfood self-scan, so no coverage is lost.
+**Trigger correction (same session):** the `:dev` path was first written as
+`on: push: branches: dev`, which fired on *any* commit reaching the `dev` ref —
+including conflict-resolution pushes to an open, unmerged promotion PR. It was
+re-scoped to `on: pull_request: types: [closed]` (base `dev`) gated on
+`pull_request.merged == true`, so `:dev` now publishes strictly when a PR is
+merged into `dev`.
 **Why:** Explicit user instruction this session, superseding the earlier
 "local-build-only / publish-on-tagged-releases-only" state of §0.6 to add the
-`dev` continuous-build path for testing dev without a release.
+`dev` continuous-build path for testing dev without a release, then re-scoping
+that path from push-based to merged-PR-based per follow-up instruction.
 **Plan section affected:** §0.6 (distribution), §9.1 (image), §13 (moved out of
 deferred).
 
