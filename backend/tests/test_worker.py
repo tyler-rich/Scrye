@@ -14,7 +14,7 @@ import pytest
 from app.core.artifacts import artifact_path
 from app.db.models import Scan, Scanner, ScanStatus, Severity, TargetType
 from app.db.session import SessionLocal
-from app.scanners import NormalizedFinding, ScanExecution, ScannerError
+from app.scanners import NormalizedFinding, ScanExecution, ScannerError, ScannerOutputError
 from app.scanners.base import tally_severities
 from app.workers import inprocess
 from app.workers.inprocess import InProcessScanWorker
@@ -123,6 +123,40 @@ async def test_worker_marks_failed_on_scanner_error(db, monkeypatch) -> None:
     assert "Trivy exited with code 1" in scan.error
     assert scan.findings_count == 0
     assert scan.artifacts == []
+
+
+@pytest.mark.asyncio
+async def test_worker_persists_raw_output_when_parsing_fails(db, monkeypatch) -> None:
+    """Wrong-shape scanner output must fail the scan *and* store the raw bytes.
+
+    Without the stored artifact a malformed-output failure is undiagnosable —
+    there is nothing on disk to inspect.
+    """
+    raw = b'["not", "a", "grype", "report"]'
+
+    class _WrongShapeScanner:
+        async def scan_image(self, target, options, *, env=None):
+            raise ScannerOutputError(
+                "Grype produced JSON of an unexpected shape: expected a top-level "
+                "object, got list.",
+                raw,
+            )
+
+    monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _WrongShapeScanner())
+    scan_id = _queue_scan(db)
+    worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+    await worker.submit(scan_id)
+    await worker.shutdown()
+
+    db.expire_all()
+    scan = db.get(Scan, scan_id)
+    assert scan.status is ScanStatus.FAILED
+    assert "unexpected shape" in scan.error
+    # The raw output is persisted as the scan's raw artifact for diagnosis.
+    assert len(scan.artifacts) == 1
+    artifact = scan.artifacts[0]
+    assert artifact.filename == "grype.json"
+    assert artifact_path(artifact.relative_path).read_bytes() == raw
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,6 @@ for storage as the source-of-truth artifact.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from app.core.config import get_settings
@@ -17,18 +16,32 @@ from app.scanners.base import (
     BaseScanner,
     NormalizedFinding,
     ScanExecution,
-    ScannerError,
+    ScannerOutputError,
+    check_success,
     clip,
     inherited_env,
+    load_json_output,
+    object_entries,
+    object_field,
     resolve_binary,
     run_command,
     scanner_cache_env,
     severity_from_string,
+    string_entries,
     tally_severities,
 )
 
+#: Engine name used in operator-facing error messages.
+_ENGINE = "Grype"
+
 #: Env var that disables Grype's interactive app-update check for batch runs.
 _UPDATE_CHECK_ENV = {"GRYPE_CHECK_FOR_APP_UPDATE": "false"}
+
+#: ``fix.state`` values surfaced when Grype lists no fixed versions. A plain
+#: ``not-fixed``/``unknown`` stays ``None`` (no fix data), but ``wont-fix`` is a
+#: vendor decision worth showing — dropping it would be indistinguishable from
+#: having no fix information at all.
+_SURFACED_FIX_STATES = frozenset({"wont-fix"})
 
 
 def build_command(binary: str, reference: str) -> list[str]:
@@ -61,18 +74,30 @@ def scan_env(overlay: dict[str, str] | None = None) -> dict[str, str]:
 
 
 def _fixed_version(fix: Any) -> str | None:
-    """Extract a human-readable fixed version from a Grype ``fix`` object."""
-    if not isinstance(fix, dict):
-        return None
-    versions = fix.get("versions") or []
+    """Extract a human-readable fixed version from a Grype ``fix`` object.
+
+    When no fixed versions are listed, a decision-relevant ``fix.state`` (e.g.
+    ``wont-fix``) is surfaced instead of being silently dropped.
+    """
+    fix_obj = object_field(fix, "fix", _ENGINE)
+    versions = string_entries(fix_obj.get("versions"), "fix.versions", _ENGINE)
     if versions:
-        return clip(", ".join(str(v) for v in versions), 128)
+        return clip(", ".join(versions), 128)
+    state = str(fix_obj.get("state") or "").strip().lower()
+    if state in _SURFACED_FIX_STATES:
+        return state
     return None
 
 
 def _location(artifact: dict[str, Any]) -> str | None:
-    """Derive a location string from a Grype artifact's first location/type."""
-    for loc in artifact.get("locations") or []:
+    """Derive a location string from a Grype artifact's first location/type.
+
+    Note the cross-engine semantic difference: for Grype this is the path of
+    the file the vulnerable *package* was cataloged from (or its package type),
+    while Trivy's ``location`` is the scanned result target. Both mean "where
+    the finding lives", but they are not directly comparable across engines.
+    """
+    for loc in object_entries(artifact.get("locations"), "artifact.locations", _ENGINE):
         path = loc.get("path")
         if path:
             return clip(path, 512)
@@ -89,38 +114,40 @@ def parse_output(raw: bytes) -> tuple[list[NormalizedFinding], str | None]:
         A tuple of (normalized findings, grype version or ``None``).
 
     Raises:
-        ScannerError: If the output is not valid JSON.
+        ScannerOutputError: If the output is not valid JSON, or is valid JSON of
+            the wrong shape (non-object document, non-array ``matches``,
+            non-object entries, a string where a list is expected). The raw
+            bytes ride on the error so the worker can persist them for
+            diagnosis.
     """
     try:
-        document = json.loads(raw or b"{}")
-    except json.JSONDecodeError as exc:
-        raise ScannerError(f"Grype produced output that is not valid JSON: {exc}.") from exc
-
-    version = None
-    descriptor = document.get("descriptor")
-    if isinstance(descriptor, dict):
+        document = load_json_output(raw, _ENGINE)
+        descriptor = object_field(document.get("descriptor"), "descriptor", _ENGINE)
         version = clip(descriptor.get("version"), 32)
 
-    findings: list[NormalizedFinding] = []
-    for match in document.get("matches") or []:
-        vuln = match.get("vulnerability") or {}
-        artifact = match.get("artifact") or {}
-        urls = vuln.get("urls") or []
-        findings.append(
-            NormalizedFinding(
-                finding_class=FindingClass.VULNERABILITY.value,
-                severity=severity_from_string(vuln.get("severity")),
-                vuln_id=clip(vuln.get("id"), 128),
-                pkg_name=clip(artifact.get("name"), 255),
-                installed_version=clip(artifact.get("version"), 128),
-                fixed_version=_fixed_version(vuln.get("fix")),
-                title=clip(vuln.get("id"), 512),
-                description=clip(vuln.get("description"), DESCRIPTION_LIMIT),
-                location=_location(artifact),
-                primary_url=clip(vuln.get("dataSource") or (urls[0] if urls else None), 512),
+        findings: list[NormalizedFinding] = []
+        for match in object_entries(document.get("matches"), "matches", _ENGINE):
+            vuln = object_field(match.get("vulnerability"), "vulnerability", _ENGINE)
+            artifact = object_field(match.get("artifact"), "artifact", _ENGINE)
+            urls = string_entries(vuln.get("urls"), "urls", _ENGINE)
+            findings.append(
+                NormalizedFinding(
+                    finding_class=FindingClass.VULNERABILITY.value,
+                    severity=severity_from_string(vuln.get("severity")),
+                    vuln_id=clip(vuln.get("id"), 128),
+                    pkg_name=clip(artifact.get("name"), 255),
+                    installed_version=clip(artifact.get("version"), 128),
+                    fixed_version=_fixed_version(vuln.get("fix")),
+                    title=clip(vuln.get("id"), 512),
+                    description=clip(vuln.get("description"), DESCRIPTION_LIMIT),
+                    location=_location(artifact),
+                    primary_url=clip(vuln.get("dataSource") or (urls[0] if urls else None), 512),
+                )
             )
-        )
-    return findings, version
+        return findings, version
+    except ScannerOutputError as exc:
+        exc.raw_output = raw
+        raise
 
 
 class GrypeScanner(BaseScanner):
@@ -143,9 +170,7 @@ class GrypeScanner(BaseScanner):
         result = await run_command(
             argv, timeout=get_settings().scan_timeout_seconds, env=scan_env(overlay)
         )
-        if result.returncode != 0:
-            detail = result.stderr.decode("utf-8", "replace").strip() or "no error output"
-            raise ScannerError(f"Grype exited with code {result.returncode}: {detail}")
+        check_success(result, _ENGINE)
 
         findings, version = parse_output(result.stdout)
         return ScanExecution(
