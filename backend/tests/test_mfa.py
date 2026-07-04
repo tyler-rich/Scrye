@@ -89,6 +89,24 @@ class TestMfaLogin:
 
 
 class TestMfaPolicyEnforcement:
+    def test_fresh_instance_defaults_to_no_mfa_requirement(self, client: TestClient) -> None:
+        # A brand-new instance must never force MFA: the default policy is
+        # OPTIONAL, so an un-enrolled account logs straight in with no second
+        # factor and no forced-enrollment prompt. Guards against a silent flip of
+        # the AuthSettings.mfa_policy default.
+        setup_admin(client)  # first admin, MFA never enrolled, no policy set
+        client.cookies.clear()
+
+        resp = client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PW})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["mfa_required"] is False
+        assert body["enrollment_required"] is False
+        assert body["mfa_token"] is None
+        # A full session is granted immediately (no second step required).
+        assert body["user"]["username"] == "admin"
+        assert client.get("/api/auth/me").status_code == 200
+
     def test_required_policy_forces_enrollment_at_login(self, client: TestClient) -> None:
         csrf = setup_admin(client)
         client.put(
