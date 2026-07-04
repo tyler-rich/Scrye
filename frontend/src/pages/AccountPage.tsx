@@ -84,13 +84,24 @@ function MfaSection() {
   const [enrollment, setEnrollment] = useState<MfaEnrollment | null>(null);
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
+  // Re-enrolling over an existing (even pending, not-yet-activated) secret needs
+  // the current password; surface a field to re-auth if the server asks for it.
+  const [reauthRequired, setReauthRequired] = useState(false);
   const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const startEnroll = async () => {
+  const startEnroll = async (currentPassword?: string) => {
     setStatus(null);
     try {
-      setEnrollment(await enrollMfa());
+      setEnrollment(await enrollMfa(currentPassword));
+      setReauthRequired(false);
+      setPassword('');
     } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        // A prior, un-activated secret exists: ask for the password and retry.
+        setReauthRequired(true);
+        setStatus({ ok: false, msg: err.message });
+        return;
+      }
       setStatus({ ok: false, msg: err instanceof ApiError ? err.message : 'Failed.' });
     }
   };
@@ -182,8 +193,21 @@ function MfaSection() {
           <Text size="sm" c="dimmed">
             Protect your account with a time-based one-time code from an authenticator app.
           </Text>
+          {reauthRequired && (
+            <PasswordInput
+              label="Current password"
+              description="Required to replace your existing two-factor secret."
+              value={password}
+              onChange={(e) => setPassword(e.currentTarget.value)}
+            />
+          )}
           <Group>
-            <Button onClick={startEnroll}>Enable MFA</Button>
+            <Button
+              onClick={() => startEnroll(reauthRequired ? password : undefined)}
+              disabled={reauthRequired && !password}
+            >
+              Enable MFA
+            </Button>
           </Group>
         </>
       )}

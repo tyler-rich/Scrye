@@ -146,6 +146,23 @@ class TestMfaPolicyEnforcement:
         )
         assert with_pw.status_code == 200
 
+    def test_reenroll_over_pending_secret_requires_password(self, client: TestClient) -> None:
+        # Security hotfix: the password gate must also cover the PENDING window —
+        # a secret exists but MFA is not yet active. Otherwise a session-only
+        # attacker (stolen cookie + CSRF, no password) could overwrite the pending
+        # secret and make the victim enroll the attacker's authenticator.
+        csrf = setup_admin(client)
+        first = client.post("/api/auth/mfa/enroll", json={}, headers={CSRF: csrf})
+        assert first.status_code == 200  # first-ever enrollment: no prior secret, no gate
+        assert client.get("/api/auth/me").json()["mfa_enabled"] is False  # pending, not active
+        # A second enroll while the pending secret exists must now require the password.
+        without = client.post("/api/auth/mfa/enroll", json={}, headers={CSRF: csrf})
+        assert without.status_code == 403
+        with_pw = client.post(
+            "/api/auth/mfa/enroll", json={"current_password": ADMIN_PW}, headers={CSRF: csrf}
+        )
+        assert with_pw.status_code == 200
+
 
 class TestMfaDisable:
     def test_disable_requires_password(self, client: TestClient) -> None:

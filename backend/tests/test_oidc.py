@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from fastapi.testclient import TestClient
 
+import app.api.oidc as oidc_module_api
 import app.auth.oidc as oidc_module
 from app.auth._jose import JsonWebKey, JsonWebToken
 from app.auth.oidc import OidcError, OidcMetadata, _allowed_algorithms
@@ -170,6 +171,110 @@ class TestOidcLoginFlow:
         # Only one local account exists for the repeated identity.
         users = client.get("/api/users").json()
         assert [u["username"] for u in users].count("alice") == 1
+
+
+class TestOidcRoleSyncHotfix:
+    """Security hotfix: OIDC role sync must not demote on an absent groups claim
+    and must never remove the last admin."""
+
+    def _patch_provider(self, monkeypatch, claims: dict) -> None:
+        async def fake_discover(issuer):
+            return _METADATA
+
+        async def fake_exchange(metadata, **kwargs):
+            return {"id_token": "stub.jwt.token"}
+
+        async def fake_verify(metadata, id_token, *, client_id, nonce):
+            return claims
+
+        monkeypatch.setattr(oidc_module, "discover", fake_discover)
+        monkeypatch.setattr(oidc_module, "exchange_code", fake_exchange)
+        monkeypatch.setattr(oidc_module, "verify_id_token", fake_verify)
+
+    def _login(self, app, monkeypatch, claims: dict) -> TestClient:
+        """Run one full OIDC login for ``claims`` in a fresh browser; return it."""
+        self._patch_provider(monkeypatch, claims)
+        browser = TestClient(app)
+        resp = browser.get("/api/auth/oidc/login", follow_redirects=False)
+        state = parse_qs(urlparse(resp.headers["location"]).query)["state"][0]
+        browser.get(
+            "/api/auth/oidc/callback",
+            params={"state": state, "code": "authcode"},
+            follow_redirects=False,
+        )
+        return browser
+
+    def test_absent_groups_claim_preserves_existing_admin_role(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        csrf = setup_admin(client)  # seed local admin (a second admin, so demotion is *allowed*)
+        _enable_oidc(
+            client, csrf, groups_claim="groups", admin_group="scrye-admins", default_role="viewer"
+        )
+        base = {"sub": "admin-1", "iss": ISSUER, "preferred_username": "boss"}
+        # First login with the admin group present -> provisioned as admin.
+        boss = self._login(client.app, monkeypatch, {**base, "groups": ["scrye-admins"]})
+        assert boss.get("/api/auth/me").json()["role"] == "admin"
+        # Next login where the ID token carries NO groups claim at all (e.g. the IdP
+        # delivers groups only via UserInfo): the role must be PRESERVED, not
+        # silently reset to default_role.
+        boss2 = self._login(client.app, monkeypatch, base)
+        assert boss2.get("/api/auth/me").json()["role"] == "admin"
+
+    def test_present_groups_without_admin_group_demotes_when_other_admin_exists(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        csrf = setup_admin(client)  # seed admin stays active -> boss is not the last admin
+        _enable_oidc(
+            client, csrf, groups_claim="groups", admin_group="scrye-admins", default_role="viewer"
+        )
+        base = {"sub": "admin-2", "iss": ISSUER, "preferred_username": "chief"}
+        chief = self._login(client.app, monkeypatch, {**base, "groups": ["scrye-admins"]})
+        assert chief.get("/api/auth/me").json()["role"] == "admin"
+        # Groups claim present but WITHOUT the admin group -> authoritative demotion.
+        chief2 = self._login(client.app, monkeypatch, {**base, "groups": ["some-team"]})
+        assert chief2.get("/api/auth/me").json()["role"] == "viewer"
+
+    def test_last_admin_is_not_demoted_via_sync(self, client: TestClient, monkeypatch) -> None:
+        csrf = setup_admin(client)
+        _enable_oidc(
+            client, csrf, groups_claim="groups", admin_group="scrye-admins", default_role="viewer"
+        )
+        base = {"sub": "admin-3", "iss": ISSUER, "preferred_username": "solo"}
+        solo = self._login(client.app, monkeypatch, {**base, "groups": ["scrye-admins"]})
+        assert solo.get("/api/auth/me").json()["role"] == "admin"
+        # Make ``solo`` the ONLY active admin by deactivating the seed local admin.
+        solo_csrf = solo.cookies.get("scrye_csrf")
+        seed = next(u for u in solo.get("/api/users").json() if u["username"] == "admin")
+        deact = solo.patch(
+            f"/api/users/{seed['id']}", json={"is_active": False}, headers={CSRF: solo_csrf}
+        )
+        assert deact.status_code == 200, deact.text
+        # A login that would demote (groups present, admin group missing) must be
+        # blocked by the last-admin guard: solo keeps admin.
+        solo2 = self._login(client.app, monkeypatch, {**base, "groups": ["nobody"]})
+        assert solo2.get("/api/auth/me").json()["role"] == "admin"
+
+
+def test_binding_cookie_uses_host_prefix_when_secure(monkeypatch) -> None:
+    """The browser-binding cookie must be a __Host- cookie under TLS (so no sibling
+    subdomain can plant it), falling back to a plain host cookie on http dev."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        oidc_module_api, "get_settings", lambda: SimpleNamespace(session_cookie_secure=True)
+    )
+    name, path, secure = oidc_module_api._binding_cookie()
+    assert name == "__Host-scrye_oidc_binding"
+    assert path == "/"
+    assert secure is True
+
+    monkeypatch.setattr(
+        oidc_module_api, "get_settings", lambda: SimpleNamespace(session_cookie_secure=False)
+    )
+    name, path, secure = oidc_module_api._binding_cookie()
+    assert name == "scrye_oidc_binding"
+    assert secure is False
 
 
 def _rsa_key(kid: str = "test-key") -> JsonWebKey:
