@@ -22,9 +22,17 @@ These were decided and are not open for re-litigation during the build:
    default and is required. Full-DB SQLCipher encryption is **deferred** (optional future
    hardening, not in v1).
 5. **Frontend:** **Mantine v7**.
-6. **Distribution:** Docker image is **built locally only** for now. **Do not** add Docker Hub
-   (or any registry) publishing — no registry slot available yet. The image must build cleanly
-   and run locally; publishing is a later concern.
+6. **Distribution:** the image builds locally **and** is **published to Docker Hub as
+   `securedbytyler/scrye`** by `.github/workflows/publish.yml` (separate from `ci.yml`, using the
+   `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets), via two independent paths:
+   - **Tagged main releases:** pushing a semver tag `v*.*.*` builds the multi-arch (amd64/arm64)
+     image and pushes `securedbytyler/scrye:<version>` (tag minus the leading `v`) **and**
+     `securedbytyler/scrye:latest`. Runs **only** when the tagged commit is on `main`.
+   - **dev continuous build:** every push to `dev` builds the multi-arch image and pushes the
+     single **moving** tag `securedbytyler/scrye:dev` (always overwritten — not a version, not
+     `latest`), for testing the current state of `dev` without cutting a release.
+   `latest`/`:<version>` come only from tagged main releases; `:dev` only from `dev` pushes. No
+   other registries or tags. (Originally locked to local-build-only; revised — see § Deviations.)
 7. **Backend runtime:** **Python 3.13.** (Originally locked to Python 3.12; revised to 3.13 in
    Phase 6 to resolve Grype-flagged CPython interpreter CVEs whose fixes are only available in
    3.13+ — see § Deviations for the full rationale.)
@@ -269,9 +277,12 @@ Multi-stage build, CIS-aligned:
 - Final: slim Python base (pinned by digest), copy in **checksum-verified** `trivy`/`grype`/`syft`
   binaries (never `curl | bash`), copy SPA, create non-root user, `HEALTHCHECK`, run non-root.
 - **Multi-arch** build (`linux/amd64` + `linux/arm64`) so it runs on docker-host and the Mac Studio.
-- **No registry publishing.** Build locally (`docker build -t scrye:0.1.0 .` /
-  `docker buildx` for multi-arch). Tag locally as `scrye:<version>`. Do **not** add Docker Hub
-  steps, CI publish jobs, or `securedbytyler/...` references.
+- **Registry publishing (Docker Hub).** Build locally (`docker build -t scrye:0.1.0 .` /
+  `docker buildx` for multi-arch) for dev; automated publishing to `securedbytyler/scrye` on
+  Docker Hub is handled by `.github/workflows/publish.yml` (locked decision §0.6) — tagged main
+  releases push `:<version>` + `:latest`, and `dev`-branch pushes push the moving `:dev` tag. The
+  multi-arch build steps are defined once in `.github/actions/build-image` and reused by both
+  `publish.yml` and `ci.yml`'s build-check.
 
 Dockerfile must: pin base by digest, non-root `USER`, no secrets in layers, comprehensive
 `.dockerignore`, `COPY` not `ADD`, `HEALTHCHECK`, combined `RUN apt-get update && install` + clean.
@@ -388,7 +399,7 @@ Must include, at minimum:
 - **Security model** — how secrets are stored (field-level AES-GCM, master key via secret file,
   write-only API, tmpfs at scan time), the socket-proxy risk note, CIS-aligned container posture.
 - **Backup & restore** — how it works and the passphrase/portability behavior.
-- **Roadmap** — deferred items (arq/Redis scale-out, SQLCipher, registry publishing).
+- **Roadmap** — deferred items (arq/Redis scale-out, SQLCipher).
 - **Contributing** — link to `CONTRIBUTING.md`.
 - **License** — link to `LICENSE`.
 
@@ -493,7 +504,9 @@ the shipped app.
 ## 13. Future / Deferred (do not build in v1)
 - arq + Redis scale-out worker.
 - SQLCipher full-DB-at-rest encryption.
-- Container registry publishing (Docker Hub or other).
+
+(Docker Hub publishing was originally deferred here; it is now **in scope** — see locked decision
+§0.6 and `.github/workflows/publish.yml`. See § Deviations.)
 
 ---
 
@@ -1375,3 +1388,40 @@ tagged releases, plus a `dev` integration branch for ongoing work, is the standa
 letting contributors work freely without risking the release branch.
 **Plan section affected:** § Git & PR conventions (CLAUDE.md), process only — no build-phase or
 architectural sections affected.
+
+### 2026-07-04 — Phase 6 — Docker Hub publishing (tagged releases + dev continuous build)
+**What changed:** Locked decision §0.6 is expanded again. The image is now
+published to Docker Hub as `securedbytyler/scrye` through a new
+`.github/workflows/publish.yml`, separate from `ci.yml`, via two independent
+triggers:
+- **Tagged main releases** (`on: push: tags: v*.*.*`) build the multi-arch
+  (amd64/arm64) image and push `securedbytyler/scrye:<version>` (the tag minus
+  its leading `v`) **and** `securedbytyler/scrye:latest`. The release job first
+  fetches `main` and fails unless the tagged commit is an ancestor of `main`'s
+  tip, so `:<version>`/`:latest` can only ever come from a real release cut from
+  `main`.
+- **dev continuous build** (`on: push: branches: dev`) builds the multi-arch
+  image and pushes the single **moving** tag `securedbytyler/scrye:dev`, always
+  overwritten — not a version, not `latest`. It exists only to test the current
+  state of `dev` without cutting a release.
+The multi-arch build invocation (QEMU + Buildx + `docker/build-push-action`
+against `docker/Dockerfile`) was extracted into a reusable composite action at
+`.github/actions/build-image`, and `ci.yml`'s `image-multiarch` build-check was
+refactored to consume it, so the build is defined in exactly one place and not
+duplicated between CI and publishing. Credentials come from the pre-configured
+`DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets; `ci.yml` still never
+publishes. `CONTRIBUTING.md` gains a "Releasing" section documenting both paths.
+Separately, `ci.yml`'s `image-multiarch` build-check is now **gated to main
+pushes and PRs whose base is `main`** (`if: github.event_name != 'pull_request'
+|| github.event.pull_request.base.ref == 'main'`). Its arm64 leg builds the
+whole Dockerfile under QEMU emulation, which on a cold `type=gha` cache takes
+multiple hours; only main-scoped runs reliably restore a warm arm64 cache, so
+`dev`-based PRs would rebuild from scratch every time. Multi-arch buildability
+stays continuously proven for `dev` by `publish.yml` (which builds amd64+arm64
+on every push to `dev` and on release tags), and `dev` PRs still run the fast
+amd64-only image build + dogfood self-scan, so no coverage is lost.
+**Why:** Explicit user instruction this session, superseding the earlier
+"local-build-only / publish-on-tagged-releases-only" state of §0.6 to add the
+`dev` continuous-build path for testing dev without a release.
+**Plan section affected:** §0.6 (distribution), §9.1 (image), §13 (moved out of
+deferred).

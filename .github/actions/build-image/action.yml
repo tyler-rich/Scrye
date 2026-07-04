@@ -1,0 +1,43 @@
+# Reusable multi-arch build for the Scrye image.
+#
+# Single source of truth for QEMU + Buildx setup and the docker/Dockerfile
+# build invocation, shared by ci.yml (build-only verification) and publish.yml
+# (build + push to Docker Hub). Callers handle registry login before invoking
+# this action with push: "true" — the action itself takes no secrets and stays
+# registry-agnostic.
+name: Build Scrye image
+description: Set up QEMU + Buildx and build the multi-arch Scrye image, optionally pushing it.
+
+inputs:
+  platforms:
+    description: Target platforms to build.
+    required: false
+    default: linux/amd64,linux/arm64
+  push:
+    description: Whether to push the built image to the registry ("true"/"false").
+    required: false
+    default: "false"
+  tags:
+    description: Newline- or comma-separated image tags (required when push is "true").
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Set up QEMU (arm64 emulation)
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: docker/Dockerfile
+        platforms: ${{ inputs.platforms }}
+        push: ${{ inputs.push }}
+        tags: ${{ inputs.tags }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
