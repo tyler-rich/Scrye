@@ -33,8 +33,19 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
    mounts `/var/run/docker.sock`.
 5. **Secrets at rest:** **application-layer AES-256-GCM field encryption** (required). **SQLCipher
    is deferred** — leave a seam, don't build it.
-6. **Distribution:** **build the Docker image locally only.** Do **not** add Docker Hub / any
-   registry publishing, CI publish jobs, or `<dockerhub-user>/...` references.
+6. **Distribution:** the image builds locally, and is **published to Docker Hub as
+   `<dockerhub-user>/scrye` via two automated paths** (in `.github/workflows/publish.yml`,
+   separate from `ci.yml`, using the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets):
+   - **Tagged main releases** — pushing a semver tag `v*.*.*` builds the multi-arch
+     (amd64/arm64) image and pushes `<dockerhub-user>/scrye:<version>` (the tag **without** the
+     leading `v`) **and** `<dockerhub-user>/scrye:latest`. This runs **only** when the tagged
+     commit is on `main`.
+   - **dev continuous build** — every push to the `dev` branch builds the multi-arch image and
+     pushes the single **moving** tag `<dockerhub-user>/scrye:dev` (always overwritten — not a
+     version, not `latest`), so the current state of `dev` can be tested without cutting a
+     release.
+   No other registries or tags. `latest` and `:<version>` come **only** from tagged main
+   releases; `:dev` comes **only** from `dev` pushes.
 7. **Theme:** **teal** primary (`primaryColor: 'teal'`), first-class **light and dark** modes.
 
 ## Hard security rules (non-negotiable)
@@ -67,8 +78,9 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 - **CI is created in Phase 0 and is the gate for every PR thereafter, including Phase 0's own.**
   `.github/workflows/ci.yml` runs on every pull request and push to `main`: lint the backend
   (`ruff` + `black --check`) and frontend (ESLint + Prettier), and run `pytest` plus any frontend
-  tests. No publish/registry job (locked decision §6). A phase's PR is not done until its CI run is
-  green — do not ask the user to merge a PR with failing or missing checks.
+  tests. CI never publishes — Docker Hub publishing lives in the separate `publish.yml`
+  (locked decision §6). A phase's PR is not done until its CI run is green — do not ask the user
+  to merge a PR with failing or missing checks.
 - **All commits and PRs are authored as the user, not as Claude.** Configure the local git identity
   for this repo (not global) before the first commit:
   `git config user.name "IamGroot60"` and
@@ -158,8 +170,9 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   `APP_SECRET_KEY_FILE`); secrets like `OIDC_CLIENT_SECRET` appear as a named placeholder with a
   comment, never a real value. `.gitignore` already ignores `.env` but allows `.env.example`.
 - **`.github/workflows/ci.yml`** — created in **Phase 0**, before that phase's own PR is opened.
-  Runs lint + tests on every PR/push to `main`. No publish/registry job. This is the gate every
-  subsequent phase's PR must pass (see Git & PR conventions).
+  Runs lint + tests on every PR/push to `main`. No publish/registry job — Docker Hub publishing
+  is handled separately by `.github/workflows/publish.yml` (locked decision §6). This is the gate
+  every subsequent phase's PR must pass (see Git & PR conventions).
 - **`THIRD_PARTY_LICENSES/`** — created in the Dockerfile phase (Phase 0), containing the
   Apache-2.0 `LICENSE` (and `NOTICE`, if present) for Trivy, Grype, and Syft, plus a README pointer
   to it. See Coding standards § Third-party license attribution.
@@ -178,4 +191,5 @@ disk); app secret key as a Docker secret file; fronted by Caddy at `scrye.your-d
 `https://pocket-id.your-domain.tld`.
 
 ## Out of scope for v1 (do not build)
-arq/Redis scale-out · SQLCipher full-DB encryption · registry publishing.
+arq/Redis scale-out · SQLCipher full-DB encryption. (Registry publishing to Docker Hub **is**
+in scope — see locked decision §6.)

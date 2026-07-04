@@ -281,6 +281,33 @@ never a target for routine contribution PRs.
 
 ---
 
+## Releasing
+
+CI (`.github/workflows/ci.yml`) never publishes — it only lints, tests, and proves the image
+builds for both architectures. Publishing to Docker Hub (`<dockerhub-user>/scrye`) is handled by
+`.github/workflows/publish.yml`, which authenticates with the `DOCKERHUB_USERNAME` /
+`DOCKERHUB_TOKEN` repository secrets and has two independent paths:
+
+- **Tagged releases (stable).** Push a semantic-version tag `v*.*.*` on a commit that is on
+  `main` (e.g. `git tag v1.4.0 && git push origin v1.4.0`). This builds the multi-arch
+  (amd64/arm64) image and pushes it as `<dockerhub-user>/scrye:<version>` (the tag without its
+  leading `v`, so `v1.4.0` → `<dockerhub-user>/scrye:1.4.0`) **and** `<dockerhub-user>/scrye:latest`.
+  The job refuses to run if the tagged commit is not on `main`, so `:latest` and `:<version>`
+  always come from a real release.
+
+- **`:dev` (continuous build, not a release).** Each time a pull request is **merged into
+  `dev`**, the multi-arch image is built and pushed as the single **moving** tag
+  `<dockerhub-user>/scrye:dev`, always overwritten. The workflow triggers on
+  `pull_request: types: [closed]` (base `dev`) gated on `pull_request.merged == true`, so it
+  fires **only on an actual merge** — not on other pushes to the `dev` ref (e.g. conflict-
+  resolution commits on an open PR) and not on PRs closed without merging. This is **not** a
+  stable release and **not** a version — it just mirrors the state of `dev` after each merge so
+  you can pull and test HEAD-of-dev (`docker pull <dockerhub-user>/scrye:dev`) without cutting a
+  tagged release. Do not treat `:dev` as production-ready; use a `:<version>` tag (or `:latest`)
+  for that.
+
+---
+
 ## Reporting security issues
 
 **Please do not open public issues for security vulnerabilities.** Report them
