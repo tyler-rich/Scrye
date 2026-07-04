@@ -1409,3 +1409,19 @@ amd64-only image build + dogfood self-scan, so no coverage is lost.
 `dev` continuous-build path for testing dev without a release.
 **Plan section affected:** §0.6 (distribution), §9.1 (image), §13 (moved out of
 deferred).
+
+### 2026-07-04 — Process — Adopted a dev/main branching model ahead of going public
+**What changed:** Introduced a `dev` integration branch (cut from `main`). `main` is now treated
+as protected and receives only tagged releases; day-to-day feature/fix branches and external
+contributions branch from `dev` and PR into `dev` by default instead of `main`. Promotion from
+`dev` to `main` is a separate, explicitly-requested PR made when cutting a release, followed by
+tagging `main`. `CLAUDE.md` § Git & PR conventions and `CONTRIBUTING.md` (new § Branching model,
+updated § Releasing and PR process) were updated accordingly; all other rules (git identity, no
+attribution footers, CI-green, deviations logging) are unchanged, just applied against `dev` as
+the usual PR target. GitHub branch protection on `main` is configured separately outside of this
+repo's docs.
+**Why:** Scrye is moving toward accepting public/external contributions. A protected `main` with
+tagged releases, plus a `dev` integration branch for ongoing work, is the standard model for
+letting contributors work freely without risking the release branch.
+**Plan section affected:** § Git & PR conventions (CLAUDE.md), process only — no build-phase or
+architectural sections affected.
