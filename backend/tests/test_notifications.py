@@ -31,6 +31,38 @@ class TestNotificationCrud:
         assert WEBHOOK_SECRET not in resp.text
         assert body["secret"]["value"] != WEBHOOK_SECRET
 
+    def test_webhook_url_is_encrypted_and_masked(self, client: TestClient) -> None:
+        """SEC-1: a token-bearing generic webhook URL must not be readable back.
+
+        Slack/Teams/Mattermost webhook URLs embed the credential in the path, so
+        the URL is treated as a write-only secret (stored encrypted, masked on
+        read) exactly like Discord — not echoed verbatim from the config column.
+        """
+        csrf = setup_admin(client)
+        secret_url = "https://hooks.slack.test/services/T000/B000/XXXXSECRETTOKEN"
+        resp = client.post(
+            "/api/notifications",
+            json={"name": "slack", "type": "webhook", "config": {"url": secret_url}},
+            headers={CSRF: csrf},
+        )
+        assert resp.status_code == 201, resp.text
+        assert "XXXXSECRETTOKEN" not in resp.text
+        assert resp.json()["secret"]["is_set"] is True
+        assert resp.json()["config"].get("url") in (None, notifications_api._URL_MASK)
+        # And the read list never surfaces the token either.
+        listing = client.get("/api/notifications", headers={CSRF: csrf})
+        assert "XXXXSECRETTOKEN" not in listing.text
+
+    def test_webhook_requires_a_url(self, client: TestClient) -> None:
+        """A webhook with no URL is rejected (the URL is now its credential)."""
+        csrf = setup_admin(client)
+        resp = client.post(
+            "/api/notifications",
+            json={"name": "empty", "type": "webhook", "config": {}},
+            headers={CSRF: csrf},
+        )
+        assert resp.status_code == 422
+
     def test_discord_url_is_encrypted_and_masked(self, client: TestClient) -> None:
         csrf = setup_admin(client)
         webhook = "https://discord.com/api/webhooks/123/super-secret-token"

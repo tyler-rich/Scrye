@@ -45,9 +45,10 @@ class NotificationEvent(enum.StrEnum):
     SCAN_HIGH_SEVERITY = "scan_high_severity"
 
 
-#: Channel types that carry a stored (encrypted) secret. A plain webhook may be
-#: unauthenticated, so its secret is optional; the others' secrets are required.
-SECRET_OPTIONAL_TYPES: frozenset[NotificationType] = frozenset({NotificationType.WEBHOOK})
+#: Channel types whose stored (encrypted) secret is optional. Every current type
+#: requires one: SMTP/Matrix carry a password/token, and webhook/Discord treat
+#: their URL as the write-only credential (SEC-1), so all four are mandatory.
+SECRET_OPTIONAL_TYPES: frozenset[NotificationType] = frozenset()
 
 
 class NotificationChannel(Base):

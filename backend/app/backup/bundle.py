@@ -21,10 +21,11 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import DateTime, select, text
+from sqlalchemy import DateTime, func, select, text
 from sqlalchemy.orm import Session
 
 from app import __version__
@@ -41,15 +42,33 @@ from app.core.secret_store import SECRET_COLUMNS
 from app.core.timeutil import utcnow
 from app.db.base import Base
 
+logger = logging.getLogger(__name__)
+
 #: Bundle format identifier and version, stored in the envelope.
 BUNDLE_FORMAT = "scrye-backup"
 BUNDLE_FORMAT_VERSION = 1
 
-#: Tables excluded from a backup: transient/host-specific state and the backup
-#: bookkeeping itself (its files don't travel inside a bundle).
+#: Rows are inserted in chunks of this size on restore (one ``executemany`` per
+#: chunk) rather than one statement per row, to keep restore linear and off the
+#: pathological per-row-INSERT path (API-3).
+_RESTORE_CHUNK_ROWS = 500
+
+#: Findings-table size past which a backup logs a size warning. Bundles are held
+#: in memory during build/restore (single-shot GCM), so very large instances
+#: should be aware of the practical ceiling (API-3); the README documents it.
+_FINDINGS_WARN_THRESHOLD = 250_000
+
+#: Tables excluded from a backup: transient/host-specific state, raw-artifact
+#: bookkeeping (the files themselves live on disk and don't travel in a bundle,
+#: so their rows are omitted to avoid restoring dangling references — API-10),
+#: and the backup bookkeeping itself.
 _EXCLUDED_TABLES: frozenset[str] = frozenset(
-    {"sessions", "oidc_login_flows", "backups", "alembic_version"}
+    {"sessions", "oidc_login_flows", "artifacts", "backups", "alembic_version"}
 )
+
+#: Tables preserved (never cleared) on restore: the local backup catalogue and
+#: the Alembic revision marker belong to the host, not the bundle.
+_PRESERVE_ON_RESTORE: frozenset[str] = frozenset({"backups", "alembic_version"})
 
 #: Map of ``(table, column)`` -> AAD for the field-encrypted secret columns.
 _SECRET_MAP: dict[tuple[str, str], str] = {
@@ -84,6 +103,29 @@ def _backup_tables() -> list:
     return [t for t in Base.metadata.sorted_tables if t.name not in _EXCLUDED_TABLES]
 
 
+def _warn_if_large(db: Session) -> None:
+    """Log a warning when the findings table is large enough to strain a bundle.
+
+    The bundle is assembled and encrypted in memory in a single pass (AES-GCM is
+    single-shot), so an instance with a very large findings table should be aware
+    of the practical size ceiling. This is advisory only — the backup still runs.
+    """
+    findings = Base.metadata.tables.get("findings")
+    if findings is None:
+        return
+    try:
+        count = db.execute(select(func.count()).select_from(findings)).scalar() or 0
+    except Exception:  # noqa: BLE001 - a count failure must not block the backup
+        return
+    if count >= _FINDINGS_WARN_THRESHOLD:
+        logger.warning(
+            "Backup of a large database: %d findings rows. The bundle is built "
+            "in memory; ensure the container memory limit accommodates it "
+            "(see the README backup size guidance).",
+            count,
+        )
+
+
 def build_bundle(db: Session, passphrase: str) -> bytes:
     """Build an encrypted backup bundle for the whole database.
 
@@ -103,10 +145,14 @@ def build_bundle(db: Session, passphrase: str) -> bytes:
     salt = new_salt()
     pass_cipher = passphrase_cipher(passphrase, salt)
 
+    _warn_if_large(db)
+
     tables: dict[str, dict] = {}
     for table in _backup_tables():
         rows: list[dict] = []
-        for record in db.execute(select(table)).mappings():
+        # Stream rows from the driver instead of buffering the whole result set
+        # in the DBAPI cursor before we start processing (API-3).
+        for record in db.execute(select(table)).yield_per(_RESTORE_CHUNK_ROWS).mappings():
             row: dict = {}
             for column in table.columns:
                 value = record[column.name]
@@ -223,15 +269,20 @@ def restore_bundle(db: Session, data: bytes, passphrase: str) -> RestoreSummary:
     master = get_secret_cipher()
     managed = _backup_tables()
 
-    # Clear managed tables (plus transient session state) in reverse FK order.
+    # Clear every table except the host-owned catalogue/version marker, in
+    # reverse FK order. Transient state (sessions, oidc_login_flows) and raw
+    # artifact rows are cleared but not repopulated, so nothing dangles.
     for table in reversed(Base.metadata.sorted_tables):
-        if table.name in _EXCLUDED_TABLES and table.name not in {"sessions", "oidc_login_flows"}:
+        if table.name in _PRESERVE_ON_RESTORE:
             continue
         db.execute(table.delete())
 
     total_rows = 0
     for table in managed:
         payload_rows = (tables_data.get(table.name) or {}).get("rows", [])
+        # Build the fully-typed value dicts, then insert in chunks with a single
+        # executemany per chunk instead of one INSERT statement per row (API-3).
+        chunk: list[dict] = []
         for row in payload_rows:
             values: dict = {}
             for column in table.columns:
@@ -251,8 +302,14 @@ def restore_bundle(db: Session, data: bytes, passphrase: str) -> RestoreSummary:
                 elif isinstance(column.type, DateTime) and isinstance(value, str):
                     value = datetime.fromisoformat(value)
                 values[column.name] = value
-            db.execute(table.insert().values(**values))
-            total_rows += 1
+            chunk.append(values)
+            if len(chunk) >= _RESTORE_CHUNK_ROWS:
+                db.execute(table.insert(), chunk)
+                total_rows += len(chunk)
+                chunk = []
+        if chunk:
+            db.execute(table.insert(), chunk)
+            total_rows += len(chunk)
 
     return RestoreSummary(
         tables=len(managed), rows=total_rows, app_version=str(envelope.get("app_version") or "")
