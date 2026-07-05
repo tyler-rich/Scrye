@@ -1500,3 +1500,40 @@ addressed consistently by hopping to a thread, and the unbounded-memory paths (s
 uploads, dashboard hydration) are bounded. No schema change; the one new setting is non-sensitive.
 **Plan section affected:** §4 (scanner orchestration), §4.4/§4.6 (list/dashboard perf), §8
 (uploads), §12 (maintenance), §11 (`SCRYE_SCANNER_MAX_OUTPUT_BYTES`).
+
+### 2026-07-05 — Post-P6 audit remediation (P2) — supply chain / deployment hardening
+**What changed:** Third tier (P2) of the audit (§10). Finding IDs:
+- **SCN-3 (§4.2):** `cors_origins` and `filesystem_scan_roots` now parse their documented
+  comma-separated env form. pydantic-settings tries `json.loads` on a `list[str]` env value, so
+  `SCRYE_FILESYSTEM_SCAN_ROOTS=/srv/scan` (the enable switch for the security-gated filesystem-scan
+  feature) failed at startup; the fields are annotated `NoDecode` with a `field_validator(mode=
+  "before")` that splits on commas. Tests construct `Settings` from the env var directly.
+- **INF-1 (supply chain):** added `.github/dependabot.yml` (weekly, grouped) for the
+  `github-actions` ecosystem so the workflow actions are tracked and rolled forward deliberately.
+  **The remaining half — pinning each `uses:` to a full commit SHA — could not be completed in the
+  remediation environment (its egress policy blocks GitHub outside this repo, so current action
+  SHAs cannot be resolved/verified); pinning to an unverified SHA would risk a red CI. Flagged for a
+  follow-up where SHAs can be resolved.**
+- **INF-3 (§0.6):** `CLAUDE.md` §6's `:dev` wording is corrected to match the implemented
+  merged-PR-into-`dev` trigger (it still said "every push to dev"), removing the doc-vs-code
+  contradiction — a documentation alignment, **not** a behavior change.
+- **INF-2 (§0.6, accepted limitation):** the fork-PR `:dev` publish gap (fork PRs get no repo
+  secrets, so their merge can't push `:dev`) is documented in `publish.yml` as an accepted
+  trade-off of the deliberate merged-PR trigger. Switching to a push-based trigger would fix it but
+  reverses a distribution locked decision (§6) and reintroduces the double-publish the re-scope
+  avoided — left as an explicit user decision, not changed here.
+- **INF-4 (§9.2, documented exception):** the optional `trivy-server` sidecar runs as root; the
+  upstream `aquasec/trivy` image ships no non-root USER and hard-codes its `/root/.cache`, so a
+  non-root `user:` would break the DB cache on a root-owned named volume. Documented the residual
+  risk and its mitigations (profile-gated, internal-net-only, read-only FS, no-new-privileges,
+  cap_drop ALL, resource-limited) in the compose file, per the audit's accepted alternative.
+- **INF-5 (§9.2):** added a small RAM-backed `tmpfs:[/run]` to the `docker-socket-proxy` sidecar
+  (HAProxy needs a writable `/run` under a read-only root FS) with a note to live-verify the profile
+  and add `cap_add:[SETUID,SETGID]` only if the proxy still cannot drop privileges.
+**Why:** The audit's P2 (supply chain / deployment hardening). SCN-3 is a real startup bug on the
+documented config path and ships with tests. The infra items that can be fully verified here are
+applied; those requiring a live Docker daemon (INF-4/5) or GitHub egress (INF-1 SHA resolution) or a
+locked-decision change (INF-2) are applied conservatively (defensive change + documentation) and
+their residual scope is called out rather than shipped unverified.
+**Plan section affected:** §0.6 (distribution docs), §4.2 (config parsing), §9.2 (compose
+hardening), §11 (CI supply chain).

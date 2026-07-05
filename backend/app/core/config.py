@@ -16,9 +16,10 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -77,7 +78,7 @@ class Settings(BaseSettings):
             "X-Forwarded-For. Do not include the client LAN range."
         ),
     )
-    cors_origins: list[str] = Field(
+    cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         description=(
             "Comma-separated list of allowed CORS origins for the dev frontend "
@@ -180,7 +181,7 @@ class Settings(BaseSettings):
         default=Path("/data/backups"),
         description="Directory holding backup bundles (manual and scheduled).",
     )
-    filesystem_scan_roots: list[str] = Field(
+    filesystem_scan_roots: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         description=(
             "Comma-separated absolute paths under which filesystem (Grype 'dir:') "
@@ -188,6 +189,21 @@ class Settings(BaseSettings):
             "host paths (e.g. the database or secret files) can never be read."
         ),
     )
+
+    @field_validator("cors_origins", "filesystem_scan_roots", mode="before")
+    @classmethod
+    def _split_comma_separated(cls, value: object) -> object:
+        """Parse a comma-separated env string into a list of trimmed entries.
+
+        pydantic-settings would otherwise try ``json.loads`` on a ``list[str]``
+        env value, so the documented ``SCRYE_FILESYSTEM_SCAN_ROOTS=/a,/b`` (or a
+        single ``/a``) fails to parse at startup (SCN-3). ``NoDecode`` on the
+        field hands us the raw string; a real list (defaults, tests) passes
+        through untouched.
+        """
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
 
     # --- Frontend ----------------------------------------------------------
     frontend_dist_dir: Path = Field(
