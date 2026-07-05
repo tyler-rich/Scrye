@@ -7,9 +7,10 @@ work Phase 6 adds:
 - pruning expired **raw artifacts** per the retention policy.
 
 It mirrors the shape of the existing scan/backup workers and stays in-process per
-the locked single-container model (§0.2). The short DB queries run inline on the
-loop (the same trade-off the scan worker documents); only the scan subprocesses,
-launched by the worker, are long-running.
+the locked single-container model (§0.2). The scan subprocesses launched by the
+worker are the long-running part; the scheduler's own DB/file work (firing due
+schedules, pruning artifacts) can still be sizeable on a large instance, so it is
+run in a thread rather than inline on the event loop (API-15).
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 
+import anyio.to_thread
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.retention import run_retention
@@ -73,17 +75,25 @@ class MaintenanceScheduler:
     async def tick(self) -> None:
         """Run one maintenance pass: fire due schedules, then prune artifacts."""
         await self._fire_schedules()
-        self._run_retention()
+        # Retention can unlink thousands of files + delete their rows on the
+        # first pass over a large history; keep it off the event loop (API-15).
+        await anyio.to_thread.run_sync(self._run_retention)
 
     async def _fire_schedules(self) -> None:
         """Create scans for due schedules and submit them to the worker."""
-        db = self._session_factory()
-        try:
-            scan_ids = fire_due_schedules(db)
-        finally:
-            db.close()
+        # The schedule query/insert batch runs off-loop; only the (async) submit
+        # of each created scan stays on the loop.
+        scan_ids = await anyio.to_thread.run_sync(self._fire_due)
         for scan_id in scan_ids:
             await self._worker.submit(scan_id)
+
+    def _fire_due(self) -> list[int]:
+        """Fire due schedules in a fresh session; return the created scan ids."""
+        db = self._session_factory()
+        try:
+            return fire_due_schedules(db)
+        finally:
+            db.close()
 
     def _run_retention(self) -> None:
         """Prune expired raw artifacts per the retention policy."""

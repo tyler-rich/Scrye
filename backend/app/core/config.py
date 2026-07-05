@@ -152,6 +152,15 @@ class Settings(BaseSettings):
         default=1800,
         description="Per-scan wall-clock timeout in seconds (default 1800 = 30 minutes).",
     )
+    scanner_max_output_bytes: int = Field(
+        default=512 * 1024 * 1024,
+        description=(
+            "Maximum bytes of stdout captured from a single scanner subprocess "
+            "(default 536870912 = 512 MiB). A scan whose output exceeds this is "
+            "killed and failed, bounding memory use against a very large or "
+            "hostile image that would otherwise emit unbounded JSON."
+        ),
+    )
     scanner_cache_dir: Path = Field(
         default=Path("/cache"),
         description=(

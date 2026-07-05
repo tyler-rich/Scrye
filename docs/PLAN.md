@@ -1472,3 +1472,31 @@ decisions intact (no schema change, field encryption, single-container worker). 
 audit's recommended fix (route the URL into `secret_ciphertext`, mask on read) rather than adding a
 new encrypted column, avoiding a data-model change.
 **Plan section affected:** §5 (RBAC/API tokens), §6 (secrets/webhook URL), §8 (backup/restore).
+
+### 2026-07-05 — Post-P6 audit remediation (P1) — availability/performance under real volume
+**What changed:** Second tier (P1) of the audit (§10). Carries the finding IDs:
+- **API-5 (§4/§12):** the scan worker's result persistence (`_persist_success` /
+  `_store_failure_output` — a 10k+-findings flush plus the raw-JSON artifact write) now runs via
+  `anyio.to_thread.run_sync` instead of inline on the event loop; the module docstring is corrected.
+- **SCN-1 (§4):** `run_command` streams a subprocess's stdout with a byte cap
+  (`SCRYE_SCANNER_MAX_OUTPUT_BYTES`, default 512 MiB) — output past the budget kills the child and
+  fails the scan as a `ScannerOutputError` (with the truncated bytes for diagnosis) rather than
+  buffering unbounded JSON; stderr is capped modestly. New setting is emitted in `.env.example`.
+- **API-4 (§4/§8):** SBOM and backup-restore uploads are read through `read_upload_capped`, which
+  rejects an over-limit body via its reported size and by a chunked read, so an oversized upload is
+  never fully materialized in memory before the size check.
+- **API-7 (§4.6):** dashboard/metrics aggregation loads only the columns it reads per target
+  (`load_only`, skipping the heavy `options`/`error` columns) and is served from a short (15 s)
+  process-wide TTL cache shared by the dashboard endpoint and every Prometheus scrape, cleared on
+  app startup (and in tests).
+- **API-1 (§4.4):** the `GET /scans` and `GET /scans/history` list endpoints eager-load
+  `Scan.tag_rows` (`selectinload`), removing the per-row N+1 tag query.
+- **API-15 / API-6 (§12):** the maintenance tick runs `fire_due_schedules` and `run_retention` off
+  the event loop (`anyio.to_thread.run_sync`), and retention deletes artifact rows in a single
+  `DELETE … WHERE id IN (…)` instead of one ORM delete per row.
+**Why:** The audit's P1 (availability/performance at real data volume) items — the systemic
+"synchronous heavy work on the event loop" pattern (API-2/3/5, plus retention/maintenance) is
+addressed consistently by hopping to a thread, and the unbounded-memory paths (scanner stdout,
+uploads, dashboard hydration) are bounded. No schema change; the one new setting is non-sensitive.
+**Plan section affected:** §4 (scanner orchestration), §4.4/§4.6 (list/dashboard perf), §8
+(uploads), §12 (maintenance), §11 (`SCRYE_SCANNER_MAX_OUTPUT_BYTES`).

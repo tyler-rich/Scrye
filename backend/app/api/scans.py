@@ -42,6 +42,7 @@ from app.api.scan_schemas import (
     ScanCreateIn,
     ScanOut,
 )
+from app.api.uploads import read_upload_capped
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.core.artifacts import artifact_path, store_artifact
 from app.core.audit import record_audit
@@ -225,14 +226,11 @@ async def create_sbom_scan(
     """
     _reject_unsupported_combo(TargetType.SBOM, scanner)
 
-    data = await file.read()
+    # Enforce the size cap while reading so an oversized upload is never fully
+    # materialized in memory before the check (API-4).
+    data = await read_upload_capped(file, _MAX_SBOM_UPLOAD_BYTES, what="SBOM")
     if not data:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The SBOM file is empty.")
-    if len(data) > _MAX_SBOM_UPLOAD_BYTES:
-        raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"SBOM exceeds the {_MAX_SBOM_UPLOAD_BYTES // (1024 * 1024)} MiB limit.",
-        )
     try:
         json.loads(data)
     except (ValueError, UnicodeDecodeError) as exc:
@@ -278,7 +276,12 @@ def list_scans(
     offset: int = Query(default=0, ge=0),
 ) -> list[ScanOut]:
     """List scans, newest first (basic filters; full history in Phase 4)."""
-    stmt = select(Scan).order_by(Scan.created_at.desc(), Scan.id.desc())
+    # Eager-load tags to avoid an N+1 SELECT per row when ScanOut reads them (API-1).
+    stmt = (
+        select(Scan)
+        .options(selectinload(Scan.tag_rows))
+        .order_by(Scan.created_at.desc(), Scan.id.desc())
+    )
     if scanner is not None:
         stmt = stmt.where(Scan.scanner == scanner)
     if scan_status is not None:
@@ -313,8 +316,14 @@ def list_history(
 
     column = _SORT_COLUMNS[sort]
     direction = column.desc() if order == "desc" else column.asc()
-    # A stable secondary key keeps pagination deterministic across equal values.
-    stmt = base.order_by(direction, Scan.id.desc()).limit(limit).offset(offset)
+    # A stable secondary key keeps pagination deterministic across equal values;
+    # eager-load tags to avoid an N+1 SELECT per row when ScanOut reads them (API-1).
+    stmt = (
+        base.options(selectinload(Scan.tag_rows))
+        .order_by(direction, Scan.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     scans = db.scalars(stmt).all()
     return ScanHistoryPage(total=total, items=[ScanOut.model_validate(s) for s in scans])
 

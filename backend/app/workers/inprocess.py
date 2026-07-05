@@ -6,9 +6,10 @@ wait for a slot while their row stays ``queued``. When a slot frees, the task
 marks the scan ``running``, invokes the scanner, stores the raw output, and
 persists normalized findings — flipping the scan to ``succeeded`` or ``failed``.
 
-The subprocess call is genuinely async; the short SQLite reads/writes around it
-run synchronously on the loop, which is fine at this scale (single-container,
-low concurrency — the locked v1 design).
+The subprocess call is genuinely async. The small status reads/writes around it
+run synchronously on the loop, but the potentially large result persistence (a
+10k+-findings flush plus the raw-JSON artifact write) is off-loaded to a thread
+so it never stalls the event loop — matching the single-container v1 design.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import contextlib
 import logging
 from contextlib import nullcontext
 
+import anyio.to_thread
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -220,7 +222,9 @@ class InProcessScanWorker(ScanWorker):
             # A parse failure carries the raw scanner output; persist it so the
             # malformed output stays diagnosable even though the scan failed.
             if isinstance(exc, ScannerOutputError) and exc.raw_output:
-                self._store_failure_output(session, scan, exc.raw_output)
+                await anyio.to_thread.run_sync(
+                    self._store_failure_output, session, scan, exc.raw_output
+                )
             # ScannerError/TargetError messages are operator-safe, but repo scans
             # can surface a scanner stderr that echoes a credential-embedded URL;
             # redact() strips URL userinfo before the message is stored/logged.
@@ -229,7 +233,10 @@ class InProcessScanWorker(ScanWorker):
             await self._notify(session, scan.id)
             return
 
-        self._persist_success(session, scan, execution, sbom)
+        # Persisting 10k+ findings + a large raw-JSON write is heavy synchronous
+        # DB/disk work; run it in a thread so the event loop (and /healthz, and
+        # other scans' subprocess I/O) is not stalled for the flush (API-5).
+        await anyio.to_thread.run_sync(self._persist_success, session, scan, execution, sbom)
         logger.info(
             "Scan %d succeeded: %d finding(s), highest=%s",
             scan.id,
