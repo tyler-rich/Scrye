@@ -67,6 +67,17 @@ services:
         max-file: "3"
 
   # Optional: shared Trivy vulnerability-DB cache (enable with --profile trivy-server).
+  #
+  # RESIDUAL RISK (documented exception to the non-root baseline, audit INF-4):
+  # this sidecar runs as root inside the container. The upstream aquasec/trivy
+  # image ships no non-root USER and hard-codes its cache under /root/.cache;
+  # running it as an arbitrary uid would leave that cache (a named volume Docker
+  # creates root-owned) unwritable, breaking the DB download. The exposure is
+  # bounded: the service is optional (profile-gated), reachable only on the
+  # internal scrye_net (no host port), read-only root FS, no-new-privileges,
+  # cap_drop ALL, and CPU/memory-limited, so an in-container compromise cannot
+  # escalate privileges or reach the host filesystem. A future hardening is to
+  # rebuild trivy-server on a non-root base with a writable cache path.
   trivy-server:
     profiles: ["trivy-server"]
     image: aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
@@ -123,6 +134,13 @@ services:
       - "no-new-privileges:true"
     cap_drop:
       - "ALL"
+    tmpfs:
+      # tecnativa/docker-socket-proxy is HAProxy-based and needs a writable /run
+      # for its pid/stats socket; the root FS is read-only, so give it a small
+      # RAM-backed /run rather than crash-loop on the first write (audit INF-5).
+      # NOTE: verify by starting `--profile docker-env` once — if the proxy still
+      # fails to drop privileges under cap_drop:ALL, add cap_add [SETUID,SETGID].
+      - /run:size=8m,mode=0755
     deploy:
       # The highest-risk service (the only docker.sock mount) is capped so a
       # runaway/wedged proxy can't exhaust host resources (CIS baseline).
