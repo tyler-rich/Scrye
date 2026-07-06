@@ -46,6 +46,7 @@ import {
   type TargetType,
 } from '../api/scans';
 import { createPreset, deletePreset, listPresets, type FilterPreset } from '../api/presets';
+import { formatWhen } from '../lib/dates';
 import { ScanStatusBadge } from '../components/ScanStatusBadge';
 import { SeverityBadge } from '../components/SeverityBadge';
 
@@ -58,10 +59,6 @@ const EXPORT_FORMATS: { value: ExportFormat; label: string }[] = [
   { value: 'markdown', label: 'Markdown' },
   { value: 'json', label: 'JSON' },
 ];
-
-function formatWhen(iso: string): string {
-  return new Date(`${iso}Z`).toLocaleString();
-}
 
 /** Build the effective filter object, folding the two date pickers into it. */
 function withDates(base: HistoryFilters, from: string, to: string): HistoryFilters {

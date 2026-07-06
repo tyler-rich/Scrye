@@ -1569,3 +1569,26 @@ multi-select, filesystem-archive upload, offline DB import, key-rotation re-encr
 de-scoped in the docs per the audit's accepted alternative rather than built out in this tier.
 **Plan section affected:** §4.5 (scanner settings actuation), §10.1 (README accuracy), §4.1/§4.2
 (target/feature scope).
+
+### 2026-07-05 — Post-P6 audit remediation (P4) — frontend correctness / UX
+**What changed:** Fifth tier (P4) of the audit (§10). Finding IDs:
+- **FE-1:** the API client dispatches a `scrye:auth-invalidated` window event on any 401; `AuthContext`
+  listens and flips `user` to null, so a dead/revoked session drops the SPA back to the login screen
+  instead of leaving a stale authenticated shell whose every action fails.
+- **FE-3:** a shared `lib/dates.ts` (`parseUtc` / `formatWhen`) is the single place that renders a
+  backend (naive-UTC) timestamp; the pages that rendered UTC as local (Account sessions, Backups
+  list + schedule last-run, Scheduled-scans last-run) now use it, and the two pages that already had
+  a private `formatWhen` (ScanDetail, Scans) were de-duplicated onto the shared helper.
+- **FE-4:** `BackupsPanel`'s restore file moves from `useRef` to `useState`, so the selected file
+  name actually re-renders on the destructive restore flow instead of showing "No file selected".
+- **FE-5:** `ScheduledScansPanel` constrains the scanner Select by target type via a `SCANNERS_FOR`
+  matrix (and auto-corrects the scanner when the target type changes), mirroring the New Scan page and
+  the backend's combo validation; it also gates Add/Run/Delete behind an operator-or-admin check
+  (`useAuth`), and `/settings` is now a **guarded route** (viewers hitting the URL are redirected to
+  `/`, not just missing the nav link).
+**Why:** The audit's P4 (frontend correctness/UX). All are client-only; the backend already enforces
+the same RBAC/validation, so these close UX gaps (stale shells, wrong times, silent destructive-flow
+labels, invalid-combo 400s, viewer-visible controls) rather than security holes. No dedicated frontend
+test runner exists yet (FE-10, deferred to P5); changes are verified by `tsc`, ESLint, Prettier, and a
+clean `vite build`.
+**Plan section affected:** §5 (RBAC surfacing in the UI), §4.4/§4.6 (history/schedules UX), §10 (SPA).

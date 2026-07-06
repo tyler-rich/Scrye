@@ -18,6 +18,7 @@ import { useForm } from '@mantine/form';
 import { IconAlertCircle, IconPlayerPlay, IconTrash } from '@tabler/icons-react';
 
 import { ApiError } from '../../api/client';
+import { formatWhen } from '../../lib/dates';
 import {
   createSchedule,
   deleteSchedule,
@@ -26,17 +27,25 @@ import {
   type ScanSchedule,
 } from '../../api/schedules';
 import type { Scanner, TargetType } from '../../api/scans';
+import { useAuth } from '../../auth/AuthContext';
 
-const SCANNERS: { value: Scanner; label: string }[] = [
-  { value: 'trivy', label: 'Trivy' },
-  { value: 'grype', label: 'Grype' },
-];
+const SCANNER_LABELS: Record<Scanner, string> = { trivy: 'Trivy', grype: 'Grype' };
 
 const TARGET_TYPES: { value: TargetType; label: string }[] = [
   { value: 'image', label: 'Container image' },
   { value: 'repository', label: 'Git repository' },
   { value: 'filesystem', label: 'Filesystem' },
 ];
+
+// Which scanners can run each schedulable target type — the backend rejects
+// invalid combos (scan_schedules.py), so mirror it here to keep the form valid
+// up front rather than 400-ing after the whole form is filled (FE-5).
+const SCANNERS_FOR: Record<TargetType, Scanner[]> = {
+  image: ['trivy', 'grype'],
+  repository: ['trivy'],
+  filesystem: ['grype'],
+  sbom: ['grype'], // not schedulable (no upload), listed for completeness
+};
 
 interface FormValues {
   name: string;
@@ -50,6 +59,8 @@ interface FormValues {
 
 /** Scheduled/recurring scans on a cron cadence (docs/PLAN.md §4.6). */
 export function ScheduledScansPanel() {
+  const { user } = useAuth();
+  const canOperate = !!user && user.role !== 'viewer';
   const [items, setItems] = useState<ScanSchedule[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [opened, { open, close }] = useDisclosure(false);
@@ -82,6 +93,15 @@ export function ScheduledScansPanel() {
       target: (v) => (v.trim() ? null : 'Required'),
     },
   });
+
+  // Keep the scanner valid for the chosen target type (FE-5).
+  const targetType = form.values.target_type;
+  const scanner = form.values.scanner;
+  useEffect(() => {
+    const allowed = SCANNERS_FOR[targetType];
+    if (!allowed.includes(scanner)) form.setFieldValue('scanner', allowed[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetType, scanner]);
 
   const submit = form.onSubmit(async (values) => {
     setError(null);
@@ -130,7 +150,7 @@ export function ScheduledScansPanel() {
           Recurring scans on a cron cadence. Due schedules launch automatically; SBOM uploads cannot
           be scheduled.
         </Text>
-        <Button onClick={open}>Add schedule</Button>
+        {canOperate && <Button onClick={open}>Add schedule</Button>}
       </Group>
 
       {error && (
@@ -175,23 +195,25 @@ export function ScheduledScansPanel() {
                 </Table.Td>
                 <Table.Td>
                   <Text size="sm" c="dimmed">
-                    {s.last_run_at ? `${s.last_run_at.slice(0, 16)} (${s.last_status})` : 'never'}
+                    {s.last_run_at ? `${formatWhen(s.last_run_at)} (${s.last_status})` : 'never'}
                   </Text>
                 </Table.Td>
                 <Table.Td>
-                  <Group gap="xs" justify="flex-end">
-                    <ActionIcon variant="subtle" aria-label="Run now" onClick={() => onRun(s.id)}>
-                      <IconPlayerPlay size={16} />
-                    </ActionIcon>
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      aria-label="Delete schedule"
-                      onClick={() => onDelete(s.id)}
-                    >
-                      <IconTrash size={16} />
-                    </ActionIcon>
-                  </Group>
+                  {canOperate && (
+                    <Group gap="xs" justify="flex-end">
+                      <ActionIcon variant="subtle" aria-label="Run now" onClick={() => onRun(s.id)}>
+                        <IconPlayerPlay size={16} />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        aria-label="Delete schedule"
+                        onClick={() => onDelete(s.id)}
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Group>
+                  )}
                 </Table.Td>
               </Table.Tr>
             ))}
@@ -221,8 +243,12 @@ export function ScheduledScansPanel() {
             <Group grow>
               <Select
                 label="Scanner"
-                data={SCANNERS}
+                data={SCANNERS_FOR[targetType].map((s) => ({
+                  value: s,
+                  label: SCANNER_LABELS[s],
+                }))}
                 allowDeselect={false}
+                disabled={SCANNERS_FOR[targetType].length === 1}
                 {...form.getInputProps('scanner')}
               />
               <Select
