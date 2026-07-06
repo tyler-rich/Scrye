@@ -21,6 +21,13 @@ inputs:
     description: Newline- or comma-separated image tags (required when push is "true").
     required: false
     default: ""
+  cache-scope:
+    description: >-
+      GHA build-cache scope. Partitions the shared type=gha cache so builds with
+      different platform sets (e.g. amd64-only vs multi-arch) don't evict each
+      other's layers under the repo's 10 GB cache budget. Empty = buildx default.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -39,5 +46,5 @@ runs:
         platforms: ${{ inputs.platforms }}
         push: ${{ inputs.push }}
         tags: ${{ inputs.tags }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-from: type=gha${{ inputs.cache-scope && format(',scope={0}', inputs.cache-scope) || '' }}
+        cache-to: type=gha,mode=max${{ inputs.cache-scope && format(',scope={0}', inputs.cache-scope) || '' }}

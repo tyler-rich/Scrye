@@ -113,14 +113,21 @@ jobs:
           platforms: linux/amd64
           tags: scrye:ci
           load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Dedicated scope so this amd64-only build and the multi-arch builds
+          # (image-multiarch, publish, dev-nightly) don't evict each other's
+          # layers under the repo's 10 GB GHA cache budget.
+          cache-from: type=gha,scope=amd64-ci
+          cache-to: type=gha,mode=max,scope=amd64-ci
 
       - name: Export image to a tar for offline scanning
         run: docker save scrye:ci -o /tmp/scrye-image.tar
 
       # Trivy pinned to the version Scrye bundles (docs/PLAN.md § Deviations).
+      # Informational only (never gates) — run on pushes to main, not on PRs, so
+      # dev PRs pay for just the two gate scans below. Full visibility is kept on
+      # main and on release-bound history. (docs/PLAN.md § Deviations, 2026-07-06.)
       - name: Trivy — full report (informational)
+        if: github.event_name == 'push'
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
@@ -146,8 +153,10 @@ jobs:
             --ignorefile /.trivyignore --exit-code 1 --no-progress
 
       # Grype informational report (does not fail the build) — keeps the excluded
-      # base-image / bundled-binary findings visible in the CI output.
+      # base-image / bundled-binary findings visible in the CI output. Gated to
+      # pushes to main (not PRs) alongside the Trivy informational report above.
       - name: Grype — full report (informational)
+        if: github.event_name == 'push'
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
@@ -198,3 +207,4 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
           push: "false"
+          cache-scope: multiarch

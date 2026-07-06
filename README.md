@@ -200,10 +200,12 @@ and one normalized findings model.
 
 ## Quick start
 
-Scrye is published to Docker Hub as **`<dockerhub-user>/scrye`** — tagged releases
-push `:<version>` and `:latest`, and the current `dev` branch is available as the
-moving `:dev` tag (`docker pull <dockerhub-user>/scrye:latest`). You can also
-**build the image locally** from this repo, as the quick start below does.
+Scrye releases are published to Docker Hub as **`<dockerhub-user>/scrye`** — tagged
+releases push `:<version>` and `:latest` (`docker pull <dockerhub-user>/scrye:latest`).
+The current `dev` branch is published separately to GHCR as the moving
+**`ghcr.io/iamgroot60/scrye:dev`** tag by a nightly build (for testing HEAD-of-dev,
+not for production). You can also **build the image locally** from this repo, as the
+quick start below does.
 
 ```bash
 # 1. Clone
@@ -525,9 +527,10 @@ scrape_configs:
 
 ## Building the image
 
-Published images are on Docker Hub as **`<dockerhub-user>/scrye`** (`:latest` and
-`:<version>` from tagged releases, `:dev` from the current `dev` branch). To build
-locally instead — a single-arch build for the host you are on:
+Published release images are on Docker Hub as **`<dockerhub-user>/scrye`** (`:latest`
+and `:<version>` from tagged releases); the current `dev` branch is published to
+GHCR as **`ghcr.io/iamgroot60/scrye:dev`** by a nightly build. To build locally
+instead — a single-arch build for the host you are on:
 
 ```bash
 docker build -f docker/Dockerfile -t scrye:0.1.0 .
@@ -592,7 +595,8 @@ Build order (see [`docs/PLAN.md`](./docs/PLAN.md) §12):
 Also not yet implemented (planned): uploaded image-tar targets, a Docker-environment
 multi-select scan launcher, a filesystem-archive upload target, offline/air-gapped
 scanner-DB import, and an admin-facing bulk secret re-encryption (key-rotation) action.
-Container-registry publishing is now **in scope** — see the Docker Hub tags above.
+Container-registry publishing is now **in scope** — Docker Hub for releases and GHCR
+for the nightly `:dev` build (see the tags above).
 
 ---
 

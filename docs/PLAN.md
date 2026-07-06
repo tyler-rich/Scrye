@@ -22,20 +22,24 @@ These were decided and are not open for re-litigation during the build:
    default and is required. Full-DB SQLCipher encryption is **deferred** (optional future
    hardening, not in v1).
 5. **Frontend:** **Mantine v7**.
-6. **Distribution:** the image builds locally **and** is **published to Docker Hub as
-   `<dockerhub-user>/scrye`** by `.github/workflows/publish.yml` (separate from `ci.yml`, using the
-   `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets), via two independent paths:
-   - **Tagged main releases:** pushing a semver tag `v*.*.*` builds the multi-arch (amd64/arm64)
-     image and pushes `<dockerhub-user>/scrye:<version>` (tag minus the leading `v`) **and**
-     `<dockerhub-user>/scrye:latest`. Runs **only** when the tagged commit is on `main`.
-   - **dev continuous build:** each time a pull request is **merged into `dev`** the multi-arch
-     image is built and pushed as the single **moving** tag `<dockerhub-user>/scrye:dev` (always
-     overwritten — not a version, not `latest`), mirroring `dev` after each merge for testing
-     without cutting a release. It does **not** fire on bare pushes to the `dev` ref (e.g.
-     conflict-resolution commits on an open PR) or on PRs closed without merging.
-   `latest`/`:<version>` come only from tagged main releases; `:dev` only from PRs merged into
-   `dev`. No other registries or tags. (Originally locked to local-build-only; revised — see
-   § Deviations.)
+6. **Distribution:** the image builds locally **and** is published to **two registries with two
+   distinct roles**:
+   - **Docker Hub `<dockerhub-user>/scrye` — releases only** (`.github/workflows/publish.yml`,
+     `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets): pushing a semver tag `v*.*.*` builds the
+     multi-arch (amd64/arm64) image and pushes `<dockerhub-user>/scrye:<version>` (tag minus the
+     leading `v`) **and** `<dockerhub-user>/scrye:latest`. Runs **only** when the tagged commit is on
+     `main`. No Docker Hub credentials are referenced outside this workflow.
+   - **GHCR `ghcr.io/iamgroot60/scrye` — dev only** (`.github/workflows/dev-nightly.yml`, GHCR login
+     via the built-in `GITHUB_TOKEN`): a **nightly scheduled** build (04:00 UTC) of the `dev` branch
+     pushes the single **moving** tag `ghcr.io/iamgroot60/scrye:dev` (always overwritten — not a
+     version, not `latest`). The scheduled run skips when `dev` has had no new commits in 24h;
+     `workflow_dispatch` always builds. It does **not** build on every dev merge — CI already
+     lints/tests/builds each dev PR, and the image is batched nightly. GHCR package visibility
+     inherits from the (private) repo.
+   `latest`/`:<version>` come only from tagged main releases on Docker Hub; `:dev` only from the
+   nightly GHCR build. No other registries or tags. (Originally locked to local-build-only, then to
+   a Docker Hub merged-PR `:dev` trigger; revised again to the GHCR nightly split — see
+   § Deviations, 2026-07-06.)
 7. **Backend runtime:** **Python 3.13.** (Originally locked to Python 3.12; revised to 3.13 in
    Phase 6 to resolve Grype-flagged CPython interpreter CVEs whose fixes are only available in
    3.13+ — see § Deviations for the full rationale.)
@@ -524,6 +528,53 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Why:** <reason — constraint discovered, better approach found, plan ambiguity resolved, etc.>
 **Plan section affected:** <§ reference>
 ```
+
+### 2026-07-06 — Infra — dev publishing moved to a nightly GHCR build (registry split + INF-2 resolved)
+**What changed:** Three coupled CI/CD changes that together restructure dev-image publishing, plus a
+general CI-minute-reduction pass. Treated as one entry because they are one architecture change:
+- **Registry split.** Docker Hub (`<dockerhub-user>/scrye`) is now **release-only** — the tagged-
+  `v*.*.*`-on-`main` path in `publish.yml` (→ `:<version>` + `:latest`). Dev images move to **GHCR**
+  at `ghcr.io/iamgroot60/scrye:dev`, published by a new `.github/workflows/dev-nightly.yml` that
+  authenticates with the built-in `GITHUB_TOKEN` (no PAT, no Docker Hub secret). The `dev` job and
+  its `pull_request: types:[closed]` trigger were **removed** from `publish.yml`; Docker Hub is no
+  longer referenced anywhere in the dev path.
+- **Nightly cadence.** The per-merge multi-arch rebuild of `:dev` is replaced by a **04:00 UTC
+  nightly** schedule (+ manual `workflow_dispatch`) that builds `dev` HEAD multi-arch (amd64+arm64)
+  and pushes the moving `:dev` tag. A skip-check short-circuits the scheduled run when `dev` has had
+  no new commits in the last 24h. **No dated history tags and no image-cleanup job in this pass**
+  (deferred — the dev-tag scheme is expected to change). Immediate per-PR feedback is unchanged:
+  `ci.yml` still lints, tests, and builds the amd64 image on every dev PR.
+- **INF-2 resolved.** The fork-PR `:dev` publish gap (a `pull_request`-triggered job whose head is a
+  fork gets no repository secrets) is eliminated: a `schedule`/`workflow_dispatch` trigger is not
+  PR-triggered and runs in the base-repo context, and GHCR uses the always-present `GITHUB_TOKEN`
+  rather than fork-withheld secrets. A fork PR merged into `dev` is picked up by the next nightly.
+  The INF-2 caveat and its "revisit before going public" note are retired (marker added to the
+  2026-07-05 P2 entry).
+- **General minute reduction (`ci.yml`).** The two **informational** scanner reports (the non-gating
+  `|| true` Trivy/Grype full reports in the `image` job) now run only on `push` events (main), not
+  on PRs — dev PRs run just the two gate scans (the required checks are unchanged). A `cache-scope`
+  input was added to `.github/actions/build-image` and wired through so amd64-only (`amd64-ci`) and
+  multi-arch (`multiarch` for main/release, `dev-multiarch` for the nightly) builds use separate GHA
+  cache scopes instead of evicting each other under the repo's 10 GB cache budget.
+**Why:** Per-merge multi-arch (arm64-under-QEMU) rebuilds of the moving `:dev` tag were the largest
+CI-minute cost relative to frequency (~10 dev merges in ~2 active days). Batching to a skip-guarded
+nightly collapses that to ≤1 build/day. Moving dev images to GHCR keeps Docker Hub strictly for
+releases, uses the free always-available `GITHUB_TOKEN`, and sidesteps the fork-secrets problem
+INF-2 flagged. User-approved this session (registry choice, cadence, informational-scan gating, and
+cache scoping).
+**Operational follow-ups (must be verified in repo Settings / GHCR — cannot be done from CI):**
+- **Settings → Actions → General → Workflow permissions** should be set to the restrictive
+  **Read repository contents and packages permissions** (read-only) default — GHCR push does **not**
+  require the repo-wide default to allow write. `dev-nightly.yml` declares its own explicit
+  `permissions: { contents: read, packages: write }` block, which overrides the read-only default
+  (an explicit block is exhaustive and takes precedence; it is not capped by the repo default). Each
+  workflow declares exactly what it needs (`publish.yml` and `ci.yml` only `contents: read`), so the
+  read-only default breaks nothing.
+- **After the first nightly push, confirm the GHCR package `ghcr.io/iamgroot60/scrye` is Private**
+  (it inherits the private repo's visibility by default; flag it if it publishes as public).
+**Plan section affected:** §0.6 (distribution), §9.1 (image). Supersedes the INF-2 item in the
+2026-07-05 P2 audit-remediation entry and the Docker Hub merged-PR `:dev` trigger in the 2026-07-04
+publishing entry.
 
 ### 2026-06-30 — Phase 0 — Scanner versions bumped to current releases
 **What changed:** Bundled scanner versions pinned to the current releases —
@@ -1528,7 +1579,9 @@ uploads, dashboard hydration) are bounded. No schema change; the one new setting
   broken `:dev` publish), so the trigger decision (keep merged-PR-only with a documented caveat, or
   move to a push-based / `workflow_run` trigger with secrets) should be made deliberately at that
   point. INF-3's `CLAUDE.md` §6 wording is intentionally left matching the current merged-PR
-  trigger.
+  trigger. **[RESOLVED 2026-07-06:** dev publishing was moved off the merged-PR trigger to a
+  nightly GHCR build authenticated with the built-in `GITHUB_TOKEN`, so the fork-withheld-secrets
+  path no longer exists. See the 2026-07-06 deviation entry above.**]**
 - **INF-4 (§9.2, documented exception):** the optional `trivy-server` sidecar runs as root; the
   upstream `aquasec/trivy` image ships no non-root USER and hard-codes its `/root/.cache`, so a
   non-root `user:` would break the DB cache on a root-owned named volume. Documented the residual

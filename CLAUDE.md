@@ -33,21 +33,27 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
    mounts `/var/run/docker.sock`.
 5. **Secrets at rest:** **application-layer AES-256-GCM field encryption** (required). **SQLCipher
    is deferred** — leave a seam, don't build it.
-6. **Distribution:** the image builds locally, and is **published to Docker Hub as
-   `<dockerhub-user>/scrye` via two automated paths** (in `.github/workflows/publish.yml`,
-   separate from `ci.yml`, using the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets):
-   - **Tagged main releases** — pushing a semver tag `v*.*.*` builds the multi-arch
-     (amd64/arm64) image and pushes `<dockerhub-user>/scrye:<version>` (the tag **without** the
-     leading `v`) **and** `<dockerhub-user>/scrye:latest`. This runs **only** when the tagged
-     commit is on `main`.
-   - **dev continuous build** — when a pull request is **merged into `dev`**, the multi-arch
-     image is built from the merge commit and pushes the single **moving** tag
-     `<dockerhub-user>/scrye:dev` (always overwritten — not a version, not `latest`), so the current
-     state of `dev` can be tested without cutting a release. It fires **only** on a merged PR into
-     `dev`, not on bare pushes to the `dev` ref (e.g. conflict-resolution commits on an open PR) or
-     on PRs closed without merging.
-   No other registries or tags. `latest` and `:<version>` come **only** from tagged main
-   releases; `:dev` comes **only** from PRs merged into `dev`.
+6. **Distribution:** the image builds locally, and is **published to two registries with two
+   distinct roles**:
+   - **Docker Hub `<dockerhub-user>/scrye` — releases only** (in `.github/workflows/publish.yml`,
+     using the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets). Pushing a semver tag `v*.*.*`
+     builds the multi-arch (amd64/arm64) image and pushes `<dockerhub-user>/scrye:<version>` (the tag
+     **without** the leading `v`) **and** `<dockerhub-user>/scrye:latest`. This runs **only** when
+     the tagged commit is on `main`. Docker Hub is **never** touched by the dev path — no Docker Hub
+     credentials appear anywhere except this release workflow.
+   - **GHCR `ghcr.io/iamgroot60/scrye` — dev only** (in `.github/workflows/dev-nightly.yml`,
+     authenticating to GHCR with the built-in `GITHUB_TOKEN` — no PAT, no Docker Hub secret). A
+     **nightly scheduled** build (04:00 UTC) of the `dev` branch builds the multi-arch image and
+     pushes the single **moving** tag `ghcr.io/iamgroot60/scrye:dev` (always overwritten — not a
+     version, not `latest`), so the current state of `dev` can be tested without cutting a release.
+     The scheduled run **skips** the build when `dev` has had no new commits in the last 24h; a
+     manual `workflow_dispatch` always builds. It does **not** build on every push/merge to `dev` —
+     CI already lints/tests/builds each dev PR, and the image is batched to the nightly. The GHCR
+     package inherits the repository's visibility (private repo → private package).
+   No other registries or tags. `latest` and `:<version>` come **only** from tagged main releases
+   on Docker Hub; `:dev` comes **only** from the nightly GHCR build of `dev`. (A `schedule` trigger
+   is not PR-triggered, so it always has a token — this is what retires the fork-secrets gap the
+   audit logged as INF-2; see `docs/PLAN.md` § Deviations, 2026-07-06.)
 7. **Theme:** **teal** primary (`primaryColor: 'teal'`), first-class **light and dark** modes.
 
 ## Hard security rules (non-negotiable)
