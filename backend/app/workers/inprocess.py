@@ -56,6 +56,7 @@ from app.scanners.credentials import (
     git_env_token,
     is_http_url,
 )
+from app.scanners.grype_policy import load_grype_ignore, materialize_grype_config
 from app.scanners.syft import SbomResult
 from app.scanners.targets import (
     TargetError,
@@ -252,13 +253,17 @@ class InProcessScanWorker(ScanWorker):
 
         For Trivy scans the managed VEX documents and ignore rules are resolved
         and materialized into tmpfs for the duration of the run (passed through
-        Trivy's ``TRIVY_IGNOREFILE`` / ``TRIVY_VEX`` env vars); Grype scans carry
-        no such policy, so the overlay is empty.
+        Trivy's ``TRIVY_IGNOREFILE`` / ``TRIVY_VEX`` env vars). Grype scans apply
+        the global Grype ignore config the same way, materialized into tmpfs and
+        handed to the runner as a ``-c`` config path (FEAT-6).
         """
         if scan.scanner is Scanner.TRIVY:
             policy = load_trivy_policy(session)
             with materialize_trivy_policy(policy) as policy_env:
                 return await self._dispatch_target(session, scan, policy_env)
+        if scan.scanner is Scanner.GRYPE:
+            with materialize_grype_config(load_grype_ignore(session)) as grype_env:
+                return await self._dispatch_target(session, scan, grype_env)
         return await self._dispatch_target(session, scan, {})
 
     async def _dispatch_target(
