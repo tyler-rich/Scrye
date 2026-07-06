@@ -1,22 +1,18 @@
-# Scrye — Docker Hub publishing.
+# Scrye — Docker Hub publishing (releases only).
 #
-# Two independent publishing paths (CLAUDE.md locked decision §6):
+# Docker Hub (securedbytyler/scrye) is now RELEASE-ONLY (CLAUDE.md locked
+# decision §6). A push of a semver tag (v*.*.*) builds the multi-arch image and
+# pushes it as securedbytyler/scrye:<version> (the tag without its leading "v")
+# and securedbytyler/scrye:latest. The release job refuses to run unless the
+# tagged commit is reachable from main, so only real releases cut from main ever
+# reach :<version>/:latest.
 #
-#   1. Tagged main releases — a push of a semver tag (v*.*.*) builds the
-#      multi-arch image and pushes it as securedbytyler/scrye:<version> (the tag
-#      without its leading "v") and securedbytyler/scrye:latest. The release job
-#      refuses to run unless the tagged commit is reachable from main, so only
-#      real releases cut from main ever reach :<version>/:latest.
-#
-#   2. dev continuous build — when a pull request is MERGED into dev, the
-#      multi-arch image is built and pushed as the single moving tag
-#      securedbytyler/scrye:dev, always overwritten. This is NOT a versioned or
-#      stable tag; it just mirrors the state of dev after each merged PR. It does
-#      NOT fire on other pushes to the dev ref (e.g. conflict-resolution commits
-#      on an open, unmerged PR) or on PRs that are closed without merging.
+# Dev images are NOT published here — they go to GHCR (ghcr.io/iamgroot60/scrye:dev)
+# via .github/workflows/dev-nightly.yml, which uses the built-in GITHUB_TOKEN.
+# Docker Hub credentials are referenced only by this release workflow.
 #
 # The multi-arch build itself is defined once in .github/actions/build-image and
-# reused by both jobs (and by ci.yml's build-only check). Credentials come from
+# reused by this job (and by ci.yml's build-only check). Credentials come from
 # the DOCKERHUB_USERNAME / DOCKERHUB_TOKEN repository secrets.
 name: Publish
 
@@ -24,21 +20,14 @@ on:
   push:
     tags:
       - "v*.*.*"
-  # The :dev tag publishes only when a pull request is actually merged into dev,
-  # never on a bare push to the dev ref. types:[closed] fires on both merge and
-  # close-without-merge; the merged==true gate lives on the dev job below.
-  pull_request:
-    types: [closed]
-    branches:
-      - dev
 
-# Least privilege: reading the repo is all either job needs. Registry auth is
+# Least privilege: reading the repo is all this job needs. Registry auth is
 # handled with the Docker Hub secrets, not the GITHUB_TOKEN.
 permissions:
   contents: read
 
 # Serialize builds per ref. Distinct release tags have distinct refs so they
-# never cancel each other; each merged-PR :dev build runs under its own PR ref.
+# never cancel each other.
 concurrency:
   group: publish-${{ github.ref }}
   cancel-in-progress: true
@@ -81,48 +70,7 @@ jobs:
         uses: ./.github/actions/build-image
         with:
           push: "true"
+          cache-scope: multiarch
           tags: |
             securedbytyler/scrye:${{ steps.version.outputs.version }}
             securedbytyler/scrye:latest
-
-  dev:
-    name: dev branch → Docker Hub (:dev continuous build)
-    # Only when a PR is genuinely merged into dev. types:[closed] also fires when
-    # a PR is closed without merging, so gate on merged==true; base.ref is pinned
-    # to dev as belt-and-suspenders alongside the on: pull_request branch filter.
-    #
-    # KNOWN LIMITATION (audit INF-2, accepted): a pull_request-triggered workflow
-    # whose head is a *fork* does not receive repository secrets, so a fork PR
-    # merged into dev cannot log in to Docker Hub and this job fails at login —
-    # :dev is not refreshed for that merge. This is an accepted trade-off of the
-    # deliberate merged-PR trigger (docs/PLAN.md § Deviations, 2026-07-04), which
-    # was chosen so :dev does not double-publish on conflict-resolution pushes to
-    # an open promotion PR. Switching to `on: push: branches:[dev]` would fix the
-    # fork case (base-repo context has secrets) at the cost of re-introducing that
-    # double-publish; that is a distribution locked-decision (§6) change to make
-    # deliberately, not silently. Internal (non-fork) PRs merged into dev publish
-    # :dev normally.
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.base.ref == 'dev'
-    runs-on: ubuntu-latest
-    steps:
-      # Build the merge commit that actually landed on dev (the PR result), not
-      # the ephemeral refs/pull/N/merge preview ref.
-      - name: Checkout the merged commit on dev
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push (:dev)
-        uses: ./.github/actions/build-image
-        with:
-          push: "true"
-          tags: securedbytyler/scrye:dev
