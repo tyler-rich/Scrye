@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { AUTH_INVALIDATED_EVENT } from '../api/client';
 import {
   fetchAuthStatus,
   login as apiLogin,
@@ -58,6 +59,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // When any API call reports 401, drop the authenticated shell back to the
+  // login screen instead of leaving a stale session where every action fails.
+  useEffect(() => {
+    const onInvalidated = () => {
+      setState((prev) => (prev.user ? { ...prev, loading: false, user: null } : prev));
+    };
+    window.addEventListener(AUTH_INVALIDATED_EVENT, onInvalidated);
+    return () => window.removeEventListener(AUTH_INVALIDATED_EVENT, onInvalidated);
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
