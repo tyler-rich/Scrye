@@ -81,6 +81,35 @@ class TestApiTokenAuthorization:
         assert bare.get("/api/settings/general", headers=headers).status_code == 200
         assert bare.get("/api/registries", headers=headers).status_code == 403
 
+    def test_low_privilege_token_of_admin_cannot_mint_admin_token(self, client: TestClient) -> None:
+        """QUA-1: a low-privilege token owned by an admin cannot escalate.
+
+        The mint check must cap against the caller's *effective* role (the
+        token's capped role), not the owner account's role. An admin who mints a
+        viewer-scoped token, then uses that token to request an admin token, must
+        be refused — otherwise a stolen/scoped token defeats role capping.
+        """
+        csrf = setup_admin(client)
+        viewer_token = client.post(
+            "/api/api-tokens",
+            json={"name": "scoped-viewer", "role": "viewer"},
+            headers={CSRF: csrf},
+        ).json()["token"]
+        bare = TestClient(client.app)
+        headers = {"Authorization": f"Bearer {viewer_token}"}
+
+        # Explicitly requesting a higher role is rejected...
+        escalate = bare.post(
+            "/api/api-tokens", json={"name": "escalate", "role": "admin"}, headers=headers
+        )
+        assert escalate.status_code == 403, escalate.text
+
+        # ...and the default role is the effective (viewer) role, not the owner's
+        # admin role, so a token minted with no explicit role stays a viewer.
+        minted = bare.post("/api/api-tokens", json={"name": "default-role"}, headers=headers)
+        assert minted.status_code == 201, minted.text
+        assert minted.json()["role"] == "viewer"
+
     def test_token_auth_skips_csrf(self, client: TestClient) -> None:
         csrf = setup_admin(client)
         token = client.post("/api/api-tokens", json={"name": "ci"}, headers={CSRF: csrf}).json()[

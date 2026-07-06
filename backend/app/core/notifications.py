@@ -41,15 +41,20 @@ def _channel_secret(channel: NotificationChannel) -> str | None:
 
 
 async def _send_webhook(channel: NotificationChannel, message: str, secret: str | None) -> None:
-    """POST a JSON body to a generic webhook (optional bearer auth)."""
-    url = channel.config.get("url")
+    """POST a JSON body to a generic webhook.
+
+    The webhook URL is treated as a write-only credential (many providers —
+    Slack, Teams, Mattermost, Google Chat — embed the token in the URL itself),
+    so it is stored field-encrypted as the channel ``secret``; ``config['url']``
+    is only a fallback for legacy rows created before the URL was encrypted.
+    """
+    url = secret or channel.config.get("url")
     if not url:
         raise ValueError("Webhook channel has no 'url' configured.")
-    headers = {"Content-Type": "application/json"}
-    if secret:
-        headers["Authorization"] = f"Bearer {secret}"
     async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as http:
-        response = await http.post(url, json={"text": message}, headers=headers)
+        response = await http.post(
+            url, json={"text": message}, headers={"Content-Type": "application/json"}
+        )
         response.raise_for_status()
 
 

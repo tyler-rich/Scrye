@@ -1439,3 +1439,36 @@ tagged releases, plus a `dev` integration branch for ongoing work, is the standa
 letting contributors work freely without risking the release branch.
 **Plan section affected:** § Git & PR conventions (CLAUDE.md), process only — no build-phase or
 architectural sections affected.
+
+### 2026-07-05 — Post-P6 audit remediation (P0) — token-mint capping, backup/restore, webhook URLs
+**What changed:** First tier (P0) of the full-repo audit (`docs/reviews/full-audit-2026-07-05.md`,
+§10). Fixes carry their audit finding IDs:
+- **QUA-1 (§5, privilege escalation):** `POST /api/api-tokens` capped minting against the owner's
+  account role instead of the caller's effective (token-capped) role, so a low-privilege token
+  belonging to an admin could mint an admin token. Now caps and defaults against
+  `AuthContext.effective_role`; a regression test constructs a viewer token owned by an admin and
+  confirms it cannot mint (or default to) an admin token.
+- **API-2 (§8):** database restore (scrypt + full-DB rebuild) now runs in a threadpool
+  (`run_in_threadpool`) so `/healthz` and the container healthcheck stay responsive and can't kill
+  the container mid-restore.
+- **API-3 (§8):** restore inserts rows with a chunked `executemany` instead of one statement per
+  row; build streams rows with `yield_per` and no longer re-parses the finished bundle to read the
+  app version; a warning is logged for very large findings tables and the practical size ceiling is
+  documented in the README. (A framed streaming-encryption format is deferred — GCM is single-shot.)
+- **API-10 (§8):** raw-artifact files are not carried in a bundle (plan §8 lists them as
+  *optional*), so the `artifacts` table is now excluded from the dump **and** cleared on restore —
+  a restored database no longer holds artifact rows that point at nonexistent files. Documented in
+  the README ("Backup & restore").
+- **API-11 (§8):** restore is refused with 409 while any scan is queued or running, so the table
+  wipe can't race the worker committing findings against a replaced/vanished scan row.
+- **SEC-1 (§4.5/§6):** a generic webhook's URL is treated as a write-only credential (Slack/Teams/
+  Mattermost/Google Chat embed the token in the URL), stored field-encrypted in `secret_ciphertext`
+  and masked on read exactly like the existing Discord handling — not echoed from the plaintext
+  `config` column. The previously-separate optional bearer-token secret for generic webhooks is
+  subsumed (the URL is the credential); the frontend renders the webhook URL as a write-only
+  password field and no longer offers a separate secret input for webhook/Discord channels.
+**Why:** These are the audit's P0 (correctness/security/data-loss) items. Each keeps the locked
+decisions intact (no schema change, field encryption, single-container worker). SEC-1 follows the
+audit's recommended fix (route the URL into `secret_ciphertext`, mask on read) rather than adding a
+new encrypted column, avoiding a data-model change.
+**Plan section affected:** §5 (RBAC/API tokens), §6 (secrets/webhook URL), §8 (backup/restore).

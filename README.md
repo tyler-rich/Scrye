@@ -468,7 +468,22 @@ download or delete stored bundles, restore from an uploaded bundle (a
 **destructive** action that replaces all data and signs you out), and configure
 **scheduled backups** — an interval, a retention count, and an encrypted
 passphrase the in-process scheduler uses to produce bundles unattended. Restore
-in v1 requires the bundle's schema version to match the running installation.
+in v1 requires the bundle's schema version to match the running installation, and
+is **refused while a scan is queued or running** (finish or cancel it first).
+
+**What a bundle contains.** The bundle is a logical dump of the database —
+scan history, normalized findings, users, settings, and (re-wrapped) secrets.
+It does **not** carry the **raw scanner-output artifact files** (the raw Trivy/
+Grype JSON and generated SBOMs), which live on disk under `SCRYE_ARTIFACTS_DIR`
+and are re-created by re-running a scan; their bookkeeping rows are therefore
+omitted from the bundle and cleared on restore, so a restored database never
+points at missing files. Copy `SCRYE_ARTIFACTS_DIR` separately if you need the
+raw outputs preserved across a move.
+
+**Size note.** A bundle is assembled and encrypted in memory in a single pass,
+so back up and restore on an instance with a very large findings table (roughly
+hundreds of thousands of rows and up) need container memory headroom
+proportional to the dump size; a warning is logged past that threshold.
 
 ---
 
