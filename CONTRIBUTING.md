@@ -306,10 +306,14 @@ builds for both architectures. Publishing is split across two registries with tw
   — it just mirrors HEAD-of-dev (`docker pull ghcr.io/iamgroot60/scrye:dev`) for testing. Do not
   treat `:dev` as production-ready; use a `:<version>` tag (or `:latest`) for that.
 
-  Two one-time repo settings back this path: **Settings → Actions → General → Workflow
-  permissions** must be **Read and write** (so `GITHUB_TOKEN` can push to GHCR), and after the
-  first push the GHCR package `ghcr.io/iamgroot60/scrye` should be confirmed **Private** (it
-  inherits the repository's visibility).
+  Two repo settings back this path. **Settings → Actions → General → Workflow permissions** can stay
+  on the restrictive **Read repository contents and packages permissions** (read-only) default —
+  GHCR push does **not** need the repo-wide default to allow write. `dev-nightly.yml` declares its
+  own `permissions: { contents: read, packages: write }` block, which overrides the read-only
+  default for that workflow (an explicit block takes precedence and is not capped by the default);
+  `publish.yml` and `ci.yml` likewise declare their own (`contents: read`). Second, after the first
+  nightly push, confirm the GHCR package `ghcr.io/iamgroot60/scrye` is **Private** (it inherits the
+  repository's visibility).
 
 ---
 

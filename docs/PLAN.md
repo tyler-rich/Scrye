@@ -563,9 +563,13 @@ releases, uses the free always-available `GITHUB_TOKEN`, and sidesteps the fork-
 INF-2 flagged. User-approved this session (registry choice, cadence, informational-scan gating, and
 cache scoping).
 **Operational follow-ups (must be verified in repo Settings / GHCR — cannot be done from CI):**
-- **Settings → Actions → General → Workflow permissions** must be **Read and write** so
-  `GITHUB_TOKEN` can push to GHCR (the workflow also requests `permissions: packages: write`
-  explicitly).
+- **Settings → Actions → General → Workflow permissions** should be set to the restrictive
+  **Read repository contents and packages permissions** (read-only) default — GHCR push does **not**
+  require the repo-wide default to allow write. `dev-nightly.yml` declares its own explicit
+  `permissions: { contents: read, packages: write }` block, which overrides the read-only default
+  (an explicit block is exhaustive and takes precedence; it is not capped by the repo default). Each
+  workflow declares exactly what it needs (`publish.yml` and `ci.yml` only `contents: read`), so the
+  read-only default breaks nothing.
 - **After the first nightly push, confirm the GHCR package `ghcr.io/iamgroot60/scrye` is Private**
   (it inherits the private repo's visibility by default; flag it if it publishes as public).
 **Plan section affected:** §0.6 (distribution), §9.1 (image). Supersedes the INF-2 item in the
