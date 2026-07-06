@@ -1592,3 +1592,54 @@ labels, invalid-combo 400s, viewer-visible controls) rather than security holes.
 test runner exists yet (FE-10, deferred to P5); changes are verified by `tsc`, ESLint, Prettier, and a
 clean `vite build`.
 **Plan section affected:** §5 (RBAC surfacing in the UI), §4.4/§4.6 (history/schedules UX), §10 (SPA).
+
+### 2026-07-05 — Deviation-logging debt from the audit (FE-2, INF-10, API-12, FEAT-4)
+The audit (§10) flagged four divergences from this plan that had never been recorded here. Logging
+them now (independently of whether the underlying item is also fixed), per CLAUDE.md § Git & PR
+conventions, which requires a dated entry at the time a deviation is made:
+- **FE-2 — hand-rolled API client (§2).** The frontend API layer is a thin hand-written `fetch`
+  wrapper (`frontend/src/api/*`), not a client generated from the FastAPI OpenAPI schema as
+  § Coding standards specifies. This was a deliberate simplicity choice (one small `api()` helper +
+  typed per-endpoint modules) and is **kept**; generating the client (e.g. openapi-typescript) over
+  the thin wrapper remains a possible future improvement. Recorded here as the required deviation.
+- **INF-10 — dogfood gate severity floor (§9.1 / CLAUDE.md § Dependency hygiene).** CI gates the
+  Trivy/Grype self-scan on **fixable HIGH/CRITICAL** only (`ci.yml`), while § Dependency hygiene says
+  "resolves all fixable findings". Fixable LOW/MEDIUM appear in the informational (non-gating) steps.
+  The HIGH/CRITICAL floor is an intentional low-churn enforcement choice; recorded here as the
+  deviation (the bundled-binary skip was already logged, this floor was not).
+- **API-12 — scans composite index column (§7).** §7 promised `scans(scanner, status, started_at)`;
+  the implemented composite index uses `created_at` (`db/models/scan.py`, migration `0003`). The
+  implemented index is the more useful one for the newest-first/history queries (which order by
+  `created_at`); only the deviation-logging was missing. Recorded here; no code change.
+- **FEAT-4 — DB-update schedule actuation (§4.5).** Phase 5 stored the `auto_update_db` /
+  `db_update_interval_hours` knobs and deferred actuation to Phase 6; Phase 6 shipped without it and
+  never logged the drop. (Now actually **implemented** in the P3 entry above — the maintenance tick
+  runs the DB updates — but the earlier un-logged gap is recorded here for the trail.)
+
+### 2026-07-05 — Post-P6 audit remediation (P5) — maintainability, process, long tail
+**What changed:** Sixth tier (P5) of the audit (§10). Finding IDs:
+- **item (g) (§8):** backup restore now derives the passphrase key from the **bundle's advertised**
+  scrypt parameters (`kdf.n/r/p`) instead of the module constants, so a bundle written under a
+  different (e.g. older) work factor still restores. `derive_key` / `passphrase_cipher` take explicit
+  `n/r/p` (defaulting to the current constants for new backups) and validate them; `restore_bundle`
+  passes the recorded values. (Verified in the remediation environment there are **no** existing
+  bundles that predate the 2^15→2^17 bump — `/data` is absent and no `.scryebak` files exist — so
+  nothing was already unrestorable; this fix is forward-looking.)
+- **QUA-23 (§7):** a new `tests/test_migrations.py` runs the **actual Alembic chain** to head against
+  a throwaway database and asserts the resulting tables/columns match `Base.metadata`, catching a
+  migration that drifts from the models (the rest of the suite builds the schema via `create_all`).
+  `alembic/env.py` now respects a caller-provided `sqlalchemy.url` so the test can target its own DB.
+**Intentionally deferred (recorded, not done) in P5:**
+- **QUA-4 / QUA-9 (structural):** consolidating the four near-identical secret-CRUD routers and
+  standardizing the list-envelope convention is a broad refactor across many endpoints; deferred to a
+  dedicated change to keep this remediation batch reviewable and low-risk.
+- **QUA-16 (type checker in CI):** adding mypy/pyright would first require resolving the existing
+  annotation gaps the audit notes (QUA-17), which is a separate cleanup; deferred rather than shipped
+  with a red gate.
+- **FE-10 (frontend tests):** a frontend test runner is still absent; adding vitest + unit tests is a
+  worthwhile follow-up. Deferred here to keep P5 scoped; the new `lib/dates.ts` helper is a natural
+  first target.
+**Why:** The audit's P5 (maintainability/process/long tail). The two concrete, self-contained,
+fully-verifiable items (item (g), QUA-23) are implemented with tests; the larger refactors and the
+type-checker/frontend-test additions are explicitly deferred with rationale rather than half-done.
+**Plan section affected:** §7 (migration integrity), §8 (backup KDF portability), process.
