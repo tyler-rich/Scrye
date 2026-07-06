@@ -35,6 +35,7 @@ from app.core.passphrase import (
     SCRYPT_N,
     SCRYPT_P,
     SCRYPT_R,
+    PassphraseKdfError,
     new_salt,
     passphrase_cipher,
 )
@@ -254,7 +255,20 @@ def restore_bundle(db: Session, data: bytes, passphrase: str) -> RestoreSummary:
         salt = base64.b64decode(kdf["salt"])
     except (KeyError, ValueError, TypeError) as exc:
         raise BackupError("Backup bundle is missing its key-derivation salt.") from exc
-    pass_cipher = passphrase_cipher(passphrase, salt)
+    # Honor the KDF parameters the bundle recorded rather than the current module
+    # constants (item (g)): a bundle made under an older scrypt work factor must
+    # still derive the same key and restore. Missing fields (older bundles) fall
+    # back to the current defaults.
+    try:
+        pass_cipher = passphrase_cipher(
+            passphrase,
+            salt,
+            n=int(kdf.get("n", SCRYPT_N)),
+            r=int(kdf.get("r", SCRYPT_R)),
+            p=int(kdf.get("p", SCRYPT_P)),
+        )
+    except PassphraseKdfError as exc:
+        raise BackupError(str(exc)) from exc
 
     try:
         inner_json = pass_cipher.decrypt(envelope["payload"], aad=AAD_BUNDLE)

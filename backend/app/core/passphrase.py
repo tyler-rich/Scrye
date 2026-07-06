@@ -42,37 +42,61 @@ def new_salt() -> bytes:
     return os.urandom(_SALT_BYTES)
 
 
-def derive_key(passphrase: str, salt: bytes) -> bytes:
+def derive_key(
+    passphrase: str,
+    salt: bytes,
+    *,
+    n: int = SCRYPT_N,
+    r: int = SCRYPT_R,
+    p: int = SCRYPT_P,
+) -> bytes:
     """Derive a 256-bit key from a passphrase and salt via scrypt.
 
     Args:
         passphrase: The user-supplied backup passphrase.
         salt: Per-backup random salt (see :func:`new_salt`).
+        n: scrypt CPU/memory cost factor (a power of two).
+        r: scrypt block size.
+        p: scrypt parallelization factor. These default to the current module
+            constants for a *new* backup, but restore passes the values the
+            bundle recorded so a bundle written under different parameters still
+            derives the same key (item (g)).
 
     Returns:
         A 32-byte key suitable for AES-256-GCM.
 
     Raises:
-        PassphraseKdfError: If the passphrase is empty.
+        PassphraseKdfError: If the passphrase is empty or the parameters are invalid.
     """
     if not passphrase:
         raise PassphraseKdfError("Backup passphrase must not be empty.")
+    if n < 2 or (n & (n - 1)) != 0 or r < 1 or p < 1:
+        raise PassphraseKdfError("Invalid scrypt parameters in backup bundle.")
     return hashlib.scrypt(
         passphrase.encode("utf-8"),
         salt=salt,
-        n=SCRYPT_N,
-        r=SCRYPT_R,
-        p=SCRYPT_P,
+        n=n,
+        r=r,
+        p=p,
         dklen=_DERIVED_KEY_BYTES,
-        maxmem=128 * SCRYPT_N * SCRYPT_R * 2,
+        maxmem=128 * n * r * 2,
     )
 
 
-def passphrase_cipher(passphrase: str, salt: bytes) -> SecretCipher:
+def passphrase_cipher(
+    passphrase: str,
+    salt: bytes,
+    *,
+    n: int = SCRYPT_N,
+    r: int = SCRYPT_R,
+    p: int = SCRYPT_P,
+) -> SecretCipher:
     """Build a :class:`SecretCipher` keyed by a passphrase-derived key.
 
     The derived key is fed as key-version 1; the cipher's token format and AAD
     handling are identical to the master-key cipher, so a value re-wrapped for a
-    backup is decrypted the same way on restore.
+    backup is decrypted the same way on restore. ``n``/``r``/``p`` default to the
+    current constants for backup; restore supplies the bundle's advertised
+    parameters so a bundle made under an older work factor still opens.
     """
-    return SecretCipher({1: derive_key(passphrase, salt)})
+    return SecretCipher({1: derive_key(passphrase, salt, n=n, r=r, p=p)})
