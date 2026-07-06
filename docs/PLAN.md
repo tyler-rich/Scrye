@@ -1517,11 +1517,18 @@ uploads, dashboard hydration) are bounded. No schema change; the one new setting
 - **INF-3 (§0.6):** `CLAUDE.md` §6's `:dev` wording is corrected to match the implemented
   merged-PR-into-`dev` trigger (it still said "every push to dev"), removing the doc-vs-code
   contradiction — a documentation alignment, **not** a behavior change.
-- **INF-2 (§0.6, accepted limitation):** the fork-PR `:dev` publish gap (fork PRs get no repo
-  secrets, so their merge can't push `:dev`) is documented in `publish.yml` as an accepted
-  trade-off of the deliberate merged-PR trigger. Switching to a push-based trigger would fix it but
-  reverses a distribution locked decision (§6) and reintroduces the double-publish the re-scope
-  avoided — left as an explicit user decision, not changed here.
+- **INF-2 (§0.6, deferred — revisit before the repo goes public):** the fork-PR `:dev` publish gap
+  (fork PRs get no repo secrets, so their merge can't push `:dev`) is documented in `publish.yml`
+  as an accepted trade-off of the deliberate merged-PR trigger. Switching to a push-based trigger
+  would fix it but reverses a distribution locked decision (§6) and reintroduces the double-publish
+  the re-scope avoided. **The merged-PR-only trigger is kept as-is for now** (user decision,
+  2026-07-05): while the repository is **private**, external fork-based contributions are not
+  possible, so the bug cannot actually be triggered. **This must be revisited specifically before
+  the repo is made public** — going public is exactly what enables fork PRs (and therefore the
+  broken `:dev` publish), so the trigger decision (keep merged-PR-only with a documented caveat, or
+  move to a push-based / `workflow_run` trigger with secrets) should be made deliberately at that
+  point. INF-3's `CLAUDE.md` §6 wording is intentionally left matching the current merged-PR
+  trigger.
 - **INF-4 (§9.2, documented exception):** the optional `trivy-server` sidecar runs as root; the
   upstream `aquasec/trivy` image ships no non-root USER and hard-codes its `/root/.cache`, so a
   non-root `user:` would break the DB cache on a root-owned named volume. Documented the residual
