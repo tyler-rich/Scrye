@@ -96,7 +96,10 @@ export function App() {
           <Route path="/scans/new" element={<NewScanPage />} />
           <Route path="/scans/diff/:baseId/:compareId" element={<ScanDiffPage />} />
           <Route path="/scans/:scanId" element={<ScanDetailPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route
+            path="/settings"
+            element={user.role !== 'viewer' ? <SettingsPage /> : <Navigate to="/" replace />}
+          />
           <Route path="/account" element={<AccountPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -1472,3 +1472,181 @@ decisions intact (no schema change, field encryption, single-container worker). 
 audit's recommended fix (route the URL into `secret_ciphertext`, mask on read) rather than adding a
 new encrypted column, avoiding a data-model change.
 **Plan section affected:** §5 (RBAC/API tokens), §6 (secrets/webhook URL), §8 (backup/restore).
+
+### 2026-07-05 — Post-P6 audit remediation (P1) — availability/performance under real volume
+**What changed:** Second tier (P1) of the audit (§10). Carries the finding IDs:
+- **API-5 (§4/§12):** the scan worker's result persistence (`_persist_success` /
+  `_store_failure_output` — a 10k+-findings flush plus the raw-JSON artifact write) now runs via
+  `anyio.to_thread.run_sync` instead of inline on the event loop; the module docstring is corrected.
+- **SCN-1 (§4):** `run_command` streams a subprocess's stdout with a byte cap
+  (`SCRYE_SCANNER_MAX_OUTPUT_BYTES`, default 512 MiB) — output past the budget kills the child and
+  fails the scan as a `ScannerOutputError` (with the truncated bytes for diagnosis) rather than
+  buffering unbounded JSON; stderr is capped modestly. New setting is emitted in `.env.example`.
+- **API-4 (§4/§8):** SBOM and backup-restore uploads are read through `read_upload_capped`, which
+  rejects an over-limit body via its reported size and by a chunked read, so an oversized upload is
+  never fully materialized in memory before the size check.
+- **API-7 (§4.6):** dashboard/metrics aggregation loads only the columns it reads per target
+  (`load_only`, skipping the heavy `options`/`error` columns) and is served from a short (15 s)
+  process-wide TTL cache shared by the dashboard endpoint and every Prometheus scrape, cleared on
+  app startup (and in tests).
+- **API-1 (§4.4):** the `GET /scans` and `GET /scans/history` list endpoints eager-load
+  `Scan.tag_rows` (`selectinload`), removing the per-row N+1 tag query.
+- **API-15 / API-6 (§12):** the maintenance tick runs `fire_due_schedules` and `run_retention` off
+  the event loop (`anyio.to_thread.run_sync`), and retention deletes artifact rows in a single
+  `DELETE … WHERE id IN (…)` instead of one ORM delete per row.
+**Why:** The audit's P1 (availability/performance at real data volume) items — the systemic
+"synchronous heavy work on the event loop" pattern (API-2/3/5, plus retention/maintenance) is
+addressed consistently by hopping to a thread, and the unbounded-memory paths (scanner stdout,
+uploads, dashboard hydration) are bounded. No schema change; the one new setting is non-sensitive.
+**Plan section affected:** §4 (scanner orchestration), §4.4/§4.6 (list/dashboard perf), §8
+(uploads), §12 (maintenance), §11 (`SCRYE_SCANNER_MAX_OUTPUT_BYTES`).
+
+### 2026-07-05 — Post-P6 audit remediation (P2) — supply chain / deployment hardening
+**What changed:** Third tier (P2) of the audit (§10). Finding IDs:
+- **SCN-3 (§4.2):** `cors_origins` and `filesystem_scan_roots` now parse their documented
+  comma-separated env form. pydantic-settings tries `json.loads` on a `list[str]` env value, so
+  `SCRYE_FILESYSTEM_SCAN_ROOTS=/srv/scan` (the enable switch for the security-gated filesystem-scan
+  feature) failed at startup; the fields are annotated `NoDecode` with a `field_validator(mode=
+  "before")` that splits on commas. Tests construct `Settings` from the env var directly.
+- **INF-1 (supply chain):** added `.github/dependabot.yml` (weekly, grouped) for the
+  `github-actions` ecosystem so the workflow actions are tracked and rolled forward deliberately.
+  **The remaining half — pinning each `uses:` to a full commit SHA — could not be completed in the
+  remediation environment (its egress policy blocks GitHub outside this repo, so current action
+  SHAs cannot be resolved/verified); pinning to an unverified SHA would risk a red CI. Flagged for a
+  follow-up where SHAs can be resolved.**
+- **INF-3 (§0.6):** `CLAUDE.md` §6's `:dev` wording is corrected to match the implemented
+  merged-PR-into-`dev` trigger (it still said "every push to dev"), removing the doc-vs-code
+  contradiction — a documentation alignment, **not** a behavior change.
+- **INF-2 (§0.6, deferred — revisit before the repo goes public):** the fork-PR `:dev` publish gap
+  (fork PRs get no repo secrets, so their merge can't push `:dev`) is documented in `publish.yml`
+  as an accepted trade-off of the deliberate merged-PR trigger. Switching to a push-based trigger
+  would fix it but reverses a distribution locked decision (§6) and reintroduces the double-publish
+  the re-scope avoided. **The merged-PR-only trigger is kept as-is for now** (user decision,
+  2026-07-05): while the repository is **private**, external fork-based contributions are not
+  possible, so the bug cannot actually be triggered. **This must be revisited specifically before
+  the repo is made public** — going public is exactly what enables fork PRs (and therefore the
+  broken `:dev` publish), so the trigger decision (keep merged-PR-only with a documented caveat, or
+  move to a push-based / `workflow_run` trigger with secrets) should be made deliberately at that
+  point. INF-3's `CLAUDE.md` §6 wording is intentionally left matching the current merged-PR
+  trigger.
+- **INF-4 (§9.2, documented exception):** the optional `trivy-server` sidecar runs as root; the
+  upstream `aquasec/trivy` image ships no non-root USER and hard-codes its `/root/.cache`, so a
+  non-root `user:` would break the DB cache on a root-owned named volume. Documented the residual
+  risk and its mitigations (profile-gated, internal-net-only, read-only FS, no-new-privileges,
+  cap_drop ALL, resource-limited) in the compose file, per the audit's accepted alternative.
+- **INF-5 (§9.2):** added a small RAM-backed `tmpfs:[/run]` to the `docker-socket-proxy` sidecar
+  (HAProxy needs a writable `/run` under a read-only root FS) with a note to live-verify the profile
+  and add `cap_add:[SETUID,SETGID]` only if the proxy still cannot drop privileges.
+**Why:** The audit's P2 (supply chain / deployment hardening). SCN-3 is a real startup bug on the
+documented config path and ships with tests. The infra items that can be fully verified here are
+applied; those requiring a live Docker daemon (INF-4/5) or GitHub egress (INF-1 SHA resolution) or a
+locked-decision change (INF-2) are applied conservatively (defensive change + documentation) and
+their residual scope is called out rather than shipped unverified.
+**Plan section affected:** §0.6 (distribution docs), §4.2 (config parsing), §9.2 (compose
+hardening), §11 (CI supply chain).
+
+### 2026-07-05 — Post-P6 audit remediation (P3) — feature gaps that mislead users
+**What changed:** Fourth tier (P3) of the audit (§10). Finding IDs:
+- **FEAT-6 / QUA-3 (§4.5):** the stored **Grype ignore** config is now applied at scan time. A new
+  `scanners/grype_policy.py` materializes the `ScannerSettings.grype_ignore` YAML into tmpfs and the
+  worker hands it to Grype via a `-c <path>` config flag (mirroring the Trivy-policy materialization),
+  carried on a private env-overlay key that the Grype runner converts to argv and never leaks to the
+  child.
+- **FEAT-7 / QUA-3 (§4.5):** the New Scan form now prefills its severity filter and ignore-unfixed
+  toggle from the instance defaults (`GET /settings/scanners`) on mount, so changing
+  `default_severities` / `default_ignore_unfixed` actually affects new scans instead of being
+  overridden by hardcoded form values.
+- **FEAT-4 / QUA-3 (§4.5):** the maintenance tick now honors `auto_update_db` +
+  `db_update_interval_hours` — a new `workers/db_update.py` runs `trivy image --download-db-only` and
+  `grype db update` best-effort when enabled and the interval has elapsed (in-process last-run marker;
+  a restart re-checks). Failures are logged, never raised. This removes the "stored no-op" knobs
+  (QUA-3): all three ScannerSettings fields the UI exposed now have real effect.
+- **DOC-1 (§0.6):** README rewritten to reflect that Docker Hub publishing (`<dockerhub-user>/scrye`,
+  `:latest`/`:<version>`/`:dev`) is in scope; the "no published registry image" claims are removed.
+- **DOC-2 / DOC-5 / FEAT-1/2/3/8:** README wording aligned with reality — uploaded image-tar targets,
+  Docker-environment multi-select scan launch, and filesystem-archive upload are marked not-yet-
+  implemented; VEX/`.trivyignore` are described as global (Settings → Scanners), not per-scan; and the
+  ECR/GCR/ACR credential-helper "binaries not bundled" caveat is stated.
+- **FEAT-5 / FEAT-10:** offline/air-gapped DB import and an admin bulk secret re-encryption
+  (key-rotation) action are explicitly listed as not-yet-implemented on the roadmap, and the README
+  key-rotation note is corrected to stop implying a re-encryption tool exists.
+**Why:** The audit's P3 ("feature gaps that mislead users"). The three dead Settings→Scanners knobs are
+wired so the UI no longer lies; the remaining unimplemented features (image-tar upload, Docker-env
+multi-select, filesystem-archive upload, offline DB import, key-rotation re-encryption) are explicitly
+de-scoped in the docs per the audit's accepted alternative rather than built out in this tier.
+**Plan section affected:** §4.5 (scanner settings actuation), §10.1 (README accuracy), §4.1/§4.2
+(target/feature scope).
+
+### 2026-07-05 — Post-P6 audit remediation (P4) — frontend correctness / UX
+**What changed:** Fifth tier (P4) of the audit (§10). Finding IDs:
+- **FE-1:** the API client dispatches a `scrye:auth-invalidated` window event on any 401; `AuthContext`
+  listens and flips `user` to null, so a dead/revoked session drops the SPA back to the login screen
+  instead of leaving a stale authenticated shell whose every action fails.
+- **FE-3:** a shared `lib/dates.ts` (`parseUtc` / `formatWhen`) is the single place that renders a
+  backend (naive-UTC) timestamp; the pages that rendered UTC as local (Account sessions, Backups
+  list + schedule last-run, Scheduled-scans last-run) now use it, and the two pages that already had
+  a private `formatWhen` (ScanDetail, Scans) were de-duplicated onto the shared helper.
+- **FE-4:** `BackupsPanel`'s restore file moves from `useRef` to `useState`, so the selected file
+  name actually re-renders on the destructive restore flow instead of showing "No file selected".
+- **FE-5:** `ScheduledScansPanel` constrains the scanner Select by target type via a `SCANNERS_FOR`
+  matrix (and auto-corrects the scanner when the target type changes), mirroring the New Scan page and
+  the backend's combo validation; it also gates Add/Run/Delete behind an operator-or-admin check
+  (`useAuth`), and `/settings` is now a **guarded route** (viewers hitting the URL are redirected to
+  `/`, not just missing the nav link).
+**Why:** The audit's P4 (frontend correctness/UX). All are client-only; the backend already enforces
+the same RBAC/validation, so these close UX gaps (stale shells, wrong times, silent destructive-flow
+labels, invalid-combo 400s, viewer-visible controls) rather than security holes. No dedicated frontend
+test runner exists yet (FE-10, deferred to P5); changes are verified by `tsc`, ESLint, Prettier, and a
+clean `vite build`.
+**Plan section affected:** §5 (RBAC surfacing in the UI), §4.4/§4.6 (history/schedules UX), §10 (SPA).
+
+### 2026-07-05 — Deviation-logging debt from the audit (FE-2, INF-10, API-12, FEAT-4)
+The audit (§10) flagged four divergences from this plan that had never been recorded here. Logging
+them now (independently of whether the underlying item is also fixed), per CLAUDE.md § Git & PR
+conventions, which requires a dated entry at the time a deviation is made:
+- **FE-2 — hand-rolled API client (§2).** The frontend API layer is a thin hand-written `fetch`
+  wrapper (`frontend/src/api/*`), not a client generated from the FastAPI OpenAPI schema as
+  § Coding standards specifies. This was a deliberate simplicity choice (one small `api()` helper +
+  typed per-endpoint modules) and is **kept**; generating the client (e.g. openapi-typescript) over
+  the thin wrapper remains a possible future improvement. Recorded here as the required deviation.
+- **INF-10 — dogfood gate severity floor (§9.1 / CLAUDE.md § Dependency hygiene).** CI gates the
+  Trivy/Grype self-scan on **fixable HIGH/CRITICAL** only (`ci.yml`), while § Dependency hygiene says
+  "resolves all fixable findings". Fixable LOW/MEDIUM appear in the informational (non-gating) steps.
+  The HIGH/CRITICAL floor is an intentional low-churn enforcement choice; recorded here as the
+  deviation (the bundled-binary skip was already logged, this floor was not).
+- **API-12 — scans composite index column (§7).** §7 promised `scans(scanner, status, started_at)`;
+  the implemented composite index uses `created_at` (`db/models/scan.py`, migration `0003`). The
+  implemented index is the more useful one for the newest-first/history queries (which order by
+  `created_at`); only the deviation-logging was missing. Recorded here; no code change.
+- **FEAT-4 — DB-update schedule actuation (§4.5).** Phase 5 stored the `auto_update_db` /
+  `db_update_interval_hours` knobs and deferred actuation to Phase 6; Phase 6 shipped without it and
+  never logged the drop. (Now actually **implemented** in the P3 entry above — the maintenance tick
+  runs the DB updates — but the earlier un-logged gap is recorded here for the trail.)
+
+### 2026-07-05 — Post-P6 audit remediation (P5) — maintainability, process, long tail
+**What changed:** Sixth tier (P5) of the audit (§10). Finding IDs:
+- **item (g) (§8):** backup restore now derives the passphrase key from the **bundle's advertised**
+  scrypt parameters (`kdf.n/r/p`) instead of the module constants, so a bundle written under a
+  different (e.g. older) work factor still restores. `derive_key` / `passphrase_cipher` take explicit
+  `n/r/p` (defaulting to the current constants for new backups) and validate them; `restore_bundle`
+  passes the recorded values. (Verified in the remediation environment there are **no** existing
+  bundles that predate the 2^15→2^17 bump — `/data` is absent and no `.scryebak` files exist — so
+  nothing was already unrestorable; this fix is forward-looking.)
+- **QUA-23 (§7):** a new `tests/test_migrations.py` runs the **actual Alembic chain** to head against
+  a throwaway database and asserts the resulting tables/columns match `Base.metadata`, catching a
+  migration that drifts from the models (the rest of the suite builds the schema via `create_all`).
+  `alembic/env.py` now respects a caller-provided `sqlalchemy.url` so the test can target its own DB.
+**Intentionally deferred (recorded, not done) in P5:**
+- **QUA-4 / QUA-9 (structural):** consolidating the four near-identical secret-CRUD routers and
+  standardizing the list-envelope convention is a broad refactor across many endpoints; deferred to a
+  dedicated change to keep this remediation batch reviewable and low-risk.
+- **QUA-16 (type checker in CI):** adding mypy/pyright would first require resolving the existing
+  annotation gaps the audit notes (QUA-17), which is a separate cleanup; deferred rather than shipped
+  with a red gate.
+- **FE-10 (frontend tests):** a frontend test runner is still absent; adding vitest + unit tests is a
+  worthwhile follow-up. Deferred here to keep P5 scoped; the new `lib/dates.ts` helper is a natural
+  first target.
+**Why:** The audit's P5 (maintainability/process/long tail). The two concrete, self-contained,
+fully-verifiable items (item (g), QUA-23) are implemented with tests; the larger refactors and the
+type-checker/frontend-test additions are explicitly deferred with rationale rather than half-done.
+**Plan section affected:** §7 (migration integrity), §8 (backup KDF portability), process.

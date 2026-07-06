@@ -16,7 +16,7 @@ import contextlib
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.app_settings import SettingsService
@@ -36,19 +36,25 @@ def prune_expired_artifacts(db: Session, *, max_age_days: int, now: datetime | N
     """
     cutoff = (now or utcnow()) - timedelta(days=max_age_days)
     old_scan_ids = select(Scan.id).where(Scan.created_at < cutoff)
-    artifacts = db.scalars(select(Artifact).where(Artifact.scan_id.in_(old_scan_ids))).all()
+    # Fetch only the id + path we need to unlink; don't hydrate whole rows.
+    rows = db.execute(
+        select(Artifact.id, Artifact.relative_path).where(Artifact.scan_id.in_(old_scan_ids))
+    ).all()
 
-    pruned = 0
-    for artifact in artifacts:
+    if not rows:
+        return 0
+
+    for _artifact_id, relative_path in rows:
         with contextlib.suppress(OSError, ValueError):
-            artifact_path(artifact.relative_path).unlink(missing_ok=True)
-        db.delete(artifact)
-        pruned += 1
-    if pruned:
-        db.commit()
-        logger.info(
-            "Retention pruned %d raw artifact(s) older than %d day(s).", pruned, max_age_days
-        )
+            artifact_path(relative_path).unlink(missing_ok=True)
+
+    # Delete the metadata rows in a single statement rather than one ORM delete
+    # per row (API-6); a missing file was already ignored above.
+    artifact_ids = [artifact_id for artifact_id, _ in rows]
+    db.execute(delete(Artifact).where(Artifact.id.in_(artifact_ids)))
+    db.commit()
+    pruned = len(artifact_ids)
+    logger.info("Retention pruned %d raw artifact(s) older than %d day(s).", pruned, max_age_days)
     return pruned
 
 

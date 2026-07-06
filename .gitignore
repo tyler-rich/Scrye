@@ -45,6 +45,10 @@ eggs/
 .eggs/
 lib/
 lib64/
+# ...but the generic lib/ ignore above targets Python build output — keep the
+# TypeScript source directory frontend/src/lib/ tracked.
+!frontend/src/lib/
+!frontend/src/lib/**
 parts/
 sdist/
 var/

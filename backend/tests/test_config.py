@@ -34,3 +34,31 @@ def test_env_example_documents_non_sensitive_vars() -> None:
     rendered = render_env_example()
     for var in ("SCRYE_PORT", "SCRYE_DATABASE_PATH", "SCRYE_LOG_LEVEL"):
         assert var in rendered
+
+
+def test_filesystem_scan_roots_parses_comma_separated_env(monkeypatch) -> None:
+    """SCN-3: the documented comma-separated env form must parse, not error."""
+    monkeypatch.setenv("SCRYE_FILESYSTEM_SCAN_ROOTS", "/srv/scan, /mnt/data")
+    settings = Settings()
+    assert settings.filesystem_scan_roots == ["/srv/scan", "/mnt/data"]
+
+
+def test_filesystem_scan_roots_parses_single_env_value(monkeypatch) -> None:
+    """A single path (not valid JSON) must also parse."""
+    monkeypatch.setenv("SCRYE_FILESYSTEM_SCAN_ROOTS", "/srv/scan")
+    assert Settings().filesystem_scan_roots == ["/srv/scan"]
+
+
+def test_cors_origins_parses_comma_separated_env(monkeypatch) -> None:
+    """CORS origins use the same comma-separated env form."""
+    monkeypatch.setenv("SCRYE_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+    assert Settings().cors_origins == [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+
+def test_list_settings_accept_python_list() -> None:
+    """A real list (defaults/tests) passes through the before-validator unchanged."""
+    settings = Settings(filesystem_scan_roots=["/a", "/b"])
+    assert settings.filesystem_scan_roots == ["/a", "/b"]

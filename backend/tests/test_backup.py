@@ -164,6 +164,24 @@ class TestBundleRoundTrip:
         assert db.scalars(select(Finding)).all()
         assert db.scalars(select(Artifact)).all() == []
 
+    def test_restore_honors_recorded_kdf_params(self, db: Session) -> None:
+        """Item (g): restore derives the key from the bundle's advertised scrypt
+        params, not the module constants — so tampering the recorded ``n`` (as a
+        proxy for a bundle written under a different work factor) changes the
+        derived key and restore fails, proving the params are actually read."""
+        import json
+
+        _seed(db)
+        data = build_bundle(db, PASSPHRASE)
+        envelope = json.loads(data)
+        assert envelope["kdf"]["n"]  # the params travel in the bundle
+        # A bundle that recorded a *different* n derives a different key; restore
+        # honoring the recorded value therefore cannot decrypt the payload.
+        envelope["kdf"]["n"] = 2**14
+        tampered = json.dumps(envelope).encode("utf-8")
+        with pytest.raises(BackupError):
+            restore_bundle(db, tampered, PASSPHRASE)
+
     def test_restore_batches_many_rows(self, db: Session) -> None:
         """API-3: the batched (executemany) restore round-trips a chunk-spanning
         number of rows without loss."""

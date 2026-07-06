@@ -29,6 +29,7 @@ import {
   type SessionInfo,
 } from '../api/account';
 import { useAuth } from '../auth/AuthContext';
+import { formatWhen } from '../lib/dates';
 
 function PasswordSection() {
   const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -261,7 +262,7 @@ function SessionsSection() {
           <Table.Tbody>
             {sessions.map((s) => (
               <Table.Tr key={s.id}>
-                <Table.Td>{new Date(s.last_seen_at).toLocaleString()}</Table.Td>
+                <Table.Td>{formatWhen(s.last_seen_at)}</Table.Td>
                 <Table.Td>{s.ip ?? '—'}</Table.Td>
                 <Table.Td style={{ maxWidth: 280 }}>
                   <Text size="xs" truncate>
