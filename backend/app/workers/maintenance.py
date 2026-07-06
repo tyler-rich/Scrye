@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 
 import anyio.to_thread
@@ -24,6 +25,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.retention import run_retention
 from app.workers.base import ScanWorker
+from app.workers.db_update import maybe_update_scanner_dbs
 from app.workers.schedules import fire_due_schedules
 
 logger = logging.getLogger(__name__)
@@ -73,11 +75,14 @@ class MaintenanceScheduler:
             self._task = None
 
     async def tick(self) -> None:
-        """Run one maintenance pass: fire due schedules, then prune artifacts."""
+        """Run one maintenance pass: schedules, retention, then scanner-DB refresh."""
         await self._fire_schedules()
         # Retention can unlink thousands of files + delete their rows on the
         # first pass over a large history; keep it off the event loop (API-15).
         await anyio.to_thread.run_sync(self._run_retention)
+        # Refresh the scanner vulnerability DBs when due (FEAT-4). The subprocess
+        # calls are genuinely async; a failure here is logged, never raised.
+        await maybe_update_scanner_dbs(now=time.monotonic())
 
     async def _fire_schedules(self) -> None:
         """Create scans for due schedules and submit them to the worker."""

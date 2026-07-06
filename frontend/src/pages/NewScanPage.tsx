@@ -30,6 +30,7 @@ import {
   type TrivyScannerName,
   type TrivySeverity,
 } from '../api/scans';
+import { getScannerSettings } from '../api/settings';
 import {
   listGitCredentialOptions,
   listRegistryOptions,
@@ -135,6 +136,30 @@ export function NewScanPage() {
         scanner === 'trivy' && v.length === 0 ? 'Select at least one scanner' : null,
     },
   });
+
+  // Prefill the severity filter and ignore-unfixed toggle from the instance
+  // defaults (Settings → Scanners) so changing those defaults actually affects
+  // new scans (FEAT-7). Runs once on mount, before the user edits the form; a
+  // fetch failure just leaves the built-in defaults in place.
+  useEffect(() => {
+    let active = true;
+    getScannerSettings()
+      .then((s) => {
+        if (!active) return;
+        const severities = s.default_severities.filter((v): v is TrivySeverity =>
+          (TRIVY_SEVERITIES as string[]).includes(v),
+        );
+        if (severities.length > 0) form.setFieldValue('trivySeverity', severities);
+        form.setFieldValue('ignoreUnfixed', s.default_ignore_unfixed);
+      })
+      .catch(() => {
+        /* keep the built-in defaults */
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isTrivy = scanner === 'trivy';
   const canGenerateSbom = targetType === 'image' || targetType === 'filesystem';

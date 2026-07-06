@@ -1537,3 +1537,35 @@ locked-decision change (INF-2) are applied conservatively (defensive change + do
 their residual scope is called out rather than shipped unverified.
 **Plan section affected:** §0.6 (distribution docs), §4.2 (config parsing), §9.2 (compose
 hardening), §11 (CI supply chain).
+
+### 2026-07-05 — Post-P6 audit remediation (P3) — feature gaps that mislead users
+**What changed:** Fourth tier (P3) of the audit (§10). Finding IDs:
+- **FEAT-6 / QUA-3 (§4.5):** the stored **Grype ignore** config is now applied at scan time. A new
+  `scanners/grype_policy.py` materializes the `ScannerSettings.grype_ignore` YAML into tmpfs and the
+  worker hands it to Grype via a `-c <path>` config flag (mirroring the Trivy-policy materialization),
+  carried on a private env-overlay key that the Grype runner converts to argv and never leaks to the
+  child.
+- **FEAT-7 / QUA-3 (§4.5):** the New Scan form now prefills its severity filter and ignore-unfixed
+  toggle from the instance defaults (`GET /settings/scanners`) on mount, so changing
+  `default_severities` / `default_ignore_unfixed` actually affects new scans instead of being
+  overridden by hardcoded form values.
+- **FEAT-4 / QUA-3 (§4.5):** the maintenance tick now honors `auto_update_db` +
+  `db_update_interval_hours` — a new `workers/db_update.py` runs `trivy image --download-db-only` and
+  `grype db update` best-effort when enabled and the interval has elapsed (in-process last-run marker;
+  a restart re-checks). Failures are logged, never raised. This removes the "stored no-op" knobs
+  (QUA-3): all three ScannerSettings fields the UI exposed now have real effect.
+- **DOC-1 (§0.6):** README rewritten to reflect that Docker Hub publishing (`securedbytyler/scrye`,
+  `:latest`/`:<version>`/`:dev`) is in scope; the "no published registry image" claims are removed.
+- **DOC-2 / DOC-5 / FEAT-1/2/3/8:** README wording aligned with reality — uploaded image-tar targets,
+  Docker-environment multi-select scan launch, and filesystem-archive upload are marked not-yet-
+  implemented; VEX/`.trivyignore` are described as global (Settings → Scanners), not per-scan; and the
+  ECR/GCR/ACR credential-helper "binaries not bundled" caveat is stated.
+- **FEAT-5 / FEAT-10:** offline/air-gapped DB import and an admin bulk secret re-encryption
+  (key-rotation) action are explicitly listed as not-yet-implemented on the roadmap, and the README
+  key-rotation note is corrected to stop implying a re-encryption tool exists.
+**Why:** The audit's P3 ("feature gaps that mislead users"). The three dead Settings→Scanners knobs are
+wired so the UI no longer lies; the remaining unimplemented features (image-tar upload, Docker-env
+multi-select, filesystem-archive upload, offline DB import, key-rotation re-encryption) are explicitly
+de-scoped in the docs per the audit's accepted alternative rather than built out in this tier.
+**Plan section affected:** §4.5 (scanner settings actuation), §10.1 (README accuracy), §4.1/§4.2
+(target/feature scope).
