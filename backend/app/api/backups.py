@@ -23,14 +23,15 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
+from app import __version__
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.backup import (
     BackupError,
     build_bundle,
-    read_manifest,
     restore_bundle,
 )
 from app.backup.store import BUNDLE_SUFFIX, BackupStore, sha256_hex
@@ -38,7 +39,15 @@ from app.core.audit import record_audit
 from app.core.masking import MaskedSecret, masked_secret
 from app.core.secret_store import AAD_BACKUP_PASSPHRASE, encrypt_secret
 from app.core.timeutil import utcnow
-from app.db.models import BACKUP_SCHEDULE_ID, Backup, BackupKind, BackupSchedule, Role
+from app.db.models import (
+    BACKUP_SCHEDULE_ID,
+    Backup,
+    BackupKind,
+    BackupSchedule,
+    Role,
+    Scan,
+    ScanStatus,
+)
 from app.db.session import get_db
 
 router = APIRouter(prefix="/backups", tags=["backups"])
@@ -137,7 +146,9 @@ def create_backup(
         size_bytes=len(data),
         checksum_sha256=sha256_hex(data),
         kind=BackupKind.MANUAL,
-        app_version=read_manifest(data)["app_version"] or "",
+        # The bundle records the running app version; use it directly instead of
+        # re-parsing the (potentially large) bundle bytes back out (API-3).
+        app_version=__version__,
         created_by_username=auth.user.username,
         note=payload.note,
     )
@@ -226,6 +237,21 @@ async def restore_backup(
             status.HTTP_400_BAD_REQUEST,
             detail="Restore is destructive; resubmit with confirmation.",
         )
+
+    # Refuse to restore while scans are in flight: restore wipes and repopulates
+    # every table, and a worker committing findings for a queued/running scan
+    # mid-wipe would attach them to a replaced (or vanished) scan row (API-11).
+    active_scans = db.execute(
+        select(func.count())
+        .select_from(Scan)
+        .where(Scan.status.in_((ScanStatus.QUEUED, ScanStatus.RUNNING)))
+    ).scalar()
+    if active_scans:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="A scan is queued or running; wait for it to finish before restoring.",
+        )
+
     data = await file.read()
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Backup file too big.")
@@ -233,7 +259,10 @@ async def restore_backup(
     actor_username = auth.user.username
     actor_ip = client_ip(request)
     try:
-        summary = restore_bundle(db, data, passphrase)
+        # scrypt + a full-DB rebuild is heavy synchronous work; run it off the
+        # event loop so /healthz (and the container healthcheck) stay responsive
+        # during a large restore (API-2).
+        summary = await run_in_threadpool(restore_bundle, db, data, passphrase)
     except BackupError as exc:
         db.rollback()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

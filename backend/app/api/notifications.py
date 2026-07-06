@@ -44,38 +44,44 @@ def _clean_events(events: list[NotificationEvent] | None) -> list[str]:
     return [e.value for e in NotificationEvent if e.value in selected]
 
 
-#: Placeholder returned for a Discord webhook URL on read (the URL is the secret).
+#: Placeholder returned for a webhook/Discord URL on read (the URL is the secret).
 _URL_MASK = "••••••"
+
+#: Channel types whose ``config['url']`` is the write-only credential and is
+#: therefore stored field-encrypted and masked on read (SEC-1).
+_URL_SECRET_TYPES: frozenset[NotificationType] = frozenset(
+    {NotificationType.WEBHOOK, NotificationType.DISCORD}
+)
 
 
 def _masked_config(channel: NotificationChannel) -> dict[str, Any]:
-    """Return the channel config with the Discord webhook URL masked.
+    """Return the channel config with any credential-bearing URL masked.
 
-    A Discord webhook URL embeds its auth token, so it is treated as a write-only
+    A webhook/Discord URL embeds its auth token, so it is treated as a write-only
     secret: new rows keep it in the encrypted ``secret`` (not in config), and any
     legacy row that still carries ``config['url']`` shows a mask on read rather
     than the token.
     """
     config = dict(channel.config or {})
-    if channel.type is NotificationType.DISCORD and config.get("url"):
+    if channel.type in _URL_SECRET_TYPES and config.get("url"):
         config["url"] = _URL_MASK
     return config
 
 
-def _extract_discord_url(payload_config: dict[str, Any], secret_value: str) -> tuple[dict, str]:
-    """Move a Discord webhook URL out of config into the encrypted secret.
+def _extract_url_secret(payload_config: dict[str, Any]) -> tuple[dict, str]:
+    """Move a credential-bearing URL out of config into the encrypted secret.
 
-    The Discord webhook URL is the whole credential, so it is stored
-    field-encrypted rather than in the plaintext ``config`` column. An explicit
-    ``secret`` wins; otherwise ``config['url']`` becomes the secret (a masked
-    placeholder from a read round-trip is ignored). The returned config never
-    carries ``url``.
+    A webhook/Discord URL is the whole credential, so it is stored
+    field-encrypted rather than in the plaintext ``config`` column. The returned
+    config never carries ``url``; the second element is the URL to store as the
+    secret (empty for a masked read round-trip, which leaves the stored secret
+    untouched).
     """
     config = dict(payload_config or {})
     url = config.pop("url", None)
     if url == _URL_MASK:
         url = None
-    return config, (secret_value or (url or ""))
+    return config, (url or "")
 
 
 class NotificationChannelOut(BaseModel):
@@ -180,10 +186,12 @@ def create_channel(
 
     secret_value = payload.secret.get_secret_value() if payload.secret else ""
     config = payload.config
-    if payload.type is NotificationType.DISCORD:
-        # The Discord webhook URL is the credential: store it encrypted, not in
-        # the plaintext config column.
-        config, secret_value = _extract_discord_url(payload.config, secret_value)
+    if payload.type in _URL_SECRET_TYPES:
+        # The webhook/Discord URL is the credential: store it encrypted, not in
+        # the plaintext config column. It also supersedes any separately-supplied
+        # secret for these types (the URL is what we POST to).
+        config, url_secret = _extract_url_secret(payload.config)
+        secret_value = url_secret or secret_value
     if not secret_value and payload.type not in SECRET_OPTIONAL_TYPES:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -239,11 +247,11 @@ def update_channel(
         channel.name = payload.name
         changes["name"] = payload.name
     if payload.config is not None:
-        if channel.type is NotificationType.DISCORD:
-            # Keep the Discord webhook URL out of the plaintext config: route a
+        if channel.type in _URL_SECRET_TYPES:
+            # Keep the webhook/Discord URL out of the plaintext config: route a
             # newly-supplied URL into the encrypted secret; a masked round-trip
             # (empty url_secret) leaves the stored secret untouched.
-            new_config, url_secret = _extract_discord_url(payload.config, "")
+            new_config, url_secret = _extract_url_secret(payload.config)
             channel.config = new_config
             if url_secret:
                 channel.secret_ciphertext = encrypt_secret(url_secret, aad=AAD_NOTIFICATION_SECRET)
