@@ -22,6 +22,17 @@ function readCookie(name: string): string | null {
   return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
 }
 
+/**
+ * Event dispatched when any API call returns 401 (session expired or revoked),
+ * so `AuthContext` can drop the SPA back to the login screen rather than leaving
+ * a stale authenticated shell whose every action fails (FE-1).
+ */
+export const AUTH_INVALIDATED_EVENT = 'scrye:auth-invalidated';
+
+function notifyUnauthorized(): void {
+  window.dispatchEvent(new Event(AUTH_INVALIDATED_EVENT));
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
@@ -53,6 +64,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     } catch {
       // Non-JSON error body; keep the generic message.
     }
+    if (response.status === 401) notifyUnauthorized();
     throw new ApiError(response.status, detail);
   }
 
@@ -86,6 +98,7 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
     } catch {
       // Non-JSON error body; keep the generic message.
     }
+    if (response.status === 401) notifyUnauthorized();
     throw new ApiError(response.status, detail);
   }
   if (response.status === 204) {

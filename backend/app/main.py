@@ -62,7 +62,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     The in-process scan worker is created here and reconciles any scans left
     mid-flight by a previous process before accepting new work.
     """
+    from app.core.dashboard import reset_dashboard_cache
+
     settings = get_settings()
+    reset_dashboard_cache()  # start each process with a cold dashboard cache (API-7)
     try:
         cipher = get_secret_cipher()
         logger.info("Master key loaded (current key version v%d).", cipher.current_version)

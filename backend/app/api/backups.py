@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app import __version__
+from app.api.uploads import read_upload_capped
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.backup import (
     BackupError,
@@ -252,9 +253,9 @@ async def restore_backup(
             detail="A scan is queued or running; wait for it to finish before restoring.",
         )
 
-    data = await file.read()
-    if len(data) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Backup file too big.")
+    # Enforce the size cap while reading so an oversized upload is never fully
+    # materialized in memory before the check (API-4).
+    data = await read_upload_capped(file, _MAX_UPLOAD_BYTES, what="Backup file")
 
     actor_username = auth.user.username
     actor_ip = client_ip(request)

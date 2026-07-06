@@ -40,12 +40,14 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
      (amd64/arm64) image and pushes `securedbytyler/scrye:<version>` (the tag **without** the
      leading `v`) **and** `securedbytyler/scrye:latest`. This runs **only** when the tagged
      commit is on `main`.
-   - **dev continuous build** — every push to the `dev` branch builds the multi-arch image and
-     pushes the single **moving** tag `securedbytyler/scrye:dev` (always overwritten — not a
-     version, not `latest`), so the current state of `dev` can be tested without cutting a
-     release.
+   - **dev continuous build** — when a pull request is **merged into `dev`**, the multi-arch
+     image is built from the merge commit and pushes the single **moving** tag
+     `securedbytyler/scrye:dev` (always overwritten — not a version, not `latest`), so the current
+     state of `dev` can be tested without cutting a release. It fires **only** on a merged PR into
+     `dev`, not on bare pushes to the `dev` ref (e.g. conflict-resolution commits on an open PR) or
+     on PRs closed without merging.
    No other registries or tags. `latest` and `:<version>` come **only** from tagged main
-   releases; `:dev` comes **only** from `dev` pushes.
+   releases; `:dev` comes **only** from PRs merged into `dev`.
 7. **Theme:** **teal** primary (`primaryColor: 'teal'`), first-class **light and dark** modes.
 
 ## Hard security rules (non-negotiable)

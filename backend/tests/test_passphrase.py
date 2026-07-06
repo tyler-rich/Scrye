@@ -61,3 +61,32 @@ class TestDerivation:
         cipher = passphrase_cipher(PASSPHRASE, salt)
         token = cipher.encrypt("s3cr3t", aad=passphrase.AAD_BUNDLE)
         assert cipher.decrypt(token, aad=passphrase.AAD_BUNDLE) == "s3cr3t"
+
+
+class TestParameterizedDerivation:
+    """Item (g): derivation must honor explicit scrypt params so a restore can
+    reproduce a key made under a different (e.g. older) work factor."""
+
+    def test_explicit_low_params_reproduce_and_differ_from_default(self) -> None:
+        salt = new_salt()
+        low = derive_key(PASSPHRASE, salt, n=2**14, r=8, p=1)
+        # Same low params reproduce the key (the restore path)...
+        assert derive_key(PASSPHRASE, salt, n=2**14, r=8, p=1) == low
+        # ...while the current default work factor yields a different key.
+        assert derive_key(PASSPHRASE, salt) != low
+
+    def test_invalid_params_rejected(self) -> None:
+        salt = new_salt()
+        for bad in ({"n": 3}, {"n": 0}, {"r": 0}, {"p": 0}):
+            with pytest.raises(PassphraseKdfError):
+                derive_key(PASSPHRASE, salt, **bad)
+
+    def test_cipher_round_trip_under_low_params(self) -> None:
+        salt = new_salt()
+        cipher = passphrase_cipher(PASSPHRASE, salt, n=2**14, r=8, p=1)
+        token = cipher.encrypt("secret", aad="x")
+        # Re-deriving under the same recorded params decrypts it.
+        assert (
+            passphrase_cipher(PASSPHRASE, salt, n=2**14, r=8, p=1).decrypt(token, aad="x")
+            == "secret"
+        )
