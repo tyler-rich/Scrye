@@ -77,6 +77,22 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   (see `CONTRIBUTING.md` § Releasing). Everything else in this section — git identity, no
   attribution footers, CI-green, deviations logging — applies the same way, just against `dev` as
   the usual PR target instead of `main`.
+- **Landing a multi-PR stacked batch is not "merge each PR in order and walk away."** When a
+  batch of stacked PRs (each built on the previous, e.g. child PR B based on parent PR A) is being
+  landed:
+  - **Retarget immediately after each parent merges.** The instant a parent PR merges, retarget
+    every remaining child PR's base from the now-merged parent branch to the true target branch
+    (e.g. `dev`) before doing anything else — do not leave a child pointed at a branch that is
+    about to go stale or be deleted. Do this one merge at a time, not as a batch fix at the end.
+  - **Re-state the full merge procedure before each merge, not just once at the start of the
+    batch.** Treat each merge in the stack as its own operation: re-confirm the current base,
+    the merge method, and the CI-green/identity/footer checks immediately before that specific
+    merge — don't rely on a plan you stated for the batch several merges ago.
+  - **Verify the target branch's actual content after the batch is reported complete.** Don't
+    report "done" on the assumption that merge order alone flows every change through the stack
+    into the target branch. Confirm it directly: `git fetch origin <target-branch>` and diff/log
+    against what was claimed to have landed, or check a marker file/line unique to the final
+    change, and only then report the batch complete.
 - **CI is created in Phase 0 and is the gate for every PR thereafter, including Phase 0's own.**
   `.github/workflows/ci.yml` runs on every pull request and push to `main`: lint the backend
   (`ruff` + `black --check`) and frontend (ESLint + Prettier), and run `pytest` plus any frontend
