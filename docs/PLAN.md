@@ -22,20 +22,24 @@ These were decided and are not open for re-litigation during the build:
    default and is required. Full-DB SQLCipher encryption is **deferred** (optional future
    hardening, not in v1).
 5. **Frontend:** **Mantine v7**.
-6. **Distribution:** the image builds locally **and** is **published to Docker Hub as
-   `<dockerhub-user>/scrye`** by `.github/workflows/publish.yml` (separate from `ci.yml`, using the
-   `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets), via two independent paths:
-   - **Tagged main releases:** pushing a semver tag `v*.*.*` builds the multi-arch (amd64/arm64)
-     image and pushes `<dockerhub-user>/scrye:<version>` (tag minus the leading `v`) **and**
-     `<dockerhub-user>/scrye:latest`. Runs **only** when the tagged commit is on `main`.
-   - **dev continuous build:** each time a pull request is **merged into `dev`** the multi-arch
-     image is built and pushed as the single **moving** tag `<dockerhub-user>/scrye:dev` (always
-     overwritten — not a version, not `latest`), mirroring `dev` after each merge for testing
-     without cutting a release. It does **not** fire on bare pushes to the `dev` ref (e.g.
-     conflict-resolution commits on an open PR) or on PRs closed without merging.
-   `latest`/`:<version>` come only from tagged main releases; `:dev` only from PRs merged into
-   `dev`. No other registries or tags. (Originally locked to local-build-only; revised — see
-   § Deviations.)
+6. **Distribution:** the image builds locally **and** is published to **two registries with two
+   distinct roles**:
+   - **Docker Hub `<dockerhub-user>/scrye` — releases only** (`.github/workflows/publish.yml`,
+     `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets): pushing a semver tag `v*.*.*` builds the
+     multi-arch (amd64/arm64) image and pushes `<dockerhub-user>/scrye:<version>` (tag minus the
+     leading `v`) **and** `<dockerhub-user>/scrye:latest`. Runs **only** when the tagged commit is on
+     `main`. No Docker Hub credentials are referenced outside this workflow.
+   - **GHCR `ghcr.io/iamgroot60/scrye` — dev only** (`.github/workflows/dev-nightly.yml`, GHCR login
+     via the built-in `GITHUB_TOKEN`): a **nightly scheduled** build (04:00 UTC) of the `dev` branch
+     pushes the single **moving** tag `ghcr.io/iamgroot60/scrye:dev` (always overwritten — not a
+     version, not `latest`). The scheduled run skips when `dev` has had no new commits in 24h;
+     `workflow_dispatch` always builds. It does **not** build on every dev merge — CI already
+     lints/tests/builds each dev PR, and the image is batched nightly. GHCR package visibility
+     inherits from the (private) repo.
+   `latest`/`:<version>` come only from tagged main releases on Docker Hub; `:dev` only from the
+   nightly GHCR build. No other registries or tags. (Originally locked to local-build-only, then to
+   a Docker Hub merged-PR `:dev` trigger; revised again to the GHCR nightly split — see
+   § Deviations, 2026-07-06.)
 7. **Backend runtime:** **Python 3.13.** (Originally locked to Python 3.12; revised to 3.13 in
    Phase 6 to resolve Grype-flagged CPython interpreter CVEs whose fixes are only available in
    3.13+ — see § Deviations for the full rationale.)
@@ -524,6 +528,53 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Why:** <reason — constraint discovered, better approach found, plan ambiguity resolved, etc.>
 **Plan section affected:** <§ reference>
 ```
+
+### 2026-07-06 — Infra — dev publishing moved to a nightly GHCR build (registry split + INF-2 resolved)
+**What changed:** Three coupled CI/CD changes that together restructure dev-image publishing, plus a
+general CI-minute-reduction pass. Treated as one entry because they are one architecture change:
+- **Registry split.** Docker Hub (`<dockerhub-user>/scrye`) is now **release-only** — the tagged-
+  `v*.*.*`-on-`main` path in `publish.yml` (→ `:<version>` + `:latest`). Dev images move to **GHCR**
+  at `ghcr.io/iamgroot60/scrye:dev`, published by a new `.github/workflows/dev-nightly.yml` that
+  authenticates with the built-in `GITHUB_TOKEN` (no PAT, no Docker Hub secret). The `dev` job and
+  its `pull_request: types:[closed]` trigger were **removed** from `publish.yml`; Docker Hub is no
+  longer referenced anywhere in the dev path.
+- **Nightly cadence.** The per-merge multi-arch rebuild of `:dev` is replaced by a **04:00 UTC
+  nightly** schedule (+ manual `workflow_dispatch`) that builds `dev` HEAD multi-arch (amd64+arm64)
+  and pushes the moving `:dev` tag. A skip-check short-circuits the scheduled run when `dev` has had
+  no new commits in the last 24h. **No dated history tags and no image-cleanup job in this pass**
+  (deferred — the dev-tag scheme is expected to change). Immediate per-PR feedback is unchanged:
+  `ci.yml` still lints, tests, and builds the amd64 image on every dev PR.
+- **INF-2 resolved.** The fork-PR `:dev` publish gap (a `pull_request`-triggered job whose head is a
+  fork gets no repository secrets) is eliminated: a `schedule`/`workflow_dispatch` trigger is not
+  PR-triggered and runs in the base-repo context, and GHCR uses the always-present `GITHUB_TOKEN`
+  rather than fork-withheld secrets. A fork PR merged into `dev` is picked up by the next nightly.
+  The INF-2 caveat and its "revisit before going public" note are retired (marker added to the
+  2026-07-05 P2 entry).
+- **General minute reduction (`ci.yml`).** The two **informational** scanner reports (the non-gating
+  `|| true` Trivy/Grype full reports in the `image` job) now run only on `push` events (main), not
+  on PRs — dev PRs run just the two gate scans (the required checks are unchanged). A `cache-scope`
+  input was added to `.github/actions/build-image` and wired through so amd64-only (`amd64-ci`) and
+  multi-arch (`multiarch` for main/release, `dev-multiarch` for the nightly) builds use separate GHA
+  cache scopes instead of evicting each other under the repo's 10 GB cache budget.
+**Why:** Per-merge multi-arch (arm64-under-QEMU) rebuilds of the moving `:dev` tag were the largest
+CI-minute cost relative to frequency (~10 dev merges in ~2 active days). Batching to a skip-guarded
+nightly collapses that to ≤1 build/day. Moving dev images to GHCR keeps Docker Hub strictly for
+releases, uses the free always-available `GITHUB_TOKEN`, and sidesteps the fork-secrets problem
+INF-2 flagged. User-approved this session (registry choice, cadence, informational-scan gating, and
+cache scoping).
+**Operational follow-ups (must be verified in repo Settings / GHCR — cannot be done from CI):**
+- **Settings → Actions → General → Workflow permissions** should be set to the restrictive
+  **Read repository contents and packages permissions** (read-only) default — GHCR push does **not**
+  require the repo-wide default to allow write. `dev-nightly.yml` declares its own explicit
+  `permissions: { contents: read, packages: write }` block, which overrides the read-only default
+  (an explicit block is exhaustive and takes precedence; it is not capped by the repo default). Each
+  workflow declares exactly what it needs (`publish.yml` and `ci.yml` only `contents: read`), so the
+  read-only default breaks nothing.
+- **After the first nightly push, confirm the GHCR package `ghcr.io/iamgroot60/scrye` is Private**
+  (it inherits the private repo's visibility by default; flag it if it publishes as public).
+**Plan section affected:** §0.6 (distribution), §9.1 (image). Supersedes the INF-2 item in the
+2026-07-05 P2 audit-remediation entry and the Docker Hub merged-PR `:dev` trigger in the 2026-07-04
+publishing entry.
 
 ### 2026-06-30 — Phase 0 — Scanner versions bumped to current releases
 **What changed:** Bundled scanner versions pinned to the current releases —
@@ -1439,3 +1490,216 @@ tagged releases, plus a `dev` integration branch for ongoing work, is the standa
 letting contributors work freely without risking the release branch.
 **Plan section affected:** § Git & PR conventions (CLAUDE.md), process only — no build-phase or
 architectural sections affected.
+
+### 2026-07-05 — Post-P6 audit remediation (P0) — token-mint capping, backup/restore, webhook URLs
+**What changed:** First tier (P0) of the full-repo audit (`docs/reviews/full-audit-2026-07-05.md`,
+§10). Fixes carry their audit finding IDs:
+- **QUA-1 (§5, privilege escalation):** `POST /api/api-tokens` capped minting against the owner's
+  account role instead of the caller's effective (token-capped) role, so a low-privilege token
+  belonging to an admin could mint an admin token. Now caps and defaults against
+  `AuthContext.effective_role`; a regression test constructs a viewer token owned by an admin and
+  confirms it cannot mint (or default to) an admin token.
+- **API-2 (§8):** database restore (scrypt + full-DB rebuild) now runs in a threadpool
+  (`run_in_threadpool`) so `/healthz` and the container healthcheck stay responsive and can't kill
+  the container mid-restore.
+- **API-3 (§8):** restore inserts rows with a chunked `executemany` instead of one statement per
+  row; build streams rows with `yield_per` and no longer re-parses the finished bundle to read the
+  app version; a warning is logged for very large findings tables and the practical size ceiling is
+  documented in the README. (A framed streaming-encryption format is deferred — GCM is single-shot.)
+- **API-10 (§8):** raw-artifact files are not carried in a bundle (plan §8 lists them as
+  *optional*), so the `artifacts` table is now excluded from the dump **and** cleared on restore —
+  a restored database no longer holds artifact rows that point at nonexistent files. Documented in
+  the README ("Backup & restore").
+- **API-11 (§8):** restore is refused with 409 while any scan is queued or running, so the table
+  wipe can't race the worker committing findings against a replaced/vanished scan row.
+- **SEC-1 (§4.5/§6):** a generic webhook's URL is treated as a write-only credential (Slack/Teams/
+  Mattermost/Google Chat embed the token in the URL), stored field-encrypted in `secret_ciphertext`
+  and masked on read exactly like the existing Discord handling — not echoed from the plaintext
+  `config` column. The previously-separate optional bearer-token secret for generic webhooks is
+  subsumed (the URL is the credential); the frontend renders the webhook URL as a write-only
+  password field and no longer offers a separate secret input for webhook/Discord channels.
+**Why:** These are the audit's P0 (correctness/security/data-loss) items. Each keeps the locked
+decisions intact (no schema change, field encryption, single-container worker). SEC-1 follows the
+audit's recommended fix (route the URL into `secret_ciphertext`, mask on read) rather than adding a
+new encrypted column, avoiding a data-model change.
+**Plan section affected:** §5 (RBAC/API tokens), §6 (secrets/webhook URL), §8 (backup/restore).
+
+### 2026-07-05 — Post-P6 audit remediation (P1) — availability/performance under real volume
+**What changed:** Second tier (P1) of the audit (§10). Carries the finding IDs:
+- **API-5 (§4/§12):** the scan worker's result persistence (`_persist_success` /
+  `_store_failure_output` — a 10k+-findings flush plus the raw-JSON artifact write) now runs via
+  `anyio.to_thread.run_sync` instead of inline on the event loop; the module docstring is corrected.
+- **SCN-1 (§4):** `run_command` streams a subprocess's stdout with a byte cap
+  (`SCRYE_SCANNER_MAX_OUTPUT_BYTES`, default 512 MiB) — output past the budget kills the child and
+  fails the scan as a `ScannerOutputError` (with the truncated bytes for diagnosis) rather than
+  buffering unbounded JSON; stderr is capped modestly. New setting is emitted in `.env.example`.
+- **API-4 (§4/§8):** SBOM and backup-restore uploads are read through `read_upload_capped`, which
+  rejects an over-limit body via its reported size and by a chunked read, so an oversized upload is
+  never fully materialized in memory before the size check.
+- **API-7 (§4.6):** dashboard/metrics aggregation loads only the columns it reads per target
+  (`load_only`, skipping the heavy `options`/`error` columns) and is served from a short (15 s)
+  process-wide TTL cache shared by the dashboard endpoint and every Prometheus scrape, cleared on
+  app startup (and in tests).
+- **API-1 (§4.4):** the `GET /scans` and `GET /scans/history` list endpoints eager-load
+  `Scan.tag_rows` (`selectinload`), removing the per-row N+1 tag query.
+- **API-15 / API-6 (§12):** the maintenance tick runs `fire_due_schedules` and `run_retention` off
+  the event loop (`anyio.to_thread.run_sync`), and retention deletes artifact rows in a single
+  `DELETE … WHERE id IN (…)` instead of one ORM delete per row.
+**Why:** The audit's P1 (availability/performance at real data volume) items — the systemic
+"synchronous heavy work on the event loop" pattern (API-2/3/5, plus retention/maintenance) is
+addressed consistently by hopping to a thread, and the unbounded-memory paths (scanner stdout,
+uploads, dashboard hydration) are bounded. No schema change; the one new setting is non-sensitive.
+**Plan section affected:** §4 (scanner orchestration), §4.4/§4.6 (list/dashboard perf), §8
+(uploads), §12 (maintenance), §11 (`SCRYE_SCANNER_MAX_OUTPUT_BYTES`).
+
+### 2026-07-05 — Post-P6 audit remediation (P2) — supply chain / deployment hardening
+**What changed:** Third tier (P2) of the audit (§10). Finding IDs:
+- **SCN-3 (§4.2):** `cors_origins` and `filesystem_scan_roots` now parse their documented
+  comma-separated env form. pydantic-settings tries `json.loads` on a `list[str]` env value, so
+  `SCRYE_FILESYSTEM_SCAN_ROOTS=/srv/scan` (the enable switch for the security-gated filesystem-scan
+  feature) failed at startup; the fields are annotated `NoDecode` with a `field_validator(mode=
+  "before")` that splits on commas. Tests construct `Settings` from the env var directly.
+- **INF-1 (supply chain):** added `.github/dependabot.yml` (weekly, grouped) for the
+  `github-actions` ecosystem so the workflow actions are tracked and rolled forward deliberately.
+  **The remaining half — pinning each `uses:` to a full commit SHA — could not be completed in the
+  remediation environment (its egress policy blocks GitHub outside this repo, so current action
+  SHAs cannot be resolved/verified); pinning to an unverified SHA would risk a red CI. Flagged for a
+  follow-up where SHAs can be resolved.**
+- **INF-3 (§0.6):** `CLAUDE.md` §6's `:dev` wording is corrected to match the implemented
+  merged-PR-into-`dev` trigger (it still said "every push to dev"), removing the doc-vs-code
+  contradiction — a documentation alignment, **not** a behavior change.
+- **INF-2 (§0.6, deferred — revisit before the repo goes public):** the fork-PR `:dev` publish gap
+  (fork PRs get no repo secrets, so their merge can't push `:dev`) is documented in `publish.yml`
+  as an accepted trade-off of the deliberate merged-PR trigger. Switching to a push-based trigger
+  would fix it but reverses a distribution locked decision (§6) and reintroduces the double-publish
+  the re-scope avoided. **The merged-PR-only trigger is kept as-is for now** (user decision,
+  2026-07-05): while the repository is **private**, external fork-based contributions are not
+  possible, so the bug cannot actually be triggered. **This must be revisited specifically before
+  the repo is made public** — going public is exactly what enables fork PRs (and therefore the
+  broken `:dev` publish), so the trigger decision (keep merged-PR-only with a documented caveat, or
+  move to a push-based / `workflow_run` trigger with secrets) should be made deliberately at that
+  point. INF-3's `CLAUDE.md` §6 wording is intentionally left matching the current merged-PR
+  trigger. **[RESOLVED 2026-07-06:** dev publishing was moved off the merged-PR trigger to a
+  nightly GHCR build authenticated with the built-in `GITHUB_TOKEN`, so the fork-withheld-secrets
+  path no longer exists. See the 2026-07-06 deviation entry above.**]**
+- **INF-4 (§9.2, documented exception):** the optional `trivy-server` sidecar runs as root; the
+  upstream `aquasec/trivy` image ships no non-root USER and hard-codes its `/root/.cache`, so a
+  non-root `user:` would break the DB cache on a root-owned named volume. Documented the residual
+  risk and its mitigations (profile-gated, internal-net-only, read-only FS, no-new-privileges,
+  cap_drop ALL, resource-limited) in the compose file, per the audit's accepted alternative.
+- **INF-5 (§9.2):** added a small RAM-backed `tmpfs:[/run]` to the `docker-socket-proxy` sidecar
+  (HAProxy needs a writable `/run` under a read-only root FS) with a note to live-verify the profile
+  and add `cap_add:[SETUID,SETGID]` only if the proxy still cannot drop privileges.
+**Why:** The audit's P2 (supply chain / deployment hardening). SCN-3 is a real startup bug on the
+documented config path and ships with tests. The infra items that can be fully verified here are
+applied; those requiring a live Docker daemon (INF-4/5) or GitHub egress (INF-1 SHA resolution) or a
+locked-decision change (INF-2) are applied conservatively (defensive change + documentation) and
+their residual scope is called out rather than shipped unverified.
+**Plan section affected:** §0.6 (distribution docs), §4.2 (config parsing), §9.2 (compose
+hardening), §11 (CI supply chain).
+
+### 2026-07-05 — Post-P6 audit remediation (P3) — feature gaps that mislead users
+**What changed:** Fourth tier (P3) of the audit (§10). Finding IDs:
+- **FEAT-6 / QUA-3 (§4.5):** the stored **Grype ignore** config is now applied at scan time. A new
+  `scanners/grype_policy.py` materializes the `ScannerSettings.grype_ignore` YAML into tmpfs and the
+  worker hands it to Grype via a `-c <path>` config flag (mirroring the Trivy-policy materialization),
+  carried on a private env-overlay key that the Grype runner converts to argv and never leaks to the
+  child.
+- **FEAT-7 / QUA-3 (§4.5):** the New Scan form now prefills its severity filter and ignore-unfixed
+  toggle from the instance defaults (`GET /settings/scanners`) on mount, so changing
+  `default_severities` / `default_ignore_unfixed` actually affects new scans instead of being
+  overridden by hardcoded form values.
+- **FEAT-4 / QUA-3 (§4.5):** the maintenance tick now honors `auto_update_db` +
+  `db_update_interval_hours` — a new `workers/db_update.py` runs `trivy image --download-db-only` and
+  `grype db update` best-effort when enabled and the interval has elapsed (in-process last-run marker;
+  a restart re-checks). Failures are logged, never raised. This removes the "stored no-op" knobs
+  (QUA-3): all three ScannerSettings fields the UI exposed now have real effect.
+- **DOC-1 (§0.6):** README rewritten to reflect that Docker Hub publishing (`<dockerhub-user>/scrye`,
+  `:latest`/`:<version>`/`:dev`) is in scope; the "no published registry image" claims are removed.
+- **DOC-2 / DOC-5 / FEAT-1/2/3/8:** README wording aligned with reality — uploaded image-tar targets,
+  Docker-environment multi-select scan launch, and filesystem-archive upload are marked not-yet-
+  implemented; VEX/`.trivyignore` are described as global (Settings → Scanners), not per-scan; and the
+  ECR/GCR/ACR credential-helper "binaries not bundled" caveat is stated.
+- **FEAT-5 / FEAT-10:** offline/air-gapped DB import and an admin bulk secret re-encryption
+  (key-rotation) action are explicitly listed as not-yet-implemented on the roadmap, and the README
+  key-rotation note is corrected to stop implying a re-encryption tool exists.
+**Why:** The audit's P3 ("feature gaps that mislead users"). The three dead Settings→Scanners knobs are
+wired so the UI no longer lies; the remaining unimplemented features (image-tar upload, Docker-env
+multi-select, filesystem-archive upload, offline DB import, key-rotation re-encryption) are explicitly
+de-scoped in the docs per the audit's accepted alternative rather than built out in this tier.
+**Plan section affected:** §4.5 (scanner settings actuation), §10.1 (README accuracy), §4.1/§4.2
+(target/feature scope).
+
+### 2026-07-05 — Post-P6 audit remediation (P4) — frontend correctness / UX
+**What changed:** Fifth tier (P4) of the audit (§10). Finding IDs:
+- **FE-1:** the API client dispatches a `scrye:auth-invalidated` window event on any 401; `AuthContext`
+  listens and flips `user` to null, so a dead/revoked session drops the SPA back to the login screen
+  instead of leaving a stale authenticated shell whose every action fails.
+- **FE-3:** a shared `lib/dates.ts` (`parseUtc` / `formatWhen`) is the single place that renders a
+  backend (naive-UTC) timestamp; the pages that rendered UTC as local (Account sessions, Backups
+  list + schedule last-run, Scheduled-scans last-run) now use it, and the two pages that already had
+  a private `formatWhen` (ScanDetail, Scans) were de-duplicated onto the shared helper.
+- **FE-4:** `BackupsPanel`'s restore file moves from `useRef` to `useState`, so the selected file
+  name actually re-renders on the destructive restore flow instead of showing "No file selected".
+- **FE-5:** `ScheduledScansPanel` constrains the scanner Select by target type via a `SCANNERS_FOR`
+  matrix (and auto-corrects the scanner when the target type changes), mirroring the New Scan page and
+  the backend's combo validation; it also gates Add/Run/Delete behind an operator-or-admin check
+  (`useAuth`), and `/settings` is now a **guarded route** (viewers hitting the URL are redirected to
+  `/`, not just missing the nav link).
+**Why:** The audit's P4 (frontend correctness/UX). All are client-only; the backend already enforces
+the same RBAC/validation, so these close UX gaps (stale shells, wrong times, silent destructive-flow
+labels, invalid-combo 400s, viewer-visible controls) rather than security holes. No dedicated frontend
+test runner exists yet (FE-10, deferred to P5); changes are verified by `tsc`, ESLint, Prettier, and a
+clean `vite build`.
+**Plan section affected:** §5 (RBAC surfacing in the UI), §4.4/§4.6 (history/schedules UX), §10 (SPA).
+
+### 2026-07-05 — Deviation-logging debt from the audit (FE-2, INF-10, API-12, FEAT-4)
+The audit (§10) flagged four divergences from this plan that had never been recorded here. Logging
+them now (independently of whether the underlying item is also fixed), per CLAUDE.md § Git & PR
+conventions, which requires a dated entry at the time a deviation is made:
+- **FE-2 — hand-rolled API client (§2).** The frontend API layer is a thin hand-written `fetch`
+  wrapper (`frontend/src/api/*`), not a client generated from the FastAPI OpenAPI schema as
+  § Coding standards specifies. This was a deliberate simplicity choice (one small `api()` helper +
+  typed per-endpoint modules) and is **kept**; generating the client (e.g. openapi-typescript) over
+  the thin wrapper remains a possible future improvement. Recorded here as the required deviation.
+- **INF-10 — dogfood gate severity floor (§9.1 / CLAUDE.md § Dependency hygiene).** CI gates the
+  Trivy/Grype self-scan on **fixable HIGH/CRITICAL** only (`ci.yml`), while § Dependency hygiene says
+  "resolves all fixable findings". Fixable LOW/MEDIUM appear in the informational (non-gating) steps.
+  The HIGH/CRITICAL floor is an intentional low-churn enforcement choice; recorded here as the
+  deviation (the bundled-binary skip was already logged, this floor was not).
+- **API-12 — scans composite index column (§7).** §7 promised `scans(scanner, status, started_at)`;
+  the implemented composite index uses `created_at` (`db/models/scan.py`, migration `0003`). The
+  implemented index is the more useful one for the newest-first/history queries (which order by
+  `created_at`); only the deviation-logging was missing. Recorded here; no code change.
+- **FEAT-4 — DB-update schedule actuation (§4.5).** Phase 5 stored the `auto_update_db` /
+  `db_update_interval_hours` knobs and deferred actuation to Phase 6; Phase 6 shipped without it and
+  never logged the drop. (Now actually **implemented** in the P3 entry above — the maintenance tick
+  runs the DB updates — but the earlier un-logged gap is recorded here for the trail.)
+
+### 2026-07-05 — Post-P6 audit remediation (P5) — maintainability, process, long tail
+**What changed:** Sixth tier (P5) of the audit (§10). Finding IDs:
+- **item (g) (§8):** backup restore now derives the passphrase key from the **bundle's advertised**
+  scrypt parameters (`kdf.n/r/p`) instead of the module constants, so a bundle written under a
+  different (e.g. older) work factor still restores. `derive_key` / `passphrase_cipher` take explicit
+  `n/r/p` (defaulting to the current constants for new backups) and validate them; `restore_bundle`
+  passes the recorded values. (Verified in the remediation environment there are **no** existing
+  bundles that predate the 2^15→2^17 bump — `/data` is absent and no `.scryebak` files exist — so
+  nothing was already unrestorable; this fix is forward-looking.)
+- **QUA-23 (§7):** a new `tests/test_migrations.py` runs the **actual Alembic chain** to head against
+  a throwaway database and asserts the resulting tables/columns match `Base.metadata`, catching a
+  migration that drifts from the models (the rest of the suite builds the schema via `create_all`).
+  `alembic/env.py` now respects a caller-provided `sqlalchemy.url` so the test can target its own DB.
+**Intentionally deferred (recorded, not done) in P5:**
+- **QUA-4 / QUA-9 (structural):** consolidating the four near-identical secret-CRUD routers and
+  standardizing the list-envelope convention is a broad refactor across many endpoints; deferred to a
+  dedicated change to keep this remediation batch reviewable and low-risk.
+- **QUA-16 (type checker in CI):** adding mypy/pyright would first require resolving the existing
+  annotation gaps the audit notes (QUA-17), which is a separate cleanup; deferred rather than shipped
+  with a red gate.
+- **FE-10 (frontend tests):** a frontend test runner is still absent; adding vitest + unit tests is a
+  worthwhile follow-up. Deferred here to keep P5 scoped; the new `lib/dates.ts` helper is a natural
+  first target.
+**Why:** The audit's P5 (maintainability/process/long tail). The two concrete, self-contained,
+fully-verifiable items (item (g), QUA-23) are implemented with tests; the larger refactors and the
+type-checker/frontend-test additions are explicitly deferred with rationale rather than half-done.
+**Plan section affected:** §7 (migration integrity), §8 (backup KDF portability), process.

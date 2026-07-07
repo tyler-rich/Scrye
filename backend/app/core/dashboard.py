@@ -12,11 +12,12 @@ session and keeps the endpoint a thin adapter.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, load_only, selectinload
 
 from app.core.timeutil import utcnow
 from app.db.models import Scan, ScanStatus, Severity
@@ -79,7 +80,23 @@ def latest_succeeded_scans(db: Session) -> list[Scan]:
         .where(Scan.status == ScanStatus.SUCCEEDED)
         .group_by(Scan.scanner, Scan.target_type, Scan.target)
     )
-    return list(db.scalars(select(Scan).where(Scan.id.in_(latest_ids))).all())
+    # Load only the columns the posture aggregation reads, not the whole row
+    # (skips the heavy ``options``/``error`` columns) per distinct target (API-7).
+    return list(
+        db.scalars(
+            select(Scan)
+            .where(Scan.id.in_(latest_ids))
+            .options(
+                load_only(
+                    Scan.scanner,
+                    Scan.target_type,
+                    Scan.target,
+                    Scan.severity_counts,
+                    Scan.findings_count,
+                )
+            )
+        ).all()
+    )
 
 
 def _time_series(db: Session, *, now: datetime) -> list[dict[str, object]]:
@@ -144,6 +161,38 @@ def compute_dashboard(db: Session, *, now: datetime | None = None) -> DashboardD
         schedules_enabled=schedules_enabled,
         schedules_total=schedules_total,
     )
+
+
+#: Short TTL for the dashboard aggregate cache. The posture changes only when a
+#: scan finishes, so a few seconds keeps it near-live while collapsing bursts of
+#: dashboard loads and Prometheus scrapes onto one computation.
+_DASHBOARD_TTL_SECONDS = 15.0
+#: Cached ``(monotonic timestamp, aggregates)`` shared across requests.
+_dashboard_cache: tuple[float, DashboardData] | None = None
+
+
+def compute_dashboard_cached(db: Session, *, now: datetime | None = None) -> DashboardData:
+    """Return the dashboard aggregates with a short process-wide TTL cache (API-7).
+
+    Both the dashboard endpoint and every Prometheus scrape read these
+    aggregates; without a cache each recomputes a ``GROUP BY`` over the whole
+    scans table plus a per-target load. A few-seconds TTL collapses read bursts
+    onto one computation. Callers wanting a guaranteed-fresh result (tests) call
+    :func:`compute_dashboard` directly.
+    """
+    global _dashboard_cache
+    cached = _dashboard_cache
+    if cached is not None and time.monotonic() - cached[0] < _DASHBOARD_TTL_SECONDS:
+        return cached[1]
+    data = compute_dashboard(db, now=now)
+    _dashboard_cache = (time.monotonic(), data)
+    return data
+
+
+def reset_dashboard_cache() -> None:
+    """Clear the dashboard TTL cache (app startup and test isolation)."""
+    global _dashboard_cache
+    _dashboard_cache = None
 
 
 def recent_scans(db: Session) -> list[Scan]:

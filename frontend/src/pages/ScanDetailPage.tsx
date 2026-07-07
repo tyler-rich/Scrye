@@ -20,6 +20,7 @@ import {
 import { IconAlertCircle, IconArrowLeft, IconDownload } from '@tabler/icons-react';
 
 import { ApiError } from '../api/client';
+import { formatWhen } from '../lib/dates';
 import {
   artifactDownloadUrl,
   cancelScan,
@@ -48,10 +49,6 @@ const EXPORT_FORMATS: { value: ExportFormat; label: string }[] = [
   { value: 'markdown', label: 'Markdown' },
   { value: 'json', label: 'JSON' },
 ];
-
-function formatWhen(iso: string | null): string {
-  return iso ? new Date(`${iso}Z`).toLocaleString() : '—';
-}
 
 function SeveritySummary({ counts }: { counts: Record<string, number> }) {
   const shown = SEVERITY_ORDER.filter((s) => (counts[s] ?? 0) > 0);

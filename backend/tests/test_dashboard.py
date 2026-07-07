@@ -9,7 +9,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core import system_info
-from app.core.dashboard import compute_dashboard, failed_scan_alerts
+from app.core.dashboard import (
+    compute_dashboard,
+    compute_dashboard_cached,
+    failed_scan_alerts,
+    reset_dashboard_cache,
+)
 from app.core.timeutil import utcnow
 from app.db.models import Scan, Scanner, ScanStatus, TargetType
 from app.db.session import SessionLocal
@@ -203,3 +208,21 @@ class TestScannerDbStatusCache:
         await system_info.scanner_db_status()
 
         assert calls["n"] == 4  # two probes per miss, two misses
+
+
+class TestDashboardCache:
+    def test_cached_within_ttl_then_reset(self, db: Session) -> None:
+        """API-7: compute_dashboard_cached serves a cached result within the TTL
+        and recomputes after a reset."""
+        reset_dashboard_cache()
+        _add_scan(db, target="a", status=ScanStatus.SUCCEEDED)
+        first = compute_dashboard_cached(db)
+        assert first.total_scans == 1
+
+        # A new scan is not reflected while the cache is warm...
+        _add_scan(db, target="b", status=ScanStatus.SUCCEEDED)
+        assert compute_dashboard_cached(db).total_scans == 1
+
+        # ...but is after the cache is cleared.
+        reset_dashboard_cache()
+        assert compute_dashboard_cached(db).total_scans == 2

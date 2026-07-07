@@ -79,6 +79,41 @@ class TestRestoreEndpoint:
         body = resp.json()
         assert body["rows"] >= 2
 
+    def test_restore_refused_while_scan_active(self, client: TestClient) -> None:
+        """API-11: restore must refuse (409) while a scan is queued or running,
+        so the table wipe cannot race a worker committing findings."""
+        from app.db.models import Scan, Scanner, ScanStatus, TargetType
+        from app.db.session import SessionLocal
+
+        csrf = setup_admin(client)
+        backup_id = client.post(
+            "/api/backups", json={"passphrase": PASSPHRASE}, headers={CSRF: csrf}
+        ).json()["id"]
+        content = client.get(f"/api/backups/{backup_id}/download").content
+
+        # Insert a queued scan directly (not via the worker) so it stays queued.
+        session = SessionLocal()
+        try:
+            session.add(
+                Scan(
+                    scanner=Scanner.TRIVY,
+                    target_type=TargetType.IMAGE,
+                    target="alpine:3.19",
+                    status=ScanStatus.QUEUED,
+                )
+            )
+            session.commit()
+        finally:
+            session.close()
+
+        resp = client.post(
+            "/api/backups/restore",
+            files={"file": ("backup.scryebak", content, "application/octet-stream")},
+            data={"passphrase": PASSPHRASE, "confirm": "true"},
+            headers={CSRF: csrf},
+        )
+        assert resp.status_code == 409, resp.text
+
     def test_restore_requires_confirmation(self, client: TestClient) -> None:
         csrf = setup_admin(client)
         data = client.post("/api/backups", json={"passphrase": PASSPHRASE}, headers={CSRF: csrf})

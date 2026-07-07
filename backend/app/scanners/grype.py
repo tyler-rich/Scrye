@@ -30,6 +30,7 @@ from app.scanners.base import (
     string_entries,
     tally_severities,
 )
+from app.scanners.grype_policy import GRYPE_CONFIG_OVERLAY_KEY
 
 #: Engine name used in operator-facing error messages.
 _ENGINE = "Grype"
@@ -44,19 +45,25 @@ _UPDATE_CHECK_ENV = {"GRYPE_CHECK_FOR_APP_UPDATE": "false"}
 _SURFACED_FIX_STATES = frozenset({"wont-fix"})
 
 
-def build_command(binary: str, reference: str) -> list[str]:
+def build_command(binary: str, reference: str, config_path: str | None = None) -> list[str]:
     """Build the ``grype`` argument vector for a source reference.
 
     Args:
         binary: Resolved Grype executable path.
         reference: A Grype source string — an image ref, ``dir:<path>``, or
             ``sbom:<path>``.
+        config_path: Optional path to a materialized Grype config file (the
+            global ignore rules, FEAT-6), passed via ``-c``.
 
     Returns:
         The full argv list.
     """
+    argv = [binary]
+    if config_path:
+        argv += ["-c", config_path]
     # `--` terminates flag parsing so a reference can never be read as an option.
-    return [binary, "-o", "json", "--", reference]
+    argv += ["-o", "json", "--", reference]
+    return argv
 
 
 def scan_env(overlay: dict[str, str] | None = None) -> dict[str, str]:
@@ -162,11 +169,15 @@ class GrypeScanner(BaseScanner):
             ScannerError: If the binary is missing, times out, or exits non-zero.
         """
         binary = resolve_binary(get_settings().grype_binary)
-        argv = build_command(binary, reference)
         # Point Grype's DB cache and temp extraction at the writable cache volume:
         # under the hardened runtime the default $HOME/.cache is on the read-only
         # root FS and the tmpfs /tmp is too small for Grype's vulnerability DB.
         overlay = {**scanner_cache_env(), **(env or {})}
+        # A materialized global-ignore config (FEAT-6) rides in on a private
+        # overlay key; pop it and turn it into a `-c <path>` flag so it is applied
+        # but never leaks to the child as a bogus env var.
+        config_path = overlay.pop(GRYPE_CONFIG_OVERLAY_KEY, None)
+        argv = build_command(binary, reference, config_path=config_path)
         result = await run_command(
             argv, timeout=get_settings().scan_timeout_seconds, env=scan_env(overlay)
         )

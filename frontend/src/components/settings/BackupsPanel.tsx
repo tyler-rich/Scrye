@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Badge,
@@ -19,6 +19,7 @@ import { useForm } from '@mantine/form';
 import { IconAlertCircle, IconCheck, IconDownload, IconTrash } from '@tabler/icons-react';
 
 import { ApiError } from '../../api/client';
+import { formatWhen } from '../../lib/dates';
 import {
   backupDownloadUrl,
   createBackup,
@@ -44,7 +45,9 @@ export function BackupsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const restoreFile = useRef<File | null>(null);
+  // State (not a ref) so the selected file name re-renders on the destructive
+  // restore flow — a ref assignment would leave the label stale (FE-4).
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
 
   const createForm = useForm({ initialValues: { passphrase: '', note: '' } });
   const restoreForm = useForm({ initialValues: { passphrase: '' } });
@@ -100,7 +103,7 @@ export function BackupsPanel() {
   };
 
   const onRestore = restoreForm.onSubmit(async (values) => {
-    if (!restoreFile.current) {
+    if (!restoreFile) {
       setError('Choose a backup file to restore.');
       return;
     }
@@ -108,12 +111,12 @@ export function BackupsPanel() {
     setNotice(null);
     setBusy(true);
     try {
-      const result = await restoreBackup(restoreFile.current, values.passphrase);
+      const result = await restoreBackup(restoreFile, values.passphrase);
       setNotice(
         `Restored ${result.rows} rows across ${result.tables} tables. You may need to sign in again.`,
       );
       restoreForm.reset();
-      restoreFile.current = null;
+      setRestoreFile(null);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Restore failed.');
@@ -192,7 +195,7 @@ export function BackupsPanel() {
             <Table.Tbody>
               {items.map((b) => (
                 <Table.Tr key={b.id}>
-                  <Table.Td>{new Date(b.created_at).toLocaleString()}</Table.Td>
+                  <Table.Td>{formatWhen(b.created_at)}</Table.Td>
                   <Table.Td>
                     <Badge variant="light" color={b.kind === 'scheduled' ? 'blue' : 'teal'}>
                       {b.kind}
@@ -247,7 +250,7 @@ export function BackupsPanel() {
             Restoring replaces all current data. You will likely be signed out afterwards.
           </Alert>
           <Group>
-            <FileButton onChange={(f) => (restoreFile.current = f)} accept=".scryebak">
+            <FileButton onChange={setRestoreFile} accept=".scryebak">
               {(props) => (
                 <Button variant="default" {...props}>
                   Choose file
@@ -255,7 +258,7 @@ export function BackupsPanel() {
               )}
             </FileButton>
             <Text size="sm" c="dimmed">
-              {restoreFile.current?.name ?? 'No file selected'}
+              {restoreFile?.name ?? 'No file selected'}
             </Text>
           </Group>
           <PasswordInput
@@ -306,7 +309,7 @@ export function BackupsPanel() {
           />
           {schedule?.last_run_at && (
             <Text size="sm" c="dimmed">
-              Last run {new Date(schedule.last_run_at).toLocaleString()} — {schedule.last_status}
+              Last run {formatWhen(schedule.last_run_at)} — {schedule.last_status}
             </Text>
           )}
           <Group>

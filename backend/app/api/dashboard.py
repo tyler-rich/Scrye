@@ -19,7 +19,7 @@ from app.api.scan_schemas import ScanOut
 from app.auth.deps import AuthContext, require_role
 from app.core.dashboard import (
     DashboardData,
-    compute_dashboard,
+    compute_dashboard_cached,
     failed_scan_alerts,
     recent_scans,
 )
@@ -88,7 +88,7 @@ def _load_dashboard_data(db: Session) -> tuple[DashboardData, list[Scan], list[S
     hop (the session is used by exactly one thread at a time) instead of
     blocking the event loop with synchronous aggregation queries.
     """
-    return compute_dashboard(db), recent_scans(db), failed_scan_alerts(db)
+    return compute_dashboard_cached(db), recent_scans(db), failed_scan_alerts(db)
 
 
 @router.get("", response_model=DashboardOut)

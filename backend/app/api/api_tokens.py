@@ -81,8 +81,11 @@ def create_token(
     db: Session = Depends(get_db),
 ) -> ApiTokenCreatedOut:
     """Mint an API token and return its plaintext once."""
-    role = payload.role or auth.user.role
-    if ROLE_RANK[role] > ROLE_RANK[auth.user.role]:
+    # Cap against the caller's *effective* role, not the owner's account role:
+    # a low-privilege bearer token belonging to an admin must not be able to
+    # mint a higher-privilege token than the token itself carries (QUA-1).
+    role = payload.role or auth.effective_role
+    if ROLE_RANK[role] > ROLE_RANK[auth.effective_role]:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail="A token cannot be granted a higher role than your own.",
