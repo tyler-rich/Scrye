@@ -1703,3 +1703,114 @@ conventions, which requires a dated entry at the time a deviation is made:
 fully-verifiable items (item (g), QUA-23) are implemented with tests; the larger refactors and the
 type-checker/frontend-test additions are explicitly deferred with rationale rather than half-done.
 **Plan section affected:** §7 (migration integrity), §8 (backup KDF portability), process.
+
+---
+
+## Build performance
+
+Durable notes on why the image build is structured the way it is, and — critically —
+what **not** to undo. Cross-referenced from `CLAUDE.md` § Coding standards → Build
+performance, `docker/Dockerfile`, and the four build workflows. Read this before
+restructuring the Dockerfile or the build workflows' caching.
+
+### Why the build was slow, and what was changed (2026-07-07)
+
+**Diagnosis (from actual CI logs, not the YAML).** The CI "image" work is four jobs:
+`backend`, `frontend`, the amd64-only `image` (build + Trivy/Grype dogfood scan), and
+`image-multiarch` (a `linux/amd64,linux/arm64` build-only check). The first three each
+finish in 1–5 min; the ~12 min wall-clock was set almost entirely by **`image-multiarch`**.
+Reading the buildkit step timings for a representative run:
+
+- The arm64 leg runs the whole Dockerfile under **QEMU emulation**, which is 5–15× slower
+  than the native amd64 leg per step (e.g. `apt-get install` 15s→333s, `npm ci` 26s→278s,
+  `npm run build` 20s→328s, `pip install` 21s→231s under emulation).
+- **The GHA layer cache was cold on essentially every run** (0 `CACHED` layers observed).
+  Root cause: the recent cost-reduction pass partitioned the `type=gha` cache into per-build
+  scopes (`amd64-ci`, `multiarch`, `dev-multiarch`) to stop them evicting each other under
+  the repo's 10 GB budget — correct — but the `multiarch` scope is *written* only by rare
+  events (a PR targeting `main`, or a release tag), so between its own invocations its
+  entries age out and it is cold when it next runs. A cold cache means the QEMU-emulated
+  arm64 layers are **re-executed from scratch** rather than restored — a `type=gha` cache
+  *hit* skips executing a layer entirely, emulation cost included. So the recurring cost was
+  the cold cache forcing a full emulated rebuild, more than QEMU per se.
+
+**Changes made (this pass). No security posture was weakened** — the scanner-binary
+checksum verification, the digest-pinned base images, and the non-root/hardened final stage
+are all unchanged.
+
+1. **Cross-seed the cache scopes (config-level, all four paths).** Each build path still
+   *writes* exactly one scope (preserving the 10 GB budget partitioning), but now also
+   *reads* the frequently-warm sibling scope, so a rarely-run build restores warm layers
+   instead of rebuilding cold:
+   - `.github/actions/build-image` gained an `extra-cache-scopes` input; a shell step composes
+     `cache-from` = primary + extras (read many) while `cache-to` stays primary-only (write one).
+   - `image-multiarch` (ci.yml) and the tagged-release build (publish.yml): write `multiarch`,
+     additionally **read** `dev-multiarch`. `main`/release content is promoted `dev`, so the
+     daily nightly build usually carries bit-identical base/apt/venv/npm-ci/arm64 layers.
+   - the nightly (dev-nightly.yml): writes `dev-multiarch`, additionally reads `multiarch`
+     (symmetric — a recent release seeds the nightly). The nightly is what keeps
+     `dev-multiarch` warm for the others to read.
+   - the amd64-only `image` job (ci.yml): writes `amd64-ci`, additionally reads `dev-multiarch`
+     (its amd64 layers are reusable by an amd64-only build and are refreshed daily).
+2. **Persist pip/npm download caches across builds (Dockerfile).** `pip install` and `npm ci`
+   use BuildKit `--mount=type=cache` mounts (and `PIP_NO_CACHE_DIR` was dropped) so an
+   unchanged dependency isn't re-downloaded when its install layer rebuilds. The cache lives
+   in the mount, not the image layer, so nothing bloats the (discarded) builder stages or the
+   final image. (Note: BuildKit cache mounts are not exported to `type=gha`, so this mainly
+   speeds **local** rebuilds and dependency-change rebuilds; the CI recurring win is item 1.)
+3. **Parallelize the scanner-binary downloads (Dockerfile).** The trivy/grype/syft
+   download→verify→extract pipelines were sequential; they now run concurrently in background
+   subshells joined by `wait`. This roughly halves a cold scanner stage, most visibly on the
+   emulated arm64 leg. **Integrity is unchanged:** each binary is still fetched with its
+   publisher's signed checksums file and verified with `sha256sum -c` *before* extraction, and
+   a failure in any subshell (download error or checksum mismatch) propagates through `wait`
+   under `set -e` to fail the build (verified under both dash and bash).
+
+**Expected before/after per build path** (estimates; the dominant variable is cache warmth):
+
+| Build path | Trigger | Before | After (typical) | Mechanism |
+|---|---|---|---|---|
+| `image` (amd64 dogfood) | every PR / main push | ~4 min | ~2–4 min | reads warm `dev-multiarch` amd64 layers |
+| `image-multiarch` | PR→main / main push | ~10–12.5 min | **~3–5 min** when `dev-multiarch` is warm (common); ~10–12 min only on a genuine cold/dep-change build | reads the nightly's warm arm64 layers → arm64 layers CACHED, QEMU rebuild skipped |
+| nightly `:dev` → GHCR | 04:00 UTC (skip if idle) | ~10–12 min | ~10–12 min first build after a dep change; faster when reading a warm `multiarch` | self-warms `dev-multiarch`; still pays QEMU on true cold builds |
+| tagged release → Docker Hub | `v*.*.*` on main | ~10–12 min | ~3–5 min when `dev-multiarch` is warm | reads the nightly's warm arm64 layers |
+
+**Not done (deliberately):** switching the arm64 leg to native `ubuntu-24.04-arm` hosted
+runners (matrix + manifest merge). It would remove QEMU from cold builds too (~12→~4–5 min
+even cold), but this is a **private** repo, so hosted arm64 runners bill per-minute and CI
+would break if the runner label isn't enabled for the account. Left as a documented future
+option, gated on that cost/availability decision. If revisited, it replaces item-1's reliance
+on cache warmth for the cold case; it does not conflict with items 2–3.
+
+### Invariants — do NOT undo these
+
+- **Keep the multi-stage split.** `frontend-builder` (Node), `scanners` (curl/tar), and
+  `backend-builder` (venv) are separate stages precisely so their toolchains never reach the
+  final `runtime` image. Do **not** consolidate stages or install build tooling in `runtime` —
+  it would bloat the image and enlarge its attack surface. The final stage copies only the
+  built venv, the three verified scanner binaries, backend source (for Alembic), the compiled
+  SPA `dist/`, the entrypoint, and the licenses.
+- **Keep the layer ordering.** Dependency manifests (`package*.json`, `pyproject.toml`) are
+  copied and installed **before** the app source is copied, so a code-only change doesn't
+  invalidate the (expensive) dependency-install layers. Do not reorder these.
+- **Keep the cache scopes partitioned by *writer*.** Each build path writes exactly one
+  `type=gha` scope; cross-seeding is **read-only** (`cache-from`). Do **not** make two paths
+  write the same scope or have a path write multiple scopes — that reintroduces the eviction
+  churn under the 10 GB budget that the partitioning exists to prevent. Broadening `cache-from`
+  is safe; broadening `cache-to` is not.
+- **Keep download-then-verify-then-extract for the scanner binaries.** The parallelism is
+  cosmetic to the integrity control; the ordering (fetch signed checksums → `sha256sum -c` →
+  only then `tar -x`) and the digest-pinned bases are the supply-chain guarantee
+  (`CLAUDE.md` § Hard security rules). Do not collapse to `curl | tar`, and do not drop the
+  per-binary checksum step to save time.
+
+**Deployment note (what must reach `main`).** The default branch is `main`; scheduled
+workflows and tag-triggered workflows run from the **default branch's** copy. So:
+`image` (amd64) Dockerfile/cache improvements take effect on `dev` PRs as soon as this merges
+to `dev`; but `image-multiarch` (runs only on main-scoped events), the release build
+(publish.yml, tag on `main`), and the nightly's own symmetric `multiarch` read
+(dev-nightly.yml runs from `main`) only take effect once promoted to `main`. The nightly keeps
+warming `dev-multiarch` from `main`'s existing copy regardless, so the cross-seed reads in the
+other paths work as soon as those paths land on their trigger branches.
+
+**Plan section affected:** §9.1 (image build), §0.6 (distribution/CI paths), process.

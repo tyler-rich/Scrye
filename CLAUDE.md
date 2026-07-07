@@ -179,6 +179,15 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   build time. Since Scrye is itself a vulnerability scanner, **dogfood it**: CI runs Trivy + Grype
   against Scrye's own image and resolves all *fixable* findings; only genuinely unfixable
   upstream/OS-level items may remain, and those are noted in the README.
+- **Build performance:** `docker/Dockerfile` changes must preserve the multi-stage build
+  boundaries and layer ordering that keep build times down and the final image slim — the
+  stage split exists to keep the Node/Python build toolchains out of the runtime image, and
+  dependency installs are ordered before app-code copies so a code-only change doesn't
+  invalidate them. The CI build-cache scopes are partitioned deliberately (each build path
+  *writes* one scope and only *reads* warm sibling scopes) to stay within the 10 GB GHA cache
+  budget without going cold. **Read `docs/PLAN.md` § Build performance before restructuring the
+  Dockerfile, consolidating stages, reordering layers, or changing the build workflows' cache
+  scopes** — those shapes are load-bearing for build time, not incidental.
 
 ## Required deliverables (build these — they are not optional)
 - **`README.md`** — full docs: what it is, features, integrations, architecture, requirements,
