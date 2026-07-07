@@ -70,7 +70,13 @@ jobs:
         uses: ./.github/actions/build-image
         with:
           push: "true"
+          # WRITE the multiarch scope; also READ the nightly dev-multiarch scope.
+          # A release is promoted dev, so the daily nightly build usually carries
+          # bit-identical layers — reading it lets a tagged release restore warm
+          # arm64 layers instead of a cold QEMU rebuild. See docs/PLAN.md §
+          # Build performance.
           cache-scope: multiarch
+          extra-cache-scopes: dev-multiarch
           tags: |
             <dockerhub-user>/scrye:${{ steps.version.outputs.version }}
             <dockerhub-user>/scrye:latest

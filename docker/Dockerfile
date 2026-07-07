@@ -16,9 +16,13 @@
 FROM node:22-bookworm-slim@sha256:813a7480f28fdadac1f7f5c824bcdad435b5bc1322a5968bbbdef8d058f9dff4 AS frontend-builder
 WORKDIR /build/frontend
 
-# Install deps from the lockfile first for better layer caching.
+# Install deps from the lockfile first for better layer caching. The BuildKit
+# cache mount keeps npm's download cache across builds even when this layer is
+# invalidated (e.g. a lockfile change), so packages already fetched aren't
+# re-downloaded. The cache lives in the mount, not the image layer, so it never
+# bloats the (discarded) builder stage.
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci
 
 COPY frontend/ ./
 RUN npm run build
@@ -37,8 +41,18 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /scanners
-# Each binary: download the asset + the publisher's checksums file, verify with
-# `sha256sum -c`, then extract. A checksum mismatch fails the build.
+# Each binary: download the asset + the publisher's signed checksums file,
+# verify with `sha256sum -c`, then extract. A checksum mismatch fails the build.
+# The three downloads are independent, so they run concurrently (each in its own
+# background subshell) instead of sequentially — this halves the wall-clock of a
+# cold scanner stage, which matters most on the QEMU-emulated arm64 leg where
+# each fetch+verify+extract is slow. Concurrency changes nothing about the
+# integrity guarantee: every binary is still checksum-verified against the
+# publisher's file before extraction, and a failure in any subshell (download
+# error OR checksum mismatch) exits it non-zero, which `wait` propagates under
+# `set -e` to fail the whole build. Do NOT collapse this back to a plain
+# `curl | tar` — the download-then-verify-then-extract order is the supply-chain
+# control (CLAUDE.md § Hard security rules); see docs/PLAN.md § Build performance.
 RUN set -eux; \
     case "${TARGETARCH}" in \
       amd64) TRIVY_ARCH="Linux-64bit"; ANCHORE_ARCH="linux_amd64" ;; \
@@ -46,40 +60,57 @@ RUN set -eux; \
       *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     \
-    TRIVY_TGZ="trivy_${TRIVY_VERSION}_${TRIVY_ARCH}.tar.gz"; \
-    curl -fsSL -O "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${TRIVY_TGZ}"; \
-    curl -fsSL -O "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_checksums.txt"; \
-    grep " ${TRIVY_TGZ}\$" "trivy_${TRIVY_VERSION}_checksums.txt" | sha256sum -c -; \
-    tar -xzf "${TRIVY_TGZ}" trivy; \
+    fetch_verify_extract() { \
+      set -eux; \
+      bin="$1"; base_url="$2"; tgz="$3"; checksums="$4"; \
+      curl -fsSL -O "${base_url}/${tgz}"; \
+      curl -fsSL -O "${base_url}/${checksums}"; \
+      grep " ${tgz}\$" "${checksums}" | sha256sum -c -; \
+      tar -xzf "${tgz}" "${bin}"; \
+    }; \
     \
-    GRYPE_TGZ="grype_${GRYPE_VERSION}_${ANCHORE_ARCH}.tar.gz"; \
-    curl -fsSL -O "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/${GRYPE_TGZ}"; \
-    curl -fsSL -O "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_checksums.txt"; \
-    grep " ${GRYPE_TGZ}\$" "grype_${GRYPE_VERSION}_checksums.txt" | sha256sum -c -; \
-    tar -xzf "${GRYPE_TGZ}" grype; \
+    fetch_verify_extract trivy \
+      "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}" \
+      "trivy_${TRIVY_VERSION}_${TRIVY_ARCH}.tar.gz" \
+      "trivy_${TRIVY_VERSION}_checksums.txt" & \
+    trivy_pid=$!; \
     \
-    SYFT_TGZ="syft_${SYFT_VERSION}_${ANCHORE_ARCH}.tar.gz"; \
-    curl -fsSL -O "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${SYFT_TGZ}"; \
-    curl -fsSL -O "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_checksums.txt"; \
-    grep " ${SYFT_TGZ}\$" "syft_${SYFT_VERSION}_checksums.txt" | sha256sum -c -; \
-    tar -xzf "${SYFT_TGZ}" syft; \
+    fetch_verify_extract grype \
+      "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}" \
+      "grype_${GRYPE_VERSION}_${ANCHORE_ARCH}.tar.gz" \
+      "grype_${GRYPE_VERSION}_checksums.txt" & \
+    grype_pid=$!; \
+    \
+    fetch_verify_extract syft \
+      "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}" \
+      "syft_${SYFT_VERSION}_${ANCHORE_ARCH}.tar.gz" \
+      "syft_${SYFT_VERSION}_checksums.txt" & \
+    syft_pid=$!; \
+    \
+    wait "${trivy_pid}"; \
+    wait "${grype_pid}"; \
+    wait "${syft_pid}"; \
     \
     chmod 0755 trivy grype syft
 
 
 # --- Stage 3: build the Python virtualenv ------------------------------------
 FROM python:3.13-slim-bookworm@sha256:fcbd8dfc2605ba7c2eca646846c5e892b2931e41f6227985154a596f26ab8ed7 AS backend-builder
-ENV PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build/backend
 
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 
 # Install the application and its pinned runtime dependencies into the venv.
+# The BuildKit cache mount persists pip's wheel download cache across builds so
+# an unchanged dependency isn't re-fetched from PyPI when this layer rebuilds
+# (PIP_NO_CACHE_DIR is intentionally NOT set — the cache now lives in the mount,
+# not the image layer, and this is a discarded builder stage, so nothing bloats
+# the final image).
 COPY backend/pyproject.toml ./
 COPY backend/app ./app
-RUN pip install .
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked pip install .
 
 
 # --- Final stage: minimal runtime image --------------------------------------
