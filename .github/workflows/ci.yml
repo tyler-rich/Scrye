@@ -113,10 +113,16 @@ jobs:
           platforms: linux/amd64
           tags: scrye:ci
           load: true
-          # Dedicated scope so this amd64-only build and the multi-arch builds
-          # (image-multiarch, publish, dev-nightly) don't evict each other's
-          # layers under the repo's 10 GB GHA cache budget.
-          cache-from: type=gha,scope=amd64-ci
+          # WRITE a dedicated amd64-only scope so this build and the multi-arch
+          # builds (image-multiarch, publish, dev-nightly) don't evict each
+          # other's layers under the repo's 10 GB GHA cache budget. Additionally
+          # READ the nightly multi-arch scope (dev-multiarch): its amd64 layers
+          # are reusable by this amd64-only build and are refreshed daily, so a
+          # per-PR dogfood build seeds from them instead of rebuilding cold.
+          # See docs/PLAN.md § Build performance.
+          cache-from: |
+            type=gha,scope=amd64-ci
+            type=gha,scope=dev-multiarch
           cache-to: type=gha,mode=max,scope=amd64-ci
 
       - name: Export image to a tar for offline scanning
@@ -207,4 +213,11 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
           push: "false"
+          # WRITE the multiarch scope; also READ the nightly dev-multiarch scope.
+          # main content is promoted dev, so the nightly build (refreshed daily)
+          # usually carries bit-identical base/apt/venv/npm-ci layers — reading it
+          # means this rarely-run check restores warm arm64 layers (skipping the
+          # QEMU rebuild) instead of being cold every time it fires. See
+          # docs/PLAN.md § Build performance.
           cache-scope: multiarch
+          extra-cache-scopes: dev-multiarch

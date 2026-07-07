@@ -83,6 +83,19 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   (see `CONTRIBUTING.md` § Releasing). Everything else in this section — git identity, no
   attribution footers, CI-green, deviations logging — applies the same way, just against `dev` as
   the usual PR target instead of `main`.
+- **Back-merge `main` into `dev` after anything lands on `main`.** Immediately after each `dev` →
+  `main` promotion merges (and after any commit that lands on `main` directly — e.g. a Dependabot
+  or hotfix PR targeted at `main`), back-merge `main` into `dev`
+  (`git fetch origin main dev && git checkout dev && git merge origin/main && git push`) so the
+  branches stay reconciled and `dev` doesn't accumulate phantom "behind" commits. Do it promptly,
+  before `dev` diverges further — the merge is trivial then. Because promotions are **squash**-
+  merged, `main`'s squashed copy of already-promoted work will conflict with `dev`'s newer versions
+  of the same files; resolve every such conflict by **keeping `dev`'s side**. The only content a
+  back-merge should actually introduce to `dev` is commits that landed on `main` independently of a
+  promotion (e.g. a Dependabot bump). Verify this before committing: the net diff of the resolved
+  merge against `dev`'s pre-merge tip should be exactly those independent changes and nothing else
+  (`git diff <dev-before> HEAD`). This keeps the git-identity and no-attribution-footer rules; the
+  merge commit is authored as the user like any other.
 - **Landing a multi-PR stacked batch is not "merge each PR in order and walk away."** When a
   batch of stacked PRs (each built on the previous, e.g. child PR B based on parent PR A) is being
   landed:
@@ -179,6 +192,15 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   build time. Since Scrye is itself a vulnerability scanner, **dogfood it**: CI runs Trivy + Grype
   against Scrye's own image and resolves all *fixable* findings; only genuinely unfixable
   upstream/OS-level items may remain, and those are noted in the README.
+- **Build performance:** `docker/Dockerfile` changes must preserve the multi-stage build
+  boundaries and layer ordering that keep build times down and the final image slim — the
+  stage split exists to keep the Node/Python build toolchains out of the runtime image, and
+  dependency installs are ordered before app-code copies so a code-only change doesn't
+  invalidate them. The CI build-cache scopes are partitioned deliberately (each build path
+  *writes* one scope and only *reads* warm sibling scopes) to stay within the 10 GB GHA cache
+  budget without going cold. **Read `docs/PLAN.md` § Build performance before restructuring the
+  Dockerfile, consolidating stages, reordering layers, or changing the build workflows' cache
+  scopes** — those shapes are load-bearing for build time, not incidental.
 
 ## Required deliverables (build these — they are not optional)
 - **`README.md`** — full docs: what it is, features, integrations, architecture, requirements,

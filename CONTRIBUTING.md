@@ -276,7 +276,14 @@ never a target for routine contribution PRs.
 1. When `dev` is in a releasable state, the maintainer opens a **promotion PR** from `dev` into
    `main`. This PR must pass the same CI gate as any other before it can merge.
 2. Once the promotion PR merges, `main` is **tagged** (e.g. `v0.x.0`) to mark the release.
-3. Contributors don't need to do anything differently for this — keep branching from and PR'ing
+3. **Immediately back-merge `main` into `dev`** (`git checkout dev && git merge origin/main &&
+   git push`) so `dev` shows 0 commits behind `main` again. Because promotions are squash-merged,
+   `main`'s squashed copy of the just-promoted work conflicts with `dev`'s newer versions of those
+   files — resolve every such conflict in favour of `dev`. The only content the back-merge should
+   actually bring into `dev` is anything that landed on `main` independently of the promotion
+   (e.g. a Dependabot or hotfix PR targeted at `main`). Skipping this is what leaves `dev`
+   accumulating phantom "behind" commits after each release.
+4. Contributors don't need to do anything differently for this — keep branching from and PR'ing
    into `dev` as usual; release promotion is handled separately by the maintainer.
 
 ---

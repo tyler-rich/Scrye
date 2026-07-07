@@ -23,9 +23,21 @@ inputs:
     default: ""
   cache-scope:
     description: >-
-      GHA build-cache scope. Partitions the shared type=gha cache so builds with
-      different platform sets (e.g. amd64-only vs multi-arch) don't evict each
-      other's layers under the repo's 10 GB cache budget. Empty = buildx default.
+      Primary GHA build-cache scope — this build WRITES (cache-to) to it and
+      READS (cache-from) from it. Partitions the shared type=gha cache so builds
+      with different platform sets (e.g. amd64-only vs multi-arch) don't evict
+      each other's layers under the repo's 10 GB cache budget. Empty = buildx
+      default. See docs/PLAN.md § Build performance for the partitioning rationale
+      — the scopes are separated on purpose; do not merge them.
+    required: false
+    default: ""
+  extra-cache-scopes:
+    description: >-
+      Optional additional scopes this build READS from (cache-from only — never
+      written). Comma/space/newline separated. Lets a build seed itself from a
+      frequently-warm sibling scope (e.g. the nightly dev-multiarch cache) so a
+      rarely-run multi-arch build isn't cold every time, WITHOUT writing a second
+      scope (which would consume the 10 GB write budget the partitioning protects).
     required: false
     default: ""
 
@@ -38,6 +50,39 @@ runs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
+    # Build the cache-from (read: primary + every extra scope) and cache-to
+    # (write: primary scope only) strings. Reads are cheap and don't grow the
+    # cache; writing exactly one scope keeps the budget partitioning intact.
+    - name: Compute build-cache configuration
+      id: cache
+      shell: bash
+      env:
+        PRIMARY_SCOPE: ${{ inputs.cache-scope }}
+        EXTRA_SCOPES: ${{ inputs.extra-cache-scopes }}
+      run: |
+        set -euo pipefail
+        from_lines=()
+        if [ -n "${PRIMARY_SCOPE}" ]; then
+          from_lines+=("type=gha,scope=${PRIMARY_SCOPE}")
+          to_line="type=gha,mode=max,scope=${PRIMARY_SCOPE}"
+        else
+          from_lines+=("type=gha")
+          to_line="type=gha,mode=max"
+        fi
+        # Split EXTRA_SCOPES on commas/whitespace/newlines; skip the primary and
+        # any blanks/dupes.
+        for scope in $(printf '%s' "${EXTRA_SCOPES}" | tr ',\n\t' '   '); do
+          [ -n "${scope}" ] || continue
+          [ "${scope}" != "${PRIMARY_SCOPE}" ] || continue
+          from_lines+=("type=gha,scope=${scope}")
+        done
+        {
+          echo "from<<EOF"
+          printf '%s\n' "${from_lines[@]}"
+          echo "EOF"
+          echo "to=${to_line}"
+        } >> "${GITHUB_OUTPUT}"
+
     - name: Build image
       uses: docker/build-push-action@v6
       with:
@@ -46,5 +91,5 @@ runs:
         platforms: ${{ inputs.platforms }}
         push: ${{ inputs.push }}
         tags: ${{ inputs.tags }}
-        cache-from: type=gha${{ inputs.cache-scope && format(',scope={0}', inputs.cache-scope) || '' }}
-        cache-to: type=gha,mode=max${{ inputs.cache-scope && format(',scope={0}', inputs.cache-scope) || '' }}
+        cache-from: ${{ steps.cache.outputs.from }}
+        cache-to: ${{ steps.cache.outputs.to }}
