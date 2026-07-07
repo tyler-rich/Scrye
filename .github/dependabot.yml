@@ -10,6 +10,12 @@ updates:
   - package-ecosystem: "github-actions"
     # Covers .github/workflows/* and the composite action under .github/actions/.
     directory: "/"
+    # Open bumps against `dev`, not the default branch (`main`). Per the
+    # branching model, `main` is protected and receives only deliberate `dev`->
+    # `main` promotions; all routine work — including action bumps — flows
+    # through `dev`. Without this, Dependabot targets the default branch (main),
+    # so a bump lands on `main` and never reaches `dev`, leaving `dev` "behind".
+    target-branch: "dev"
     schedule:
       interval: "weekly"
     commit-message:
