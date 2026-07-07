@@ -51,19 +51,27 @@ Trivy and Grype each bring a different scope; Scrye unifies them behind one UI
 and one normalized findings model.
 
 - **Trivy scanning**
-  - Targets: a **single container image** (registry ref or uploaded tar),
-    **images running in a Docker environment** (enumerated via a read-only
-    socket proxy), and **git repositories** (public or private).
+  - Targets: a **single container image** (registry reference), **images running
+    in a Docker environment** (enumerated via a read-only socket proxy), and
+    **git repositories** (public or private). _(Scanning an uploaded `docker save`
+    tar is not yet implemented; and the Docker-environment view enumerates images
+    for you to copy a reference from rather than launching a multi-select scan.)_
   - Scanners (all selectable, default all): **vulnerabilities/CVEs**, **SBOM**
     (OS packages + dependencies), **IaC misconfiguration**, **secrets**, and
     **licenses**.
   - Per-scan options: scanner selection, severity filter, `--ignore-unfixed`,
-    VEX policy, `.trivyignore` rules, repo branch/ref, SBOM format.
+    repo branch/ref, SBOM format. VEX policy and `.trivyignore` rules are managed
+    **globally** in Settings → Scanners (applied to every Trivy scan), not per-scan.
 - **Grype scanning** (vulnerabilities — Grype's scope)
-  - Targets: **container image**, **filesystem/directory**, and an existing
-    **SBOM** (fed the Syft-generated SBOM directly).
-  - **Private registries** via a transient, in-memory Docker config
-    materialized at scan time (static creds and ECR/GCR/ACR credential helpers).
+  - Targets: **container image**, **filesystem/directory** (a mounted path under
+    an admin-configured allowlist — disabled by default; there is no archive-upload
+    variant yet), and an existing **SBOM** (fed the Syft-generated SBOM directly).
+    A global Grype ignore config (Settings → Scanners) is applied to every scan.
+  - **Private registries** via a transient, in-memory Docker config materialized
+    at scan time. Static credentials are supported out of the box; the ECR/GCR/ACR
+    credential helpers are configured but their **helper binaries are not bundled**
+    in the image, so those registry types work only where the matching helper is
+    present in the runtime environment.
 - **Syft** generates one SBOM per artifact, handed to Grype and stored as a
   downloadable artifact.
 - **Normalized findings** — raw scanner JSON is persisted as the source of
@@ -107,7 +115,9 @@ and one normalized findings model.
 - **OIDC** — generic, validated against Pocket ID.
 - **Docker** — image enumeration via a **read-only** `docker-socket-proxy`
   sidecar (the app never mounts the Docker socket itself).
-- **Private registries** — static credentials and ECR/GCR/ACR helpers.
+- **Private registries** — static credentials (built in); ECR/GCR/ACR credential
+  helpers are supported only where the deployment provides the helper binary (not
+  bundled in the image).
 - **Notification channels** — webhook / Discord / SMTP / Matrix, dispatched on
   scan events.
 - **Prometheus** — an authenticated `/metrics` endpoint for scraping.
@@ -190,7 +200,12 @@ and one normalized findings model.
 
 ## Quick start
 
-Scrye's image is **built locally** (there is no published registry image yet).
+Scrye releases are published to Docker Hub as **`securedbytyler/scrye`** — tagged
+releases push `:<version>` and `:latest` (`docker pull securedbytyler/scrye:latest`).
+The current `dev` branch is published separately to GHCR as the moving
+**`ghcr.io/iamgroot60/scrye:dev`** tag by a nightly build (for testing HEAD-of-dev,
+not for production). You can also **build the image locally** from this repo, as the
+quick start below does.
 
 ```bash
 # 1. Clone
@@ -279,8 +294,11 @@ production the app **refuses to start** without a valid key file.
 
 **Key rotation:** the key file may hold multiple versions, one per line, as
 `v<N>:<base64>` entries (a plain single-line key is version 1). New secrets are
-encrypted under the highest version; older versions remain readable so existing
-secrets can be re-encrypted, after which the old line can be removed.
+encrypted under the highest version and older versions remain readable, so you
+can add a new version and restart safely. Note that v1 does **not** yet ship an
+admin-facing bulk re-encryption action, so existing rows stay wrapped under the
+version they were written with until each is next updated; keep the older key
+line in place until a re-encryption tool lands (tracked on the roadmap).
 
 ---
 
@@ -468,7 +486,22 @@ download or delete stored bundles, restore from an uploaded bundle (a
 **destructive** action that replaces all data and signs you out), and configure
 **scheduled backups** — an interval, a retention count, and an encrypted
 passphrase the in-process scheduler uses to produce bundles unattended. Restore
-in v1 requires the bundle's schema version to match the running installation.
+in v1 requires the bundle's schema version to match the running installation, and
+is **refused while a scan is queued or running** (finish or cancel it first).
+
+**What a bundle contains.** The bundle is a logical dump of the database —
+scan history, normalized findings, users, settings, and (re-wrapped) secrets.
+It does **not** carry the **raw scanner-output artifact files** (the raw Trivy/
+Grype JSON and generated SBOMs), which live on disk under `SCRYE_ARTIFACTS_DIR`
+and are re-created by re-running a scan; their bookkeeping rows are therefore
+omitted from the bundle and cleared on restore, so a restored database never
+points at missing files. Copy `SCRYE_ARTIFACTS_DIR` separately if you need the
+raw outputs preserved across a move.
+
+**Size note.** A bundle is assembled and encrypted in memory in a single pass,
+so back up and restore on an instance with a very large findings table (roughly
+hundreds of thousands of rows and up) need container memory headroom
+proportional to the dump size; a warning is logged past that threshold.
 
 ---
 
@@ -494,8 +527,10 @@ scrape_configs:
 
 ## Building the image
 
-The image is **built locally** — there is no published registry image (a locked
-decision for v1). A single-arch build for the host you are on:
+Published release images are on Docker Hub as **`securedbytyler/scrye`** (`:latest`
+and `:<version>` from tagged releases); the current `dev` branch is published to
+GHCR as **`ghcr.io/iamgroot60/scrye:dev`** by a nightly build. To build locally
+instead — a single-arch build for the host you are on:
 
 ```bash
 docker build -f docker/Dockerfile -t scrye:0.1.0 .
@@ -556,8 +591,12 @@ Build order (see [`docs/PLAN.md`](./docs/PLAN.md) §12):
   notification dispatch, scheduled/recurring scans, Trivy VEX & ignore-rule
   management, `/metrics`, result retention, multi-arch build, self-scanning CI.
 
-**Deferred (not in v1):** arq/Redis scale-out, SQLCipher full-DB encryption,
-container-registry publishing.
+**Deferred (not in v1):** arq/Redis scale-out and SQLCipher full-DB encryption.
+Also not yet implemented (planned): uploaded image-tar targets, a Docker-environment
+multi-select scan launcher, a filesystem-archive upload target, offline/air-gapped
+scanner-DB import, and an admin-facing bulk secret re-encryption (key-rotation) action.
+Container-registry publishing is now **in scope** — Docker Hub for releases and GHCR
+for the nightly `:dev` build (see the tags above).
 
 ---
 

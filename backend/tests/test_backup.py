@@ -22,12 +22,21 @@ from app.core.secret_store import AAD_REGISTRY_SECRET, decrypt_secret, encrypt_s
 from app.core.timeutil import utcnow
 from app.db.models import (
     BACKUP_SCHEDULE_ID,
+    Artifact,
+    ArtifactKind,
     Backup,
     BackupKind,
     BackupSchedule,
+    Finding,
+    FindingClass,
     Registry,
     RegistryAuthType,
     Role,
+    Scan,
+    Scanner,
+    ScanStatus,
+    Severity,
+    TargetType,
     User,
 )
 
@@ -115,6 +124,90 @@ class TestBundleRoundTrip:
         _seed(db)
         data = build_bundle(db, PASSPHRASE)
         assert b"registry-token-value" not in data
+
+    def test_artifacts_excluded_and_cleared_on_restore(self, db: Session) -> None:
+        """API-10: raw-artifact rows don't travel in a bundle, so a restore must
+        not repopulate them (their files aren't in the bundle) — while the scan
+        and its findings do survive."""
+        db.add(User(username="admin", password_hash="x", role=Role.ADMIN))
+        scan = Scan(
+            scanner=Scanner.TRIVY,
+            target_type=TargetType.IMAGE,
+            target="alpine:3.19",
+            status=ScanStatus.SUCCEEDED,
+        )
+        db.add(scan)
+        db.flush()
+        db.add(
+            Finding(
+                scan_id=scan.id, finding_class=FindingClass.VULNERABILITY, severity=Severity.HIGH
+            )
+        )
+        db.add(
+            Artifact(
+                scan_id=scan.id,
+                kind=ArtifactKind.RAW_TRIVY_JSON,
+                filename="trivy.json",
+                relative_path=f"{scan.id}/trivy.json",
+                sha256="deadbeef",
+            )
+        )
+        db.commit()
+
+        data = build_bundle(db, PASSPHRASE)
+        # The bundle carries no artifact rows.
+        assert b"trivy.json" not in data
+
+        restore_bundle(db, data, PASSPHRASE)
+        # Scan + finding restored; artifacts cleared (no dangling file references).
+        assert db.scalar(select(Scan).where(Scan.target == "alpine:3.19")) is not None
+        assert db.scalars(select(Finding)).all()
+        assert db.scalars(select(Artifact)).all() == []
+
+    def test_restore_honors_recorded_kdf_params(self, db: Session) -> None:
+        """Item (g): restore derives the key from the bundle's advertised scrypt
+        params, not the module constants — so tampering the recorded ``n`` (as a
+        proxy for a bundle written under a different work factor) changes the
+        derived key and restore fails, proving the params are actually read."""
+        import json
+
+        _seed(db)
+        data = build_bundle(db, PASSPHRASE)
+        envelope = json.loads(data)
+        assert envelope["kdf"]["n"]  # the params travel in the bundle
+        # A bundle that recorded a *different* n derives a different key; restore
+        # honoring the recorded value therefore cannot decrypt the payload.
+        envelope["kdf"]["n"] = 2**14
+        tampered = json.dumps(envelope).encode("utf-8")
+        with pytest.raises(BackupError):
+            restore_bundle(db, tampered, PASSPHRASE)
+
+    def test_restore_batches_many_rows(self, db: Session) -> None:
+        """API-3: the batched (executemany) restore round-trips a chunk-spanning
+        number of rows without loss."""
+        scan = Scan(
+            scanner=Scanner.GRYPE,
+            target_type=TargetType.IMAGE,
+            target="busybox:latest",
+            status=ScanStatus.SUCCEEDED,
+        )
+        db.add(scan)
+        db.flush()
+        for _ in range(1200):  # > _RESTORE_CHUNK_ROWS (500) to span chunks
+            db.add(
+                Finding(
+                    scan_id=scan.id,
+                    finding_class=FindingClass.VULNERABILITY,
+                    severity=Severity.MEDIUM,
+                )
+            )
+        db.commit()
+        data = build_bundle(db, PASSPHRASE)
+        db.query(Finding).delete()
+        db.query(Scan).delete()
+        db.commit()
+        restore_bundle(db, data, PASSPHRASE)
+        assert len(db.scalars(select(Finding)).all()) == 1200
 
 
 class TestScheduledBackup:

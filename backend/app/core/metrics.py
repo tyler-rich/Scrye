@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import __version__
-from app.core.dashboard import compute_dashboard
+from app.core.dashboard import compute_dashboard_cached
 from app.db.models import ApiToken, NotificationChannel, User
 
 #: Prometheus text exposition content type (version 0.0.4).
@@ -37,7 +37,9 @@ def _metric(name: str, value: float, labels: dict[str, str] | None = None) -> st
 
 def render_metrics(db: Session) -> str:
     """Render all Scrye metrics in Prometheus text-exposition format."""
-    data = compute_dashboard(db)
+    # Reuse the short-TTL dashboard cache so a frequent Prometheus scrape does
+    # not recompute the full aggregation on every request (API-7).
+    data = compute_dashboard_cached(db)
     user_count = db.scalar(select(func.count()).select_from(User)) or 0
     token_count = db.scalar(select(func.count()).select_from(ApiToken)) or 0
     channel_count = db.scalar(select(func.count()).select_from(NotificationChannel)) or 0

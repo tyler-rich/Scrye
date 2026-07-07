@@ -1,0 +1,86 @@
+# Scrye — dev branch nightly image build (GHCR).
+#
+# Dev images are published to the GitHub Container Registry (GHCR), NOT Docker
+# Hub — Docker Hub (securedbytyler/scrye) is release-only, handled by publish.yml
+# (CLAUDE.md locked decision §6). This workflow builds the current dev branch
+# once a night and pushes the single moving tag ghcr.io/iamgroot60/scrye:dev
+# (always overwritten — not a version, not :latest), so HEAD-of-dev can be pulled
+# and tested without cutting a release.
+#
+# Cadence rationale: dev images used to be rebuilt (multi-arch, arm64 under QEMU)
+# on every merge into dev, which was the largest CI-minute cost relative to
+# frequency. They are now batched to one nightly build, skipped entirely when dev
+# has had no new commits in the last 24h. Immediate per-PR feedback is unchanged:
+# ci.yml still lints, tests, and builds the amd64 image on every dev PR.
+#
+# Auth uses the built-in GITHUB_TOKEN (always available, no PAT, no Docker Hub
+# secret). Because this is a schedule/dispatch trigger — not a pull_request one —
+# it always runs in the base-repo context with a token, so the fork-PR secrets
+# gap (audit INF-2) does not apply here.
+name: Dev Nightly Build
+
+on:
+  # 04:00 UTC nightly — off-hours; the build is skipped if dev has no new commits.
+  schedule:
+    - cron: "0 4 * * *"
+  # Manual force-build (always builds, ignores the freshness check).
+  workflow_dispatch:
+
+# GHCR push needs packages:write on GITHUB_TOKEN; contents:read to check out dev.
+permissions:
+  contents: read
+  packages: write
+
+# One nightly at a time; a manual dispatch supersedes an in-flight run.
+concurrency:
+  group: dev-nightly
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    name: dev branch → GHCR (:dev nightly build)
+    # Never run on forks (scheduled workflows run on forks that enable Actions).
+    if: github.repository == 'IamGroot60/Scrye'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      # Scheduled runs skip the (expensive multi-arch) build when dev's tip has
+      # not moved in the last 24h. workflow_dispatch has no freshness step, so
+      # steps.freshness.outputs.skip is empty there and every gated step runs.
+      - name: Skip build if dev has no new commits in 24h (scheduled only)
+        if: github.event_name == 'schedule'
+        id: freshness
+        run: |
+          LAST_COMMIT=$(git log -1 --format=%ct)
+          NOW=$(date +%s)
+          AGE=$(( NOW - LAST_COMMIT ))
+          if [ "$AGE" -gt 86400 ]; then
+            echo "dev HEAD is ${AGE}s old (> 24h); skipping nightly build."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dev HEAD is ${AGE}s old (<= 24h); building."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to GHCR
+        if: steps.freshness.outputs.skip != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Multi-arch (amd64 + arm64) so the :dev image runs on both deployment
+      # targets. Uses its own GHA cache scope so it doesn't evict the amd64-only
+      # CI build cache. No Docker Hub credentials are referenced here.
+      - name: Build and push (:dev)
+        if: steps.freshness.outputs.skip != 'true'
+        uses: ./.github/actions/build-image
+        with:
+          push: "true"
+          tags: ghcr.io/iamgroot60/scrye:dev
+          cache-scope: dev-multiarch

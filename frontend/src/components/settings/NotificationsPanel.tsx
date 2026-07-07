@@ -26,7 +26,6 @@ import {
   deleteChannel,
   EVENT_LABELS,
   listChannels,
-  SECRET_OPTIONAL_TYPES,
   testChannel,
   type NotificationChannel,
   type NotificationEvent,
@@ -117,8 +116,6 @@ export function NotificationsPanel() {
     },
     validate: { name: (v) => (v.trim() ? null : 'Required') },
   });
-
-  const secretOptional = SECRET_OPTIONAL_TYPES.includes(form.values.type);
 
   const submit = form.onSubmit(async (values) => {
     setError(null);
@@ -266,8 +263,9 @@ export function NotificationsPanel() {
             />
 
             {(form.values.type === 'webhook' || form.values.type === 'discord') && (
-              <TextInput
+              <PasswordInput
                 label="Webhook URL"
+                description="The URL is the credential — stored encrypted, masked on read."
                 placeholder="https://…"
                 {...form.getInputProps('url')}
               />
@@ -304,11 +302,12 @@ export function NotificationsPanel() {
               </>
             )}
 
-            <PasswordInput
-              label={form.values.type === 'smtp' ? 'SMTP password' : 'Secret / token'}
-              description={secretOptional ? 'Optional for unauthenticated webhooks.' : undefined}
-              {...form.getInputProps('secret')}
-            />
+            {(form.values.type === 'smtp' || form.values.type === 'matrix') && (
+              <PasswordInput
+                label={form.values.type === 'smtp' ? 'SMTP password' : 'Access token'}
+                {...form.getInputProps('secret')}
+              />
+            )}
             <MultiSelect
               label="Notify on"
               description="Events that dispatch a message to this channel."

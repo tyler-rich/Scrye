@@ -87,6 +87,69 @@ class CommandResult:
     argv: list[str] = field(default_factory=list)
 
 
+#: stderr is only used for error text, so cap it modestly and discard the rest.
+_STDERR_CAP_BYTES = 256 * 1024
+#: Read granularity when streaming a subprocess's stdout/stderr.
+_READ_CHUNK_BYTES = 65536
+
+
+class _OutputTooLargeError(Exception):
+    """Internal: a subprocess's stdout exceeded the configured byte budget."""
+
+    def __init__(self, partial: bytes) -> None:
+        """Carry the bytes captured before the budget was exceeded."""
+        super().__init__("scanner output too large")
+        self.partial = partial
+
+
+async def _read_capped(proc: asyncio.subprocess.Process, max_stdout: int) -> tuple[bytes, bytes]:
+    """Read stdout (bounded by ``max_stdout``) and stderr concurrently.
+
+    Streaming both pipes avoids the pipe-buffer deadlock that a naive
+    "read stdout fully, then stderr" would hit. stdout is capped at
+    ``max_stdout`` bytes — exceeding it raises :class:`_OutputTooLargeError` so the
+    caller can kill the child — while stderr is capped modestly (it is only used
+    for the error message) and any excess is discarded.
+    """
+
+    async def _pump_stdout() -> bytes:
+        buf = bytearray()
+        assert proc.stdout is not None
+        while True:
+            chunk = await proc.stdout.read(_READ_CHUNK_BYTES)
+            if not chunk:
+                return bytes(buf)
+            buf.extend(chunk)
+            if len(buf) > max_stdout:
+                raise _OutputTooLargeError(bytes(buf[:max_stdout]))
+
+    async def _pump_stderr() -> bytes:
+        buf = bytearray()
+        assert proc.stderr is not None
+        while True:
+            chunk = await proc.stderr.read(_READ_CHUNK_BYTES)
+            if not chunk:
+                return bytes(buf)
+            if len(buf) < _STDERR_CAP_BYTES:
+                buf.extend(chunk)  # keep only the first _STDERR_CAP_BYTES
+
+    stdout_task = asyncio.ensure_future(_pump_stdout())
+    stderr_task = asyncio.ensure_future(_pump_stderr())
+    try:
+        stdout = await stdout_task
+        stderr = await stderr_task
+    finally:
+        # On stdout-overflow, timeout, or cancellation, don't leak the sibling
+        # reader task; cancel whatever is still pending before unwinding.
+        for task in (stdout_task, stderr_task):
+            if not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+    await proc.wait()
+    return stdout, stderr
+
+
 async def run_command(
     argv: list[str],
     *,
@@ -118,8 +181,20 @@ async def run_command(
     except OSError as exc:
         raise ScannerError(f"Failed to launch scanner {argv[0]!r}: {exc}.") from exc
 
+    max_bytes = get_settings().scanner_max_output_bytes
     try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        stdout, stderr = await asyncio.wait_for(_read_capped(proc, max_bytes), timeout=timeout)
+    except _OutputTooLargeError as exc:
+        # The child kept producing output past the byte budget; kill it and fail
+        # the scan rather than buffering unbounded JSON into memory (SCN-1). The
+        # bytes captured so far ride along so the truncated output is diagnosable.
+        proc.kill()
+        with contextlib.suppress(ProcessLookupError):
+            await proc.wait()
+        raise ScannerOutputError(
+            f"Scanner output exceeded the {max_bytes}-byte limit and was aborted.",
+            raw_output=exc.partial,
+        ) from exc
     except TimeoutError as exc:
         proc.kill()
         await proc.wait()

@@ -41,8 +41,11 @@ from app.main import create_app  # noqa: E402
 @pytest.fixture
 def db() -> Iterator[Session]:
     """Yield a session against a freshly reset schema."""
+    from app.core.dashboard import reset_dashboard_cache
+
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    reset_dashboard_cache()  # the dashboard TTL cache is process-wide (API-7)
     session = SessionLocal()
     try:
         yield session
@@ -53,8 +56,11 @@ def db() -> Iterator[Session]:
 @pytest.fixture
 def client() -> Iterator[TestClient]:
     """Yield a test client with a fresh app instance and a clean database."""
+    from app.core.dashboard import reset_dashboard_cache
+
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    reset_dashboard_cache()  # the dashboard TTL cache is process-wide (API-7)
     app = create_app()
     with TestClient(app) as test_client:
         yield test_client

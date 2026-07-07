@@ -6,8 +6,12 @@ import type { MaskedSecret } from './targets';
 export type NotificationType = 'webhook' | 'discord' | 'smtp' | 'matrix';
 export type NotificationEvent = 'scan_completed' | 'scan_failed' | 'scan_high_severity';
 
-/** Channel types where a stored secret is optional (the rest require one). */
-export const SECRET_OPTIONAL_TYPES: NotificationType[] = ['webhook'];
+/** Channel types where a stored secret is optional. None: webhook/Discord treat
+ *  their URL as the write-only credential, and SMTP/Matrix require a secret. */
+export const SECRET_OPTIONAL_TYPES: NotificationType[] = [];
+
+/** Channel types whose URL is the write-only credential (stored encrypted). */
+export const URL_SECRET_TYPES: NotificationType[] = ['webhook', 'discord'];
 
 /** Human labels for the notification events a channel can subscribe to. */
 export const EVENT_LABELS: Record<NotificationEvent, string> = {

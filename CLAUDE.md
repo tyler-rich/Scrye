@@ -33,19 +33,27 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
    mounts `/var/run/docker.sock`.
 5. **Secrets at rest:** **application-layer AES-256-GCM field encryption** (required). **SQLCipher
    is deferred** — leave a seam, don't build it.
-6. **Distribution:** the image builds locally, and is **published to Docker Hub as
-   `securedbytyler/scrye` via two automated paths** (in `.github/workflows/publish.yml`,
-   separate from `ci.yml`, using the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets):
-   - **Tagged main releases** — pushing a semver tag `v*.*.*` builds the multi-arch
-     (amd64/arm64) image and pushes `securedbytyler/scrye:<version>` (the tag **without** the
-     leading `v`) **and** `securedbytyler/scrye:latest`. This runs **only** when the tagged
-     commit is on `main`.
-   - **dev continuous build** — every push to the `dev` branch builds the multi-arch image and
-     pushes the single **moving** tag `securedbytyler/scrye:dev` (always overwritten — not a
-     version, not `latest`), so the current state of `dev` can be tested without cutting a
-     release.
-   No other registries or tags. `latest` and `:<version>` come **only** from tagged main
-   releases; `:dev` comes **only** from `dev` pushes.
+6. **Distribution:** the image builds locally, and is **published to two registries with two
+   distinct roles**:
+   - **Docker Hub `securedbytyler/scrye` — releases only** (in `.github/workflows/publish.yml`,
+     using the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets). Pushing a semver tag `v*.*.*`
+     builds the multi-arch (amd64/arm64) image and pushes `securedbytyler/scrye:<version>` (the tag
+     **without** the leading `v`) **and** `securedbytyler/scrye:latest`. This runs **only** when
+     the tagged commit is on `main`. Docker Hub is **never** touched by the dev path — no Docker Hub
+     credentials appear anywhere except this release workflow.
+   - **GHCR `ghcr.io/iamgroot60/scrye` — dev only** (in `.github/workflows/dev-nightly.yml`,
+     authenticating to GHCR with the built-in `GITHUB_TOKEN` — no PAT, no Docker Hub secret). A
+     **nightly scheduled** build (04:00 UTC) of the `dev` branch builds the multi-arch image and
+     pushes the single **moving** tag `ghcr.io/iamgroot60/scrye:dev` (always overwritten — not a
+     version, not `latest`), so the current state of `dev` can be tested without cutting a release.
+     The scheduled run **skips** the build when `dev` has had no new commits in the last 24h; a
+     manual `workflow_dispatch` always builds. It does **not** build on every push/merge to `dev` —
+     CI already lints/tests/builds each dev PR, and the image is batched to the nightly. The GHCR
+     package inherits the repository's visibility (private repo → private package).
+   No other registries or tags. `latest` and `:<version>` come **only** from tagged main releases
+   on Docker Hub; `:dev` comes **only** from the nightly GHCR build of `dev`. (A `schedule` trigger
+   is not PR-triggered, so it always has a token — this is what retires the fork-secrets gap the
+   audit logged as INF-2; see `docs/PLAN.md` § Deviations, 2026-07-06.)
 7. **Theme:** **teal** primary (`primaryColor: 'teal'`), first-class **light and dark** modes.
 
 ## Hard security rules (non-negotiable)
@@ -75,6 +83,22 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   (see `CONTRIBUTING.md` § Releasing). Everything else in this section — git identity, no
   attribution footers, CI-green, deviations logging — applies the same way, just against `dev` as
   the usual PR target instead of `main`.
+- **Landing a multi-PR stacked batch is not "merge each PR in order and walk away."** When a
+  batch of stacked PRs (each built on the previous, e.g. child PR B based on parent PR A) is being
+  landed:
+  - **Retarget immediately after each parent merges.** The instant a parent PR merges, retarget
+    every remaining child PR's base from the now-merged parent branch to the true target branch
+    (e.g. `dev`) before doing anything else — do not leave a child pointed at a branch that is
+    about to go stale or be deleted. Do this one merge at a time, not as a batch fix at the end.
+  - **Re-state the full merge procedure before each merge, not just once at the start of the
+    batch.** Treat each merge in the stack as its own operation: re-confirm the current base,
+    the merge method, and the CI-green/identity/footer checks immediately before that specific
+    merge — don't rely on a plan you stated for the batch several merges ago.
+  - **Verify the target branch's actual content after the batch is reported complete.** Don't
+    report "done" on the assumption that merge order alone flows every change through the stack
+    into the target branch. Confirm it directly: `git fetch origin <target-branch>` and diff/log
+    against what was claimed to have landed, or check a marker file/line unique to the final
+    change, and only then report the batch complete.
 - **CI is created in Phase 0 and is the gate for every PR thereafter, including Phase 0's own.**
   `.github/workflows/ci.yml` runs on every pull request and push to `main`: lint the backend
   (`ruff` + `black --check`) and frontend (ESLint + Prettier), and run `pytest` plus any frontend
