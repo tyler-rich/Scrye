@@ -529,6 +529,32 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-07 — Process — back-merge step after promotion; Dependabot retargeted to `dev`
+**What changed:** Two coupled changes to the `dev`/`main` branching model (adopted 2026-07-04) that
+stop `dev` from silently drifting "behind" `main` after every release:
+- **Documented back-merge step.** `CLAUDE.md` § Git & PR conventions and `CONTRIBUTING.md`
+  § Releasing now require back-merging `main` into `dev` immediately after each `dev` → `main`
+  promotion (and after any commit that lands on `main` directly). Because promotions are
+  squash-merged, `main`'s squashed copy of already-promoted work conflicts with `dev`'s newer
+  versions of those files; the rule is to resolve every such conflict in favour of `dev`, so the
+  only content a back-merge introduces to `dev` is whatever landed on `main` independently.
+- **Dependabot retargeted to `dev`.** `.github/dependabot.yml` gains `target-branch: "dev"`.
+  Previously Dependabot targeted the default branch (`main`), so a github-actions bump merged onto
+  `main` and never reached `dev` — one of the two drift sources. Routing bumps through `dev` (the
+  integration branch) leaves only the unavoidable promotion-squash case for the back-merge step to
+  handle, at much lower frequency.
+This entry also records the one-time reconciliation performed the same day: `main` was back-merged
+into `dev` to clear the accumulated drift (the #32 promotion squash + the #33 github-actions bump
+that had landed directly on `main`), resolving conflicts in favour of `dev` so the only net change
+to `dev` was #33's action version bumps.
+**Why:** `dev` showed "behind" `main` after two successive promotions — an inherent side effect of
+the squash-based promotion model plus Dependabot targeting `main`. Retargeting Dependabot removes
+the avoidable source; the documented back-merge handles the unavoidable squash-divergence so the
+branches stay reconciled and the "behind" count doesn't reappear as a surprise each release.
+**Plan section affected:** Process — amends the 2026-07-04 "Adopted a dev/main branching model"
+entry; § Git & PR conventions (CLAUDE.md), § Releasing (CONTRIBUTING.md). No build-phase or
+architectural sections affected.
+
 ### 2026-07-06 — Infra — dev publishing moved to a nightly GHCR build (registry split + INF-2 resolved)
 **What changed:** Three coupled CI/CD changes that together restructure dev-image publishing, plus a
 general CI-minute-reduction pass. Treated as one entry because they are one architecture change:
