@@ -11,17 +11,20 @@ place, on your own infrastructure. It orchestrates the official scanner binaries
 persists their raw JSON as the source of truth, and normalizes the results into a
 single findings model so Trivy and Grype render in one table.
 
+[![CI](https://github.com/IamGroot60/Scrye/actions/workflows/ci.yml/badge.svg)](https://github.com/IamGroot60/Scrye/actions/workflows/ci.yml)
+[![Container: GHCR](https://img.shields.io/badge/ghcr.io-iamgroot60%2Fscrye-2496ED?logo=github&logoColor=white)](https://github.com/iamgroot60/scrye/pkgs/container/scrye)
+![Arch: amd64 · arm64](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-informational)
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](./LICENSE)
-![Build](https://img.shields.io/badge/build-multi--arch-informational)
 
 - **What it is:** one container that serves a React SPA and a FastAPI backend,
   runs `trivy`/`grype`/`syft` as subprocesses, and stores everything in SQLite.
-- **Who it's for:** teams that want a self-hosted, hardened scan console with
-  history, exports, scheduling, notifications, RBAC, and OIDC — without wiring a
-  pipeline together by hand.
-- **Distribution:** stable releases on Docker Hub (`securedbytyler/scrye`), the
-  moving dev build on GHCR (`ghcr.io/iamgroot60/scrye:dev`), or build locally
-  from this repo.
+- **Who it's for:** teams and homelabbers who want a self-hosted, hardened scan
+  console with history, exports, scheduling, notifications, RBAC, and OIDC —
+  without wiring a pipeline together by hand.
+- **Distribution:** published to the GitHub Container Registry (GHCR):
+  `ghcr.io/iamgroot60/scrye:latest` and `:<version>` for stable releases, and the
+  moving `:dev` tag from the nightly `dev` build. You can also build the image
+  locally from this repo. (No Docker Hub.)
 
 ---
 
@@ -34,15 +37,17 @@ single findings model so Trivy and Grype render in one table.
 - [Requirements](#requirements)
 - [Deploying with Docker](#deploying-with-docker)
   - [1. Prerequisites](#1-prerequisites)
-  - [2. Choose an image](#2-choose-an-image-build-docker-hub-or-ghcr)
-  - [3. Generate the application master key](#3-generate-the-application-master-key)
-  - [4. Bring up the stack](#4-bring-up-the-stack)
+  - [2. Create the application master key](#2-create-the-application-master-key)
+  - [3. Create `docker-compose.yml`](#3-create-docker-composeyml)
+  - [4. Start it](#4-start-it)
   - [5. First-run setup (admin bootstrap)](#5-first-run-setup-admin-bootstrap)
   - [6. Where persistent data lives](#6-where-persistent-data-lives)
-  - [7. Optional sidecars](#7-optional-sidecars)
-  - [8. Put it behind a reverse proxy](#8-put-it-behind-a-reverse-proxy)
+  - [Which image tag?](#which-image-tag)
+  - [Build from source instead](#build-from-source-instead)
   - [Troubleshooting first-run issues](#troubleshooting-first-run-issues)
 - [Configuration](#configuration)
+- [Reverse proxy (TLS)](#reverse-proxy-tls)
+- [Optional sidecars](#optional-sidecars)
 - [Configuring OIDC](#configuring-oidc)
 - [Usage](#usage)
 - [Security model](#security-model)
@@ -135,8 +140,9 @@ and one normalized findings model.
   `LICENSE`/`NOTICE` files are bundled unmodified in the image at
   `/THIRD_PARTY_LICENSES` (see
   [`THIRD_PARTY_LICENSES/`](THIRD_PARTY_LICENSES/README.md)).
-- **OIDC** — generic OpenID Connect (Authlib, authorization-code + PKCE, RS256),
-  validated against Pocket ID. Configured entirely in the UI.
+- **OIDC** — generic OpenID Connect (Authlib, authorization-code + PKCE, RS256).
+  Configured entirely in the UI; works with any compliant provider (developed
+  against Pocket ID).
 - **Docker** — image enumeration via a **read-only** `docker-socket-proxy`
   sidecar; the app never mounts the Docker socket itself.
 - **Private registries** — static credentials (built in); ECR/GCR/ACR credential
@@ -151,7 +157,7 @@ and one normalized findings model.
 
 ```
                          ┌───────────────────────────────────────────────┐
-   Browser ── HTTPS ──▶  │  Reverse proxy + TLS (e.g. Caddy / nginx)      │
+   Browser ── HTTPS ──▶  │  Reverse proxy + TLS (Caddy / nginx / Traefik) │
                          └───────────────────────────────────────────────┘
                                             │ HTTP (loopback / internal net)
                                             ▼
@@ -213,7 +219,8 @@ and one normalized findings model.
   consume RAM and OOM the container. (See
   [Troubleshooting](#troubleshooting-first-run-issues).)
 - Optional sidecars: a **Trivy server** (shared vuln-DB cache) and a read-only
-  **docker-socket-proxy** (to scan running images).
+  **docker-socket-proxy** (to scan running images). Both off by default — see
+  [Optional sidecars](#optional-sidecars).
 - For native (non-container) development: **Python 3.13**, **Node 20+**, and the
   `trivy`/`grype`/`syft` binaries on `PATH`. See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
@@ -221,89 +228,117 @@ and one normalized findings model.
 
 ## Deploying with Docker
 
-This is the supported way to run Scrye. The steps below use the hardened
-`docker/docker-compose.yml` from this repo, which builds the image locally by
-default; [step 2](#2-choose-an-image-build-docker-hub-or-ghcr) covers pulling a
-published image instead.
+The fastest path is to **pull the published image from GHCR** — you do **not**
+need to clone this repository. Create a directory, drop in the master-key secret
+and a `docker-compose.yml`, and bring it up. (Prefer to build from source? See
+[Build from source instead](#build-from-source-instead).)
 
 ### 1. Prerequisites
 
 - Docker 24+ with Compose v2 (`docker compose version`).
-- `openssl` (to generate the master key) — present on essentially every Linux/macOS host.
-- A clone of this repository (for the Compose file and the Dockerfile):
+- `openssl` (to generate the master key) — present on essentially every
+  Linux/macOS host.
+- A working directory for the deployment:
 
   ```bash
-  git clone https://github.com/iamgroot60/scrye.git
-  cd scrye
+  mkdir -p scrye/secrets && cd scrye
   ```
 
-### 2. Choose an image: build, Docker Hub, or GHCR
+### 2. Create the application master key
 
-Scrye is published to two registries with two distinct roles:
+The **master key** encrypts all stored secrets. It is provided as a **Docker
+secret file**, never an environment variable or image layer. Generate it once:
 
-| Source | Reference | Use it for |
-| ------ | --------- | ---------- |
-| **Docker Hub** | `securedbytyler/scrye:latest` or `securedbytyler/scrye:<version>` | **Stable releases.** Built and pushed only from tagged `v*.*.*` releases on `main`. |
-| **GHCR** | `ghcr.io/iamgroot60/scrye:dev` | **Testing the current dev state.** A single moving tag rebuilt nightly from `dev`; not a release, not production. |
-| **Local build** | `scrye:0.1.0` (built by Compose) | Building from source / development. |
+```bash
+openssl rand -base64 48 > secrets/app_secret_key
+chmod 600 secrets/app_secret_key
+```
 
-The shipped `docker/docker-compose.yml` **builds locally** (`build:` context with
-`image: scrye:0.1.0`). To run a **published** image instead, edit the `scrye`
-service — remove/comment the `build:` block and set `image:` to the tag you want:
+In production Scrye **refuses to start** without a valid key file. **Back this
+file up** — losing it makes every stored secret unrecoverable. (Key rotation is
+supported; see [The master key](#the-master-key).)
+
+### 3. Create `docker-compose.yml`
+
+Save this next to the `secrets/` directory you just created. It runs the
+**published GHCR image** with the same hardened, CIS-aligned posture the project
+ships (non-root, read-only root FS, dropped capabilities, resource limits,
+loopback-only port, healthcheck):
 
 ```yaml
 services:
   scrye:
-    # build:                      # ← remove or comment out to skip the local build
-    #   context: ..
-    #   dockerfile: docker/Dockerfile
-    image: securedbytyler/scrye:latest      # stable release
-    # image: ghcr.io/iamgroot60/scrye:dev   # or the moving dev build
+    image: ghcr.io/iamgroot60/scrye:latest # or :<version> to pin a release
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - "ALL"
+    ports:
+      # Loopback only — put a reverse proxy in front for TLS/external access.
+      # For a quick local trial without a proxy, change to "8089:8089".
+      - "127.0.0.1:8089:8089"
+    environment:
+      - SCRYE_DATABASE_PATH=/data/scrye.db
+      - SCRYE_APP_SECRET_KEY_FILE=/run/secrets/app_secret_key
+      # REQUIRED behind a reverse proxy: the IP/CIDR your proxy connects FROM.
+      # The default below fits a proxy container on the default Docker bridge;
+      # set it to match your topology (see "Reverse proxy" below). Never "*".
+      - SCRYE_FORWARDED_ALLOW_IPS=172.16.0.0/12
+    secrets:
+      - app_secret_key
+    volumes:
+      - scrye_data:/data # SQLite DB, raw artifacts, backups — BACK THIS UP
+      - scrye_cache:/cache # scanner vuln DBs + scratch (≥10 GB; reconstructible)
+    tmpfs:
+      # RAM-backed, owned by uid 1000, holds only transient credential files.
+      # Do NOT enlarge to "fix" a scanner disk error — see "Requirements".
+      - /tmp:size=200m,mode=1700,uid=1000,gid=1000
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8089/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  scrye_data:
+  scrye_cache:
+
+secrets:
+  app_secret_key:
+    file: ./secrets/app_secret_key # created in step 2; never commit it
 ```
 
-Then pull it:
+### 4. Start it
 
 ```bash
-docker pull securedbytyler/scrye:latest       # stable
-# docker pull ghcr.io/iamgroot60/scrye:dev    # dev (GHCR package inherits repo visibility)
-```
-
-Everything else in the Compose file (hardening, volumes, secret, healthcheck) is
-image-agnostic and applies unchanged.
-
-### 3. Generate the application master key
-
-The **master key** encrypts all stored secrets. It is provided as a **Docker
-secret file**, never an environment variable or image layer. Generate it once and
-keep it out of version control:
-
-```bash
-mkdir -p docker/secrets
-openssl rand -base64 48 > docker/secrets/app_secret_key
-chmod 600 docker/secrets/app_secret_key
-```
-
-The Compose file mounts this file as the `app_secret_key` secret at
-`/run/secrets/app_secret_key` (the path in `SCRYE_APP_SECRET_KEY_FILE`). In
-production Scrye **refuses to start** without a valid key file. **Back this file
-up** — losing it makes every stored secret unrecoverable. (Key rotation is
-supported; see [The master key](#the-master-key).)
-
-### 4. Bring up the stack
-
-```bash
-# Builds the SPA + backend into one image (skip --build if you set a published image)
-docker compose -f docker/docker-compose.yml up --build -d
+docker compose up -d
 
 # Verify health
 curl -fsS http://127.0.0.1:8089/healthz
 # {"status":"healthy","version":"0.1.0","database":"ok"}
 ```
 
-On startup the container applies database migrations (`alembic upgrade head`)
-and then serves the API and SPA. The port is published to **loopback only**
-(`127.0.0.1:8089`) — put it behind your own reverse proxy for TLS and external
-access ([step 8](#8-put-it-behind-a-reverse-proxy)).
+On startup the container applies database migrations (`alembic upgrade head`) and
+then serves the API and SPA. Because the port is published to **loopback only**,
+put it behind a [reverse proxy](#reverse-proxy-tls) for TLS and external access
+(or change the port mapping to `8089:8089` for a quick local trial over plain
+HTTP).
 
 ### 5. First-run setup (admin bootstrap)
 
@@ -342,39 +377,42 @@ Inspect their host paths with `docker volume inspect scrye_scrye_data`. For a
 fixed on-disk location, replace the named volumes with bind mounts to a directory
 you control (e.g. `/mnt/appdata/scrye/data:/data`).
 
-### 7. Optional sidecars
+### Which image tag?
 
-Both are gated behind Compose **profiles**, so a plain `up` starts only the app.
+Everything publishes to GHCR (`ghcr.io/iamgroot60/scrye`):
+
+| Tag | What it is | Use it for |
+| --- | ---------- | ---------- |
+| `:latest` | The most recent tagged release (built from `main`). | **Production.** Tracks the newest release. |
+| `:<version>` (e.g. `:1.4.0`) | A specific tagged release. | **Production, pinned** — reproducible, no surprise upgrades. |
+| `:dev` | A **moving** tag rebuilt nightly from the `dev` branch. | **Testing HEAD-of-dev only.** Not a release; may be unstable. Do not run in production. |
+
+Pin `:<version>` for anything you care about; use `:latest` if you want to track
+releases and re-`pull` on your own cadence. All tags are multi-arch
+(`linux/amd64` + `linux/arm64`).
 
 ```bash
-# Shared Trivy vulnerability-DB cache (a trivy-server the app queries)
-docker compose -f docker/docker-compose.yml --profile trivy-server up -d
-
-# Read-only Docker socket proxy ("scan running images") — see Security model
-docker compose -f docker/docker-compose.yml --profile docker-env up -d
+docker pull ghcr.io/iamgroot60/scrye:latest
+# docker pull ghcr.io/iamgroot60/scrye:1.4.0   # pin a release
+# docker pull ghcr.io/iamgroot60/scrye:dev      # test the dev branch
 ```
 
-When you enable a sidecar, point the app at it by uncommenting the matching env
-var in the `scrye` service:
+### Build from source instead
 
-- `SCRYE_TRIVY_SERVER_URL=http://trivy-server:4954`
-- `SCRYE_DOCKER_PROXY_URL=http://docker-socket-proxy:2375`
+If you'd rather build the image yourself (to modify Scrye, or to avoid pulling a
+prebuilt image), clone the repo and use the bundled Compose file, which **builds
+locally** instead of pulling:
 
-The `docker-socket-proxy` is the **only** place a Docker socket is mounted (read-
-only), and it is restricted to read endpoints (`POST=0`). See the
-[Security model](#security-model) for the residual-risk note.
+```bash
+git clone https://github.com/iamgroot60/scrye.git
+cd scrye
+mkdir -p docker/secrets
+openssl rand -base64 48 > docker/secrets/app_secret_key
+docker compose -f docker/docker-compose.yml up --build -d
+```
 
-### 8. Put it behind a reverse proxy
-
-Scrye serves plain HTTP internally and binds to loopback. Front it with a
-TLS-terminating reverse proxy (Caddy, nginx, Traefik, …) that forwards to
-`127.0.0.1:8089`. **One deployment-specific setting is required:** set
-`SCRYE_FORWARDED_ALLOW_IPS` to the IP/CIDR your proxy actually connects **from**,
-so Scrye trusts `X-Forwarded-For` from it and the auth rate limiter and audit log
-see the real client IP. See
-[Trusted reverse-proxy hops](#security-model) for the details and per-topology
-examples — the default (`172.16.0.0/12`) assumes Caddy as a Docker container on
-the default bridge.
+See [Building the image yourself](#building-the-image-yourself) for multi-arch
+builds and the dogfooding self-scan.
 
 ### Troubleshooting first-run issues
 
@@ -383,12 +421,13 @@ the default bridge.
   container runs non-root) and that the `scrye_data` volume mounted.
 - **Container exits at start with `refusing to start: master key file …`.** The
   `app_secret_key` secret file is missing or empty. Re-run
-  [step 3](#3-generate-the-application-master-key) and confirm
-  `docker/secrets/app_secret_key` exists and is non-empty.
-- **`exec /app/entrypoint.sh: no such file or directory`.** The entrypoint was
-  checked out with CRLF line endings (a Windows checkout). The repo pins shell
-  scripts to LF via `.gitattributes` and the image strips stray CRs, so a normal
-  clone is fine; if you hit this, run `git add --renormalize .` and rebuild.
+  [step 2](#2-create-the-application-master-key) and confirm
+  `secrets/app_secret_key` exists and is non-empty.
+- **`exec /app/entrypoint.sh: no such file or directory`** (only when building
+  from source). The entrypoint was checked out with CRLF line endings (a Windows
+  checkout). The repo pins shell scripts to LF via `.gitattributes` and the image
+  strips stray CRs, so a normal clone is fine; if you hit this, run
+  `git add --renormalize .` and rebuild.
 - **Scanner fails with `mkdir /app/.cache: read-only file system` or
   `no space left on device`.** This is the classic hardened-runtime cache-path
   issue. Scrye runs non-root on a **read-only root filesystem**, so a scanner's
@@ -396,11 +435,11 @@ the default bridge.
   hold a multi-GB vulnerability DB or image staging. The shipped image already
   routes all scanner cache and temp writes to the disk-backed `/cache` volume
   (`TRIVY_CACHE_DIR`, `GRYPE_DB_CACHE_DIR`, `XDG_CACHE_HOME`/`HOME`, `TMPDIR`) and
-  mounts `/tmp` owned by uid 1000. If you see this, you're almost certainly
-  running a **stale image** built before that fix — **rebuild from the current
-  source** (`docker compose … up --build`) or pull a current published tag. Do
-  **not** try to fix it by enlarging the `/tmp` tmpfs; that trades a disk error
-  for an OOM (tmpfs is RAM-backed). Ensure `/cache` has ≥ 10 GB free.
+  mounts `/tmp` owned by uid 1000 — provided you keep the `scrye_cache` volume and
+  the `/tmp` tmpfs from the compose above. If you see this, confirm those mounts
+  are present and that `/cache` has ≥ 10 GB free, and that you're on a **current
+  image** (`docker pull …:latest`). Do **not** try to fix it by enlarging the
+  `/tmp` tmpfs; that trades a disk error for an OOM (tmpfs is RAM-backed).
 - **Filesystem scans are rejected.** Filesystem (Grype `dir:`) scanning is
   **disabled by default**. An admin must set `SCRYE_FILESYSTEM_SCAN_ROOTS` to one
   or more absolute paths and mount them into the container; targets outside those
@@ -412,40 +451,47 @@ the default bridge.
 
 Configuration is driven by environment variables (prefix `SCRYE_`). The
 [`.env.example`](./.env.example) file is **generated from the backend `Settings`
-model** (`backend/app/core/config.py`) — copy it to `.env` for local development.
-Only **non-sensitive** variables belong there; the master key is always the
-Docker secret file. Runtime-editable, non-secret options (instance name, auth
-policy, scanner defaults, retention) are **not** env vars — they live in the app's
-Settings UI and database.
+model** (`backend/app/core/config.py`). Only **non-sensitive** variables belong
+in the environment; the master key is always the Docker secret file.
+Runtime-editable, non-secret options (instance name, auth policy, scanner
+defaults, retention) are **not** env vars — they live in the app's Settings UI
+and database.
 
-| Variable | Default | Description |
-| -------- | ------- | ----------- |
-| `SCRYE_APP_NAME` | `Scrye` | Application name shown in the UI and logs. |
-| `SCRYE_ENVIRONMENT` | `production` | `development` or `production`. |
-| `SCRYE_LOG_LEVEL` | `INFO` | Root log level. |
-| `SCRYE_HOST` | `0.0.0.0` | Bind address inside the container (published to loopback). |
-| `SCRYE_PORT` | `8089` | API/SPA port inside the container. |
-| `SCRYE_FORWARDED_ALLOW_IPS` | `172.16.0.0/12` | **Required per deployment.** IP/CIDR the reverse proxy connects from; the trust boundary for `X-Forwarded-For`. Never `*`. See [Security model](#security-model). |
-| `SCRYE_CORS_ORIGINS` | _(empty)_ | Comma-separated dev CORS origins (e.g. `http://localhost:5173`); empty in production (same-origin SPA). |
-| `SCRYE_DATABASE_PATH` | `/data/scrye.db` | SQLite database file path. |
-| `SCRYE_APP_SECRET_KEY_FILE` | `/run/secrets/app_secret_key` | Path to the Docker secret file holding the **master key**. |
-| `SCRYE_SESSION_LIFETIME_HOURS` | `168` | Login session lifetime (hours; 168 = 7 days). |
-| `SCRYE_SESSION_COOKIE_SECURE` | `true` | `Secure` flag on session cookies (disable only for plain-HTTP dev). |
-| `SCRYE_AUTH_RATE_LIMIT_ATTEMPTS` | `5` | Max auth attempts per client IP per window. |
-| `SCRYE_AUTH_RATE_LIMIT_WINDOW_SECONDS` | `60` | Auth rate-limit window length (seconds). |
-| `SCRYE_TRIVY_SERVER_URL` | _(unset)_ | Optional Trivy server URL (shared vuln-DB cache sidecar). |
-| `SCRYE_DOCKER_PROXY_URL` | _(unset)_ | Optional read-only docker-socket-proxy URL. |
-| `SCRYE_TRIVY_BINARY` | `trivy` | Trivy binary path/name (resolved on `PATH` if a bare name). |
-| `SCRYE_GRYPE_BINARY` | `grype` | Grype binary path/name. |
-| `SCRYE_SYFT_BINARY` | `syft` | Syft binary path/name. |
-| `SCRYE_MAX_CONCURRENT_SCANS` | `2` | Max scans the in-process worker runs at once. |
-| `SCRYE_SCAN_TIMEOUT_SECONDS` | `1800` | Per-scan wall-clock timeout (seconds). |
-| `SCRYE_SCANNER_MAX_OUTPUT_BYTES` | `536870912` | Max stdout (512 MiB) captured from a scanner subprocess; output past this kills and fails the scan. |
-| `SCRYE_SCANNER_CACHE_DIR` | `/cache` | Writable volume for scanner vuln DBs and scratch (see [Requirements](#requirements)). |
-| `SCRYE_ARTIFACTS_DIR` | `/data/artifacts` | Directory holding raw scanner artifacts (JSON output, SBOMs). |
-| `SCRYE_BACKUPS_DIR` | `/data/backups` | Directory holding backup bundles (manual and scheduled). |
-| `SCRYE_FILESYSTEM_SCAN_ROOTS` | _(empty)_ | Comma-separated absolute paths under which filesystem (`dir:`) scans are allowed. Empty disables filesystem scanning. |
-| `SCRYE_FRONTEND_DIST_DIR` | `/app/frontend/dist` | Directory of the built SPA served by FastAPI. |
+Every variable has a working default; the **Need** column says when you actually
+have to touch it:
+
+- **Required** — must be present/correct for a normal deployment.
+- **Conditional** — only matters under the named circumstance; ignore otherwise.
+- **Optional** — a tuning knob; the default is fine for most deployments.
+
+| Variable | Default | Need | Description |
+| -------- | ------- | ---- | ----------- |
+| `SCRYE_APP_SECRET_KEY_FILE` | `/run/secrets/app_secret_key` | **Required** | Path to the Docker secret file holding the **master key**. The file *must* exist at this path; the default matches the compose secret. |
+| `SCRYE_FORWARDED_ALLOW_IPS` | `172.16.0.0/12` | **Required** *(behind a proxy)* | IP/CIDR your reverse proxy connects **from** — the trust boundary for `X-Forwarded-For`. Set it to match your topology (see [Reverse proxy](#reverse-proxy-tls)). Never `*`. Irrelevant only if nothing fronts Scrye. |
+| `SCRYE_SESSION_COOKIE_SECURE` | `true` | **Conditional** | Set `false` **only** for plain-HTTP local dev; keep `true` in production (behind TLS). |
+| `SCRYE_CORS_ORIGINS` | _(empty)_ | **Conditional** | Comma-separated origins for a **split dev frontend** (e.g. `http://localhost:5173`). Empty for the normal same-origin SPA. |
+| `SCRYE_TRIVY_SERVER_URL` | _(unset)_ | **Conditional** | Only when the [`trivy-server` sidecar](#optional-sidecars) is enabled (e.g. `http://trivy-server:4954`). |
+| `SCRYE_DOCKER_PROXY_URL` | _(unset)_ | **Conditional** | Only for ["scan running images"](#optional-sidecars) via the read-only docker-socket-proxy (e.g. `http://docker-socket-proxy:2375`). |
+| `SCRYE_FILESYSTEM_SCAN_ROOTS` | _(empty)_ | **Conditional** | Comma-separated absolute paths under which Grype `dir:` scans are allowed. Empty **disables** filesystem scanning; set it (and mount the paths) to enable. |
+| `SCRYE_APP_NAME` | `Scrye` | Optional | Application name shown in the UI and logs. |
+| `SCRYE_ENVIRONMENT` | `production` | Optional | `development` or `production`. |
+| `SCRYE_LOG_LEVEL` | `INFO` | Optional | Root log level. |
+| `SCRYE_HOST` | `0.0.0.0` | Optional | Bind address inside the container (published to loopback by the port mapping). |
+| `SCRYE_PORT` | `8089` | Optional | API/SPA port inside the container. |
+| `SCRYE_DATABASE_PATH` | `/data/scrye.db` | Optional | SQLite database file path. |
+| `SCRYE_SESSION_LIFETIME_HOURS` | `168` | Optional | Login session lifetime (hours; 168 = 7 days). |
+| `SCRYE_AUTH_RATE_LIMIT_ATTEMPTS` | `5` | Optional | Max auth attempts per client IP per window. |
+| `SCRYE_AUTH_RATE_LIMIT_WINDOW_SECONDS` | `60` | Optional | Auth rate-limit window length (seconds). |
+| `SCRYE_MAX_CONCURRENT_SCANS` | `2` | Optional | Max scans the in-process worker runs at once. |
+| `SCRYE_SCAN_TIMEOUT_SECONDS` | `1800` | Optional | Per-scan wall-clock timeout (seconds). |
+| `SCRYE_SCANNER_MAX_OUTPUT_BYTES` | `536870912` | Optional | Max stdout (512 MiB) captured from a scanner subprocess; output past this kills and fails the scan. |
+| `SCRYE_SCANNER_CACHE_DIR` | `/cache` | Optional | Writable volume for scanner vuln DBs and scratch (see [Requirements](#requirements)). |
+| `SCRYE_ARTIFACTS_DIR` | `/data/artifacts` | Optional | Directory holding raw scanner artifacts (JSON output, SBOMs). |
+| `SCRYE_BACKUPS_DIR` | `/data/backups` | Optional | Directory holding backup bundles (manual and scheduled). |
+| `SCRYE_TRIVY_BINARY` | `trivy` | Optional | Trivy binary path/name (resolved on `PATH` if a bare name). |
+| `SCRYE_GRYPE_BINARY` | `grype` | Optional | Grype binary path/name. |
+| `SCRYE_SYFT_BINARY` | `syft` | Optional | Syft binary path/name. |
+| `SCRYE_FRONTEND_DIST_DIR` | `/app/frontend/dist` | Optional | Directory of the built SPA served by FastAPI. |
 
 ### The master key
 
@@ -463,6 +509,139 @@ add a new version and restart safely. Note that v1 does **not** yet ship an
 admin-facing bulk re-encryption action, so existing rows stay wrapped under the
 version they were written with until each is next updated; keep the older key line
 in place until that tool lands (tracked on the [roadmap](./docs/ROADMAP.md)).
+
+---
+
+## Reverse proxy (TLS)
+
+Scrye serves **plain HTTP** internally and (with the compose above) binds to
+**loopback**. In production you front it with a TLS-terminating reverse proxy.
+Any proxy that sets `X-Forwarded-For` works — the client-IP logic is
+proxy-agnostic.
+
+**One setting is required:** `SCRYE_FORWARDED_ALLOW_IPS` must be the IP/CIDR the
+proxy connects to Scrye **from**, so Scrye trusts the forwarded client IP (used
+by the auth rate limiter and audit log). If it doesn't match, Scrye **fails safe**
+— it ignores `X-Forwarded-For` and uses the raw peer IP (no spoofing, but
+per-client rate-limiting/audit IPs won't apply until you set it right). **Never
+set it to `*`.** See [Security model](#security-model) for the full rationale.
+
+There are two common topologies:
+
+- **Proxy as a container on the same Docker network as Scrye.** The proxy reaches
+  Scrye at `scrye:8089` over the internal network; you can drop the host port
+  mapping entirely. `SCRYE_FORWARDED_ALLOW_IPS` is the proxy's Docker subnet (or
+  its exact container IP). Put both services on one Compose network.
+- **Proxy on the host** (installed directly, not in Docker). It reaches Scrye at
+  the published `127.0.0.1:8089`. `SCRYE_FORWARDED_ALLOW_IPS=127.0.0.1`.
+
+Examples below assume your DNS name is `scrye.example.com`.
+
+### Caddy
+
+Caddy fetches/renews TLS automatically and sets `X-Forwarded-For` for you.
+
+```caddyfile
+# Caddyfile — Caddy as a container on the same Docker network as Scrye
+scrye.example.com {
+    reverse_proxy scrye:8089
+}
+```
+
+Set `SCRYE_FORWARDED_ALLOW_IPS` to Caddy's Docker subnet (the shipped default
+`172.16.0.0/12` covers the default bridge). Host-installed Caddy proxying to
+`127.0.0.1:8089` instead → `SCRYE_FORWARDED_ALLOW_IPS=127.0.0.1`.
+
+### nginx
+
+Host-installed nginx terminating TLS and proxying to the loopback-published port:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name scrye.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/scrye.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/scrye.example.com/privkey.pem;
+
+    # SPA + API are same-origin; one proxy_pass covers everything.
+    location / {
+        proxy_pass         http://127.0.0.1:8089;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s; # allow long-running scan requests
+    }
+}
+```
+
+With host nginx → `SCRYE_FORWARDED_ALLOW_IPS=127.0.0.1`.
+
+### Traefik
+
+Traefik v3 as a container, discovering Scrye via Docker labels (both on the same
+Docker network; no host port needed). Add to the `scrye` service in your Compose:
+
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.scrye.rule=Host(`scrye.example.com`)"
+  - "traefik.http.routers.scrye.entrypoints=websecure"
+  - "traefik.http.routers.scrye.tls.certresolver=letsencrypt"
+  - "traefik.http.services.scrye.loadbalancer.server.port=8089"
+```
+
+Traefik forwards `X-Forwarded-For` by default. Set `SCRYE_FORWARDED_ALLOW_IPS`
+to Traefik's Docker network subnet (e.g. `10.89.0.0/24`) or its exact container
+IP.
+
+---
+
+## Optional sidecars
+
+Both sidecars are **off by default** and gated behind Compose **profiles** in the
+bundled `docker/docker-compose.yml`. A normal deployment does not need either.
+Enable one only if you want the specific capability it adds.
+
+### `trivy-server` — shared Trivy vulnerability-DB cache
+
+- **Optional.** Runs a `trivy server` that holds one shared Trivy vulnerability
+  DB; point Scrye at it with `SCRYE_TRIVY_SERVER_URL=http://trivy-server:4954`.
+- **Without it:** Scrye downloads and maintains its own Trivy DB on the `/cache`
+  volume. This is completely fine — for a single Scrye instance it is the normal
+  setup and costs nothing extra.
+- **When you'd want it:** you run **multiple** Scrye instances (or other Trivy
+  consumers) and want them to share one DB cache to save bandwidth and disk, or
+  you want to control DB refresh centrally. Not worth it for a single instance.
+
+### `docker-socket-proxy` — "scan running images"
+
+- **Optional.** A **read-only** proxy (`POST=0`) in front of the Docker socket
+  that lets Scrye **enumerate** the images on a Docker host. Point Scrye at it
+  with `SCRYE_DOCKER_PROXY_URL=http://docker-socket-proxy:2375` and register the
+  environment under Settings → Docker environments.
+- **Without it:** you simply don't get the image-enumeration convenience. You can
+  still scan **any** image by typing its reference into New scan — nothing else is
+  lost.
+- **When you'd want it:** you want to browse images running on a Docker host from
+  Scrye's UI and scan them by picking from a list instead of typing references.
+- **Residual risk:** this is the **only** place a Docker socket is mounted (read-
+  only). Anyone who can reach the proxy can enumerate images/containers, so enable
+  it deliberately, keep it on the internal network (no host port), and see the
+  [Security model](#security-model).
+
+To enable a sidecar from the bundled Compose file (build-from-source layout):
+
+```bash
+docker compose -f docker/docker-compose.yml --profile trivy-server up -d
+docker compose -f docker/docker-compose.yml --profile docker-env up -d
+```
+
+If you deploy from the published image with your own Compose file, copy the
+matching service definition from
+[`docker/docker-compose.yml`](docker/docker-compose.yml) (they carry the hardened
+settings and residual-risk notes) and set the corresponding `SCRYE_*` URL.
 
 ---
 
@@ -486,10 +665,9 @@ OIDC is configured **in the UI**, not via environment variables — go to
 
 Notes:
 
-- Scrye uses generic OIDC (authorization-code + PKCE, RS256), validated against
-  Pocket ID. ID-token signature and `iss`/`aud`/`exp`/`nonce`/`sub` claims are
-  verified, and each login is bound to the initiating browser (defeating
-  login-CSRF/session fixation).
+- Scrye uses generic OIDC (authorization-code + PKCE, RS256). ID-token signature
+  and `iss`/`aud`/`exp`/`nonce`/`sub` claims are verified, and each login is bound
+  to the initiating browser (defeating login-CSRF/session fixation).
 - You can require OIDC-only by disabling local login (Settings → Authentication),
   but only once OIDC is enabled.
 - **MFA and OIDC:** the mandatory-MFA policy is enforced on **local** login only;
@@ -600,16 +778,13 @@ only in memory at scan time.
   that is **not** in that set, discarding any spoofed leftmost entry.
 
   Set it to the IP/CIDR your proxy actually connects from. The default
-  (`172.16.0.0/12`) assumes Caddy as a Docker container on the default bridge.
+  (`172.16.0.0/12`) fits a proxy container on the default Docker bridge.
   **Fail-safe on mismatch:** if the configured value doesn't include the real
   connecting peer, `X-Forwarded-For` is ignored and the raw proxy IP is used — no
   spoofing possible, but per-client rate-limit buckets and accurate audit IPs
   don't take effect until you set it correctly. **Never set it to `*`** and never
   include the client LAN range — that trusts every hop and re-opens the spoofing
-  hole. Examples:
-  - Caddy as a Docker container (default): `SCRYE_FORWARDED_ALLOW_IPS=172.16.0.0/12`.
-  - Host-networked nginx (proxying to `127.0.0.1:8089`): `SCRYE_FORWARDED_ALLOW_IPS=127.0.0.1`.
-  - Traefik in its own Docker network (e.g. `10.89.0.0/24`): `SCRYE_FORWARDED_ALLOW_IPS=10.89.0.0/24`.
+  hole. See [Reverse proxy](#reverse-proxy-tls) for per-topology values.
 - **MFA scope for OIDC (accepted limitation).** The mandatory-MFA policy
   (`required_all` / `required_admin`) is enforced on **local** password login.
   OIDC logins delegate the second factor to the identity provider — Scrye has no
@@ -618,6 +793,9 @@ only in memory at scan time.
   IdP. When group→role mapping is configured it re-applies on each login, but an
   **absent** groups claim preserves the user's current role rather than demoting
   them, and an OIDC sync can never remove the last admin.
+
+**Reporting a vulnerability:** please do it privately — see
+[SECURITY.md](./SECURITY.md).
 
 ---
 
@@ -679,10 +857,9 @@ scrape_configs:
 
 ## Building the image yourself
 
-Published release images are on Docker Hub as **`securedbytyler/scrye`** (`:latest`
-and `:<version>` from tagged releases); the current `dev` branch is on GHCR as
-**`ghcr.io/iamgroot60/scrye:dev`** (nightly). To build locally instead — single-
-arch for the host you're on:
+The published image lives on GHCR as **`ghcr.io/iamgroot60/scrye`** (`:latest` and
+`:<version>` from tagged releases; `:dev` nightly from `dev`). To build locally
+instead — single-arch for the host you're on:
 
 ```bash
 docker build -f docker/Dockerfile -t scrye:0.1.0 .
@@ -707,8 +884,8 @@ image filesystem is scanned). The **bundled `trivy`/`grype`/`syft` binaries** ar
 the one thing excluded from the gate (they still appear in the informational scan
 report): they're unmodified upstream Go binaries Scrye can't rebuild, so CVEs in
 their embedded Go modules track upstream's release cadence — keeping the pinned
-scanner versions current is how those are addressed. CI never publishes; Docker
-Hub and GHCR publishing live in separate workflows.
+scanner versions current is how those are addressed. CI never publishes; GHCR
+publishing lives in separate release and nightly workflows.
 
 ---
 
@@ -718,17 +895,13 @@ Scrye is feature-complete for its core mission. Forward-looking work — open
 features, known limitations, and candidate improvements — is tracked in
 **[`docs/ROADMAP.md`](./docs/ROADMAP.md)**.
 
-The full history of how Scrye was built (the phase-by-phase build order, locked
-decisions, and the dated deviations log) is preserved in
-**[`docs/ARCHIVE.md`](./docs/ARCHIVE.md)**.
-
 ---
 
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for local development setup, project
-layout, coding standards, testing, the branching model and PR process, the release
-procedure, and how to report security issues privately.
+layout, coding standards, testing, the branching model and PR process, and the
+release procedure. To report a security issue, see [SECURITY.md](./SECURITY.md).
 
 ## License
 

@@ -1744,6 +1744,47 @@ fully-verifiable items (item (g), QUA-23) are implemented with tests; the larger
 type-checker/frontend-test additions are explicitly deferred with rationale rather than half-done.
 **Plan section affected:** §7 (migration integrity), §8 (backup KDF portability), process.
 
+### 2026-07-09 — Infra/Process — repo goes public; distribution consolidated to GHCR-only
+**What changed:** The repository is being made **public**, and image distribution is consolidated
+from two registries to **GHCR only**. Concretely:
+- **Docker Hub removed entirely.** `.github/workflows/publish.yml` no longer pushes to
+  `securedbytyler/scrye` and no longer references the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN`
+  secrets. Those secrets are now unused by any workflow and can be deleted from the repo settings.
+- **Releases publish to GHCR.** `publish.yml` (still `on: push: tags: v*.*.*`, still gated on the
+  tagged commit being on `main`) now authenticates to GHCR with the built-in `GITHUB_TOKEN`
+  (`permissions: packages: write`) and pushes `ghcr.io/iamgroot60/scrye:<version>` **and**
+  `ghcr.io/iamgroot60/scrye:latest`. A `github.repository == 'IamGroot60/Scrye'` guard was added so
+  a fork that pushes a tag just skips rather than failing. The nightly `:dev` build
+  (`dev-nightly.yml`) was already GHCR/`GITHUB_TOKEN` and is unchanged except for comments; all
+  three release/nightly/CI workflows and the composite build action had their Docker-Hub-era
+  comments corrected.
+- **INF-2 fully retired.** The fork-PR `:dev` secrets gap was previously "resolved" only by the
+  nightly schedule trigger while the repo stayed private (2026-07-06 entry). With the repo going
+  public — which is what makes fork PRs real — the fix is now complete and confirmed: **both**
+  publish paths (release tag push, nightly schedule) are triggered outside `pull_request` and use
+  `GITHUB_TOKEN`, so no `pull_request`-triggered workflow carries a registry secret. `ci.yml` runs
+  on fork PRs but uses no secrets and never publishes (build/scan only, `load: true`). There is no
+  remaining fork-unsafe secret path.
+- **Public-repo governance.** Added `.github/CODEOWNERS` (`* @IamGroot60`) and a `SECURITY.md`
+  (private vulnerability reporting via GitHub Security advisories, supported-tags table, scope).
+  The remaining pre-public items are **repository settings, not files**, and are tracked on
+  `docs/ROADMAP.md`: branch protection on `main`/`dev` (require CI + PR + Code Owner review),
+  signed-commit enforcement (a decision to make), and enabling private vulnerability reporting /
+  Dependabot security updates.
+- **Docs.** `README.md` (GHCR-only distribution, standalone pull-from-GHCR compose that needs no
+  clone, categorized env-var necessity, nginx/Caddy/Traefik proxy examples, clearer sidecar
+  necessity, GHCR/CI badges), `CONTRIBUTING.md` (§ Releasing → GHCR), `docs/ROADMAP.md` (public-repo
+  reality — free arm64 runners, governance checklist), and `CLAUDE.md` (locked decision §6 rewritten
+  GHCR-only) were updated to match.
+**Why:** Explicit user instruction this session, superseding the two-registry split locked in the
+2026-07-06 entry. Going public makes fork-based contributions real, so the INF-2 caveat had to be
+closed rather than deferred; using `GITHUB_TOKEN`→GHCR for releases too (rather than a long-lived
+Docker Hub PAT) is also the safer posture for a public repo (no exfiltratable registry secret). The
+locked decision `CLAUDE.md` §6 is updated accordingly.
+**Plan section affected:** §0.6 (distribution — now GHCR-only), §9.1 (image publishing),
+CLAUDE.md § Locked decisions §6. Supersedes the Docker Hub role in the 2026-07-06 entry; completes
+and closes INF-2 (2026-07-05 P2 / 2026-07-06 entries).
+
 ---
 
 ## Build performance

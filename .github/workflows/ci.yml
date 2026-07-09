@@ -3,9 +3,10 @@
 # This is the CI baseline all future phases build on: add new jobs/steps here as
 # the app grows (e.g. the Phase 6 dogfood self-scan that runs Trivy + Grype
 # against Scrye's own image). CI itself never publishes — it lints, tests, and
-# proves the image builds for both architectures. Registry publishing to Docker
-# Hub lives in the separate publish.yml workflow, gated on tagged main releases
-# and dev-branch pushes (CLAUDE.md locked decision §6).
+# proves the image builds for both architectures. Registry publishing to GHCR
+# lives in the separate publish.yml (release tags → :latest/:<version>) and
+# dev-nightly.yml (nightly dev build → :dev) workflows (CLAUDE.md locked
+# decision §6).
 name: CI
 
 on:
@@ -119,7 +120,7 @@ jobs:
           # READ the nightly multi-arch scope (dev-multiarch): its amd64 layers
           # are reusable by this amd64-only build and are refreshed daily, so a
           # per-PR dogfood build seeds from them instead of rebuilding cold.
-          # See docs/PLAN.md § Build performance.
+          # See docs/ARCHIVE.md § Build performance.
           cache-from: |
             type=gha,scope=amd64-ci
             type=gha,scope=dev-multiarch
@@ -128,10 +129,10 @@ jobs:
       - name: Export image to a tar for offline scanning
         run: docker save scrye:ci -o /tmp/scrye-image.tar
 
-      # Trivy pinned to the version Scrye bundles (docs/PLAN.md § Deviations).
+      # Trivy pinned to the version Scrye bundles (docs/ARCHIVE.md § Deviations).
       # Informational only (never gates) — run on pushes to main, not on PRs, so
       # dev PRs pay for just the two gate scans below. Full visibility is kept on
-      # main and on release-bound history. (docs/PLAN.md § Deviations, 2026-07-06.)
+      # main and on release-bound history. (docs/ARCHIVE.md § Deviations, 2026-07-06.)
       - name: Trivy — full report (informational)
         if: github.event_name == 'push'
         run: |
@@ -145,7 +146,7 @@ jobs:
       # they are unmodified upstream Go binaries Scrye cannot rebuild, so their
       # embedded-module / Go-stdlib CVEs track upstream's release cadence, not
       # Scrye's. They remain visible in the informational report above and are
-      # documented in the README. See docs/PLAN.md § Deviations.
+      # documented in the README. See docs/ARCHIVE.md § Deviations.
       - name: Trivy — gate on fixable HIGH/CRITICAL (excl. bundled scanners)
         run: |
           docker run --rm \
@@ -172,7 +173,7 @@ jobs:
       # Trivy gate note above); the base-image CPython interpreter is no longer
       # excluded now that Scrye runs on Python 3.13, whose current patch release
       # carries the interpreter-CVE fixes. Trivy's OS-aware scan also gates the
-      # base image. See docs/PLAN.md § Deviations.
+      # base image. See docs/ARCHIVE.md § Deviations.
       - name: Grype — gate on fixable High+ (excl. bundled scanners)
         run: |
           docker run --rm \
@@ -185,7 +186,7 @@ jobs:
             --exclude '/usr/local/bin/syft'
 
   # Phase 6: prove the image builds for both target architectures
-  # (linux/amd64 + linux/arm64, docs/PLAN.md §9.1). No load/push — a multi-arch
+  # (linux/amd64 + linux/arm64, docs/ARCHIVE.md §9.1). No load/push — a multi-arch
   # build cannot be loaded into the local daemon, so this only verifies both
   # platforms build cleanly (the arm64 scanner-download path included). Uses the
   # shared build action that publish.yml also drives, so the build invocation
@@ -195,10 +196,10 @@ jobs:
   # Dockerfile under QEMU emulation, so on a cold `type=gha` cache it takes hours;
   # only main-scoped runs reliably restore a warm arm64 cache, whereas dev-based
   # PRs would rebuild from scratch every time. Multi-arch buildability stays
-  # continuously proven for dev anyway: publish.yml builds amd64+arm64 on every
-  # push to dev (the :dev tag) and on release tags. dev PRs still get the fast
-  # amd64-only `image` build + dogfood self-scan above. See docs/PLAN.md
-  # § Deviations.
+  # continuously proven for dev anyway: dev-nightly.yml builds amd64+arm64 nightly
+  # (the :dev tag) and publish.yml builds both on release tags. dev PRs still get
+  # the fast amd64-only `image` build + dogfood self-scan above. See
+  # docs/ARCHIVE.md § Deviations.
   image-multiarch:
     name: Image — multi-arch build check
     runs-on: ubuntu-latest
@@ -218,6 +219,6 @@ jobs:
           # usually carries bit-identical base/apt/venv/npm-ci layers — reading it
           # means this rarely-run check restores warm arm64 layers (skipping the
           # QEMU rebuild) instead of being cold every time it fires. See
-          # docs/PLAN.md § Build performance.
+          # docs/ARCHIVE.md § Build performance.
           cache-scope: multiarch
           extra-cache-scopes: dev-multiarch

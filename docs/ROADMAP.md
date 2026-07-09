@@ -8,8 +8,10 @@
 > Nothing here is a commitment or a dated schedule. Items are grouped by rough effort and
 > readiness — **near-term** (small, well-scoped, closes a real gap), **medium-term** (a feature
 > or a developer-experience investment), and **longer-term / speculative** (architectural, or
-> gated on a decision like going public or scaling out). A final section records **known
-> limitations and accepted trade-offs** that are on the record but may never change.
+> gated on a scale threshold). Scrye's repository is now **public**, so items that were
+> previously blocked on that (free CI runners, fork-based contribution safety) are unblocked. A
+> final section records **known limitations and accepted trade-offs** that are on the record but
+> may never change.
 
 ---
 
@@ -36,7 +38,16 @@ Small, self-contained work that closes a concrete gap.
 - **Pin GitHub Actions to commit SHAs.** Dependabot already tracks the `github-actions`
   ecosystem, but the workflow `uses:` references are pinned by tag, not by full commit SHA.
   Pin each action to a SHA (Dependabot will keep them rolling) to close the tag-mutability
-  supply-chain gap.
+  supply-chain gap — more important now that the repo is public.
+- **Finish the public-repo governance setup (repository settings).** Going public added the
+  in-repo pieces — a `.github/CODEOWNERS` (owner-review requests) and a `SECURITY.md` (private
+  vulnerability reporting). The remaining pieces are GitHub **settings**, not files, so they live
+  here as a checklist: enable **branch protection** on `main` and `dev` (require a passing CI
+  status, require a pull request, require review from Code Owners, and — for `main` — restrict who
+  can push tags/promote); decide on **signed-commit enforcement** (require signed commits on the
+  protected branches, which means contributors must sign — worth it for a security tool, so weigh
+  the contributor friction); and enable **private vulnerability reporting** and Dependabot
+  **security** updates in the repo's Security settings.
 - **Real screenshots in the README.** The README screenshot table is still placeholders. Capture
   the dashboard, new-scan, results, and history views from a running instance.
 
@@ -106,8 +117,9 @@ Architectural directions, mostly gated on a scale threshold or an explicit decis
   emulation, which is slow on a cold cache (cross-seeded caches mitigate this — see
   [`ARCHIVE.md` § Build performance](./ARCHIVE.md)). Switching the arm64 leg to native
   `ubuntu-24.04-arm` hosted runners (matrix build + manifest merge) would remove emulation from
-  cold builds entirely. It's gated on the per-minute cost of hosted arm64 runners, which is a
-  live concern while the repository is private.
+  cold builds entirely. Now that the repository is **public**, GitHub-hosted arm64 runners are
+  free — the cost concern that previously gated this is gone, making it a straightforward win
+  whenever the multi-arch cold-build time becomes annoying.
 
 ## Known limitations & accepted trade-offs
 

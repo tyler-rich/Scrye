@@ -293,42 +293,43 @@ anything differently: keep branching from and PR'ing into `dev` as usual.
 ### What gets published
 
 CI (`.github/workflows/ci.yml`) never publishes — it only lints, tests, and proves the image
-builds for both architectures. Publishing is split across two registries with two distinct roles:
+builds for both architectures. Everything is published to a **single registry, GHCR**
+(`ghcr.io/iamgroot60/scrye`), with two tag roles. Both authenticate with the built-in
+`GITHUB_TOKEN` — there are **no Docker Hub or other registry secrets** in the repo.
 
-- **Tagged releases → Docker Hub (stable).** Handled by `.github/workflows/publish.yml`, which
-  authenticates with the `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` repository secrets. Push a
-  semantic-version tag `v*.*.*` on a commit that is on `main` (e.g.
+- **Tagged releases → `:latest` + `:<version>`.** Handled by `.github/workflows/publish.yml`. Push
+  a semantic-version tag `v*.*.*` on a commit that is on `main` (e.g.
   `git tag v1.4.0 && git push origin v1.4.0`). This builds the multi-arch (amd64/arm64) image and
-  pushes it as `securedbytyler/scrye:<version>` (the tag without its leading `v`, so `v1.4.0` →
-  `securedbytyler/scrye:1.4.0`) **and** `securedbytyler/scrye:latest`. The job refuses to run if
-  the tagged commit is not on `main`, so `:latest` and `:<version>` always come from a real
-  release. Docker Hub is used **only** for releases.
+  pushes it as `ghcr.io/iamgroot60/scrye:<version>` (the tag without its leading `v`, so `v1.4.0` →
+  `ghcr.io/iamgroot60/scrye:1.4.0`) **and** `ghcr.io/iamgroot60/scrye:latest`. The job refuses to
+  run unless the tagged commit is on `main`, so `:latest`/`:<version>` always come from a real
+  release.
 
-- **`:dev` → GHCR (nightly build, not a release).** Handled by
-  `.github/workflows/dev-nightly.yml`, which authenticates to GHCR with the built-in
-  `GITHUB_TOKEN` (no Docker Hub secret). A scheduled run at **04:00 UTC** builds the current `dev`
-  branch multi-arch and pushes the single **moving** tag `ghcr.io/iamgroot60/scrye:dev`, always
-  overwritten. The scheduled build is **skipped** when `dev` has had no new commits in the last
-  24h; a manual **Run workflow** (`workflow_dispatch`) always builds. It does **not** rebuild on
-  every merge into `dev` — the per-PR CI already lints, tests, and builds the amd64 image, and the
-  published image is batched to the nightly. This is **not** a stable release and **not** a version
-  — it just mirrors HEAD-of-dev (`docker pull ghcr.io/iamgroot60/scrye:dev`) for testing. Do not
-  treat `:dev` as production-ready; use a `:<version>` tag (or `:latest`) for that.
+- **`:dev` (nightly build, not a release).** Handled by `.github/workflows/dev-nightly.yml`. A
+  scheduled run at **04:00 UTC** builds the current `dev` branch multi-arch and pushes the single
+  **moving** tag `ghcr.io/iamgroot60/scrye:dev`, always overwritten. The scheduled build is
+  **skipped** when `dev` has had no new commits in the last 24h; a manual **Run workflow**
+  (`workflow_dispatch`) always builds. It does **not** rebuild on every merge into `dev` — the
+  per-PR CI already lints, tests, and builds the amd64 image, and the published image is batched to
+  the nightly. This is **not** a stable release and **not** a version — it just mirrors HEAD-of-dev
+  (`docker pull ghcr.io/iamgroot60/scrye:dev`) for testing. Use a `:<version>` tag (or `:latest`)
+  for production.
 
-  Two repo settings back this path. **Settings → Actions → General → Workflow permissions** can stay
-  on the restrictive **Read repository contents and packages permissions** (read-only) default —
-  GHCR push does **not** need the repo-wide default to allow write. `dev-nightly.yml` declares its
-  own `permissions: { contents: read, packages: write }` block, which overrides the read-only
-  default for that workflow (an explicit block takes precedence and is not capped by the default);
-  `publish.yml` and `ci.yml` likewise declare their own (`contents: read`). Second, after the first
-  nightly push, confirm the GHCR package `ghcr.io/iamgroot60/scrye` is **Private** (it inherits the
-  repository's visibility).
+Both publish workflows declare their own `permissions: { contents: read, packages: write }`, so
+**Settings → Actions → General → Workflow permissions** can stay on the restrictive read-only
+default (an explicit per-workflow block takes precedence and is not capped by the repo default);
+`ci.yml` declares only `contents: read` and never publishes. The repo is **public**, so the GHCR
+package is public — no per-package visibility change is needed. Because both publish paths are
+triggered outside `pull_request` (a tag push, and a schedule), a fork's pull request never has a
+secret-bearing publish path — going public does not reopen the old fork-secrets gap (audit INF-2).
 
 ---
 
 ## Reporting security issues
 
 **Please do not open public issues for security vulnerabilities.** Report them
-privately to the maintainers (e.g. via a private security advisory or direct
-contact) so a fix can be prepared before disclosure. Include reproduction steps
+privately via GitHub's private vulnerability reporting (the **Report a
+vulnerability** button on the repository's **Security** tab) — see
+[SECURITY.md](./SECURITY.md) for the full policy — so a fix can be prepared before
+disclosure. Include reproduction steps
 and affected versions where possible.

@@ -1,10 +1,11 @@
 # Dependabot — keep the GitHub Actions supply chain current and reviewable.
 #
-# Part of audit finding INF-1: the workflows that hold the Docker Hub token
-# should reference pinned, tracked action versions. Dependabot opens grouped PRs
-# to bump the actions (in workflows and the composite build action), so a pinned
-# SHA can be reviewed and rolled forward deliberately rather than silently
-# resolving a mutable tag at run time.
+# Part of audit finding INF-1: the publishing workflows push to GHCR with the
+# built-in GITHUB_TOKEN (packages:write), so their actions should reference
+# pinned, tracked versions. Dependabot opens grouped PRs to bump the actions (in
+# workflows and the composite build action), so a pinned SHA can be reviewed and
+# rolled forward deliberately rather than silently resolving a mutable tag at run
+# time. (Full commit-SHA pinning of each `uses:` is tracked on docs/ROADMAP.md.)
 version: 2
 updates:
   - package-ecosystem: "github-actions"
