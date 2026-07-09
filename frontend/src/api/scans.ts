@@ -120,6 +120,11 @@ export function cancelScan(id: number): Promise<Scan> {
   return api<Scan>(`/api/scans/${id}/cancel`, { method: 'POST' });
 }
 
+/** Delete a completed scan and all of its data (findings, artifacts, tags). */
+export function deleteScan(id: number): Promise<void> {
+  return api<void>(`/api/scans/${id}`, { method: 'DELETE' });
+}
+
 export function listFindings(
   id: number,
   params: {

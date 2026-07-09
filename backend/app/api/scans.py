@@ -44,7 +44,7 @@ from app.api.scan_schemas import (
 )
 from app.api.uploads import read_upload_capped
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
-from app.core.artifacts import artifact_path, store_artifact
+from app.core.artifacts import artifact_path, remove_scan_artifacts, store_artifact
 from app.core.audit import record_audit
 from app.core.timeutil import utcnow
 from app.db.models import (
@@ -490,6 +490,59 @@ def cancel_scan(
     db.commit()
     db.refresh(scan)
     return ScanOut.model_validate(scan)
+
+
+@router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_scan(
+    scan_id: int,
+    request: Request,
+    auth: AuthContext = Depends(require_csrf),
+    _: AuthContext = Depends(_operator),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Delete a completed scan and every trace of it (docs/PLAN.md §5, RBAC).
+
+    Removing the ``scans`` row cascades — via the ORM relationships and the
+    ``ON DELETE CASCADE`` foreign keys — to its findings, stored-artifact
+    metadata, and tags, so the scan stops contributing to dashboard aggregates,
+    history, and diffs. The raw artifact files on disk are removed afterwards.
+
+    Only scans in a terminal state can be deleted; a queued or running scan must
+    be canceled first (the worker still references it). Deletion requires the
+    ``operator`` role and is CSRF-guarded.
+    """
+    scan = _get_scan_or_404(db, scan_id)
+    if scan.status in (ScanStatus.QUEUED, ScanStatus.RUNNING):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail=(
+                f"Only completed scans can be deleted (status is '{scan.status.value}'); "
+                "cancel the scan first."
+            ),
+        )
+
+    record_audit(
+        db,
+        action="scan.deleted",
+        actor=auth.user,
+        ip=client_ip(request),
+        target_type="scan",
+        target_id=str(scan_id),
+        details={
+            "scanner": scan.scanner.value,
+            "target_type": scan.target_type.value,
+            "target": scan.target,
+            "findings_count": scan.findings_count,
+        },
+    )
+    # ORM delete cascades to findings/artifacts/tags (relationship + FK cascade).
+    db.delete(scan)
+    db.commit()
+    # Remove the raw artifact files only after the rows are gone; an orphaned
+    # directory would be harmless, a dangling row pointing at deleted bytes is not.
+    remove_scan_artifacts(scan_id)
+    logger.info("Deleted scan %d and all associated data.", scan_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 #: Finding columns the export/diff paths actually read. ``description`` (up to
