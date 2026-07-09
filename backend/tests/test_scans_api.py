@@ -445,3 +445,147 @@ def test_generate_sbom_stores_sbom_artifact(client: TestClient, monkeypatch) -> 
     sbom_artifacts = [a for a in artifacts if a["kind"] == "sbom"]
     assert len(sbom_artifacts) == 1
     assert sbom_artifacts[0]["filename"] == "sbom.cyclonedx.json"
+
+
+# --- Deletion: full cleanup + RBAC ------------------------------------------
+
+
+def _count_findings(scan_id: int) -> int:
+    """Count normalized findings still stored for a scan (direct DB read)."""
+    from sqlalchemy import func, select
+
+    from app.db.models import Finding
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as session:
+        return session.scalar(
+            select(func.count()).select_from(Finding).where(Finding.scan_id == scan_id)
+        )
+
+
+def _dashboard_open_high() -> int:
+    """Compute the live dashboard open-high posture (bypassing the TTL cache)."""
+    from app.core.dashboard import compute_dashboard
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as session:
+        return compute_dashboard(session).open_high
+
+
+def _dashboard_total() -> int:
+    """Compute the live dashboard total-scans aggregate (bypassing the cache)."""
+    from app.core.dashboard import compute_dashboard
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as session:
+        return compute_dashboard(session).total_scans
+
+
+def test_delete_scan_purges_findings_artifacts_and_aggregates(
+    client: TestClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _FakeScanner())
+    csrf = _setup_admin(client)
+    resp = client.post(
+        "/api/scans", headers={CSRF: csrf}, json={"scanner": "trivy", "target": "alpine:3.19"}
+    )
+    scan_id = resp.json()["id"]
+    _wait_for_status(client, scan_id, {"succeeded", "failed"})
+
+    # Precondition: the scan has findings, a stored artifact on disk, and counts
+    # toward the dashboard aggregates.
+    assert _count_findings(scan_id) == 1
+    artifacts = client.get(f"/api/scans/{scan_id}/artifacts").json()
+    assert len(artifacts) == 1
+    artifact_dir = config.get_settings().artifacts_dir / str(scan_id)
+    assert artifact_dir.is_dir()
+    assert _dashboard_total() == 1
+    assert _dashboard_open_high() == 1  # the fake scan reports one HIGH finding
+
+    deleted = client.delete(f"/api/scans/{scan_id}", headers={CSRF: csrf})
+    assert deleted.status_code == 204, deleted.text
+
+    # The scan is gone from the API, its findings are gone from the DB, the raw
+    # artifact directory is removed, and it no longer feeds the aggregates.
+    assert client.get(f"/api/scans/{scan_id}").status_code == 404
+    assert _count_findings(scan_id) == 0
+    assert not artifact_dir.exists()
+    assert _dashboard_total() == 0
+    assert _dashboard_open_high() == 0
+    # It also drops out of history.
+    history = client.get("/api/scans/history").json()
+    assert history["total"] == 0
+
+
+def test_delete_requires_operator(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _FakeScanner())
+    admin_csrf = _setup_admin(client)
+    resp = client.post(
+        "/api/scans", headers={CSRF: admin_csrf}, json={"scanner": "trivy", "target": "alpine"}
+    )
+    scan_id = resp.json()["id"]
+    _wait_for_status(client, scan_id, {"succeeded", "failed"})
+
+    created = client.post(
+        "/api/users",
+        headers={CSRF: admin_csrf},
+        json={"username": "viewer", "password": VIEWER_PW, "role": "viewer"},
+    )
+    assert created.status_code == 201, created.text
+    login = client.post("/api/auth/login", json={"username": "viewer", "password": VIEWER_PW})
+    viewer_csrf = login.json()["csrf_token"]
+
+    denied = client.delete(f"/api/scans/{scan_id}", headers={CSRF: viewer_csrf})
+    assert denied.status_code == 403
+    # The scan survives the forbidden attempt.
+    assert client.get(f"/api/scans/{scan_id}").status_code == 200
+
+
+def test_delete_requires_csrf(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _FakeScanner())
+    csrf = _setup_admin(client)
+    resp = client.post(
+        "/api/scans", headers={CSRF: csrf}, json={"scanner": "trivy", "target": "alpine"}
+    )
+    scan_id = resp.json()["id"]
+    _wait_for_status(client, scan_id, {"succeeded", "failed"})
+
+    denied = client.delete(f"/api/scans/{scan_id}")  # no CSRF header
+    assert denied.status_code == 403
+    assert client.get(f"/api/scans/{scan_id}").status_code == 200
+
+
+def test_delete_missing_scan_is_404(client: TestClient) -> None:
+    csrf = _setup_admin(client)
+    assert client.delete("/api/scans/9999", headers={CSRF: csrf}).status_code == 404
+
+
+def test_delete_queued_scan_rejected(client: TestClient, monkeypatch) -> None:
+    # A blocking scanner keeps a second scan queued so we can try to delete it.
+    import asyncio
+
+    class _SlowScanner:
+        async def scan_image(
+            self, target: str, options: dict, *, env: dict | None = None
+        ) -> ScanExecution:
+            await asyncio.sleep(0.2)
+            return _fake_execution()
+
+    monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _SlowScanner())
+    client.app.state.scan_worker._semaphore = asyncio.Semaphore(1)
+    csrf = _setup_admin(client)
+
+    first = client.post(
+        "/api/scans", headers={CSRF: csrf}, json={"scanner": "trivy", "target": "a"}
+    ).json()
+    second = client.post(
+        "/api/scans", headers={CSRF: csrf}, json={"scanner": "trivy", "target": "b"}
+    ).json()
+
+    # The queued scan cannot be deleted while it is still pending.
+    rejected = client.delete(f"/api/scans/{second['id']}", headers={CSRF: csrf})
+    assert rejected.status_code == 409
+    # Once everything settles it can be deleted like any completed scan.
+    _wait_for_status(client, first["id"], {"succeeded", "failed"})
+    _wait_for_status(client, second["id"], {"succeeded", "failed"})
+    assert client.delete(f"/api/scans/{second['id']}", headers={CSRF: csrf}).status_code == 204
