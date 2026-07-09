@@ -1895,3 +1895,28 @@ warming `dev-multiarch` from `main`'s existing copy regardless, so the cross-see
 other paths work as soon as those paths land on their trigger branches.
 
 **Plan section affected:** §9.1 (image build), §0.6 (distribution/CI paths), process.
+
+### 2026-07-09 — Post-v1 — teal hue refinement, scan deletion, nav active-match fix
+**What changed:** Three small frontend/backend changes:
+- **Theme hue.** `frontend/src/theme.ts` now defines a custom `teal` ramp (the Tailwind teal
+  scale) instead of relying on Mantine's built-in teal, whose mid-tones read as a bright mint.
+  The primary lands on teal-700 (`#0f766e`) in light mode and teal-600 (`#0d9488`) in dark mode
+  (`primaryShade: { light: 7, dark: 6 }`), with `autoContrast: true` + `luminanceThreshold: 0.2`
+  so filled controls pick the higher-contrast label per mode. All primary usages clear WCAG AA:
+  light filled/text 5.47:1, dark filled 5.61:1 (black label), dark text 4.60:1. This keeps locked
+  decision §7 (teal primary, first-class light/dark) — only the exact shade changed.
+- **Delete completed scans.** New `DELETE /api/scans/{id}` (operator role + CSRF, terminal-status
+  only) removes the scan and cascades to its findings, artifact-metadata rows, and tags via the
+  existing ORM `cascade="all, delete-orphan"` + `ON DELETE CASCADE` FKs; the on-disk artifact
+  directory is removed via a new `remove_scan_artifacts()` helper. No schema change was needed
+  (the cascade was already declared), so **no Alembic migration**. A confirmation modal + Delete
+  button was added to the scan detail page. A deleted scan stops feeding the dashboard aggregates
+  (they query the live tables) and drops out of history/diffs.
+- **Nav active-state fix.** `frontend/src/App.tsx` used `pathname.startsWith(to)`, which lit both
+  "Scans" and "New scan" on `/scans/new`. Now the active item is the *longest* matching nav path
+  (matching `to` exactly or as a `to/` prefix), so each item highlights only for its own route;
+  Dashboard (`/`) stays exact-match.
+**Why:** User-requested polish: the teal read as mint, there was no way to delete a scan, and the
+nav double-highlighted on the new-scan page.
+**Plan section affected:** §7 (theme, hue only), §5 (RBAC — new destructive action), §4.6
+(dashboard aggregates), frontend nav.

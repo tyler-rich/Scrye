@@ -358,8 +358,8 @@ Additional users are created by an admin (Settings → Users & roles, or
 `POST /api/users`) with one of three roles:
 
 - **viewer** — read and export.
-- **operator** — viewer + launch scans, manage own scan tags, own API tokens,
-  and scheduled scans.
+- **operator** — viewer + launch scans, delete completed scans, manage own scan
+  tags, own API tokens, and scheduled scans.
 - **admin** — everything, including settings, users, credentials, and
   backup/restore.
 
@@ -703,7 +703,9 @@ adjust to match:
 **Reading results** — the **scan detail** page shows live status, a severity
 summary, and the normalized findings table; every completed scan stores the
 scanner's original JSON (and any generated SBOM) verbatim, downloadable from that
-page.
+page. Operators and admins can **delete** a completed scan there (behind a
+confirmation) — this permanently removes the scan and all of its findings, stored
+artifacts, and tags, so it drops out of history, diffs, and the dashboard totals.
 
 **History, diff & export** — the **Scan history** page filters, sorts, and
 paginates scans, with saveable filter **presets** and per-scan **tags**. Select
