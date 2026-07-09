@@ -43,9 +43,9 @@ These were decided and are not open for re-litigation during the build:
      multi-arch (amd64/arm64) image and pushes `<dockerhub-user>/scrye:<version>` (tag minus the
      leading `v`) **and** `<dockerhub-user>/scrye:latest`. Runs **only** when the tagged commit is on
      `main`. No Docker Hub credentials are referenced outside this workflow.
-   - **GHCR `ghcr.io/iamgroot60/scrye` — dev only** (`.github/workflows/dev-nightly.yml`, GHCR login
+   - **GHCR `ghcr.io/tyler-rich/scrye` — dev only** (`.github/workflows/dev-nightly.yml`, GHCR login
      via the built-in `GITHUB_TOKEN`): a **nightly scheduled** build (04:00 UTC) of the `dev` branch
-     pushes the single **moving** tag `ghcr.io/iamgroot60/scrye:dev` (always overwritten — not a
+     pushes the single **moving** tag `ghcr.io/tyler-rich/scrye:dev` (always overwritten — not a
      version, not `latest`). The scheduled run skips when `dev` has had no new commits in 24h;
      `workflow_dispatch` always builds. It does **not** build on every dev merge — CI already
      lints/tests/builds each dev PR, and the image is batched nightly. GHCR package visibility
@@ -574,7 +574,7 @@ architectural sections affected.
 general CI-minute-reduction pass. Treated as one entry because they are one architecture change:
 - **Registry split.** Docker Hub (`<dockerhub-user>/scrye`) is now **release-only** — the tagged-
   `v*.*.*`-on-`main` path in `publish.yml` (→ `:<version>` + `:latest`). Dev images move to **GHCR**
-  at `ghcr.io/iamgroot60/scrye:dev`, published by a new `.github/workflows/dev-nightly.yml` that
+  at `ghcr.io/tyler-rich/scrye:dev`, published by a new `.github/workflows/dev-nightly.yml` that
   authenticates with the built-in `GITHUB_TOKEN` (no PAT, no Docker Hub secret). The `dev` job and
   its `pull_request: types:[closed]` trigger were **removed** from `publish.yml`; Docker Hub is no
   longer referenced anywhere in the dev path.
@@ -610,7 +610,7 @@ cache scoping).
   (an explicit block is exhaustive and takes precedence; it is not capped by the repo default). Each
   workflow declares exactly what it needs (`publish.yml` and `ci.yml` only `contents: read`), so the
   read-only default breaks nothing.
-- **After the first nightly push, confirm the GHCR package `ghcr.io/iamgroot60/scrye` is Private**
+- **After the first nightly push, confirm the GHCR package `ghcr.io/tyler-rich/scrye` is Private**
   (it inherits the private repo's visibility by default; flag it if it publishes as public).
 **Plan section affected:** §0.6 (distribution), §9.1 (image). Supersedes the INF-2 item in the
 2026-07-05 P2 audit-remediation entry and the Docker Hub merged-PR `:dev` trigger in the 2026-07-04
@@ -1752,8 +1752,8 @@ from two registries to **GHCR only**. Concretely:
   secrets. Those secrets are now unused by any workflow and can be deleted from the repo settings.
 - **Releases publish to GHCR.** `publish.yml` (still `on: push: tags: v*.*.*`, still gated on the
   tagged commit being on `main`) now authenticates to GHCR with the built-in `GITHUB_TOKEN`
-  (`permissions: packages: write`) and pushes `ghcr.io/iamgroot60/scrye:<version>` **and**
-  `ghcr.io/iamgroot60/scrye:latest`. A `github.repository == 'IamGroot60/Scrye'` guard was added so
+  (`permissions: packages: write`) and pushes `ghcr.io/tyler-rich/scrye:<version>` **and**
+  `ghcr.io/tyler-rich/scrye:latest`. A `github.repository == 'tyler-rich/Scrye'` guard was added so
   a fork that pushes a tag just skips rather than failing. The nightly `:dev` build
   (`dev-nightly.yml`) was already GHCR/`GITHUB_TOKEN` and is unchanged except for comments; all
   three release/nightly/CI workflows and the composite build action had their Docker-Hub-era
@@ -1765,7 +1765,7 @@ from two registries to **GHCR only**. Concretely:
   `GITHUB_TOKEN`, so no `pull_request`-triggered workflow carries a registry secret. `ci.yml` runs
   on fork PRs but uses no secrets and never publishes (build/scan only, `load: true`). There is no
   remaining fork-unsafe secret path.
-- **Public-repo governance.** Added `.github/CODEOWNERS` (`* @IamGroot60`) and a `SECURITY.md`
+- **Public-repo governance.** Added `.github/CODEOWNERS` (`* @tyler-rich`) and a `SECURITY.md`
   (private vulnerability reporting via GitHub Security advisories, supported-tags table, scope).
   The remaining pre-public items are **repository settings, not files**, and are tracked on
   `docs/ROADMAP.md`: branch protection on `main`/`dev` (require CI + PR + Code Owner review),

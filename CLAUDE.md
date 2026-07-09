@@ -35,16 +35,16 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 5. **Secrets at rest:** **application-layer AES-256-GCM field encryption** (required). **SQLCipher
    is deferred** — leave a seam, don't build it.
 6. **Distribution:** the image builds locally, and is **published to a single registry — GHCR
-   (`ghcr.io/iamgroot60/scrye`) — with two tag roles**, both authenticated by the built-in
+   (`ghcr.io/tyler-rich/scrye`) — with two tag roles**, both authenticated by the built-in
    `GITHUB_TOKEN` (`packages: write`). **No Docker Hub, no PAT, no long-lived registry secret
    anywhere in the repo.**
    - **Releases** (in `.github/workflows/publish.yml`): pushing a semver tag `v*.*.*` builds the
-     multi-arch (amd64/arm64) image and pushes `ghcr.io/iamgroot60/scrye:<version>` (the tag
-     **without** the leading `v`) **and** `ghcr.io/iamgroot60/scrye:latest`. Runs **only** when the
+     multi-arch (amd64/arm64) image and pushes `ghcr.io/tyler-rich/scrye:<version>` (the tag
+     **without** the leading `v`) **and** `ghcr.io/tyler-rich/scrye:latest`. Runs **only** when the
      tagged commit is on `main` (the job verifies main-ancestry and is guarded to the canonical
      repo).
    - **Dev** (in `.github/workflows/dev-nightly.yml`): a **nightly scheduled** build (04:00 UTC) of
-     the `dev` branch pushes the single **moving** tag `ghcr.io/iamgroot60/scrye:dev` (always
+     the `dev` branch pushes the single **moving** tag `ghcr.io/tyler-rich/scrye:dev` (always
      overwritten — not a version, not `latest`), so the current state of `dev` can be tested
      without cutting a release. The scheduled run **skips** the build when `dev` has had no new
      commits in the last 24h; a manual `workflow_dispatch` always builds. It does **not** build on
@@ -121,8 +121,8 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   its CI run is green — do not ask the user to merge a PR with failing or missing checks.
 - **All commits and PRs are authored as the user, not as Claude.** Configure the local git identity
   for this repo (not global) before the first commit:
-  `git config user.name "IamGroot60"` and
-  `git config user.email "170156756+IamGroot60@users.noreply.github.com"`.
+  `git config user.name "tyler-rich"` and
+  `git config user.email "170156756+tyler-rich@users.noreply.github.com"`.
   Every commit and PR must use this name/email — no Claude/Anthropic identity, no co-author
   trailer, no bot account. This is in addition to, not instead of, the no-attribution-footer rule
   below.
