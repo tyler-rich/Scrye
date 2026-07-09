@@ -1,8 +1,9 @@
 # CLAUDE.md — Scrye
 
 Operating contract for Claude Code on the **Scrye** project. Read this first, every session.
-Full detail lives in `docs/PLAN.md` — this file is the condensed, authoritative ruleset.
-When this file and the plan disagree, **this file wins**; if either conflicts with explicit user
+The historical build record and dated deviation log live in `docs/ARCHIVE.md`; forward-looking
+work lives in `docs/ROADMAP.md`. This file is the condensed, authoritative ruleset. When this
+file and the archive disagree, **this file wins**; if either conflicts with explicit user
 instructions in the session, the user wins.
 
 ## When to ask vs. decide
@@ -25,7 +26,7 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 1. **Name:** Scrye.
 2. **Stack:** React 18 + TS + Vite + **Mantine v7** frontend; **Python 3.13 + FastAPI + Pydantic
    v2 + SQLAlchemy 2.0 + Alembic** backend; **SQLite**. (Originally locked to Python 3.12;
-   revised to 3.13 in Phase 6 — see `docs/PLAN.md` § Deviations.)
+   revised to 3.13 in Phase 6 — see `docs/ARCHIVE.md` § Deviations.)
 3. **Job model:** single-container **in-process async worker** (DB-backed `scans` table +
    concurrency semaphore). **No Redis/arq in v1** — but keep a thin worker interface so it could be
    swapped later.
@@ -33,27 +34,27 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
    mounts `/var/run/docker.sock`.
 5. **Secrets at rest:** **application-layer AES-256-GCM field encryption** (required). **SQLCipher
    is deferred** — leave a seam, don't build it.
-6. **Distribution:** the image builds locally, and is **published to two registries with two
-   distinct roles**:
-   - **Docker Hub `<dockerhub-user>/scrye` — releases only** (in `.github/workflows/publish.yml`,
-     using the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets). Pushing a semver tag `v*.*.*`
-     builds the multi-arch (amd64/arm64) image and pushes `<dockerhub-user>/scrye:<version>` (the tag
-     **without** the leading `v`) **and** `<dockerhub-user>/scrye:latest`. This runs **only** when
-     the tagged commit is on `main`. Docker Hub is **never** touched by the dev path — no Docker Hub
-     credentials appear anywhere except this release workflow.
-   - **GHCR `ghcr.io/iamgroot60/scrye` — dev only** (in `.github/workflows/dev-nightly.yml`,
-     authenticating to GHCR with the built-in `GITHUB_TOKEN` — no PAT, no Docker Hub secret). A
-     **nightly scheduled** build (04:00 UTC) of the `dev` branch builds the multi-arch image and
-     pushes the single **moving** tag `ghcr.io/iamgroot60/scrye:dev` (always overwritten — not a
-     version, not `latest`), so the current state of `dev` can be tested without cutting a release.
-     The scheduled run **skips** the build when `dev` has had no new commits in the last 24h; a
-     manual `workflow_dispatch` always builds. It does **not** build on every push/merge to `dev` —
-     CI already lints/tests/builds each dev PR, and the image is batched to the nightly. The GHCR
-     package inherits the repository's visibility (private repo → private package).
-   No other registries or tags. `latest` and `:<version>` come **only** from tagged main releases
-   on Docker Hub; `:dev` comes **only** from the nightly GHCR build of `dev`. (A `schedule` trigger
-   is not PR-triggered, so it always has a token — this is what retires the fork-secrets gap the
-   audit logged as INF-2; see `docs/PLAN.md` § Deviations, 2026-07-06.)
+6. **Distribution:** the image builds locally, and is **published to a single registry — GHCR
+   (`ghcr.io/iamgroot60/scrye`) — with two tag roles**, both authenticated by the built-in
+   `GITHUB_TOKEN` (`packages: write`). **No Docker Hub, no PAT, no long-lived registry secret
+   anywhere in the repo.**
+   - **Releases** (in `.github/workflows/publish.yml`): pushing a semver tag `v*.*.*` builds the
+     multi-arch (amd64/arm64) image and pushes `ghcr.io/iamgroot60/scrye:<version>` (the tag
+     **without** the leading `v`) **and** `ghcr.io/iamgroot60/scrye:latest`. Runs **only** when the
+     tagged commit is on `main` (the job verifies main-ancestry and is guarded to the canonical
+     repo).
+   - **Dev** (in `.github/workflows/dev-nightly.yml`): a **nightly scheduled** build (04:00 UTC) of
+     the `dev` branch pushes the single **moving** tag `ghcr.io/iamgroot60/scrye:dev` (always
+     overwritten — not a version, not `latest`), so the current state of `dev` can be tested
+     without cutting a release. The scheduled run **skips** the build when `dev` has had no new
+     commits in the last 24h; a manual `workflow_dispatch` always builds. It does **not** build on
+     every push/merge to `dev` — CI already lints/tests/builds each dev PR, and the image is
+     batched to the nightly.
+   No other registries or tags. `latest`/`:<version>` come **only** from tagged main releases;
+   `:dev` **only** from the nightly build. The repo is **public**, so the GHCR package is public.
+   Both publish paths are triggered outside `pull_request` (a tag push / a schedule), so a fork PR
+   never has a secret-bearing publish path — this fully retires the fork-secrets gap the audit
+   logged as INF-2; see `docs/ARCHIVE.md` § Deviations.
 7. **Theme:** **teal** primary (`primaryColor: 'teal'`), first-class **light and dark** modes.
 
 ## Hard security rules (non-negotiable)
@@ -115,9 +116,9 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 - **CI is created in Phase 0 and is the gate for every PR thereafter, including Phase 0's own.**
   `.github/workflows/ci.yml` runs on every pull request and push to `main`: lint the backend
   (`ruff` + `black --check`) and frontend (ESLint + Prettier), and run `pytest` plus any frontend
-  tests. CI never publishes — Docker Hub publishing lives in the separate `publish.yml`
-  (locked decision §6). A phase's PR is not done until its CI run is green — do not ask the user
-  to merge a PR with failing or missing checks.
+  tests. CI never publishes — GHCR publishing lives in the separate `publish.yml` (releases) and
+  `dev-nightly.yml` (nightly `:dev`) workflows (locked decision §6). A phase's PR is not done until
+  its CI run is green — do not ask the user to merge a PR with failing or missing checks.
 - **All commits and PRs are authored as the user, not as Claude.** Configure the local git identity
   for this repo (not global) before the first commit:
   `git config user.name "IamGroot60"` and
@@ -139,11 +140,11 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   — rebase and re-author with `--force-with-lease`, and edit the PR body directly — before telling
   the user the PR is ready. Do not report this check as passed without having actually run it this
   session.
-- **Deviations from `docs/PLAN.md` are recorded in `docs/PLAN.md` itself, not only in the PR.**
+- **Deviations from `docs/ARCHIVE.md` are recorded in `docs/ARCHIVE.md` itself, not only in the PR.**
   The moment you implement something differently than the plan specifies, say so inline in the
   session as you do it, and add a dated entry to the "Deviations from this plan" section at the
-  bottom of `docs/PLAN.md` (what changed, why, which phase). The PR description only needs a
-  one-line pointer — e.g. "See `docs/PLAN.md` § Deviations for changes made in this phase" — not
+  bottom of `docs/ARCHIVE.md` (what changed, why, which phase). The PR description only needs a
+  one-line pointer — e.g. "See `docs/ARCHIVE.md` § Deviations for changes made in this phase" — not
   the full explanation repeated there.
 
 ## Definition of done (per phase — all must hold before opening the PR)
@@ -152,7 +153,7 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 3. CI (`.github/workflows/ci.yml`) is green on the PR.
 4. `docker compose up` brings the stack up and `/healthz` returns healthy.
 5. Docs touched by the phase are updated (README/CONTRIBUTING/`.env.example` as applicable).
-6. Any deviations are logged in `docs/PLAN.md` § Deviations.
+6. Any deviations are logged in `docs/ARCHIVE.md` § Deviations.
 7. No secrets, keys, or tokens committed; `.gitignore` still covers all sensitive paths.
 8. Commits/PR are **verified** — not assumed — to be under the user's git identity with no
    attribution footers, checked via `git log --format="%an <%ae>%n%B"` and the live PR body,
@@ -198,7 +199,7 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   dependency installs are ordered before app-code copies so a code-only change doesn't
   invalidate them. The CI build-cache scopes are partitioned deliberately (each build path
   *writes* one scope and only *reads* warm sibling scopes) to stay within the 10 GB GHA cache
-  budget without going cold. **Read `docs/PLAN.md` § Build performance before restructuring the
+  budget without going cold. **Read `docs/ARCHIVE.md` § Build performance before restructuring the
   Dockerfile, consolidating stages, reordering layers, or changing the build workflows' cache
   scopes** — those shapes are load-bearing for build time, not incidental.
 
@@ -216,15 +217,16 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   `APP_SECRET_KEY_FILE`); secrets like `OIDC_CLIENT_SECRET` appear as a named placeholder with a
   comment, never a real value. `.gitignore` already ignores `.env` but allows `.env.example`.
 - **`.github/workflows/ci.yml`** — created in **Phase 0**, before that phase's own PR is opened.
-  Runs lint + tests on every PR/push to `main`. No publish/registry job — Docker Hub publishing
-  is handled separately by `.github/workflows/publish.yml` (locked decision §6). This is the gate
-  every subsequent phase's PR must pass (see Git & PR conventions).
+  Runs lint + tests on every PR/push to `main`. No publish/registry job — GHCR publishing is
+  handled separately by `.github/workflows/publish.yml` (releases) and `dev-nightly.yml` (nightly
+  `:dev`) (locked decision §6). This is the gate every subsequent phase's PR must pass (see Git &
+  PR conventions).
 - **`THIRD_PARTY_LICENSES/`** — created in the Dockerfile phase (Phase 0), containing the
   Apache-2.0 `LICENSE` (and `NOTICE`, if present) for Trivy, Grype, and Syft, plus a README pointer
   to it. See Coding standards § Third-party license attribution.
 
 ## Build order
-Follow the phased roadmap in `docs/PLAN.md` §12 (Phase 0 scaffold → Phase 6 polish).
+Follow the phased roadmap in `docs/ARCHIVE.md` §12 (Phase 0 scaffold → Phase 6 polish).
 Create `README.md`, `CONTRIBUTING.md`, `LICENSE`, `.gitignore`, `.github/workflows/ci.yml`, and
 `THIRD_PARTY_LICENSES/` in Phase 0 — CI must exist and pass before Phase 0's own PR is opened;
 generate `.env.example` from the `Settings` model once the config layer exists (Phase 0–1); and
@@ -237,5 +239,5 @@ disk); app secret key as a Docker secret file; fronted by Caddy at `scrye.your-d
 `https://pocket-id.your-domain.tld`.
 
 ## Out of scope for v1 (do not build)
-arq/Redis scale-out · SQLCipher full-DB encryption. (Registry publishing to Docker Hub **is**
+arq/Redis scale-out · SQLCipher full-DB encryption. (Registry publishing to GHCR **is**
 in scope — see locked decision §6.)
