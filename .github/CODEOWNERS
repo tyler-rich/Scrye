@@ -1,0 +1,10 @@
+# Code owners for Scrye.
+#
+# The owner is requested for review automatically on every pull request. Combined
+# with branch protection on `main` and `dev` ("Require review from Code Owners"),
+# this ensures changes to a public repository are reviewed before they land.
+#
+# Add more specific rules below the catch-all as the project grows (e.g. a
+# security-focused reviewer for backend/app/core/crypto.py or the workflows).
+
+*       @tyler-rich

@@ -1,11 +1,11 @@
 # Scrye — dev branch nightly image build (GHCR).
 #
-# Dev images are published to the GitHub Container Registry (GHCR), NOT Docker
-# Hub — Docker Hub (<dockerhub-user>/scrye) is release-only, handled by publish.yml
-# (CLAUDE.md locked decision §6). This workflow builds the current dev branch
-# once a night and pushes the single moving tag ghcr.io/iamgroot60/scrye:dev
-# (always overwritten — not a version, not :latest), so HEAD-of-dev can be pulled
-# and tested without cutting a release.
+# The moving :dev tag is published to the GitHub Container Registry (GHCR) at
+# ghcr.io/tyler-rich/scrye:dev — the SAME package that publish.yml pushes the
+# release :latest/:<version> tags to (CLAUDE.md locked decision §6). This
+# workflow builds the current dev branch once a night and overwrites :dev (not a
+# version, not :latest), so HEAD-of-dev can be pulled and tested without cutting
+# a release.
 #
 # Cadence rationale: dev images used to be rebuilt (multi-arch, arm64 under QEMU)
 # on every merge into dev, which was the largest CI-minute cost relative to
@@ -13,10 +13,11 @@
 # has had no new commits in the last 24h. Immediate per-PR feedback is unchanged:
 # ci.yml still lints, tests, and builds the amd64 image on every dev PR.
 #
-# Auth uses the built-in GITHUB_TOKEN (always available, no PAT, no Docker Hub
-# secret). Because this is a schedule/dispatch trigger — not a pull_request one —
-# it always runs in the base-repo context with a token, so the fork-PR secrets
-# gap (audit INF-2) does not apply here.
+# Auth uses the built-in GITHUB_TOKEN (always available, no PAT, no long-lived
+# registry secret). Because this is a schedule/dispatch trigger — not a
+# pull_request one — it always runs in the base-repo context with a token, so
+# there is no fork-PR secrets gap (audit INF-2 is fully retired now that release
+# publishing also uses GITHUB_TOKEN → GHCR; see docs/ARCHIVE.md § Deviations).
 name: Dev Nightly Build
 
 on:
@@ -40,7 +41,7 @@ jobs:
   nightly:
     name: dev branch → GHCR (:dev nightly build)
     # Never run on forks (scheduled workflows run on forks that enable Actions).
-    if: github.repository == 'IamGroot60/Scrye'
+    if: github.repository == 'tyler-rich/Scrye'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout dev
@@ -79,12 +80,12 @@ jobs:
       # evict the amd64-only CI build cache; also READs the release multiarch
       # scope so a recent tagged release seeds this build symmetrically. This is
       # the build that keeps dev-multiarch warm for everything else to read from
-      # (see docs/PLAN.md § Build performance). No Docker Hub credentials here.
+      # (see docs/ARCHIVE.md § Build performance).
       - name: Build and push (:dev)
         if: steps.freshness.outputs.skip != 'true'
         uses: ./.github/actions/build-image
         with:
           push: "true"
-          tags: ghcr.io/iamgroot60/scrye:dev
+          tags: ghcr.io/tyler-rich/scrye:dev
           cache-scope: dev-multiarch
           extra-cache-scopes: multiarch

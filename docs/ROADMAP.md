@@ -1,0 +1,157 @@
+# Scrye — Roadmap
+
+> Forward-looking view of what's next for Scrye. Scrye is feature-complete for its core mission
+> — a unified, self-hosted web UI over Trivy and Grype — so this document is about **open work,
+> known limitations, and candidate features**, not the original build (that history lives in
+> [`ARCHIVE.md`](./ARCHIVE.md), and what Scrye does today is in the [`README.md`](../README.md)).
+>
+> Nothing here is a commitment or a dated schedule. Items are grouped by rough effort and
+> readiness — **near-term** (small, well-scoped, closes a real gap), **medium-term** (a feature
+> or a developer-experience investment), and **longer-term / speculative** (architectural, or
+> gated on a scale threshold). Scrye's repository is now **public**, so items that were
+> previously blocked on that (free CI runners, fork-based contribution safety) are unblocked. A
+> final section records **known limitations and accepted trade-offs** that are on the record but
+> may never change.
+
+---
+
+## Near-term
+
+Small, self-contained work that closes a concrete gap.
+
+- **Content-addressed SBOM target identity.** Two uploaded SBOMs that share a filename *and*
+  target type currently collapse into a single target identity for history grouping, scan-diff,
+  and the dashboard's per-target "open" posture — the scan row carries only the filename as
+  identity. Key SBOM targets on a content hash (the SHA-256 already computed for the uploaded
+  SBOM's artifact) instead of the filename, so distinct SBOMs are always distinct targets.
+- **Admin bulk secret re-encryption (key-rotation action).** The master-key file already
+  supports multiple versions (`v<N>:<base64>` lines) and new secrets encrypt under the highest
+  version, but there is no admin-facing action to *re-wrap existing rows* under a new version.
+  Today an old ciphertext stays wrapped under the version it was written with until that record
+  is next updated, so an operator must keep the retired key line in place indefinitely. A
+  "re-encrypt all secrets" action (walking the `SECRET_COLUMNS` registry) would let a rotation
+  actually retire an old key version.
+- **Offline / air-gapped scanner-DB import.** The Scanners settings already drive scheduled
+  online DB refreshes (`trivy image --download-db-only`, `grype db update`). Add an import path
+  for environments with no outbound access to `mirror.gcr.io` / `grype.anchore.io`, so the Trivy
+  and Grype vulnerability databases can be side-loaded from a file.
+- **Pin GitHub Actions to commit SHAs.** Dependabot already tracks the `github-actions`
+  ecosystem, but the workflow `uses:` references are pinned by tag, not by full commit SHA.
+  Pin each action to a SHA (Dependabot will keep them rolling) to close the tag-mutability
+  supply-chain gap — more important now that the repo is public.
+- **Finish the public-repo governance setup (repository settings).** Going public added the
+  in-repo pieces — a `.github/CODEOWNERS` (owner-review requests) and a `SECURITY.md` (private
+  vulnerability reporting). The remaining pieces are GitHub **settings**, not files, so they live
+  here as a checklist: enable **branch protection** on `main` and `dev` (require a passing CI
+  status, require a pull request, require review from Code Owners, and — for `main` — restrict who
+  can push tags/promote); decide on **signed-commit enforcement** (require signed commits on the
+  protected branches, which means contributors must sign — worth it for a security tool, so weigh
+  the contributor friction); and enable **private vulnerability reporting** and Dependabot
+  **security** updates in the repo's Security settings.
+- **Real screenshots in the README.** The README screenshot table is still placeholders. Capture
+  the dashboard, new-scan, results, and history views from a running instance.
+
+## Medium-term
+
+Features and developer-experience investments with a larger surface.
+
+- **Uploaded image-tar (`docker save`) targets.** Both Trivy and Grype can scan a local image
+  archive. Add a target type that accepts an uploaded `docker save` tarball, so an image can be
+  scanned without a reachable registry.
+- **Filesystem-archive upload target.** Grype filesystem scanning today is limited to a
+  mounted host path under the admin-configured `SCRYE_FILESYSTEM_SCAN_ROOTS` allowlist. Add an
+  archive-upload variant (upload a `.tar`/`.zip`, unpack into scratch, scan, discard) so a
+  filesystem scan doesn't require pre-mounting the path into the container.
+- **Docker-environment multi-select scan launcher.** The read-only `docker-socket-proxy`
+  integration currently *enumerates* the images running in a Docker environment and lets you
+  copy a reference to scan as a normal image target. Add a multi-select launcher that queues a
+  scan for each chosen image in one action.
+- **Cancel a running scan.** Cancellation is currently limited to scans still in the `queued`
+  state — the in-process worker has no channel to interrupt a live scanner subprocess. A
+  cooperative-cancellation path (signal the subprocess, mark the scan canceled, clean up its
+  scratch) would let a long-running scan be stopped.
+- **Cross-version backup restore.** A restore requires the bundle's schema version to match the
+  running installation. Add forward-migration of an older bundle on restore (run the Alembic
+  chain against the imported data) so a backup taken on an earlier release can be restored onto
+  a newer one.
+- **Frontend test runner.** There is no frontend test runner yet; the SPA is verified by `tsc`,
+  ESLint, Prettier, and a clean `vite build`. Add Vitest with unit tests — the shared
+  `lib/dates.ts` UTC-formatting helper and the scanner/target validation matrices are natural
+  first targets — and wire it into CI.
+- **Generated API client.** The frontend API layer is a thin, hand-written `fetch` wrapper
+  (`frontend/src/api/*`). Generating a typed client from the FastAPI OpenAPI schema (e.g.
+  openapi-typescript) over that wrapper would keep the client and server contracts in lockstep.
+- **Type-checking in CI.** Add a Python type checker (mypy or pyright) to the CI gate. This
+  first needs the existing annotation gaps resolved so the gate lands green rather than red.
+- **Backend structural cleanup.** The four near-identical secret-CRUD routers (registries, git
+  credentials, notification channels, OIDC) and the list-response envelope convention could be
+  consolidated behind shared helpers to cut duplication.
+
+## Longer-term / speculative
+
+Architectural directions, mostly gated on a scale threshold or an explicit decision.
+
+- **Pluggable scale-out worker (arq / Redis).** The scan worker is a single-container,
+  in-process async worker behind a small `ScanWorker` interface, deliberately so it can be
+  swapped later. A Redis-backed queue (e.g. arq) would let scans run across multiple worker
+  processes or containers for higher throughput — only warranted if a single instance's
+  concurrency ceiling becomes the bottleneck.
+- **Full-database encryption at rest (SQLCipher).** Secrets are field-encrypted at the
+  application layer today (AES-256-GCM), which is the required baseline. SQLCipher would encrypt
+  the *entire* database file at rest as defense-in-depth. A clean seam was left for it; adopting
+  it is a deliberate future hardening step, not a v1 requirement.
+- **Row-bound secret AAD.** Each field-encrypted secret is currently bound (via AES-GCM
+  additional authenticated data) to its *column*, not its *row*. Binding to the row id as well
+  would harden against a DB-*write* attacker swapping ciphertexts between rows — a threat outside
+  the current DB-*read* model. It requires a key-available re-encryption migration (it
+  invalidates every existing ciphertext), so it pairs naturally with the bulk re-encryption tool
+  above.
+- **Framed streaming backup encryption.** A backup bundle is assembled and encrypted in a single
+  in-memory AES-GCM pass, so a very large findings table (hundreds of thousands of rows and up)
+  needs container memory headroom proportional to the dump. A framed/streaming encryption format
+  would bound backup/restore memory regardless of database size.
+- **One-pass SBOM cataloging for Grype.** When an image scan generates a Syft SBOM, that SBOM
+  could be fed directly into the same Grype run (one cataloging pass) instead of Grype
+  re-cataloging the target. A modest efficiency win for combined SBOM-plus-vuln scans.
+- **Native arm64 CI runners.** The multi-arch image build runs its arm64 leg under QEMU
+  emulation, which is slow on a cold cache (cross-seeded caches mitigate this — see
+  [`ARCHIVE.md` § Build performance](./ARCHIVE.md)). Switching the arm64 leg to native
+  `ubuntu-24.04-arm` hosted runners (matrix build + manifest merge) would remove emulation from
+  cold builds entirely. Now that the repository is **public**, GitHub-hosted arm64 runners are
+  free — the cost concern that previously gated this is gone, making it a straightforward win
+  whenever the multi-arch cold-build time becomes annoying.
+
+## Known limitations & accepted trade-offs
+
+On the record and unlikely to change without a specific reason — documented here so a deployer
+isn't surprised.
+
+- **OIDC delegates MFA to the identity provider.** The mandatory-MFA policies (`required_all` /
+  `required_admin`) are enforced on **local** password login. OIDC logins have no local TOTP
+  step in the handshake, and provisioned OIDC accounts carry no usable local password — so an
+  OIDC user's second factor must be enforced at the IdP (e.g. Pocket ID). This is an accepted
+  limitation, not a planned change; gating it at Scrye's layer would lock out OIDC accounts that
+  have no local password. (When group→role mapping is configured it is re-applied on each login,
+  but an absent groups claim preserves the current role, and an OIDC sync can never remove the
+  last admin.)
+- **Cloud registry credential helpers are not bundled.** Static registry credentials and tokens
+  work out of the box. The ECR / GCR / ACR credential-helper *configuration* is generated at
+  scan time, but the helper binaries themselves are not shipped in the image — those registry
+  types work only where the matching helper is present in the runtime environment, as a
+  deployment add-on. Bundling them would bloat the image and pull in unvetted dependencies.
+- **Bundled scanner binaries track upstream for CVEs.** Trivy, Grype, and Syft are shipped as
+  unmodified upstream Go binaries under Apache-2.0. CVEs in *their* embedded Go modules or the Go
+  standard library are fixed only when Aqua/Anchore cut a new release built against a patched Go,
+  so they're excluded from Scrye's own CI dogfood gate (they remain visible in the informational
+  scan report). Keeping the pinned scanner versions current is how those are addressed — Scrye's
+  own attack surface (base image, OS packages including `git`, Python/JS deps, app code) stays
+  fully gated.
+- **The optional `trivy-server` sidecar runs as root.** The upstream `aquasec/trivy` image ships
+  no non-root `USER` and hard-codes its cache under `/root/.cache`, so running it as an arbitrary
+  uid breaks the DB cache on a root-owned named volume. The sidecar is optional (profile-gated),
+  reachable only on the internal network, and otherwise hardened (read-only root FS,
+  `no-new-privileges`, `cap_drop: ALL`, resource-limited). Rebuilding it on a non-root base with
+  a writable cache path is a possible future hardening.
+- **Very large backups need memory headroom.** See the framed-streaming item above — until that
+  lands, sizing container memory to the dump is the operational answer, and Scrye logs a warning
+  past the threshold.
