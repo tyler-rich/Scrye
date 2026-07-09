@@ -1,10 +1,24 @@
-# Scrye — Build Plan
+# Scrye — Build Archive (historical record)
 
 > **Scrye** — a unified, self-hosted web UI for the **Trivy** and **Grype** scanners.
 > ("Scry": to perceive hidden things, fused with "scan.")
-> **Audience:** Claude Code. This is the build specification. `CLAUDE.md` is the condensed
-> operating contract; this document is the detailed reference. Execute in the order given by
-> "Implementation Roadmap" (§12).
+>
+> **This is the historical build record — preserved, not maintained.** It was the original
+> build specification (`PLAN.md`) and is kept verbatim as the archive of *how Scrye was built
+> and why*: the phase-by-phase build order (§12), the locked decisions and their revisions
+> (§0), the data model and architecture as originally specified, the full **Deviations log**
+> (§14 — every place the implementation diverged from the plan, dated, with rationale: the
+> Python 3.13 bump, the INF-2 → GHCR-nightly migration, the post-promotion back-merge process
+> fix, the multi-tier security-audit remediation, etc.), and the durable **Build performance**
+> notes at the end.
+>
+> It is **not** forward-looking. For what's next — open work, known limitations, and planned
+> features — see [`ROADMAP.md`](./ROADMAP.md). For what Scrye is and how to run it, see the
+> [`README.md`](../README.md). `CLAUDE.md` remains the condensed, authoritative operating
+> contract.
+>
+> _Section numbers and the "Plan section affected" cross-references below refer to this
+> document as it stood during the build; they are retained unchanged for the historical trail._
 
 ---
 
@@ -29,9 +43,9 @@ These were decided and are not open for re-litigation during the build:
      multi-arch (amd64/arm64) image and pushes `<dockerhub-user>/scrye:<version>` (tag minus the
      leading `v`) **and** `<dockerhub-user>/scrye:latest`. Runs **only** when the tagged commit is on
      `main`. No Docker Hub credentials are referenced outside this workflow.
-   - **GHCR `ghcr.io/iamgroot60/scrye` — dev only** (`.github/workflows/dev-nightly.yml`, GHCR login
+   - **GHCR `ghcr.io/tyler-rich/scrye` — dev only** (`.github/workflows/dev-nightly.yml`, GHCR login
      via the built-in `GITHUB_TOKEN`): a **nightly scheduled** build (04:00 UTC) of the `dev` branch
-     pushes the single **moving** tag `ghcr.io/iamgroot60/scrye:dev` (always overwritten — not a
+     pushes the single **moving** tag `ghcr.io/tyler-rich/scrye:dev` (always overwritten — not a
      version, not `latest`). The scheduled run skips when `dev` has had no new commits in 24h;
      `workflow_dispatch` always builds. It does **not** build on every dev merge — CI already
      lints/tests/builds each dev PR, and the image is batched nightly. GHCR package visibility
@@ -560,7 +574,7 @@ architectural sections affected.
 general CI-minute-reduction pass. Treated as one entry because they are one architecture change:
 - **Registry split.** Docker Hub (`<dockerhub-user>/scrye`) is now **release-only** — the tagged-
   `v*.*.*`-on-`main` path in `publish.yml` (→ `:<version>` + `:latest`). Dev images move to **GHCR**
-  at `ghcr.io/iamgroot60/scrye:dev`, published by a new `.github/workflows/dev-nightly.yml` that
+  at `ghcr.io/tyler-rich/scrye:dev`, published by a new `.github/workflows/dev-nightly.yml` that
   authenticates with the built-in `GITHUB_TOKEN` (no PAT, no Docker Hub secret). The `dev` job and
   its `pull_request: types:[closed]` trigger were **removed** from `publish.yml`; Docker Hub is no
   longer referenced anywhere in the dev path.
@@ -596,7 +610,7 @@ cache scoping).
   (an explicit block is exhaustive and takes precedence; it is not capped by the repo default). Each
   workflow declares exactly what it needs (`publish.yml` and `ci.yml` only `contents: read`), so the
   read-only default breaks nothing.
-- **After the first nightly push, confirm the GHCR package `ghcr.io/iamgroot60/scrye` is Private**
+- **After the first nightly push, confirm the GHCR package `ghcr.io/tyler-rich/scrye` is Private**
   (it inherits the private repo's visibility by default; flag it if it publishes as public).
 **Plan section affected:** §0.6 (distribution), §9.1 (image). Supersedes the INF-2 item in the
 2026-07-05 P2 audit-remediation entry and the Docker Hub merged-PR `:dev` trigger in the 2026-07-04
@@ -1730,6 +1744,47 @@ fully-verifiable items (item (g), QUA-23) are implemented with tests; the larger
 type-checker/frontend-test additions are explicitly deferred with rationale rather than half-done.
 **Plan section affected:** §7 (migration integrity), §8 (backup KDF portability), process.
 
+### 2026-07-09 — Infra/Process — repo goes public; distribution consolidated to GHCR-only
+**What changed:** The repository is being made **public**, and image distribution is consolidated
+from two registries to **GHCR only**. Concretely:
+- **Docker Hub removed entirely.** `.github/workflows/publish.yml` no longer pushes to
+  `<dockerhub-user>/scrye` and no longer references the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN`
+  secrets. Those secrets are now unused by any workflow and can be deleted from the repo settings.
+- **Releases publish to GHCR.** `publish.yml` (still `on: push: tags: v*.*.*`, still gated on the
+  tagged commit being on `main`) now authenticates to GHCR with the built-in `GITHUB_TOKEN`
+  (`permissions: packages: write`) and pushes `ghcr.io/tyler-rich/scrye:<version>` **and**
+  `ghcr.io/tyler-rich/scrye:latest`. A `github.repository == 'tyler-rich/Scrye'` guard was added so
+  a fork that pushes a tag just skips rather than failing. The nightly `:dev` build
+  (`dev-nightly.yml`) was already GHCR/`GITHUB_TOKEN` and is unchanged except for comments; all
+  three release/nightly/CI workflows and the composite build action had their Docker-Hub-era
+  comments corrected.
+- **INF-2 fully retired.** The fork-PR `:dev` secrets gap was previously "resolved" only by the
+  nightly schedule trigger while the repo stayed private (2026-07-06 entry). With the repo going
+  public — which is what makes fork PRs real — the fix is now complete and confirmed: **both**
+  publish paths (release tag push, nightly schedule) are triggered outside `pull_request` and use
+  `GITHUB_TOKEN`, so no `pull_request`-triggered workflow carries a registry secret. `ci.yml` runs
+  on fork PRs but uses no secrets and never publishes (build/scan only, `load: true`). There is no
+  remaining fork-unsafe secret path.
+- **Public-repo governance.** Added `.github/CODEOWNERS` (`* @tyler-rich`) and a `SECURITY.md`
+  (private vulnerability reporting via GitHub Security advisories, supported-tags table, scope).
+  The remaining pre-public items are **repository settings, not files**, and are tracked on
+  `docs/ROADMAP.md`: branch protection on `main`/`dev` (require CI + PR + Code Owner review),
+  signed-commit enforcement (a decision to make), and enabling private vulnerability reporting /
+  Dependabot security updates.
+- **Docs.** `README.md` (GHCR-only distribution, standalone pull-from-GHCR compose that needs no
+  clone, categorized env-var necessity, nginx/Caddy/Traefik proxy examples, clearer sidecar
+  necessity, GHCR/CI badges), `CONTRIBUTING.md` (§ Releasing → GHCR), `docs/ROADMAP.md` (public-repo
+  reality — free arm64 runners, governance checklist), and `CLAUDE.md` (locked decision §6 rewritten
+  GHCR-only) were updated to match.
+**Why:** Explicit user instruction this session, superseding the two-registry split locked in the
+2026-07-06 entry. Going public makes fork-based contributions real, so the INF-2 caveat had to be
+closed rather than deferred; using `GITHUB_TOKEN`→GHCR for releases too (rather than a long-lived
+Docker Hub PAT) is also the safer posture for a public repo (no exfiltratable registry secret). The
+locked decision `CLAUDE.md` §6 is updated accordingly.
+**Plan section affected:** §0.6 (distribution — now GHCR-only), §9.1 (image publishing),
+CLAUDE.md § Locked decisions §6. Supersedes the Docker Hub role in the 2026-07-06 entry; completes
+and closes INF-2 (2026-07-05 P2 / 2026-07-06 entries).
+
 ---
 
 ## Build performance
@@ -1840,3 +1895,28 @@ warming `dev-multiarch` from `main`'s existing copy regardless, so the cross-see
 other paths work as soon as those paths land on their trigger branches.
 
 **Plan section affected:** §9.1 (image build), §0.6 (distribution/CI paths), process.
+
+### 2026-07-09 — Post-v1 — teal hue refinement, scan deletion, nav active-match fix
+**What changed:** Three small frontend/backend changes:
+- **Theme hue.** `frontend/src/theme.ts` now defines a custom `teal` ramp (the Tailwind teal
+  scale) instead of relying on Mantine's built-in teal, whose mid-tones read as a bright mint.
+  The primary lands on teal-700 (`#0f766e`) in light mode and teal-600 (`#0d9488`) in dark mode
+  (`primaryShade: { light: 7, dark: 6 }`), with `autoContrast: true` + `luminanceThreshold: 0.2`
+  so filled controls pick the higher-contrast label per mode. All primary usages clear WCAG AA:
+  light filled/text 5.47:1, dark filled 5.61:1 (black label), dark text 4.60:1. This keeps locked
+  decision §7 (teal primary, first-class light/dark) — only the exact shade changed.
+- **Delete completed scans.** New `DELETE /api/scans/{id}` (operator role + CSRF, terminal-status
+  only) removes the scan and cascades to its findings, artifact-metadata rows, and tags via the
+  existing ORM `cascade="all, delete-orphan"` + `ON DELETE CASCADE` FKs; the on-disk artifact
+  directory is removed via a new `remove_scan_artifacts()` helper. No schema change was needed
+  (the cascade was already declared), so **no Alembic migration**. A confirmation modal + Delete
+  button was added to the scan detail page. A deleted scan stops feeding the dashboard aggregates
+  (they query the live tables) and drops out of history/diffs.
+- **Nav active-state fix.** `frontend/src/App.tsx` used `pathname.startsWith(to)`, which lit both
+  "Scans" and "New scan" on `/scans/new`. Now the active item is the *longest* matching nav path
+  (matching `to` exactly or as a `to/` prefix), so each item highlights only for its own route;
+  Dashboard (`/`) stays exact-match.
+**Why:** User-requested polish: the teal read as mint, there was no way to delete a scan, and the
+nav double-highlighted on the new-scan page.
+**Plan section affected:** §7 (theme, hue only), §5 (RBAC — new destructive action), §4.6
+(dashboard aggregates), frontend nav.

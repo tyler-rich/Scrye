@@ -9,7 +9,9 @@ backups cheap.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -59,6 +61,20 @@ def store_artifact(scan_id: int, filename: str, data: bytes) -> StoredArtifact:
         size_bytes=len(data),
         sha256=hashlib.sha256(data).hexdigest(),
     )
+
+
+def remove_scan_artifacts(scan_id: int) -> None:
+    """Delete a scan's entire on-disk artifact subdirectory (best-effort).
+
+    Used when a scan is deleted: the raw scanner JSON and SBOMs stored under
+    ``<artifacts>/<scan_id>/`` are removed alongside the database rows. A missing
+    directory (a scan that produced no artifacts) is a no-op, and any filesystem
+    error is suppressed so a partially-cleaned state still converges — the
+    database is the source of truth and the metadata rows are already gone.
+    """
+    scan_dir = _artifacts_root() / str(scan_id)
+    with contextlib.suppress(OSError):
+        shutil.rmtree(scan_dir, ignore_errors=True)
 
 
 def artifact_path(relative_path: str) -> Path:

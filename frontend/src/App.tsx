@@ -24,11 +24,21 @@ const BASE_NAV_LINKS = [
 function NavLinks() {
   const { pathname } = useLocation();
   const { user } = useAuth();
-  const isActive = (to: string) => (to === '/' ? pathname === '/' : pathname.startsWith(to));
   const links =
     user && user.role !== 'viewer'
       ? [...BASE_NAV_LINKS, { to: '/settings', label: 'Settings' }]
       : BASE_NAV_LINKS;
+
+  // A nav item matches its own route and any child route ("/scans" also covers
+  // "/scans/123"), but not a sibling. To keep "/scans/new" from also lighting
+  // up "Scans", we pick the *longest* matching path — the most specific nav
+  // item wins — rather than highlighting every prefix match (FE nav bug).
+  const matches = (to: string) =>
+    to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`);
+  const activeTo = links
+    .filter((link) => matches(link.to))
+    .reduce((best, link) => (link.to.length > best.length ? link.to : best), '');
+
   return (
     <Group gap="xs" visibleFrom="sm">
       {links.map((link) => (
@@ -36,7 +46,7 @@ function NavLinks() {
           key={link.to}
           component={Link}
           to={link.to}
-          variant={isActive(link.to) ? 'light' : 'subtle'}
+          variant={link.to === activeTo ? 'light' : 'subtle'}
           size="compact-md"
         >
           {link.label}

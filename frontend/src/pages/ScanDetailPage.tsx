@@ -10,6 +10,7 @@ import {
   Group,
   Loader,
   Menu,
+  Modal,
   Select,
   Stack,
   Table,
@@ -17,13 +18,15 @@ import {
   Text,
   Title,
 } from '@mantine/core';
-import { IconAlertCircle, IconArrowLeft, IconDownload } from '@tabler/icons-react';
+import { useDisclosure } from '@mantine/hooks';
+import { IconAlertCircle, IconArrowLeft, IconDownload, IconTrash } from '@tabler/icons-react';
 
 import { ApiError } from '../api/client';
 import { formatWhen } from '../lib/dates';
 import {
   artifactDownloadUrl,
   cancelScan,
+  deleteScan,
   getScan,
   isActive,
   listArtifacts,
@@ -87,6 +90,8 @@ export function ScanDetailPage() {
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [savingTags, setSavingTags] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadScan = useCallback(async () => {
     try {
@@ -166,6 +171,18 @@ export function ScanDetailPage() {
     }
   };
 
+  const remove = async () => {
+    setDeleting(true);
+    try {
+      await deleteScan(id);
+      navigate('/scans');
+    } catch (err: unknown) {
+      setError(err instanceof ApiError ? err.message : 'Failed to delete scan.');
+      setDeleting(false);
+      closeConfirm();
+    }
+  };
+
   if (!scan) {
     return (
       <Center mih={200}>{error ? <Text c="red">{error}</Text> : <Loader color="teal" />}</Center>
@@ -220,9 +237,37 @@ export function ScanDetailPage() {
                 Cancel
               </Button>
             )}
+            {canOperate && !isActive(scan.status) && (
+              <Button
+                variant="light"
+                color="red"
+                leftSection={<IconTrash size={16} />}
+                onClick={openConfirm}
+              >
+                Delete
+              </Button>
+            )}
           </Group>
         </Group>
       </div>
+
+      <Modal opened={confirmOpened} onClose={closeConfirm} title="Delete scan" centered>
+        <Stack gap="md">
+          <Text size="sm">
+            Permanently delete <strong>scan #{scan.id}</strong> ({scan.scanner} — {scan.target})?
+            This removes the scan and all of its findings, stored artifacts, and tags. It cannot be
+            undone, and the scan will no longer appear in history or dashboard totals.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeConfirm} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button color="red" loading={deleting} onClick={() => void remove()}>
+              Delete scan
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       {error && <Text c="red">{error}</Text>}
 
