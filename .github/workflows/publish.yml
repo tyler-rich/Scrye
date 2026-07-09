@@ -1,10 +1,10 @@
 # Scrye — release publishing to GHCR (tagged releases only).
 #
 # Releases publish to the GitHub Container Registry (GHCR) at
-# ghcr.io/iamgroot60/scrye (CLAUDE.md locked decision §6). A push of a semver
+# ghcr.io/tyler-rich/scrye (CLAUDE.md locked decision §6). A push of a semver
 # tag (v*.*.*) builds the multi-arch image and pushes it as
-# ghcr.io/iamgroot60/scrye:<version> (the tag without its leading "v") and
-# ghcr.io/iamgroot60/scrye:latest. The release job refuses to run unless the
+# ghcr.io/tyler-rich/scrye:<version> (the tag without its leading "v") and
+# ghcr.io/tyler-rich/scrye:latest. The release job refuses to run unless the
 # tagged commit is reachable from main, so only real releases cut from main ever
 # reach :<version>/:latest.
 #
@@ -41,9 +41,9 @@ jobs:
   release:
     name: Tagged release → GHCR (:<version> + :latest)
     # Only the canonical repo publishes; a fork that pushes a tag (with Actions
-    # enabled) can never write to iamgroot60/scrye's package anyway, but guard
+    # enabled) can never write to tyler-rich/scrye's package anyway, but guard
     # explicitly so a fork just skips instead of failing a confusing run.
-    if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'IamGroot60/Scrye'
+    if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'tyler-rich/Scrye'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (full history to verify the tag is on main)
@@ -62,7 +62,7 @@ jobs:
             exit 1
           fi
 
-      # ghcr.io/iamgroot60/scrye:<version> uses the tag without its leading "v"
+      # ghcr.io/tyler-rich/scrye:<version> uses the tag without its leading "v"
       # (v1.4.0 -> 1.4.0).
       - name: Derive the version from the tag
         id: version
@@ -87,5 +87,5 @@ jobs:
           cache-scope: multiarch
           extra-cache-scopes: dev-multiarch
           tags: |
-            ghcr.io/iamgroot60/scrye:${{ steps.version.outputs.version }}
-            ghcr.io/iamgroot60/scrye:latest
+            ghcr.io/tyler-rich/scrye:${{ steps.version.outputs.version }}
+            ghcr.io/tyler-rich/scrye:latest

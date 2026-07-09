@@ -11,8 +11,8 @@ place, on your own infrastructure. It orchestrates the official scanner binaries
 persists their raw JSON as the source of truth, and normalizes the results into a
 single findings model so Trivy and Grype render in one table.
 
-[![CI](https://github.com/IamGroot60/Scrye/actions/workflows/ci.yml/badge.svg)](https://github.com/IamGroot60/Scrye/actions/workflows/ci.yml)
-[![Container: GHCR](https://img.shields.io/badge/ghcr.io-iamgroot60%2Fscrye-2496ED?logo=github&logoColor=white)](https://github.com/iamgroot60/scrye/pkgs/container/scrye)
+[![CI](https://github.com/tyler-rich/Scrye/actions/workflows/ci.yml/badge.svg)](https://github.com/tyler-rich/Scrye/actions/workflows/ci.yml)
+[![Container: GHCR](https://img.shields.io/badge/ghcr.io-tyler--rich%2Fscrye-2496ED?logo=github&logoColor=white)](https://github.com/tyler-rich/scrye/pkgs/container/scrye)
 ![Arch: amd64 · arm64](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-informational)
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](./LICENSE)
 
@@ -22,7 +22,7 @@ single findings model so Trivy and Grype render in one table.
   console with history, exports, scheduling, notifications, RBAC, and OIDC —
   without wiring a pipeline together by hand.
 - **Distribution:** published to the GitHub Container Registry (GHCR):
-  `ghcr.io/iamgroot60/scrye:latest` and `:<version>` for stable releases, and the
+  `ghcr.io/tyler-rich/scrye:latest` and `:<version>` for stable releases, and the
   moving `:dev` tag from the nightly `dev` build. You can also build the image
   locally from this repo. (No Docker Hub.)
 
@@ -268,7 +268,7 @@ loopback-only port, healthcheck):
 ```yaml
 services:
   scrye:
-    image: ghcr.io/iamgroot60/scrye:latest # or :<version> to pin a release
+    image: ghcr.io/tyler-rich/scrye:latest # or :<version> to pin a release
     user: "1000:1000"
     read_only: true
     security_opt:
@@ -379,7 +379,7 @@ you control (e.g. `/mnt/appdata/scrye/data:/data`).
 
 ### Which image tag?
 
-Everything publishes to GHCR (`ghcr.io/iamgroot60/scrye`):
+Everything publishes to GHCR (`ghcr.io/tyler-rich/scrye`):
 
 | Tag | What it is | Use it for |
 | --- | ---------- | ---------- |
@@ -392,9 +392,9 @@ releases and re-`pull` on your own cadence. All tags are multi-arch
 (`linux/amd64` + `linux/arm64`).
 
 ```bash
-docker pull ghcr.io/iamgroot60/scrye:latest
-# docker pull ghcr.io/iamgroot60/scrye:1.4.0   # pin a release
-# docker pull ghcr.io/iamgroot60/scrye:dev      # test the dev branch
+docker pull ghcr.io/tyler-rich/scrye:latest
+# docker pull ghcr.io/tyler-rich/scrye:1.4.0   # pin a release
+# docker pull ghcr.io/tyler-rich/scrye:dev      # test the dev branch
 ```
 
 ### Build from source instead
@@ -404,7 +404,7 @@ prebuilt image), clone the repo and use the bundled Compose file, which **builds
 locally** instead of pulling:
 
 ```bash
-git clone https://github.com/iamgroot60/scrye.git
+git clone https://github.com/tyler-rich/scrye.git
 cd scrye
 mkdir -p docker/secrets
 openssl rand -base64 48 > docker/secrets/app_secret_key
@@ -859,7 +859,7 @@ scrape_configs:
 
 ## Building the image yourself
 
-The published image lives on GHCR as **`ghcr.io/iamgroot60/scrye`** (`:latest` and
+The published image lives on GHCR as **`ghcr.io/tyler-rich/scrye`** (`:latest` and
 `:<version>` from tagged releases; `:dev` nightly from `dev`). To build locally
 instead — single-arch for the host you're on:
 
