@@ -10,7 +10,7 @@ vulnerability.** Public disclosure before a fix is available puts every deployer
 at risk.
 
 Instead, report it privately through GitHub's **[private vulnerability
-reporting](https://github.com/IamGroot60/Scrye/security/advisories/new)** (the
+reporting](https://github.com/tyler-rich/Scrye/security/advisories/new)** (the
 "Report a vulnerability" button on the repository's **Security** tab). If that is
 unavailable to you, contact the maintainer directly rather than filing anything
 public.
@@ -34,8 +34,8 @@ maintenance branches:
 
 | Tag | Source | Security fixes |
 | --- | ------ | -------------- |
-| `ghcr.io/iamgroot60/scrye:latest` and `:<version>` | Tagged releases from `main` | Yes — always run the latest release. |
-| `ghcr.io/iamgroot60/scrye:dev` | Nightly build of `dev` | Best-effort (moving tag; not for production). |
+| `ghcr.io/tyler-rich/scrye:latest` and `:<version>` | Tagged releases from `main` | Yes — always run the latest release. |
+| `ghcr.io/tyler-rich/scrye:dev` | Nightly build of `dev` | Best-effort (moving tag; not for production). |
 
 Fixes are made on `dev` and shipped in the next tagged release. There is no
 back-porting to older `:<version>` tags — upgrade to the latest release to pick

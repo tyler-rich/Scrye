@@ -294,25 +294,25 @@ anything differently: keep branching from and PR'ing into `dev` as usual.
 
 CI (`.github/workflows/ci.yml`) never publishes — it only lints, tests, and proves the image
 builds for both architectures. Everything is published to a **single registry, GHCR**
-(`ghcr.io/iamgroot60/scrye`), with two tag roles. Both authenticate with the built-in
+(`ghcr.io/tyler-rich/scrye`), with two tag roles. Both authenticate with the built-in
 `GITHUB_TOKEN` — there are **no Docker Hub or other registry secrets** in the repo.
 
 - **Tagged releases → `:latest` + `:<version>`.** Handled by `.github/workflows/publish.yml`. Push
   a semantic-version tag `v*.*.*` on a commit that is on `main` (e.g.
   `git tag v1.4.0 && git push origin v1.4.0`). This builds the multi-arch (amd64/arm64) image and
-  pushes it as `ghcr.io/iamgroot60/scrye:<version>` (the tag without its leading `v`, so `v1.4.0` →
-  `ghcr.io/iamgroot60/scrye:1.4.0`) **and** `ghcr.io/iamgroot60/scrye:latest`. The job refuses to
+  pushes it as `ghcr.io/tyler-rich/scrye:<version>` (the tag without its leading `v`, so `v1.4.0` →
+  `ghcr.io/tyler-rich/scrye:1.4.0`) **and** `ghcr.io/tyler-rich/scrye:latest`. The job refuses to
   run unless the tagged commit is on `main`, so `:latest`/`:<version>` always come from a real
   release.
 
 - **`:dev` (nightly build, not a release).** Handled by `.github/workflows/dev-nightly.yml`. A
   scheduled run at **04:00 UTC** builds the current `dev` branch multi-arch and pushes the single
-  **moving** tag `ghcr.io/iamgroot60/scrye:dev`, always overwritten. The scheduled build is
+  **moving** tag `ghcr.io/tyler-rich/scrye:dev`, always overwritten. The scheduled build is
   **skipped** when `dev` has had no new commits in the last 24h; a manual **Run workflow**
   (`workflow_dispatch`) always builds. It does **not** rebuild on every merge into `dev` — the
   per-PR CI already lints, tests, and builds the amd64 image, and the published image is batched to
   the nightly. This is **not** a stable release and **not** a version — it just mirrors HEAD-of-dev
-  (`docker pull ghcr.io/iamgroot60/scrye:dev`) for testing. Use a `:<version>` tag (or `:latest`)
+  (`docker pull ghcr.io/tyler-rich/scrye:dev`) for testing. Use a `:<version>` tag (or `:latest`)
   for production.
 
 Both publish workflows declare their own `permissions: { contents: read, packages: write }`, so
