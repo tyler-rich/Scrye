@@ -1,9 +1,10 @@
 # Reusable multi-arch build for the Scrye image.
 #
 # Single source of truth for QEMU + Buildx setup and the docker/Dockerfile
-# build invocation, shared by ci.yml (build-only verification) and publish.yml
-# (build + push to Docker Hub). Callers handle registry login before invoking
-# this action with push: "true" — the action itself takes no secrets and stays
+# build invocation, shared by ci.yml (build-only verification), publish.yml
+# (build + push release tags to GHCR), and dev-nightly.yml (build + push the
+# :dev tag to GHCR). Callers handle registry login before invoking this action
+# with push: "true" — the action itself takes no secrets and stays
 # registry-agnostic.
 name: Build Scrye image
 description: Set up QEMU + Buildx and build the multi-arch Scrye image, optionally pushing it.
@@ -27,8 +28,8 @@ inputs:
       READS (cache-from) from it. Partitions the shared type=gha cache so builds
       with different platform sets (e.g. amd64-only vs multi-arch) don't evict
       each other's layers under the repo's 10 GB cache budget. Empty = buildx
-      default. See docs/PLAN.md § Build performance for the partitioning rationale
-      — the scopes are separated on purpose; do not merge them.
+      default. See docs/ARCHIVE.md § Build performance for the partitioning
+      rationale — the scopes are separated on purpose; do not merge them.
     required: false
     default: ""
   extra-cache-scopes:

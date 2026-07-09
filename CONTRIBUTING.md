@@ -145,7 +145,9 @@ scrye/
 ├── LICENSE              # MIT
 ├── .env.example         # generated from the backend Settings model
 ├── docs/
-│   └── PLAN.md          # detailed build specification + deviation log
+│   ├── ARCHIVE.md       # historical build record + dated deviation log
+│   ├── ROADMAP.md       # forward-looking roadmap + known limitations
+│   └── reviews/         # archived security/audit review notes
 ├── backend/
 │   ├── app/
 │   │   ├── main.py      # FastAPI app: API + SPA serving, startup key check,
@@ -223,13 +225,12 @@ scrye/
 
 - [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`,
   `docs:`, `chore:`, …). Small, reviewable changes.
-- Branch from `dev`; one PR per change against `dev` (see § Branching model above). During the
-  phased build, branches are named `phase/PX` (e.g. `phase/P0`); afterwards, use a short
+- Branch from `dev`; one PR per change against `dev` (see § Branching model above). Use a short,
   descriptive branch name.
 - Update docs in the same PR as the code they describe.
 - Commit messages and PR descriptions carry **no AI-attribution footers**.
-- Any divergence from `docs/PLAN.md` is recorded in that file's
-  "Deviations from this plan" section at the time it happens.
+- The dated deviation log lives in [`docs/ARCHIVE.md`](docs/ARCHIVE.md) (the historical build
+  record); forward-looking work is tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ---
 
@@ -254,7 +255,7 @@ plaintext never appears in logs or API reads.
 
 ## Pull request process
 
-1. Fork (or branch) from `dev` and create a `phase/PX` (or descriptive) branch.
+1. Fork (or branch) from `dev` and create a short, descriptively named branch.
 2. Make your change with tests and updated docs.
 3. Ensure the checklist holds:
    - [ ] `ruff` + `black` clean (Python), ESLint + Prettier clean (TypeScript)
@@ -262,7 +263,6 @@ plaintext never appears in logs or API reads.
    - [ ] `docker compose up` brings the stack up and `/healthz` is healthy
    - [ ] Docs updated (README / CONTRIBUTING / `.env.example` as applicable)
    - [ ] No secrets, keys, or tokens committed
-   - [ ] Any plan deviations logged in `docs/PLAN.md`
 4. Open the PR against `dev` (not `main` — see § Branching model above) with a clear summary of
    what changed.
 
@@ -270,63 +270,66 @@ plaintext never appears in logs or API reads.
 
 ## Releasing
 
-`main` is protected and only ever moves via a deliberate, maintainer-initiated release — it is
-never a target for routine contribution PRs.
+Releasing is a deliberate, maintainer-initiated step. `main` is protected and only ever moves via
+a release — it is never a target for routine contribution PRs. Contributors don't need to do
+anything differently: keep branching from and PR'ing into `dev` as usual.
+
+### Promoting `dev` to `main`, then back-merging
 
 1. When `dev` is in a releasable state, the maintainer opens a **promotion PR** from `dev` into
    `main`. This PR must pass the same CI gate as any other before it can merge.
-2. Once the promotion PR merges, `main` is **tagged** (e.g. `v0.x.0`) to mark the release.
-3. **Immediately back-merge `main` into `dev`** (`git checkout dev && git merge origin/main &&
-   git push`) so `dev` shows 0 commits behind `main` again. Because promotions are squash-merged,
-   `main`'s squashed copy of the just-promoted work conflicts with `dev`'s newer versions of those
-   files — resolve every such conflict in favour of `dev`. The only content the back-merge should
-   actually bring into `dev` is anything that landed on `main` independently of the promotion
-   (e.g. a Dependabot or hotfix PR targeted at `main`). Skipping this is what leaves `dev`
-   accumulating phantom "behind" commits after each release.
-4. Contributors don't need to do anything differently for this — keep branching from and PR'ing
-   into `dev` as usual; release promotion is handled separately by the maintainer.
+2. Once the promotion PR merges, `main` is **tagged** (e.g. `v0.x.0`) to mark the release. The tag
+   is what triggers publishing (below).
+3. **Immediately back-merge `main` into `dev`** (`git fetch origin main dev && git checkout dev &&
+   git merge origin/main && git push`) so `dev` shows 0 commits behind `main` again. Because
+   promotions are squash-merged, `main`'s squashed copy of the just-promoted work conflicts with
+   `dev`'s newer versions of those files — resolve every such conflict in favour of `dev`. The
+   only content the back-merge should actually bring into `dev` is anything that landed on `main`
+   independently of the promotion (e.g. a Dependabot or hotfix PR targeted at `main`); verify the
+   net diff against `dev`'s pre-merge tip is exactly that. Skipping this is what leaves `dev`
+   accumulating phantom "behind" commits after each release. (Dependabot targets `dev`, so
+   promotion squashes are normally the only thing the back-merge has to reconcile.)
 
----
-
-## Releasing
+### What gets published
 
 CI (`.github/workflows/ci.yml`) never publishes — it only lints, tests, and proves the image
-builds for both architectures. Publishing is split across two registries with two distinct roles:
+builds for both architectures. Everything is published to a **single registry, GHCR**
+(`ghcr.io/iamgroot60/scrye`), with two tag roles. Both authenticate with the built-in
+`GITHUB_TOKEN` — there are **no Docker Hub or other registry secrets** in the repo.
 
-- **Tagged releases → Docker Hub (stable).** Handled by `.github/workflows/publish.yml`, which
-  authenticates with the `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` repository secrets. Push a
-  semantic-version tag `v*.*.*` on a commit that is on `main` (e.g.
+- **Tagged releases → `:latest` + `:<version>`.** Handled by `.github/workflows/publish.yml`. Push
+  a semantic-version tag `v*.*.*` on a commit that is on `main` (e.g.
   `git tag v1.4.0 && git push origin v1.4.0`). This builds the multi-arch (amd64/arm64) image and
-  pushes it as `securedbytyler/scrye:<version>` (the tag without its leading `v`, so `v1.4.0` →
-  `securedbytyler/scrye:1.4.0`) **and** `securedbytyler/scrye:latest`. The job refuses to run if
-  the tagged commit is not on `main`, so `:latest` and `:<version>` always come from a real
-  release. Docker Hub is used **only** for releases.
+  pushes it as `ghcr.io/iamgroot60/scrye:<version>` (the tag without its leading `v`, so `v1.4.0` →
+  `ghcr.io/iamgroot60/scrye:1.4.0`) **and** `ghcr.io/iamgroot60/scrye:latest`. The job refuses to
+  run unless the tagged commit is on `main`, so `:latest`/`:<version>` always come from a real
+  release.
 
-- **`:dev` → GHCR (nightly build, not a release).** Handled by
-  `.github/workflows/dev-nightly.yml`, which authenticates to GHCR with the built-in
-  `GITHUB_TOKEN` (no Docker Hub secret). A scheduled run at **04:00 UTC** builds the current `dev`
-  branch multi-arch and pushes the single **moving** tag `ghcr.io/iamgroot60/scrye:dev`, always
-  overwritten. The scheduled build is **skipped** when `dev` has had no new commits in the last
-  24h; a manual **Run workflow** (`workflow_dispatch`) always builds. It does **not** rebuild on
-  every merge into `dev` — the per-PR CI already lints, tests, and builds the amd64 image, and the
-  published image is batched to the nightly. This is **not** a stable release and **not** a version
-  — it just mirrors HEAD-of-dev (`docker pull ghcr.io/iamgroot60/scrye:dev`) for testing. Do not
-  treat `:dev` as production-ready; use a `:<version>` tag (or `:latest`) for that.
+- **`:dev` (nightly build, not a release).** Handled by `.github/workflows/dev-nightly.yml`. A
+  scheduled run at **04:00 UTC** builds the current `dev` branch multi-arch and pushes the single
+  **moving** tag `ghcr.io/iamgroot60/scrye:dev`, always overwritten. The scheduled build is
+  **skipped** when `dev` has had no new commits in the last 24h; a manual **Run workflow**
+  (`workflow_dispatch`) always builds. It does **not** rebuild on every merge into `dev` — the
+  per-PR CI already lints, tests, and builds the amd64 image, and the published image is batched to
+  the nightly. This is **not** a stable release and **not** a version — it just mirrors HEAD-of-dev
+  (`docker pull ghcr.io/iamgroot60/scrye:dev`) for testing. Use a `:<version>` tag (or `:latest`)
+  for production.
 
-  Two repo settings back this path. **Settings → Actions → General → Workflow permissions** can stay
-  on the restrictive **Read repository contents and packages permissions** (read-only) default —
-  GHCR push does **not** need the repo-wide default to allow write. `dev-nightly.yml` declares its
-  own `permissions: { contents: read, packages: write }` block, which overrides the read-only
-  default for that workflow (an explicit block takes precedence and is not capped by the default);
-  `publish.yml` and `ci.yml` likewise declare their own (`contents: read`). Second, after the first
-  nightly push, confirm the GHCR package `ghcr.io/iamgroot60/scrye` is **Private** (it inherits the
-  repository's visibility).
+Both publish workflows declare their own `permissions: { contents: read, packages: write }`, so
+**Settings → Actions → General → Workflow permissions** can stay on the restrictive read-only
+default (an explicit per-workflow block takes precedence and is not capped by the repo default);
+`ci.yml` declares only `contents: read` and never publishes. The repo is **public**, so the GHCR
+package is public — no per-package visibility change is needed. Because both publish paths are
+triggered outside `pull_request` (a tag push, and a schedule), a fork's pull request never has a
+secret-bearing publish path — going public does not reopen the old fork-secrets gap (audit INF-2).
 
 ---
 
 ## Reporting security issues
 
 **Please do not open public issues for security vulnerabilities.** Report them
-privately to the maintainers (e.g. via a private security advisory or direct
-contact) so a fix can be prepared before disclosure. Include reproduction steps
+privately via GitHub's private vulnerability reporting (the **Report a
+vulnerability** button on the repository's **Security** tab) — see
+[SECURITY.md](./SECURITY.md) for the full policy — so a fix can be prepared before
+disclosure. Include reproduction steps
 and affected versions where possible.

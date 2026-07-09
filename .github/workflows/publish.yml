@@ -1,19 +1,23 @@
-# Scrye — Docker Hub publishing (releases only).
+# Scrye — release publishing to GHCR (tagged releases only).
 #
-# Docker Hub (securedbytyler/scrye) is now RELEASE-ONLY (CLAUDE.md locked
-# decision §6). A push of a semver tag (v*.*.*) builds the multi-arch image and
-# pushes it as securedbytyler/scrye:<version> (the tag without its leading "v")
-# and securedbytyler/scrye:latest. The release job refuses to run unless the
+# Releases publish to the GitHub Container Registry (GHCR) at
+# ghcr.io/iamgroot60/scrye (CLAUDE.md locked decision §6). A push of a semver
+# tag (v*.*.*) builds the multi-arch image and pushes it as
+# ghcr.io/iamgroot60/scrye:<version> (the tag without its leading "v") and
+# ghcr.io/iamgroot60/scrye:latest. The release job refuses to run unless the
 # tagged commit is reachable from main, so only real releases cut from main ever
 # reach :<version>/:latest.
 #
-# Dev images are NOT published here — they go to GHCR (ghcr.io/iamgroot60/scrye:dev)
-# via .github/workflows/dev-nightly.yml, which uses the built-in GITHUB_TOKEN.
-# Docker Hub credentials are referenced only by this release workflow.
+# The moving :dev tag is published separately by dev-nightly.yml (a nightly
+# schedule build of the dev branch). Both workflows push to the SAME GHCR
+# package with the SAME built-in GITHUB_TOKEN — there are no Docker Hub or other
+# registry credentials anywhere in the repo. Because publishing is triggered by
+# a tag push (base-repo context) and authenticated with GITHUB_TOKEN, there is
+# no pull_request-triggered secret path a fork PR could exploit (audit INF-2 is
+# fully retired — see docs/ARCHIVE.md § Deviations).
 #
 # The multi-arch build itself is defined once in .github/actions/build-image and
-# reused by this job (and by ci.yml's build-only check). Credentials come from
-# the DOCKERHUB_USERNAME / DOCKERHUB_TOKEN repository secrets.
+# reused by this job (and by ci.yml's build-only check).
 name: Publish
 
 on:
@@ -21,10 +25,11 @@ on:
     tags:
       - "v*.*.*"
 
-# Least privilege: reading the repo is all this job needs. Registry auth is
-# handled with the Docker Hub secrets, not the GITHUB_TOKEN.
+# Least privilege: contents:read to check out and verify the tag is on main;
+# packages:write so the built-in GITHUB_TOKEN can push to GHCR. No repo secrets.
 permissions:
   contents: read
+  packages: write
 
 # Serialize builds per ref. Distinct release tags have distinct refs so they
 # never cancel each other.
@@ -34,8 +39,11 @@ concurrency:
 
 jobs:
   release:
-    name: Tagged release → Docker Hub (:<version> + :latest)
-    if: startsWith(github.ref, 'refs/tags/v')
+    name: Tagged release → GHCR (:<version> + :latest)
+    # Only the canonical repo publishes; a fork that pushes a tag (with Actions
+    # enabled) can never write to iamgroot60/scrye's package anyway, but guard
+    # explicitly so a fork just skips instead of failing a confusing run.
+    if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'IamGroot60/Scrye'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (full history to verify the tag is on main)
@@ -54,17 +62,18 @@ jobs:
             exit 1
           fi
 
-      # securedbytyler/scrye:<version> uses the tag without its leading "v"
+      # ghcr.io/iamgroot60/scrye:<version> uses the tag without its leading "v"
       # (v1.4.0 -> 1.4.0).
       - name: Derive the version from the tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Log in to Docker Hub
+      - name: Log in to GHCR
         uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push (:<version> + :latest)
         uses: ./.github/actions/build-image
@@ -73,10 +82,10 @@ jobs:
           # WRITE the multiarch scope; also READ the nightly dev-multiarch scope.
           # A release is promoted dev, so the daily nightly build usually carries
           # bit-identical layers — reading it lets a tagged release restore warm
-          # arm64 layers instead of a cold QEMU rebuild. See docs/PLAN.md §
+          # arm64 layers instead of a cold QEMU rebuild. See docs/ARCHIVE.md §
           # Build performance.
           cache-scope: multiarch
           extra-cache-scopes: dev-multiarch
           tags: |
-            securedbytyler/scrye:${{ steps.version.outputs.version }}
-            securedbytyler/scrye:latest
+            ghcr.io/iamgroot60/scrye:${{ steps.version.outputs.version }}
+            ghcr.io/iamgroot60/scrye:latest
