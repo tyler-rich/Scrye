@@ -1,10 +1,24 @@
-# Scrye — Build Plan
+# Scrye — Build Archive (historical record)
 
 > **Scrye** — a unified, self-hosted web UI for the **Trivy** and **Grype** scanners.
 > ("Scry": to perceive hidden things, fused with "scan.")
-> **Audience:** Claude Code. This is the build specification. `CLAUDE.md` is the condensed
-> operating contract; this document is the detailed reference. Execute in the order given by
-> "Implementation Roadmap" (§12).
+>
+> **This is the historical build record — preserved, not maintained.** It was the original
+> build specification (`PLAN.md`) and is kept verbatim as the archive of *how Scrye was built
+> and why*: the phase-by-phase build order (§12), the locked decisions and their revisions
+> (§0), the data model and architecture as originally specified, the full **Deviations log**
+> (§14 — every place the implementation diverged from the plan, dated, with rationale: the
+> Python 3.13 bump, the INF-2 → GHCR-nightly migration, the post-promotion back-merge process
+> fix, the multi-tier security-audit remediation, etc.), and the durable **Build performance**
+> notes at the end.
+>
+> It is **not** forward-looking. For what's next — open work, known limitations, and planned
+> features — see [`ROADMAP.md`](./ROADMAP.md). For what Scrye is and how to run it, see the
+> [`README.md`](../README.md). `CLAUDE.md` remains the condensed, authoritative operating
+> contract.
+>
+> _Section numbers and the "Plan section affected" cross-references below refer to this
+> document as it stood during the build; they are retained unchanged for the historical trail._
 
 ---
 

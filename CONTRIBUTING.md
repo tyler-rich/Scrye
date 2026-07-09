@@ -145,7 +145,9 @@ scrye/
 ├── LICENSE              # MIT
 ├── .env.example         # generated from the backend Settings model
 ├── docs/
-│   └── PLAN.md          # detailed build specification + deviation log
+│   ├── ARCHIVE.md       # historical build record + dated deviation log
+│   ├── ROADMAP.md       # forward-looking roadmap + known limitations
+│   └── reviews/         # archived security/audit review notes
 ├── backend/
 │   ├── app/
 │   │   ├── main.py      # FastAPI app: API + SPA serving, startup key check,
@@ -223,13 +225,12 @@ scrye/
 
 - [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`,
   `docs:`, `chore:`, …). Small, reviewable changes.
-- Branch from `dev`; one PR per change against `dev` (see § Branching model above). During the
-  phased build, branches are named `phase/PX` (e.g. `phase/P0`); afterwards, use a short
+- Branch from `dev`; one PR per change against `dev` (see § Branching model above). Use a short,
   descriptive branch name.
 - Update docs in the same PR as the code they describe.
 - Commit messages and PR descriptions carry **no AI-attribution footers**.
-- Any divergence from `docs/PLAN.md` is recorded in that file's
-  "Deviations from this plan" section at the time it happens.
+- The dated deviation log lives in [`docs/ARCHIVE.md`](docs/ARCHIVE.md) (the historical build
+  record); forward-looking work is tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ---
 
@@ -254,7 +255,7 @@ plaintext never appears in logs or API reads.
 
 ## Pull request process
 
-1. Fork (or branch) from `dev` and create a `phase/PX` (or descriptive) branch.
+1. Fork (or branch) from `dev` and create a short, descriptively named branch.
 2. Make your change with tests and updated docs.
 3. Ensure the checklist holds:
    - [ ] `ruff` + `black` clean (Python), ESLint + Prettier clean (TypeScript)
@@ -262,7 +263,6 @@ plaintext never appears in logs or API reads.
    - [ ] `docker compose up` brings the stack up and `/healthz` is healthy
    - [ ] Docs updated (README / CONTRIBUTING / `.env.example` as applicable)
    - [ ] No secrets, keys, or tokens committed
-   - [ ] Any plan deviations logged in `docs/PLAN.md`
 4. Open the PR against `dev` (not `main` — see § Branching model above) with a clear summary of
    what changed.
 
@@ -270,25 +270,27 @@ plaintext never appears in logs or API reads.
 
 ## Releasing
 
-`main` is protected and only ever moves via a deliberate, maintainer-initiated release — it is
-never a target for routine contribution PRs.
+Releasing is a deliberate, maintainer-initiated step. `main` is protected and only ever moves via
+a release — it is never a target for routine contribution PRs. Contributors don't need to do
+anything differently: keep branching from and PR'ing into `dev` as usual.
+
+### Promoting `dev` to `main`, then back-merging
 
 1. When `dev` is in a releasable state, the maintainer opens a **promotion PR** from `dev` into
    `main`. This PR must pass the same CI gate as any other before it can merge.
-2. Once the promotion PR merges, `main` is **tagged** (e.g. `v0.x.0`) to mark the release.
-3. **Immediately back-merge `main` into `dev`** (`git checkout dev && git merge origin/main &&
-   git push`) so `dev` shows 0 commits behind `main` again. Because promotions are squash-merged,
-   `main`'s squashed copy of the just-promoted work conflicts with `dev`'s newer versions of those
-   files — resolve every such conflict in favour of `dev`. The only content the back-merge should
-   actually bring into `dev` is anything that landed on `main` independently of the promotion
-   (e.g. a Dependabot or hotfix PR targeted at `main`). Skipping this is what leaves `dev`
-   accumulating phantom "behind" commits after each release.
-4. Contributors don't need to do anything differently for this — keep branching from and PR'ing
-   into `dev` as usual; release promotion is handled separately by the maintainer.
+2. Once the promotion PR merges, `main` is **tagged** (e.g. `v0.x.0`) to mark the release. The tag
+   is what triggers publishing (below).
+3. **Immediately back-merge `main` into `dev`** (`git fetch origin main dev && git checkout dev &&
+   git merge origin/main && git push`) so `dev` shows 0 commits behind `main` again. Because
+   promotions are squash-merged, `main`'s squashed copy of the just-promoted work conflicts with
+   `dev`'s newer versions of those files — resolve every such conflict in favour of `dev`. The
+   only content the back-merge should actually bring into `dev` is anything that landed on `main`
+   independently of the promotion (e.g. a Dependabot or hotfix PR targeted at `main`); verify the
+   net diff against `dev`'s pre-merge tip is exactly that. Skipping this is what leaves `dev`
+   accumulating phantom "behind" commits after each release. (Dependabot targets `dev`, so
+   promotion squashes are normally the only thing the back-merge has to reconcile.)
 
----
-
-## Releasing
+### What gets published
 
 CI (`.github/workflows/ci.yml`) never publishes — it only lints, tests, and proves the image
 builds for both architectures. Publishing is split across two registries with two distinct roles:

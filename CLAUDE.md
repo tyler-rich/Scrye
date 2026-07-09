@@ -1,8 +1,9 @@
 # CLAUDE.md — Scrye
 
 Operating contract for Claude Code on the **Scrye** project. Read this first, every session.
-Full detail lives in `docs/PLAN.md` — this file is the condensed, authoritative ruleset.
-When this file and the plan disagree, **this file wins**; if either conflicts with explicit user
+The historical build record and dated deviation log live in `docs/ARCHIVE.md`; forward-looking
+work lives in `docs/ROADMAP.md`. This file is the condensed, authoritative ruleset. When this
+file and the archive disagree, **this file wins**; if either conflicts with explicit user
 instructions in the session, the user wins.
 
 ## When to ask vs. decide
@@ -25,7 +26,7 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 1. **Name:** Scrye.
 2. **Stack:** React 18 + TS + Vite + **Mantine v7** frontend; **Python 3.13 + FastAPI + Pydantic
    v2 + SQLAlchemy 2.0 + Alembic** backend; **SQLite**. (Originally locked to Python 3.12;
-   revised to 3.13 in Phase 6 — see `docs/PLAN.md` § Deviations.)
+   revised to 3.13 in Phase 6 — see `docs/ARCHIVE.md` § Deviations.)
 3. **Job model:** single-container **in-process async worker** (DB-backed `scans` table +
    concurrency semaphore). **No Redis/arq in v1** — but keep a thin worker interface so it could be
    swapped later.
@@ -53,7 +54,7 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
    No other registries or tags. `latest` and `:<version>` come **only** from tagged main releases
    on Docker Hub; `:dev` comes **only** from the nightly GHCR build of `dev`. (A `schedule` trigger
    is not PR-triggered, so it always has a token — this is what retires the fork-secrets gap the
-   audit logged as INF-2; see `docs/PLAN.md` § Deviations, 2026-07-06.)
+   audit logged as INF-2; see `docs/ARCHIVE.md` § Deviations, 2026-07-06.)
 7. **Theme:** **teal** primary (`primaryColor: 'teal'`), first-class **light and dark** modes.
 
 ## Hard security rules (non-negotiable)
@@ -139,11 +140,11 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   — rebase and re-author with `--force-with-lease`, and edit the PR body directly — before telling
   the user the PR is ready. Do not report this check as passed without having actually run it this
   session.
-- **Deviations from `docs/PLAN.md` are recorded in `docs/PLAN.md` itself, not only in the PR.**
+- **Deviations from `docs/ARCHIVE.md` are recorded in `docs/ARCHIVE.md` itself, not only in the PR.**
   The moment you implement something differently than the plan specifies, say so inline in the
   session as you do it, and add a dated entry to the "Deviations from this plan" section at the
-  bottom of `docs/PLAN.md` (what changed, why, which phase). The PR description only needs a
-  one-line pointer — e.g. "See `docs/PLAN.md` § Deviations for changes made in this phase" — not
+  bottom of `docs/ARCHIVE.md` (what changed, why, which phase). The PR description only needs a
+  one-line pointer — e.g. "See `docs/ARCHIVE.md` § Deviations for changes made in this phase" — not
   the full explanation repeated there.
 
 ## Definition of done (per phase — all must hold before opening the PR)
@@ -152,7 +153,7 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 3. CI (`.github/workflows/ci.yml`) is green on the PR.
 4. `docker compose up` brings the stack up and `/healthz` returns healthy.
 5. Docs touched by the phase are updated (README/CONTRIBUTING/`.env.example` as applicable).
-6. Any deviations are logged in `docs/PLAN.md` § Deviations.
+6. Any deviations are logged in `docs/ARCHIVE.md` § Deviations.
 7. No secrets, keys, or tokens committed; `.gitignore` still covers all sensitive paths.
 8. Commits/PR are **verified** — not assumed — to be under the user's git identity with no
    attribution footers, checked via `git log --format="%an <%ae>%n%B"` and the live PR body,
@@ -198,7 +199,7 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   dependency installs are ordered before app-code copies so a code-only change doesn't
   invalidate them. The CI build-cache scopes are partitioned deliberately (each build path
   *writes* one scope and only *reads* warm sibling scopes) to stay within the 10 GB GHA cache
-  budget without going cold. **Read `docs/PLAN.md` § Build performance before restructuring the
+  budget without going cold. **Read `docs/ARCHIVE.md` § Build performance before restructuring the
   Dockerfile, consolidating stages, reordering layers, or changing the build workflows' cache
   scopes** — those shapes are load-bearing for build time, not incidental.
 
@@ -224,7 +225,7 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   to it. See Coding standards § Third-party license attribution.
 
 ## Build order
-Follow the phased roadmap in `docs/PLAN.md` §12 (Phase 0 scaffold → Phase 6 polish).
+Follow the phased roadmap in `docs/ARCHIVE.md` §12 (Phase 0 scaffold → Phase 6 polish).
 Create `README.md`, `CONTRIBUTING.md`, `LICENSE`, `.gitignore`, `.github/workflows/ci.yml`, and
 `THIRD_PARTY_LICENSES/` in Phase 0 — CI must exist and pass before Phase 0's own PR is opened;
 generate `.env.example` from the `Settings` model once the config layer exists (Phase 0–1); and
