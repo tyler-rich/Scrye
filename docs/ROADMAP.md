@@ -48,8 +48,6 @@ Small, self-contained work that closes a concrete gap.
   protected branches, which means contributors must sign — worth it for a security tool, so weigh
   the contributor friction); and enable **private vulnerability reporting** and Dependabot
   **security** updates in the repo's Security settings.
-- **Real screenshots in the README.** The README screenshot table is still placeholders. Capture
-  the dashboard, new-scan, results, and history views from a running instance.
 
 ## Medium-term
 
