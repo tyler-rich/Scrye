@@ -1920,3 +1920,70 @@ other paths work as soon as those paths land on their trigger branches.
 nav double-highlighted on the new-scan page.
 **Plan section affected:** §7 (theme, hue only), §5 (RBAC — new destructive action), §4.6
 (dashboard aggregates), frontend nav.
+
+### 2026-07-09 — Post-v1 — v0.1.0 bundled-binary CVE check: no upstream fix available yet
+**What changed:** Nothing in the image — a version-bump-if-available check across all severities
+that concluded **no bump is applicable**, logged here per the "Bundled scanner binaries track
+upstream for CVEs" limitation (README § Integrations; ROADMAP § Known limitations). A Docker Scout
+scan of the published `ghcr.io/tyler-rich/scrye:0.1.0` image (`--only-fixed`, no severity filter)
+surfaced ten distinct CVEs, **all** inside the bundled upstream scanner binaries
+(`/usr/local/bin/{trivy,grype,syft}`) — none in Scrye's own base image, OS packages, Python/JS
+deps, or application code (those stay fully gated by the CI dogfood). Grouped by the embedded
+module and the upstream version that fixes each:
+
+- **Go standard library** (grype + syft, built against `stdlib@1.26.3`):
+  - CVE-2026-42504 (HIGH) — `net/textproto` MIME-header CPU exhaustion — fixed in Go **1.26.4**.
+  - CVE-2026-42507 (MEDIUM) — `net/textproto` error-message injection — fixed in Go **1.26.4**.
+  - CVE-2026-39822 (LOW) — `os.Root` symlink escape — fixed in Go **1.26.5**.
+  - CVE-2026-42505 (LOW) — ECH pre-shared-key identity disclosure — fixed in Go **1.26.5**.
+- **oras.land/oras-go/v2** (trivy, embeds `2.6.0`):
+  - CVE-2026-50151 (HIGH) — SSRF / credential-forwarding via blob-upload `Location` header — fixed
+    in oras-go **2.6.1**.
+  - GHSA-vh4v-2xq2-g5cg (MEDIUM) — related oras-go issue — fixed in oras-go **2.6.1**.
+  - CVE-2026-48978 (LOW) — SSRF / cleartext transmission via unvalidated bearer-challenge realm —
+    fixed in oras-go **2.6.1**.
+- **github.com/docker/docker (moby)** (grype, embeds `28.5.2+incompatible`):
+  - CVE-2026-34040 (HIGH) — AuthZ-plugin bypass (incomplete fix for CVE-2024-41110) — fixed in
+    moby **29.3.1**.
+- **github.com/sigstore/timestamp-authority/v2** (trivy signing/attestation path, embeds `2.0.6`):
+  - CVE-2026-49835 (MEDIUM) — unbounded memory growth via unauthenticated metrics-label injection
+    — fixed in timestamp-authority **2.1.0**.
+
+Per binary, the currently-pinned versions **are already the latest available upstream releases**
+as of this date (verified against each project's release feed):
+
+- **Trivy** — pinned `0.72.0` (released 2026-06-30); latest upstream is `0.72.0`. No newer release
+  exists, so nothing rebuilds `oras-go` past `2.6.0` or `timestamp-authority` past `2.0.6`. **All
+  four Trivy-side CVEs remain unresolved at latest.**
+- **Grype** — pinned `0.115.0` (released 2026-06-26); latest upstream is `0.115.0`. Still built on
+  Go `1.26.3` and moby `28.5.2`. **All Grype-side CVEs (the four Go-stdlib items shared with Syft,
+  plus moby CVE-2026-34040) remain unresolved at latest.**
+- **Syft** — pinned `1.46.0` (released 2026-06-26); latest upstream is `1.46.0`. Still built on Go
+  `1.26.3`. **The four Go-stdlib CVEs remain unresolved at latest.**
+
+Because the Scout scan found these CVEs *in the v0.1.0 image itself* — which was built with exactly
+these pinned versions — the latest upstream releases by definition do not yet resolve any of them.
+The relevant fixed dependencies are recent (Go `1.26.4` early June 2026, Go `1.26.5` on 2026-07-07
+— two days before this check, oras-go `2.6.1`, moby `29.3.1`, timestamp-authority `2.1.0`), and
+Aqua/Anchore have not yet cut a scanner release rebuilt against them. This is exactly the
+"genuinely unfixable-by-us upstream item" carve-out (CLAUDE.md § Dependency hygiene): the fix path
+is a scanner-version bump once upstream ships one, not a Scrye-side patch — no vendoring, no
+binary workarounds. The three `*_VERSION` pins in `docker/Dockerfile` are therefore left unchanged,
+and each is re-confirmed as the current latest so this is a tracked treadmill item, not a stale
+pin. When Aqua/Anchore publish a release built against the patched deps, the fix is the usual
+one-line `ARG` bump (the Dockerfile self-verifies each new asset against the publisher's signed
+`checksums.txt`) plus a fresh Scout/Grype scan confirming the specific CVE IDs are gone.
+
+Because no binary version changed and the image is byte-for-byte unaffected, this is **not** a new
+release: Scrye's app version stays `0.1.0` (`backend/app/__init__.py`, `backend/pyproject.toml`,
+`frontend/package.json`, `/healthz`), and no `## [0.1.1]` CHANGELOG entry is warranted — a version
+bump and changelog entry are gated on an actual binary bump shipping, which did not happen here.
+The next scanner-version bump that does resolve one or more of these CVEs is what cuts `0.1.1`.
+**Why:** CLAUDE.md § Dependency hygiene requires keeping bundled scanner binaries current and
+resolving fixable findings; this check verified all three are already current and that the ten
+findings are upstream-embedded items with no fixed release available yet, so the correct action is
+to record them as tracked limitations rather than bump or patch. Documented here (not a re-push of
+the immutable `0.1.0` tag) so the check is on the record and the next person sees the exact CVE →
+upstream-fix-version mapping to re-test against.
+**Plan section affected:** §9.1 (bundled scanner pins), CLAUDE.md § Dependency hygiene, README §
+Integrations / ROADMAP § Known limitations (bundled-binary CVE tracking).
