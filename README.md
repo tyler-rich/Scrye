@@ -62,11 +62,9 @@ single findings model so Trivy and Grype render in one table.
 
 ## Screenshots
 
-_Placeholders — real captures are tracked on the [roadmap](./docs/ROADMAP.md)._
-
-| Dashboard | New scan | Results | History |
-| --------- | -------- | ------- | ------- |
-| _TODO_    | _TODO_   | _TODO_  | _TODO_  |
+| Dashboard                                        | New scan                                       | Results                                     | History                                       |
+| ------------------------------------------------- | ----------------------------------------------- | -------------------------------------------- | ----------------------------------------------- |
+| ![Dashboard](./docs/screenshots/dashboard.png)     | ![New scan](./docs/screenshots/new-scan.png)     | ![Results](./docs/screenshots/results.png)   | ![History](./docs/screenshots/history.png)      |
 
 ---
 
