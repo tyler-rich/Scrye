@@ -64,7 +64,7 @@ single findings model so Trivy and Grype render in one table.
 
 | Dashboard | New scan | Results | History |
 | --------- | -------- | ------- | ------- |
-| <img src="./docs/screenshots/dashboard.png" width="220" alt="Dashboard"> | <img src="./docs/screenshots/new-scan.png" width="220" alt="New scan"> | <img src="./docs/screenshots/results.png" width="220" alt="Results"> | <img src="./docs/screenshots/history.png" width="220" alt="History"> |
+| <img src="./docs/screenshots/dashboard.png" width="260" height="200" alt="Dashboard"> | <img src="./docs/screenshots/new-scan.png" width="260" height="200" alt="New scan"> | <img src="./docs/screenshots/results.png" width="260" height="200" alt="Results"> | <img src="./docs/screenshots/history.png" width="260" height="200" alt="History"> |
 
 ---
 
