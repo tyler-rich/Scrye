@@ -62,9 +62,9 @@ single findings model so Trivy and Grype render in one table.
 
 ## Screenshots
 
-| Dashboard                                        | New scan                                       | Results                                     | History                                       |
-| ------------------------------------------------- | ----------------------------------------------- | -------------------------------------------- | ----------------------------------------------- |
-| ![Dashboard](./docs/screenshots/dashboard.png)     | ![New scan](./docs/screenshots/new-scan.png)     | ![Results](./docs/screenshots/results.png)   | ![History](./docs/screenshots/history.png)      |
+| Dashboard | New scan | Results | History |
+| --------- | -------- | ------- | ------- |
+| <img src="./docs/screenshots/dashboard.png" width="220" alt="Dashboard"> | <img src="./docs/screenshots/new-scan.png" width="220" alt="New scan"> | <img src="./docs/screenshots/results.png" width="220" alt="Results"> | <img src="./docs/screenshots/history.png" width="220" alt="History"> |
 
 ---
 
