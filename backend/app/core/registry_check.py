@@ -18,6 +18,9 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.core.config import get_settings
+from app.core.egress import EgressError, validate_egress_url_async
+
 _TIMEOUT_SECONDS = 10.0
 _CHALLENGE_RE = re.compile(r'(\w+)="([^"]*)"')
 
@@ -61,6 +64,12 @@ async def _bearer_token(
         return None
     if urlparse(realm).scheme != "https":
         return None
+    # The realm host is attacker-influenced (it comes from the probed registry's
+    # own header); refuse to send the credential to an internal/metadata target.
+    try:
+        await validate_egress_url_async(realm, allow_internal=get_settings().allow_internal_egress)
+    except EgressError:
+        return None
     params = {k: challenge[k] for k in ("service", "scope") if challenge.get(k)}
     response = await client.get(realm, params=params, auth=auth)
     if response.status_code != 200:
@@ -94,6 +103,10 @@ async def check_registry(*, registry_host: str, username: str | None, secret: st
             False,
             "Registry probe requires an https URL; refusing to send credentials over http.",
         )
+    try:
+        await validate_egress_url_async(base, allow_internal=get_settings().allow_internal_egress)
+    except EgressError as exc:
+        return RegistryCheck(False, str(exc))
     url = f"{base}/v2/"
     auth = (username or "", secret)
     try:

@@ -17,7 +17,9 @@ from email.message import EmailMessage
 import anyio.to_thread
 import httpx
 
+from app.core.config import get_settings
 from app.core.crypto import SecretDecryptError
+from app.core.egress import validate_egress_host, validate_egress_url_async
 from app.core.secret_store import AAD_NOTIFICATION_SECRET, decrypt_secret
 from app.db.models import NotificationChannel, NotificationType
 
@@ -51,6 +53,7 @@ async def _send_webhook(channel: NotificationChannel, message: str, secret: str 
     url = secret or channel.config.get("url")
     if not url:
         raise ValueError("Webhook channel has no 'url' configured.")
+    await validate_egress_url_async(url, allow_internal=get_settings().allow_internal_egress)
     async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as http:
         response = await http.post(
             url, json={"text": message}, headers={"Content-Type": "application/json"}
@@ -68,6 +71,7 @@ async def _send_discord(channel: NotificationChannel, message: str, secret: str 
     url = secret or channel.config.get("url")
     if not url:
         raise ValueError("Discord channel has no webhook URL configured.")
+    await validate_egress_url_async(url, allow_internal=get_settings().allow_internal_egress)
     async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as http:
         response = await http.post(url, json={"content": message})
         response.raise_for_status()
@@ -81,6 +85,7 @@ async def _send_matrix(channel: NotificationChannel, message: str, secret: str |
         raise ValueError("Matrix channel needs 'homeserver' and 'room_id'.")
     if not secret:
         raise ValueError("Matrix channel needs an access token.")
+    await validate_egress_url_async(homeserver, allow_internal=get_settings().allow_internal_egress)
     url = f"{homeserver}/_matrix/client/v3/rooms/{room_id}/send/m.room.message"
     # Pass the access token in the Authorization header, never as a URL query
     # parameter: query-string auth is deprecated by the Matrix spec (v1.1+) and
@@ -102,6 +107,9 @@ def _send_smtp(channel: NotificationChannel, message: str, secret: str | None) -
     recipient = config.get("to")
     if not host or not sender or not recipient:
         raise ValueError("SMTP channel needs 'host', 'from', and 'to'.")
+    # SMTP has no URL scheme; guard the bare host against SSRF to internal/
+    # metadata addresses (this runs in a worker thread, so the sync guard is fine).
+    validate_egress_host(host, allow_internal=get_settings().allow_internal_egress)
     port = int(config.get("port", 587))
     username = config.get("username") or sender
 

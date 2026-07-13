@@ -471,6 +471,7 @@ have to touch it:
 | `SCRYE_TRIVY_SERVER_URL` | _(unset)_ | **Conditional** | Only when the [`trivy-server` sidecar](#optional-sidecars) is enabled (e.g. `http://trivy-server:4954`). |
 | `SCRYE_DOCKER_PROXY_URL` | _(unset)_ | **Conditional** | Only for ["scan running images"](#optional-sidecars) via the read-only docker-socket-proxy (e.g. `http://docker-socket-proxy:2375`). |
 | `SCRYE_FILESYSTEM_SCAN_ROOTS` | _(empty)_ | **Conditional** | Comma-separated absolute paths under which Grype `dir:` scans are allowed. Empty **disables** filesystem scanning; set it (and mount the paths) to enable. |
+| `SCRYE_ALLOW_INTERNAL_EGRESS` | `false` | Optional | Allow server-side fetchers (notification webhook/SMTP/Matrix, the registry probe) to reach **private/internal** addresses. Off by default to block SSRF; enable only if you use an internal SMTP relay or private registry. Loopback and cloud-metadata addresses are **always** refused. |
 | `SCRYE_APP_NAME` | `Scrye` | Optional | Application name shown in the UI and logs. |
 | `SCRYE_ENVIRONMENT` | `production` | Optional | `development` or `production`. |
 | `SCRYE_LOG_LEVEL` | `INFO` | Optional | Root log level. |
@@ -785,6 +786,14 @@ only in memory at scan time.
   is mounted (read-only). Anyone who can reach the proxy can _enumerate_ images
   and containers, so enable that profile deliberately and keep it on the internal
   network.
+- **Outbound egress / SSRF.** Admin-configured fetch targets — notification
+  transports (webhook/Discord/Matrix/SMTP), the registry connectivity probe, and
+  the Docker socket proxy — are resolved and screened before Scrye connects.
+  Loopback and link-local/**cloud-metadata** (`169.254.169.254`) addresses are
+  **always** refused; RFC-1918/private addresses are refused **by default** and
+  permitted only when `SCRYE_ALLOW_INTERNAL_EGRESS=true` (for deployments that use
+  an internal SMTP relay or private registry). This is a best-effort,
+  defense-in-depth control on an already admin-gated, CSRF-protected surface.
 - **Trusted reverse-proxy hops (`SCRYE_FORWARDED_ALLOW_IPS` — required per
   deployment).** Scrye honors `X-Forwarded-For` (uvicorn `--proxy-headers`) so the
   auth rate limiter and audit log see the **real** client IP. The logic is
