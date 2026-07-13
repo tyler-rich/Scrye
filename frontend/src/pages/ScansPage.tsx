@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ActionIcon,
@@ -47,6 +47,7 @@ import {
 } from '../api/scans';
 import { createPreset, deletePreset, listPresets, type FilterPreset } from '../api/presets';
 import { formatWhen, parseUtc } from '../lib/dates';
+import { createLatestGuard } from '../lib/latest';
 import { ScanStatusBadge } from '../components/ScanStatusBadge';
 import { SeverityBadge } from '../components/SeverityBadge';
 
@@ -95,7 +96,14 @@ export function ScansPage() {
     [filters, dateFrom, dateTo],
   );
 
+  // Latest-wins guard: the debounce delays sending but never cancels in-flight
+  // requests, so a slow response for an old filter could resolve after a newer
+  // one and overwrite the table with rows that contradict the visible filters
+  // (M21 / P1-4). Only the most recent request is allowed to render.
+  const historyGuard = useRef(createLatestGuard());
+
   const load = useCallback(async () => {
+    const token = historyGuard.current.begin();
     try {
       const result = await listHistory({
         ...effectiveFilters,
@@ -104,9 +112,11 @@ export function ScansPage() {
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
       });
+      if (!historyGuard.current.isCurrent(token)) return;
       setData(result);
       setError(null);
     } catch (err: unknown) {
+      if (!historyGuard.current.isCurrent(token)) return;
       setError(err instanceof Error ? err.message : 'Failed to load history.');
     }
   }, [effectiveFilters, sort, order, page]);
