@@ -74,6 +74,32 @@ class TestIgnoreRuleApi:
             client.delete(f"/api/trivy/ignore-rules/{rid}", headers={CSRF: csrf}).status_code == 204
         )
 
+    def test_aware_expires_at_normalized_to_utc(self, client: TestClient) -> None:
+        """An offset-aware ``expires_at`` is stored on the correct UTC instant (APIR-1).
+
+        ``2026-08-01T00:00:00+09:00`` is ``2026-07-31T15:00:00`` in UTC; without
+        normalization the ``+09:00`` offset was silently dropped, suppressing the
+        CVE for 9 extra hours.
+        """
+        csrf = setup_admin(client)
+        rid = client.post(
+            "/api/trivy/ignore-rules",
+            json={"vuln_id": "CVE-2026-5555", "expires_at": "2026-08-01T00:00:00+09:00"},
+            headers={CSRF: csrf},
+        ).json()["id"]
+
+        stored = client.get("/api/trivy/ignore-rules").json()[0]["expires_at"]
+        assert stored.startswith("2026-07-31T15:00:00"), stored
+
+        # A naive timestamp is assumed to already be UTC and passes through.
+        client.put(
+            f"/api/trivy/ignore-rules/{rid}",
+            json={"vuln_id": "CVE-2026-5555", "expires_at": "2026-08-01T00:00:00"},
+            headers={CSRF: csrf},
+        )
+        stored = client.get("/api/trivy/ignore-rules").json()[0]["expires_at"]
+        assert stored.startswith("2026-08-01T00:00:00"), stored
+
 
 class TestPolicyLoad:
     def test_load_combines_global_and_active_rules(self, db: Session) -> None:

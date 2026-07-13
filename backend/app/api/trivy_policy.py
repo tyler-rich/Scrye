@@ -15,12 +15,13 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.core.audit import record_audit
+from app.core.timeutil import to_naive_utc
 from app.db.models import Role, TrivyIgnoreRule, VexDocument, VexFormat
 from app.db.session import get_db
 
@@ -211,6 +212,17 @@ class IgnoreRuleIn(BaseModel):
     reason: str | None = Field(default=None, max_length=512)
     expires_at: datetime | None = None
     enabled: bool = True
+
+    @field_validator("expires_at")
+    @classmethod
+    def _normalize_expires_at(cls, value: datetime | None) -> datetime | None:
+        """Store ``expires_at`` as naive UTC so a client offset isn't dropped.
+
+        The ``DateTime`` column is naive-UTC (``core/timeutil``); without this an
+        aware timestamp like ``2026-08-01T00:00:00+09:00`` would persist its
+        wall-clock fields verbatim, expiring the rule 9 hours late.
+        """
+        return to_naive_utc(value)
 
 
 def _get_rule_or_404(db: Session, rule_id: int) -> TrivyIgnoreRule:
