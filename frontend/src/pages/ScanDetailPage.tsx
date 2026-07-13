@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -22,6 +22,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { IconAlertCircle, IconArrowLeft, IconDownload, IconTrash } from '@tabler/icons-react';
 
 import { ApiError } from '../api/client';
+import { sameItems } from '../lib/arrays';
 import { formatWhen } from '../lib/dates';
 import { MAX_POLL_FAILURES, POLL_BASE_MS, pollBackoffMs } from '../lib/polling';
 import { safeHttpUrl } from '../lib/url';
@@ -90,6 +91,10 @@ export function ScanDetailPage() {
   const [severityFilter, setSeverityFilter] = useState<Severity | null>(null);
   const [classFilter, setClassFilter] = useState<FindingClass | null>(null);
   const [tagDraft, setTagDraft] = useState<string[]>([]);
+  // The server tags we last synced into the draft. The status poll refreshes
+  // the scan every few seconds; syncing the draft only when it still matches
+  // this keeps a poll from wiping an operator's in-progress edit (L16 / P2-1).
+  const lastSyncedTags = useRef<string[]>([]);
   const [savingTags, setSavingTags] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Non-null once the status poller gives up: 'gone' = the scan 404s (deleted),
@@ -103,7 +108,11 @@ export function ScanDetailPage() {
     try {
       const s = await getScan(id);
       setScan(s);
-      setTagDraft(s.tags);
+      // Adopt the server's tags only if the operator hasn't edited the draft
+      // away from what we last synced — don't clobber an in-progress edit.
+      const prevSynced = lastSyncedTags.current;
+      lastSyncedTags.current = s.tags;
+      setTagDraft((draft) => (sameItems(draft, prevSynced) ? s.tags : draft));
       setError(null);
       setPollHalt(null);
       return 'ok';
@@ -122,6 +131,7 @@ export function ScanDetailPage() {
     try {
       const updated = await setScanTags(id, tagDraft);
       setScan(updated);
+      lastSyncedTags.current = updated.tags;
       setTagDraft(updated.tags);
       setError(null);
     } catch (err: unknown) {
