@@ -912,6 +912,13 @@ their embedded Go modules track upstream's release cadence — keeping the pinne
 scanner versions current is how those are addressed. CI never publishes; GHCR
 publishing lives in separate release and nightly workflows.
 
+The dogfood gate only runs when code changes, so a **weekly scheduled re-scan**
+(`.github/workflows/rescan.yml`) pulls the already-published `:latest` and `:dev`
+images and re-runs the same Trivy/Grype gate against them. A newly disclosed,
+fixable HIGH/CRITICAL CVE in a shipped image opens (or comments on) a tracking
+issue rather than gating a merge — so a quiet period can't hide a fresh CVE in the
+image you're running.
+
 ---
 
 ## Roadmap
