@@ -36,10 +36,14 @@ class AuditEntryOut(BaseModel):
 
 
 class AuditPageOut(BaseModel):
-    """A page of audit entries, newest first."""
+    """A page of audit entries, newest first.
+
+    Uses the ``{total, items}`` envelope shared by every other paginated
+    endpoint (history, findings) rather than a third key name (APIR-8).
+    """
 
     total: int
-    entries: list[AuditEntryOut]
+    items: list[AuditEntryOut]
 
 
 @router.get("", response_model=AuditPageOut)
@@ -57,4 +61,4 @@ def list_audit_entries(
         .limit(limit)
         .offset(offset)
     ).all()
-    return AuditPageOut(total=total, entries=[AuditEntryOut.model_validate(r) for r in rows])
+    return AuditPageOut(total=total, items=[AuditEntryOut.model_validate(r) for r in rows])
