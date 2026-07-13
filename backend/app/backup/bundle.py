@@ -159,30 +159,44 @@ def build_bundle(db: Session, passphrase: str) -> bytes:
 
     _warn_if_large(db)
 
+    # Read every table inside one explicit transaction so the whole dump is a
+    # single consistent snapshot. pysqlite's legacy isolation defers BEGIN to
+    # the first DML, leaving each SELECT its own implicit read transaction — a
+    # scan committing between two table reads would then land in the later table
+    # (findings) but not the earlier one (scans), producing a torn bundle
+    # (CON-9). An explicit BEGIN takes the WAL read snapshot at the first SELECT
+    # and holds it across every table; WAL keeps a long reader cheap and
+    # non-blocking for concurrent writers. The transaction is read-only, so it is
+    # released with a rollback once the dump is assembled.
+    db.rollback()  # discard any autobegun transaction so the raw BEGIN is clean
+    db.execute(text("BEGIN"))
     tables: dict[str, dict] = {}
-    for table in _backup_tables():
-        rows: list[dict] = []
-        # Stream rows from the driver instead of buffering the whole result set
-        # in the DBAPI cursor before we start processing (API-3).
-        for record in db.execute(select(table)).yield_per(_RESTORE_CHUNK_ROWS).mappings():
-            row: dict = {}
-            for column in table.columns:
-                value = record[column.name]
-                aad = _SECRET_MAP.get((table.name, column.name))
-                if aad is not None and value:
-                    try:
-                        plaintext = master.decrypt(value, aad=aad)
-                    except SecretDecryptError as exc:
-                        raise BackupError(
-                            f"Cannot re-wrap secret {table.name}.{column.name}: "
-                            "it could not be decrypted under the current master key."
-                        ) from exc
-                    value = pass_cipher.encrypt(plaintext, aad=aad)
-                elif isinstance(value, datetime):
-                    value = value.isoformat()
-                row[column.name] = value
-            rows.append(row)
-        tables[table.name] = {"rows": rows}
+    try:
+        for table in _backup_tables():
+            rows: list[dict] = []
+            # Stream rows from the driver instead of buffering the whole result
+            # set in the DBAPI cursor before we start processing (API-3).
+            for record in db.execute(select(table)).yield_per(_RESTORE_CHUNK_ROWS).mappings():
+                row: dict = {}
+                for column in table.columns:
+                    value = record[column.name]
+                    aad = _SECRET_MAP.get((table.name, column.name))
+                    if aad is not None and value:
+                        try:
+                            plaintext = master.decrypt(value, aad=aad)
+                        except SecretDecryptError as exc:
+                            raise BackupError(
+                                f"Cannot re-wrap secret {table.name}.{column.name}: "
+                                "it could not be decrypted under the current master key."
+                            ) from exc
+                        value = pass_cipher.encrypt(plaintext, aad=aad)
+                    elif isinstance(value, datetime):
+                        value = value.isoformat()
+                    row[column.name] = value
+                rows.append(row)
+            tables[table.name] = {"rows": rows}
+    finally:
+        db.rollback()  # end the read-only snapshot transaction
 
     inner = json.dumps({"tables": tables}, separators=(",", ":"))
     payload = pass_cipher.encrypt(inner, aad=AAD_BUNDLE)

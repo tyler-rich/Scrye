@@ -323,3 +323,101 @@ class TestScheduledBackup:
         db.commit()  # prune_scheduled defers the commit to its caller
         assert pruned == 3
         assert len(db.scalars(select(Backup)).all()) == 2
+
+
+class TestBackupSnapshotConsistency:
+    """CON-9: the dump reads a single consistent snapshot and scheduled backups
+    defer while a scan is active."""
+
+    def test_build_bundle_excludes_a_write_committed_mid_dump(
+        self, db: Session, monkeypatch
+    ) -> None:
+        """A scan committed by another connection *between* two table reads must
+        not leak into the bundle: the dump holds one WAL read snapshot across
+        every table, so a torn (scans-vs-findings) capture is impossible."""
+        from sqlalchemy import event
+
+        from app.backup import bundle as bundle_mod
+        from app.db.base import Base
+        from app.db.session import SessionLocal, engine
+
+        _seed(db)  # gives the users table a row read before scans
+
+        users_tbl = Base.metadata.tables["users"]
+        scans_tbl = Base.metadata.tables["scans"]
+        # Force a deterministic order: users read first (establishing the
+        # snapshot), scans read second (must not see the injected row).
+        monkeypatch.setattr(bundle_mod, "_backup_tables", lambda: [users_tbl, scans_tbl])
+
+        state = {"injected": False}
+
+        def _inject_after_first_select(conn, cursor, statement, params, context, many):
+            # Fire right after the dump reads the first table (users) — the read
+            # that establishes the snapshot — and before it reads scans.
+            if state["injected"] or "from users" not in statement.lower():
+                return
+            state["injected"] = True
+            # A separate pooled connection commits a new (terminal) scan while
+            # the dump's snapshot transaction is open on `db`'s connection.
+            other = SessionLocal()
+            try:
+                other.add(
+                    Scan(
+                        scanner=Scanner.GRYPE,
+                        target_type=TargetType.IMAGE,
+                        target="injected:mid-dump",
+                        status=ScanStatus.SUCCEEDED,
+                        options={},
+                        severity_counts={},
+                    )
+                )
+                other.commit()
+            finally:
+                other.close()
+
+        event.listen(engine, "after_cursor_execute", _inject_after_first_select)
+        try:
+            data = build_bundle(db, PASSPHRASE)
+        finally:
+            event.remove(engine, "after_cursor_execute", _inject_after_first_select)
+
+        assert state["injected"], "the concurrent write was never triggered"
+        # Restore the bundle and confirm the injected scan is absent — the dump
+        # captured the pre-injection snapshot, not a torn one.
+        restore_bundle(db, data, PASSPHRASE)
+        targets = {s.target for s in db.scalars(select(Scan)).all()}
+        assert "injected:mid-dump" not in targets
+
+    def test_scheduled_backup_defers_while_a_scan_is_active(self, db: Session, tmp_path) -> None:
+        _seed(db)
+        db.add(
+            BackupSchedule(
+                id=BACKUP_SCHEDULE_ID,
+                enabled=True,
+                interval_hours=24,
+                retention_count=2,
+                passphrase_ciphertext=encrypt_secret(PASSPHRASE, aad="backup.passphrase"),
+                secret_updated_at=utcnow(),
+            )
+        )
+        db.add(
+            Scan(
+                scanner=Scanner.GRYPE,
+                target_type=TargetType.IMAGE,
+                target="running:now",
+                status=ScanStatus.RUNNING,
+                options={},
+                severity_counts={},
+            )
+        )
+        db.commit()
+
+        result = run_due_backup(db, store=BackupStore(tmp_path))
+
+        assert result == "skipped"
+        assert db.scalars(select(Backup)).all() == []
+        schedule = db.get(BackupSchedule, BACKUP_SCHEDULE_ID)
+        # last_run_at stays unset so the backup retries next tick once the scan
+        # finishes, rather than silently skipping the whole interval.
+        assert schedule.last_run_at is None
+        assert "scan active" in (schedule.last_status or "")

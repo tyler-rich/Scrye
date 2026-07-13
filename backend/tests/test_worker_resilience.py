@@ -10,6 +10,7 @@ hold executions while the database is rewritten.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import sqlite3
 import threading
 from datetime import timedelta
@@ -262,9 +263,215 @@ class TestStaleScanWatchdog:
         worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
         scheduler = MaintenanceScheduler(SessionLocal, worker)
         await scheduler.tick()
+        await scheduler.shutdown()  # drains the detached DB-update task
         await worker.shutdown()
         db.expire_all()
         assert db.get(Scan, scan_id).status is ScanStatus.SUCCEEDED
+
+
+class TestBoundedSchedulerShutdown:
+    @pytest.mark.asyncio
+    async def test_shutdown_gives_up_on_a_wedged_task(self, monkeypatch) -> None:
+        """A tick stuck in a non-cancellable thread must not hold shutdown past
+        the bound — shutdown logs and abandons it instead of blocking (CON-6)."""
+        from app.workers import maintenance as maintenance_mod
+        from app.workers.maintenance import MaintenanceScheduler
+
+        monkeypatch.setattr(maintenance_mod, "_SHUTDOWN_TASK_TIMEOUT_SECONDS", 0.2)
+        scheduler = MaintenanceScheduler(SessionLocal, InProcessScanWorker(SessionLocal, 1))
+        release = asyncio.Event()
+
+        async def _wedged() -> None:
+            # Swallow cancellation (mimics a cancel delivered while inside a
+            # non-cancellable to_thread pass) until the test lets it go, so
+            # shutdown must time out rather than await the cancellation.
+            while not release.is_set():
+                try:
+                    await asyncio.sleep(3600)
+                except asyncio.CancelledError:
+                    continue
+
+        wedged = asyncio.create_task(_wedged())
+        scheduler._task = wedged
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        await scheduler.shutdown()
+        elapsed = loop.time() - started
+
+        assert elapsed < 2, "shutdown must not block on a wedged task"
+        assert scheduler._task is None
+
+        # Let the abandoned task finish so it isn't garbage-collected pending.
+        release.set()
+        wedged.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await wedged
+
+
+class TestMaintenanceDbUpdateDecoupled:
+    @pytest.mark.asyncio
+    async def test_slow_db_update_does_not_block_the_tick(self, db, monkeypatch) -> None:
+        """A tick must return promptly even while a slow scanner-DB refresh runs;
+        the refresh proceeds as a detached task (CON-13)."""
+        from app.workers import maintenance as maintenance_mod
+        from app.workers.maintenance import MaintenanceScheduler
+
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def _slow_update(*, now):
+            started.set()
+            await release.wait()  # stand in for a multi-minute DB pull
+            return True
+
+        monkeypatch.setattr(maintenance_mod, "maybe_update_scanner_dbs", _slow_update)
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+        scheduler = MaintenanceScheduler(SessionLocal, worker)
+
+        loop = asyncio.get_running_loop()
+        t0 = loop.time()
+        await scheduler.tick()  # must not wait for the slow update
+        assert loop.time() - t0 < 1.0
+        await started.wait()  # the update did start, detached
+        assert scheduler._db_update_task is not None and not scheduler._db_update_task.done()
+
+        # A second tick while the first update is still running must not stack
+        # another update task.
+        first_task = scheduler._db_update_task
+        await scheduler.tick()
+        assert scheduler._db_update_task is first_task
+
+        release.set()
+        await scheduler.shutdown()
+        await worker.shutdown()
+
+
+class TestNotificationSlotRelease:
+    @pytest.mark.asyncio
+    async def test_notification_does_not_hold_the_concurrency_slot(self, db, monkeypatch) -> None:
+        """A scan's finished-notification runs after its semaphore slot is
+        released, so a slow/dead channel can't starve queued scans (CON-15).
+        With max_concurrent=1, a second scan must run to completion while the
+        first scan's notification is still blocked."""
+        notify_started = asyncio.Event()
+        release_notify = asyncio.Event()
+
+        async def _blocking_dispatch(session, scan):
+            notify_started.set()
+            await release_notify.wait()
+
+        monkeypatch.setattr(inprocess, "dispatch_scan_event", _blocking_dispatch)
+        monkeypatch.setattr(inprocess, "get_scanner", lambda s: _FakeScanner(_make_execution()))
+
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+        first = _queue_scan(db)
+        second = _queue_scan(db)
+        try:
+            await worker.submit(first)
+            await asyncio.wait_for(notify_started.wait(), timeout=5)
+            # First scan is done and stuck in notify; its slot must be free.
+            await worker.submit(second)
+            for _ in range(100):
+                db.expire_all()
+                if db.get(Scan, second).status is ScanStatus.SUCCEEDED:
+                    break
+                await asyncio.sleep(0.02)
+            assert db.get(Scan, second).status is ScanStatus.SUCCEEDED
+        finally:
+            release_notify.set()
+            await worker.shutdown()
+
+
+class TestTaskLifecycle:
+    @pytest.mark.asyncio
+    async def test_session_factory_failure_leaves_scan_queued(self, db, monkeypatch) -> None:
+        """A session-factory failure must be caught and logged (not a silent
+        GC-time 'Task exception was never retrieved'); the scan stays QUEUED for
+        the watchdog (CON-16)."""
+        scan_id = _queue_scan(db)
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+
+        def _boom():
+            raise RuntimeError("engine disposed")
+
+        monkeypatch.setattr(worker, "_session_factory", _boom)
+        await worker.submit(scan_id)
+        await worker.shutdown()  # drains the task
+
+        db.expire_all()
+        assert db.get(Scan, scan_id).status is ScanStatus.QUEUED
+
+    @pytest.mark.asyncio
+    async def test_done_callback_logs_a_crashed_task(self, monkeypatch) -> None:
+        """The done callback retrieves and logs an escaped task exception."""
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+        logged: list[tuple] = []
+        monkeypatch.setattr(inprocess.logger, "error", lambda *a, **k: logged.append((a, k)))
+
+        async def _boom() -> None:
+            raise RuntimeError("kaboom")
+
+        task = asyncio.create_task(_boom())
+        await asyncio.gather(task, return_exceptions=True)
+        worker._on_task_done(task, 42)  # must not raise
+
+        assert logged, "a crashed task must be logged"
+        assert 42 in logged[0][0], "the log must identify the crashed scan"
+
+    @pytest.mark.asyncio
+    async def test_submit_defers_when_task_cap_reached(self, db) -> None:
+        """Beyond the task cap, submit leaves the scan QUEUED (no new task) so the
+        watchdog re-submits it later — task spawning stays bounded (CON-16)."""
+        scan_id = _queue_scan(db)
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+        worker._submit_cap = 1
+        filler = asyncio.create_task(asyncio.sleep(30))
+        worker._tasks[-1] = filler  # occupy the only cap slot
+        try:
+            await worker.submit(scan_id)
+            assert scan_id not in worker._tasks  # deferred, not scheduled
+        finally:
+            filler.cancel()
+            worker._tasks.pop(-1, None)
+        db.expire_all()
+        assert db.get(Scan, scan_id).status is ScanStatus.QUEUED
+
+
+class TestNotifyStaleRead:
+    @pytest.mark.asyncio
+    async def test_no_notification_for_a_concurrently_deleted_scan(self, db, monkeypatch) -> None:
+        """A scan deleted the instant after it finished must not be announced;
+        _notify re-reads the row rather than trusting the identity map (CON-19)."""
+        dispatched: list[int] = []
+
+        async def _spy_dispatch(session, scan):
+            dispatched.append(scan.id)
+
+        monkeypatch.setattr(inprocess, "dispatch_scan_event", _spy_dispatch)
+
+        scan_id = _insert_scan(ScanStatus.SUCCEEDED)
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+        session = SessionLocal()
+        try:
+            # Prime the worker session's identity map with the scan and hold a
+            # strong reference so the (weak) identity map keeps the stale copy —
+            # exactly the just-committed scan the worker holds after persistence.
+            primed = session.get(Scan, scan_id)
+            assert primed is not None
+            # ...then delete it through a different session.
+            other = SessionLocal()
+            try:
+                other.delete(other.get(Scan, scan_id))
+                other.commit()
+            finally:
+                other.close()
+
+            await worker._notify(session, scan_id)
+            assert primed is not None  # keep the reference alive across _notify
+        finally:
+            session.close()
+
+        assert dispatched == [], "notified for a scan that was already deleted"
 
 
 class TestPauseGate:

@@ -8,6 +8,7 @@ instead, and this app exposes only the API.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -97,10 +98,35 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        await maintenance.shutdown()
-        await backup_scheduler.shutdown()
-        await worker.shutdown()
+        # Shield the whole teardown: if the lifespan task is cancelled again mid
+        # shutdown (uvicorn's forced-exit path / a second SIGINT), an unshielded
+        # await would abort the sequence and skip worker.shutdown() — leaving
+        # live scanner subprocesses running until SIGKILL. Each step also runs
+        # under its own try/except so one failure can't skip the rest (CON-7).
+        await asyncio.shield(_shutdown_all(maintenance, backup_scheduler, worker))
         logger.info("Scan worker, backup, and maintenance schedulers stopped.")
+
+
+async def _shutdown_all(
+    maintenance: MaintenanceScheduler,
+    backup_scheduler: BackupScheduler,
+    worker: InProcessScanWorker,
+) -> None:
+    """Shut down every background component, isolating each step's failures.
+
+    The worker is stopped last and, critically, always — even if a scheduler
+    shutdown raises — so its scanner subprocesses are cancelled and killed
+    rather than abandoned (CON-7).
+    """
+    for name, component in (
+        ("maintenance scheduler", maintenance),
+        ("backup scheduler", backup_scheduler),
+        ("scan worker", worker),
+    ):
+        try:
+            await component.shutdown()
+        except Exception:  # noqa: BLE001 - one component's failure must not skip the rest
+            logger.exception("Error shutting down the %s; continuing.", name)
 
 
 def _mount_spa(app: FastAPI, dist_dir: Path) -> None:

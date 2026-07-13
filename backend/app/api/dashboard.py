@@ -8,6 +8,7 @@ recent scans, and failed-scan alerts. Read-only; requires the ``viewer`` role.
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
@@ -26,6 +27,8 @@ from app.core.dashboard import (
 from app.core.system_info import scanner_db_status
 from app.db.models import Role, Scan
 from app.db.session import get_db
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -99,10 +102,22 @@ async def get_dashboard(
     """Return the aggregate dashboard widgets (docs/PLAN.md §4.6)."""
     # DB aggregation happens off the event loop, concurrently with the
     # (subprocess-backed, TTL-cached) scanner-DB freshness probes.
-    (data, recent, failed), db_status = await asyncio.gather(
+    # return_exceptions=True so that if the DB branch fails, gather still awaits
+    # the probe branch to completion instead of leaving its subprocesses running
+    # detached (CON-18); each branch's failure is then handled explicitly.
+    data_result, db_status = await asyncio.gather(
         run_in_threadpool(_load_dashboard_data, db),
         scanner_db_status(),
+        return_exceptions=True,
     )
+    if isinstance(data_result, BaseException):
+        raise data_result
+    if isinstance(db_status, BaseException):
+        # A probe failure degrades gracefully to "unknown" rather than failing
+        # the whole dashboard.
+        logger.warning("Scanner-DB freshness probe failed: %r", db_status)
+        db_status = []
+    data, recent, failed = data_result
     return DashboardOut(
         total_scans=data.total_scans,
         scans_by_status=data.scans_by_status,
