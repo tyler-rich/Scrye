@@ -132,6 +132,11 @@ class TestMfaPolicyEnforcement:
         )
         assert second.status_code == 200
         assert client.get("/api/auth/me").json()["mfa_enabled"] is True
+        # SEC-9: the policy-forced first-enrollment is audited distinctly, so an
+        # admin can spot an unexpected enrollment during the password-only window.
+        entries = client.get("/api/audit").json()["items"]
+        enrolled = [e for e in entries if e["action"] == "auth.mfa_enabled"]
+        assert enrolled and enrolled[0]["details"] == {"forced_by_policy": True}
 
     def test_reenroll_requires_current_password(self, client: TestClient) -> None:
         csrf = setup_admin(client)

@@ -820,6 +820,15 @@ only in memory at scan time.
   carrying that second factor. When group→role mapping is configured it re-applies on each login, but an
   **absent** groups claim preserves the user's current role rather than demoting
   them, and an OIDC sync can never remove the last admin.
+- **Forced-enrollment window (accepted limitation).** When a mandatory-MFA policy
+  applies to an account that has never enrolled, enroll-on-first-login means
+  whoever presents a valid **password** completes the first-factor setup — so
+  during the window before the legitimate user enrolls, a password-only attacker
+  could bind **their own** authenticator (the exact threat mandatory MFA targets).
+  This is inherent to self-service enrollment; the durable mitigation is
+  out-of-band/admin-provisioned enrollment. Until then, each policy-forced
+  first-enrollment is recorded in the audit log with `forced_by_policy`, so an
+  unexpected enrollment is detectable — enroll promptly after enabling the policy.
 
 **Reporting a vulnerability:** please do it privately — see
 [SECURITY.md](./SECURITY.md).

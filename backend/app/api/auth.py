@@ -219,7 +219,15 @@ def verify_mfa(
 
     if purpose == mfa.PURPOSE_ENROLL and not user.mfa_enabled:
         user.mfa_enabled = True
-        record_audit(db, action="auth.mfa_enabled", actor=user, ip=ip)
+        # This path is reached only from the policy-forced first-enrollment on a
+        # password login (PURPOSE_ENROLL is issued nowhere else). Enroll-on-first-
+        # login inherently lets whoever holds the password bind the first factor
+        # during the window before the legitimate user enrolls (SEC-9), so flag the
+        # event as forced-by-policy: an admin can then audit that a mandatory-MFA
+        # account's first factor was bound as expected and act on an unexpected one.
+        record_audit(
+            db, action="auth.mfa_enabled", actor=user, ip=ip, details={"forced_by_policy": True}
+        )
         db.commit()
 
     return _complete_login(db, user, request, response, action="auth.login")
