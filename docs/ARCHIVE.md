@@ -543,6 +543,39 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-13 — Post-release — Frontend-review wave 2 (M19–M21, L16–L22)
+**What changed:** Worked the remaining confirmed frontend-review findings from
+`docs/reviews/frontend-review.md` (summarized in `docs/reviews/00-summary.md`), one commit each.
+No schema, security-model, or contract change — all fixes are client-side lifecycle/UX/a11y:
+- **M19 / P1-2.** Settings forms (Retention, General, Backups schedule) no longer render editable
+  with Save enabled before their initial GET resolves — they gate the inputs/Save on a `loaded`
+  flag and only seed fetched values into a pristine form (`!form.isDirty()`), so a slow GET can't
+  be overwritten with defaults and a late response can't clobber in-progress edits. Backups splits
+  the schedule-form hydration out of the shared `load()` so list mutations stop re-hydrating it.
+  The New scan FEAT-7 prefill applies only to a pristine form.
+- **M20 / P1-3.** The scan-detail status poller uses exponential backoff (2.5s→30s) and halts after
+  a failure ceiling (or on a 404), surfacing a paused/Retry state instead of hammering a failing
+  endpoint behind a stale "running" badge. Backoff math is a unit-tested `lib/polling` helper.
+- **M21 / P1-4, L18 / P2-3.** History and findings fetches use a unit-tested latest-wins guard
+  (`lib/latest`) so out-of-order responses can't render results for a filter no longer selected.
+  Findings also gain loading/loaded flags (Loader on first load, LoadingOverlay during filter
+  changes) to remove the empty-state flash and stale rows.
+- **L16 / P2-1, L17 / P2-2.** The status poll no longer wipes an in-progress tag edit (adopts the
+  server tags only while the draft still matches the last synced value, via `lib/arrays`), and all
+  per-scan state resets in an effect keyed on `:scanId` so navigating between scans can't mix state.
+- **L19 / P2-4.** In-flight guards on mutation triggers (API-token create/revoke, user create,
+  schedule create/run/delete, MFA enroll/confirm/disable, session revoke, change password) — most
+  importantly stopping a double-click from minting an invisible second API token.
+- **L20 / P2-5, L21 / P2-6, L22 / P2-7.** History table made keyboard-accessible (UnstyledButton
+  headers + `aria-sort`, row links via `Anchor component={Link}`); accessible names added to the
+  scan-detail filters/tags, New scan segmented controls, and MFA PinInput; a Burger+Drawer mobile
+  nav fallback added below the `sm` breakpoint.
+P1-1 (unsafe `primary_url` href) was already fixed in wave 1 (the `safeHttpUrl` helper) and is
+reused, not re-touched.
+**Why:** Remediate the confirmed frontend-review findings. Client-only changes; no plan decision
+touched.
+**Plan section affected:** none (bug/UX/a11y fixes; no schema, security-model, or job-model change).
+
 ### 2026-07-13 — Post-release — API-review batch (APIR-1…APIR-10)
 **What changed:** Worked the API/data-model review findings from
 `docs/reviews/api-review.md` (summarized in `docs/reviews/00-summary.md`), one commit each:
