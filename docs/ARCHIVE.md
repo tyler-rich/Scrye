@@ -594,6 +594,59 @@ model (§0.2) — the worker stays a single-container in-process async worker.
 **Plan section affected:** §0.2 (worker seam — extended, not reshaped), §8 (restore semantics),
 §12 (post-release hardening; no phase scope changed).
 
+### 2026-07-13 — Post-release — CON-5–CON-20 remediation: async-path, shutdown, and pool hygiene
+**What changed:** The remaining medium/low concurrency-review findings
+(`docs/reviews/concurrency-review.md`), each landed as its own commit with a regression test:
+- **CON-5** (event-loop offload). The maintenance tick's scanner-DB policy read
+  (`workers/db_update.py`), the worker's per-scan Trivy/Grype policy loads, and the scan-queue
+  insert/audit/commit (`api/scans.py`) now hop off the loop via a worker thread, matching the
+  pattern already used for result persistence and restore.
+- **CON-6** (shutdown budget). Added `stop_grace_period: 30s` to `docker/docker-compose.yml`,
+  shrank the worker drain grace `10s → 5s`, and bounded each scheduler's shutdown with
+  `asyncio.wait` (not `wait_for`, which would block on a cancel-swallowing threaded pass) so a
+  wedged task is abandoned after a timeout instead of running past SIGKILL.
+- **CON-7** (unshielded lifespan). The lifespan teardown is wrapped in `asyncio.shield` and each
+  component's shutdown runs under its own `try/except`, so a second cancellation or one failure
+  can't skip `worker.shutdown()` and abandon live scanner subprocesses.
+- **CON-8** (`PendingMfaStore`). `issue`/`consume`/`_prune` now hold a `threading.Lock`, mirroring
+  the rate limiter, so concurrent threadpool logins can't raise "dictionary changed size".
+- **CON-9** (backup snapshot). `build_bundle` reads every table inside one explicit `BEGIN` (a
+  single WAL read snapshot) so a scan committing mid-dump can't tear the bundle; `run_due_backup`
+  additionally defers (and logs, leaving `last_run_at` unset to retry) while any scan is
+  queued/running, mirroring the manual-restore guard.
+- **CON-10** (connection pinning). *User chose "Both" when presented the architectural option.* The
+  worker now resolves all DB inputs up front into detached values (`_RunInputs`), rolls back to
+  return its pooled connection to the pool, runs the minutes-long subprocess holding none, and
+  re-acquires only for persistence. As defense-in-depth the pool is sized from
+  `max_concurrent_scans` (`db/session.py`) and the setting is **newly capped at 1–32**
+  (`core/config.py`; `.env.example` regenerated).
+- **CON-12** (DB-update marker). `maybe_update_scanner_dbs` advances its interval marker only when
+  at least one engine actually updated, so a transient failure retries next tick.
+- **CON-13** (serialized tick). The scanner-DB refresh runs as its own detached maintenance task
+  (guarded to one at a time), so a slow update no longer delays the next tick's schedules/retention.
+- **CON-15** (semaphore-held notify). Notifications dispatch after the concurrency-semaphore block
+  exits, so a slow/dead channel can't hold a scan slot.
+- **CON-16** (task hygiene). The per-scan task's done callback retrieves and logs any escaped
+  exception; the session-factory call is guarded; and `submit` caps live tasks (scaled from
+  `max_concurrent`, floor 64) so a flood is deferred to the watchdog rather than piling up.
+- **CON-17** (run-now race). "Run now" stamps `last_run_at`, so the cron tick doesn't fire the same
+  schedule again the same minute.
+- **CON-18** (dashboard gather). The dashboard `asyncio.gather` uses `return_exceptions=True` and
+  handles each branch, so a DB error no longer abandons the in-flight scanner-DB probe subprocesses.
+- **CON-19** (stale identity-map notify). `_notify` re-reads the scan with `populate_existing=True`,
+  so a scan deleted the instant it finished isn't announced with a 404 link.
+- **CON-20** (loop-blocking rmtree). `generic_repo_checkout` removes the (potentially multi-GB)
+  checkout via a shielded thread hop instead of inline on the loop.
+**Why:** All are direct remediations of the cited review findings. **CON-11** was verified against
+current code and found **already retired** by Session 2's stale-scan watchdog (re-submits stranded
+`queued` scans), so it was skipped, not re-fixed. **CON-10** was the one finding whose primary fix
+is architectural; per the review-branch task it was raised with the user before implementing, who
+chose the combined connection-release + pool-sizing/cap approach. No DB schema change; the locked
+job model (§0.2, single-container in-process async worker) is unchanged — `max_concurrent_scans`
+gaining an upper bound is a new operational guard, not a model change.
+**Plan section affected:** §0.2 (worker internals — connection lifecycle refined, model unchanged),
+§8 (backup snapshot consistency), §12 (post-release hardening; no phase scope changed).
+
 ### 2026-07-13 — Security — account-takeover chain fix: XSS sink containment + baseline security headers
 **What changed:** Two coupled changes closing the audit's account-takeover chain (frontend FE-9 +
 the missing response-header baseline):
