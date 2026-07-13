@@ -1987,3 +1987,19 @@ the immutable `0.1.0` tag) so the check is on the record and the next person see
 upstream-fix-version mapping to re-test against.
 **Plan section affected:** §9.1 (bundled scanner pins), CLAUDE.md § Dependency hygiene, README §
 Integrations / ROADMAP § Known limitations (bundled-binary CVE tracking).
+
+### 2026-07-13 — Infra — runtime-stage curl/libcurl explicitly version-pinned for CVE-2026-5773
+**What changed:** The CI dogfood self-scan flagged `curl` / `libcurl3-gnutls` / `libcurl4`
+`7.88.1-10+deb12u14` (HIGH, CVE-2026-5773, fixed in `7.88.1-10+deb12u15`) in the runtime image.
+Rather than the usual "apt packages are unpinned, tracking the digest-pinned base image" pattern
+(§9.1, the Phase 3 git-package note), `docker/Dockerfile`'s runtime-stage `apt-get install` now
+pins these three packages to the exact fixed version `7.88.1-10+deb12u15`, since that version is
+already present in the base image's frozen apt snapshot — no base-image digest bump needed.
+**Why:** The fix is available at the package level without moving the base image, so a targeted
+version pin is the smaller, more surgical change; it also serves as a deliberate exception to the
+"apt packages track the base snapshot" convention, recorded here so a future session doesn't read
+these three explicit pins as stray/accidental and "clean them up" back to unpinned. When the base
+image digest is next bumped for an unrelated reason, these three pins should be reviewed — if the
+new base snapshot already carries `7.88.1-10+deb12u15` or later as the default, the explicit pins
+can be dropped.
+**Plan section affected:** §9.1 (Dockerfile / apt packages).
