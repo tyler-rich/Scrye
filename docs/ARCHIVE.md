@@ -543,6 +543,22 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-13 — Post-release — CON-2/CON-14 remediation: process-group kills for scanner subprocesses
+**What changed:** `run_command` (`backend/app/scanners/base.py`) now spawns scanner/git subprocesses
+with `start_new_session=True`, making the child its own process-group leader, and kills the whole
+group (`os.killpg(proc.pid, signal.SIGKILL)` via a new `_kill_process_group` helper) on all three
+abort paths — output-cap overflow, timeout, and shutdown cancellation — instead of `proc.kill()`,
+which only signalled the direct child. The helper (and the pre-existing `wait()` guards) suppress
+`ProcessLookupError` so a process group that has already exited can't replace the abort's own error
+(CON-14; the timeout path previously lacked this suppression entirely).
+**Why:** `git clone` spawns `git-remote-https`, and trivy/grype can spawn their own helpers; on
+timeout, output-cap overflow, or worker-shutdown cancellation the direct child died but these
+grandchildren kept running with `SCRYE_GIT_PASSWORD`/`GIT_ASKPASS` still in their environment
+(`docs/reviews/concurrency-review.md` CON-2, Top 5 #4) — a leaked credential-bearing process racing
+`generic_repo_checkout`'s best-effort cache cleanup. Process-group kill is the review's recommended
+fix and covers every current and future scanner child through the single `run_command` seam.
+**Plan section affected:** none (bug fix; no schema, security-model, or job-model change).
+
 ### 2026-07-13 — Post-release — CON-1/CON-11/CON-3/SEC-2 remediation; worker seam gains optional hooks
 **What changed:** Three coupled fixes from the 2026-07-12 review batch (`docs/reviews/00-summary.md`
 Top 5 #2), landed as one change-set because they compound into a single failure theme:
