@@ -1,4 +1,16 @@
-import { AppShell, Button, Center, Group, Loader, Text, Title } from '@mantine/core';
+import {
+  AppShell,
+  Burger,
+  Button,
+  Center,
+  Drawer,
+  Group,
+  Loader,
+  Stack,
+  Text,
+  Title,
+} from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { ColorSchemeToggle } from './components/ColorSchemeToggle';
@@ -20,8 +32,8 @@ const BASE_NAV_LINKS = [
   { to: '/scans/new', label: 'New scan' },
 ];
 
-/** Header navigation links, highlighting the active section. */
-function NavLinks() {
+/** Resolve the visible nav links and the currently-active one for this user. */
+function useNavItems() {
   const { pathname } = useLocation();
   const { user } = useAuth();
   const links =
@@ -39,19 +51,43 @@ function NavLinks() {
     .filter((link) => matches(link.to))
     .reduce((best, link) => (link.to.length > best.length ? link.to : best), '');
 
-  return (
+  return { links, activeTo };
+}
+
+/**
+ * Navigation links, highlighting the active section. Renders horizontally in
+ * the header from `sm` up; the vertical variant fills the mobile drawer
+ * (L22 / P2-7).
+ */
+function NavLinks({
+  orientation = 'horizontal',
+  onNavigate,
+}: {
+  orientation?: 'horizontal' | 'vertical';
+  onNavigate?: () => void;
+}) {
+  const { links, activeTo } = useNavItems();
+  const vertical = orientation === 'vertical';
+  const items = links.map((link) => (
+    <Button
+      key={link.to}
+      component={Link}
+      to={link.to}
+      onClick={onNavigate}
+      variant={link.to === activeTo ? 'light' : 'subtle'}
+      size="compact-md"
+      justify={vertical ? 'flex-start' : undefined}
+      fullWidth={vertical}
+    >
+      {link.label}
+    </Button>
+  ));
+
+  return vertical ? (
+    <Stack gap="xs">{items}</Stack>
+  ) : (
     <Group gap="xs" visibleFrom="sm">
-      {links.map((link) => (
-        <Button
-          key={link.to}
-          component={Link}
-          to={link.to}
-          variant={link.to === activeTo ? 'light' : 'subtle'}
-          size="compact-md"
-        >
-          {link.label}
-        </Button>
-      ))}
+      {items}
     </Group>
   );
 }
@@ -62,6 +98,8 @@ function NavLinks() {
  */
 export function App() {
   const { loading, needsSetup, user } = useAuth();
+  const [mobileNavOpened, { toggle: toggleMobileNav, close: closeMobileNav }] =
+    useDisclosure(false);
 
   if (loading) {
     return (
@@ -82,6 +120,13 @@ export function App() {
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
           <Group gap="lg">
+            <Burger
+              opened={mobileNavOpened}
+              onClick={toggleMobileNav}
+              hiddenFrom="sm"
+              size="sm"
+              aria-label="Toggle navigation"
+            />
             <Group gap="xs">
               <Title order={3} c="teal">
                 Scrye
@@ -98,6 +143,16 @@ export function App() {
           </Group>
         </Group>
       </AppShell.Header>
+
+      <Drawer
+        opened={mobileNavOpened}
+        onClose={closeMobileNav}
+        hiddenFrom="sm"
+        size="xs"
+        title="Navigation"
+      >
+        <NavLinks orientation="vertical" onNavigate={closeMobileNav} />
+      </Drawer>
 
       <AppShell.Main>
         <Routes>
