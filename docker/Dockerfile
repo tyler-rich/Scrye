@@ -95,7 +95,7 @@ RUN set -eux; \
 
 
 # --- Stage 3: build the Python virtualenv ------------------------------------
-FROM python:3.13-slim-bookworm@sha256:fcbd8dfc2605ba7c2eca646846c5e892b2931e41f6227985154a596f26ab8ed7 AS backend-builder
+FROM python:3.13-slim-bookworm AS backend-builder
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build/backend
 
@@ -114,7 +114,7 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked pip install .
 
 
 # --- Final stage: minimal runtime image --------------------------------------
-FROM python:3.13-slim-bookworm@sha256:fcbd8dfc2605ba7c2eca646846c5e892b2931e41f6227985154a596f26ab8ed7 AS runtime
+FROM python:3.13-slim-bookworm AS runtime
 
 # ca-certificates: scanner DB downloads + TLS. curl: container HEALTHCHECK.
 # git: authenticated clone of generic-host private repos into tmpfs, so the
