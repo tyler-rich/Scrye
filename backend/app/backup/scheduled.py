@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import __version__
@@ -19,7 +19,14 @@ from app.backup.store import BUNDLE_SUFFIX, BackupStore, sha256_hex
 from app.core.crypto import SecretDecryptError
 from app.core.secret_store import AAD_BACKUP_PASSPHRASE, decrypt_secret
 from app.core.timeutil import utcnow
-from app.db.models import BACKUP_SCHEDULE_ID, Backup, BackupKind, BackupSchedule
+from app.db.models import (
+    BACKUP_SCHEDULE_ID,
+    Backup,
+    BackupKind,
+    BackupSchedule,
+    Scan,
+    ScanStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +38,16 @@ def _is_due(schedule: BackupSchedule) -> bool:
     if schedule.last_run_at is None:
         return True
     return utcnow() - schedule.last_run_at >= timedelta(hours=schedule.interval_hours)
+
+
+def _has_active_scan(db: Session) -> bool:
+    """Return True while any scan is queued or running."""
+    count = db.execute(
+        select(func.count())
+        .select_from(Scan)
+        .where(Scan.status.in_((ScanStatus.QUEUED, ScanStatus.RUNNING)))
+    ).scalar()
+    return bool(count)
 
 
 def prune_scheduled(db: Session, keep: int, *, store: BackupStore | None = None) -> int:
@@ -63,6 +80,19 @@ def run_due_backup(db: Session, *, store: BackupStore | None = None, force: bool
     if schedule is None or (not force and not _is_due(schedule)):
         return "skipped"
     if not schedule.enabled or not schedule.passphrase_ciphertext:
+        return "skipped"
+
+    # Don't snapshot while a scan is in flight: even a consistent read snapshot
+    # would capture that scan mid-``running`` (findings not yet flushed), which
+    # restores as a stuck-running scan (CON-9). The manual restore path already
+    # refuses to run against active scans; mirror that here. last_run_at is left
+    # untouched so the schedule stays due and simply retries the next tick, once
+    # the scan finishes — a long-running scan can't silently skip the whole
+    # interval's backup.
+    if not force and _has_active_scan(db):
+        schedule.last_status = "skipped: scan active"
+        db.commit()
+        logger.info("Scheduled backup deferred: a scan is queued or running.")
         return "skipped"
 
     store = store or BackupStore()
