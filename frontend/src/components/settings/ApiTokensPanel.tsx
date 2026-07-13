@@ -36,6 +36,8 @@ export function ApiTokensPanel() {
   const [tokens, setTokens] = useState<ApiTokenInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [plaintext, setPlaintext] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [revoking, setRevoking] = useState<number | null>(null);
   const [opened, { open, close }] = useDisclosure(false);
 
   const allowedRoles = ROLE_ORDER.slice(0, ROLE_ORDER.indexOf(user?.role ?? 'viewer') + 1);
@@ -62,7 +64,12 @@ export function ApiTokensPanel() {
   });
 
   const submit = form.onSubmit(async (values) => {
+    // Guard against a double-click minting two tokens: the plaintext alert
+    // only shows the last one, silently leaving an active bearer token the
+    // user never saw and can't copy (L19 / P2-4).
+    if (creating) return;
     setError(null);
+    setCreating(true);
     try {
       const created = await createApiToken({
         name: values.name.trim(),
@@ -75,16 +82,22 @@ export function ApiTokensPanel() {
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to create token.');
+    } finally {
+      setCreating(false);
     }
   });
 
   const onRevoke = async (id: number) => {
+    if (revoking !== null) return;
     setError(null);
+    setRevoking(id);
     try {
       await revokeApiToken(id);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to revoke token.');
+    } finally {
+      setRevoking(null);
     }
   };
 
@@ -164,6 +177,8 @@ export function ApiTokensPanel() {
                         variant="subtle"
                         color="red"
                         leftSection={<IconTrash size={14} />}
+                        loading={revoking === t.id}
+                        disabled={revoking !== null}
                         onClick={() => onRevoke(t.id)}
                       >
                         Revoke
@@ -204,10 +219,12 @@ export function ApiTokensPanel() {
               {...form.getInputProps('expires_in_days')}
             />
             <Group justify="flex-end">
-              <Button variant="default" onClick={close}>
+              <Button variant="default" onClick={close} disabled={creating}>
                 Cancel
               </Button>
-              <Button type="submit">Create</Button>
+              <Button type="submit" loading={creating}>
+                Create
+              </Button>
             </Group>
           </Stack>
         </form>
