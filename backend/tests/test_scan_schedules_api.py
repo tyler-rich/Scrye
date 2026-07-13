@@ -137,7 +137,10 @@ class TestRunNow:
         resp = client.post(f"/api/scan-schedules/{sid}/run", headers={CSRF: csrf})
         assert resp.status_code == 200
         manual_scan_id = resp.json()["last_scan_id"]
+        # APIR-7: the three last_* fields are one record of the latest firing;
+        # run-now must stamp all of them, not just last_scan_id.
         assert resp.json()["last_run_at"] is not None
+        assert resp.json()["last_status"] == "ok (manual run)"
 
         # The cron tick, running in the same minute, must find nothing due.
         with SessionLocal() as db:

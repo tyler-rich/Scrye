@@ -543,6 +543,43 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-13 — Post-release — API-review batch (APIR-1…APIR-10)
+**What changed:** Worked the API/data-model review findings from
+`docs/reviews/api-review.md` (summarized in `docs/reviews/00-summary.md`), one commit each:
+- **APIR-1 (H7).** `IgnoreRuleIn.expires_at` now normalizes aware datetimes to naive UTC via a
+  new shared `core.timeutil.to_naive_utc` (which `scan_filters` also reuses), so a Trivy ignore
+  rule's offset is no longer silently dropped.
+- **APIR-2 (H8).** A `RequestValidationError` handler in `main.py` flattens schema-validation 422s
+  into the string `detail` envelope hand-raised 422s already use, so the SPA renders the reason.
+- **APIR-5 (M17).** Response models serialize timestamps with an explicit `Z` via a shared
+  `UtcDatetime` field type (`api/schema_types.py`); storage stays naive. **Contract note:** the
+  wire format for every timestamp changed from bare ISO-8601 to `…Z` (additive for correct
+  consumers; `parseUtc` already accepted it).
+- **APIR-3 (M15).** `DiffFindingOut` gains `location` (part of the diff identity for non-vuln
+  classes) and the SPA's Compare gate now also checks `target_type`.
+- **APIR-4 (M16).** Filtered-history export flags truncation (JSON metadata, Markdown/CSV note,
+  `X-Scrye-Truncated`/`X-Scrye-Total` headers) when the 5 000-row cap fires.
+- **APIR-6 (M18).** Update paths for secret-bearing resources re-establish create-path invariants:
+  a mandatory notification secret can't be cleared, and registry update strips `name`/
+  `registry_host` and refuses to blank a username_password username.
+- **APIR-7 (L12).** Already resolved by the CON-17 fix in #60 (run-now stamps all three `last_*`
+  fields); added the `last_status` assertion the review called out. No code change.
+- **APIR-8 (L13).** Renamed the audit pagination envelope key `entries` → `items` to match the
+  dominant `{total, items}` shape. **Scope decision (maintainer-directed):** deliberately *not*
+  the broad rewrite — the unpaginated bare-array admin lists and the frozen `GET /api/scans` are
+  left as-is. **Contract note:** `/api/audit` response key changed (admin-only, no SPA consumer).
+- **APIR-9 (L14).** Split `ScanSummaryOut` (drops `options`/`error`, adds `has_error`) for list/
+  history/dashboard rows from the full `ScanOut` (detail only). **Contract note:** those list
+  payloads no longer carry `options`/`error`.
+- **APIR-10 (L15).** Extracted the duplicated scanner↔target matrix to
+  `app/scanners/support.py` (`SCANNER_TARGET_SUPPORT` / `scanner_supports`), consumed by both the
+  scans and scan-schedules routers.
+**Why:** Remediate the confirmed API-layer findings. APIR-5/8/9 change response shapes; per the
+review's own guidance they were scoped narrowly (or, for APIR-8, held to the single-key rename per
+maintainer direction) rather than taken as a broad contract-version bump.
+**Plan section affected:** none (bug fixes / additive contract clarifications; no schema, security-
+model, or job-model change).
+
 ### 2026-07-13 — Post-release — CON-2/CON-14 remediation: process-group kills for scanner subprocesses
 **What changed:** `run_command` (`backend/app/scanners/base.py`) now spawns scanner/git subprocesses
 with `start_new_session=True`, making the child its own process-group leader, and kills the whole

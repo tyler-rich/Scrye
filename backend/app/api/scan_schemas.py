@@ -7,11 +7,11 @@ credentials for private images arrive in Phase 3 and are handled separately
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.api.schema_types import UtcDatetime
 from app.db.models import (
     ArtifactKind,
     FindingClass,
@@ -145,8 +145,15 @@ class ScanCreateIn(BaseModel):
         return options
 
 
-class ScanOut(BaseModel):
-    """Read view of a scan (summary and detail share this shape)."""
+class ScanSummaryOut(BaseModel):
+    """Trimmed scan view for list/history/dashboard rows (APIR-9).
+
+    Drops ``options`` (unrendered by every list view, and it leaks internal
+    ``registry_id``/``git_credential_id`` to viewers) and the unbounded scanner
+    ``error`` text, keeping a lightweight ``has_error`` flag. The full
+    :class:`ScanOut` — with ``options`` and ``error`` — is returned only by the
+    single-scan detail endpoint, which is where the SPA reads them.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -155,17 +162,27 @@ class ScanOut(BaseModel):
     target_type: TargetType
     target: str
     status: ScanStatus
-    options: dict
     severity_counts: dict[str, int]
     highest_severity: Severity | None
     findings_count: int
     scanner_version: str | None
-    error: str | None
+    has_error: bool
     created_by_username: str | None
     tags: list[str] = []
-    created_at: datetime
-    started_at: datetime | None
-    finished_at: datetime | None
+    created_at: UtcDatetime
+    started_at: UtcDatetime | None
+    finished_at: UtcDatetime | None
+
+
+class ScanOut(ScanSummaryOut):
+    """Full read view of a single scan (detail endpoint).
+
+    Extends the summary with the fields only the detail page needs: the scan
+    ``options`` and the full scanner ``error`` text.
+    """
+
+    options: dict
+    error: str | None
 
 
 class FindingOut(BaseModel):
@@ -204,4 +221,4 @@ class ArtifactOut(BaseModel):
     content_type: str
     size_bytes: int
     sha256: str
-    created_at: datetime
+    created_at: UtcDatetime

@@ -98,6 +98,26 @@ class TestNotificationCrud:
             client.post("/api/notifications", json=payload, headers={CSRF: csrf}).status_code == 409
         )
 
+    def test_update_cannot_clear_mandatory_secret(self, client: TestClient) -> None:
+        """PATCH secret="" must not reach a state create forbids (APIR-6).
+
+        Every channel type currently requires a secret, so clearing it would
+        leave an enabled channel with no credential that only fails at send time.
+        """
+        csrf = setup_admin(client)
+        cid = client.post(
+            "/api/notifications",
+            json={"name": "smtp1", "type": "smtp", "config": {"host": "mx"}, "secret": "pw"},
+            headers={CSRF: csrf},
+        ).json()["id"]
+        resp = client.patch(
+            f"/api/notifications/{cid}",
+            json={"secret": ""},
+            headers={CSRF: csrf},
+        )
+        assert resp.status_code == 422
+        assert "secret is required" in resp.json()["detail"].lower()
+
     def test_delete_removes_channel(self, client: TestClient) -> None:
         csrf = setup_admin(client)
         cid = client.post(

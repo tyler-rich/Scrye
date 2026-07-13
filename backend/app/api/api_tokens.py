@@ -8,13 +8,14 @@ show only the prefix and metadata.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.schema_types import UtcDatetime
 from app.auth.api_tokens import generate_api_token
 from app.auth.deps import AuthContext, client_ip, require_auth, require_csrf
 from app.core.audit import record_audit
@@ -37,10 +38,10 @@ class ApiTokenOut(BaseModel):
     name: str
     token_prefix: str
     role: Role
-    created_at: datetime
-    last_used_at: datetime | None
-    expires_at: datetime | None
-    revoked_at: datetime | None
+    created_at: UtcDatetime
+    last_used_at: UtcDatetime | None
+    expires_at: UtcDatetime | None
+    revoked_at: UtcDatetime | None
 
 
 class ApiTokenCreateIn(BaseModel):

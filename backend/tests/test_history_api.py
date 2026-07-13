@@ -102,6 +102,22 @@ def test_history_returns_paginated_envelope(client: TestClient) -> None:
     assert body["items"][0]["target"] == "img:2"
 
 
+def test_history_rows_are_trimmed_summaries(client: TestClient) -> None:
+    """History rows omit options/error and expose has_error; detail keeps them (APIR-9)."""
+    _setup_admin(client)
+    sid = _insert_scan(target="img", findings=[])
+
+    row = client.get("/api/scans/history").json()["items"][0]
+    assert "options" not in row
+    assert "error" not in row
+    assert row["has_error"] is False
+
+    detail = client.get(f"/api/scans/{sid}").json()
+    assert "options" in detail
+    assert "error" in detail
+    assert detail["has_error"] is False
+
+
 def test_history_filters_by_scanner_and_status(client: TestClient) -> None:
     _setup_admin(client)
     _insert_scan(scanner=Scanner.TRIVY, status=ScanStatus.SUCCEEDED)
@@ -263,6 +279,30 @@ def test_history_export_respects_filters(client: TestClient) -> None:
     assert resp.status_code == 200
     assert "keep" in resp.text and "drop" not in resp.text
     assert resp.headers["content-disposition"].endswith('scrye-history.csv"')
+    # No truncation signal when the full set fits under the cap.
+    assert "x-scrye-truncated" not in resp.headers
+
+
+def test_history_export_signals_truncation(client: TestClient, monkeypatch) -> None:
+    """When the export cap fires, every format and the response header say so (APIR-4)."""
+    _setup_admin(client)
+    monkeypatch.setattr("app.api.scans._MAX_HISTORY_EXPORT_SCANS", 2)
+    for i in range(3):
+        _insert_scan(target=f"img:{i}")
+
+    js = client.get("/api/scans/export", params={"format": "json"})
+    assert js.headers["x-scrye-truncated"] == "true"
+    assert js.headers["x-scrye-total"] == "3"
+    body = js.json()
+    assert body["truncated"] is True
+    assert body["total"] == 3
+    assert body["count"] == 2
+
+    md = client.get("/api/scans/export", params={"format": "markdown"}).text
+    assert "Truncated" in md and "of 3 matching scans" in md
+
+    csv_text = client.get("/api/scans/export", params={"format": "csv"}).text
+    assert csv_text.startswith("# Truncated: showing the newest 2 of 3")
 
 
 # --- Diff --------------------------------------------------------------------
@@ -287,6 +327,41 @@ def test_diff_two_scans_of_same_target(client: TestClient) -> None:
     assert [f["vuln_id"] for f in body["added"]] == ["CVE-NEW"]
     assert [f["vuln_id"] for f in body["removed"]] == ["CVE-FIXED"]
     assert body["unchanged_count"] == 1
+
+
+def test_diff_payload_includes_location_for_non_vuln_findings(client: TestClient) -> None:
+    """The same misconfig rule firing in two files must stay distinguishable (APIR-3).
+
+    ``location`` is part of the diff identity for every non-vulnerability class,
+    so the payload must carry it — otherwise a rule fixed in one file and newly
+    firing in another serializes as two byte-identical rows.
+    """
+    _setup_admin(client)
+
+    def _misconfig(location: str) -> dict:
+        return {
+            "finding_class": FindingClass.MISCONFIGURATION,
+            "severity": Severity.HIGH,
+            "vuln_id": "DS002",
+            "title": "Image user should not be root",
+            "location": location,
+        }
+
+    base = _insert_scan(
+        scanner=Scanner.TRIVY,
+        target_type=TargetType.REPOSITORY,
+        target="repo",
+        findings=[_misconfig("a/Dockerfile")],
+    )
+    compare = _insert_scan(
+        scanner=Scanner.TRIVY,
+        target_type=TargetType.REPOSITORY,
+        target="repo",
+        findings=[_misconfig("b/Dockerfile")],
+    )
+    body = client.get(f"/api/scans/{base}/diff/{compare}").json()
+    assert [f["location"] for f in body["removed"]] == ["a/Dockerfile"]
+    assert [f["location"] for f in body["added"]] == ["b/Dockerfile"]
 
 
 def test_diff_rejects_different_targets(client: TestClient) -> None:

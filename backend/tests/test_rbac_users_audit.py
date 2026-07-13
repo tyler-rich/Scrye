@@ -131,7 +131,7 @@ class TestAuditLog:
         browser.post("/api/auth/logout", headers={CSRF: vera_csrf})
 
         page = client.get("/api/audit").json()
-        actions = [e["action"] for e in page["entries"]]
+        actions = [e["action"] for e in page["items"]]
         for expected in (
             "auth.setup",
             "user.created",
@@ -140,7 +140,7 @@ class TestAuditLog:
             "auth.logout",
         ):
             assert expected in actions, f"missing {expected} in {actions}"
-        assert page["total"] == len(page["entries"])
+        assert page["total"] == len(page["items"])
 
     def test_audit_entries_contain_no_secret_values(self, client: TestClient) -> None:
         csrf = setup_admin(client)
@@ -154,7 +154,7 @@ class TestAuditLog:
         setup_admin(client)
         fresh = TestClient(client.app)
         fresh.post("/api/auth/login", json={"username": "GhostUser", "password": "wrong" * 3})
-        entries = client.get("/api/audit").json()["entries"]
+        entries = client.get("/api/audit").json()["items"]
         failed = next(e for e in entries if e["action"] == "auth.login_failed")
         assert failed["details"] == {"username": "ghostuser"}
         assert failed["ip"]

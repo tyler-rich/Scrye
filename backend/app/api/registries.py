@@ -28,7 +28,7 @@ from app.core.masking import masked_secret
 from app.core.registry_check import check_registry
 from app.core.secret_store import AAD_REGISTRY_SECRET, decrypt_secret, encrypt_secret
 from app.core.timeutil import utcnow
-from app.db.models import SECRET_BEARING_AUTH_TYPES, Registry, Role
+from app.db.models import SECRET_BEARING_AUTH_TYPES, Registry, RegistryAuthType, Role
 from app.db.session import get_db
 
 router = APIRouter(prefix="/registries", tags=["registries"])
@@ -156,6 +156,14 @@ def update_registry(
         registry.registry_host = payload.registry_host
         changes["registry_host"] = payload.registry_host
     if payload.username is not None:
+        blanking = not payload.username.strip()
+        if registry.auth_type is RegistryAuthType.USERNAME_PASSWORD and blanking:
+            # Create requires a username for this auth type; don't let update
+            # blank it back out (APIR-6).
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Username/password auth requires a username.",
+            )
         registry.username = payload.username
         changes["username"] = "updated"
     if payload.enabled is not None:

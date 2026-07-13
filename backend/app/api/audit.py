@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -10,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, require_role
 from app.db.models import AuditLog, Role
 from app.db.session import get_db
@@ -25,7 +25,7 @@ class AuditEntryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    created_at: datetime
+    created_at: UtcDatetime
     actor_id: int | None
     actor_username: str | None
     action: str
@@ -36,10 +36,14 @@ class AuditEntryOut(BaseModel):
 
 
 class AuditPageOut(BaseModel):
-    """A page of audit entries, newest first."""
+    """A page of audit entries, newest first.
+
+    Uses the ``{total, items}`` envelope shared by every other paginated
+    endpoint (history, findings) rather than a third key name (APIR-8).
+    """
 
     total: int
-    entries: list[AuditEntryOut]
+    items: list[AuditEntryOut]
 
 
 @router.get("", response_model=AuditPageOut)
@@ -57,4 +61,4 @@ def list_audit_entries(
         .limit(limit)
         .offset(offset)
     ).all()
-    return AuditPageOut(total=total, entries=[AuditEntryOut.model_validate(r) for r in rows])
+    return AuditPageOut(total=total, items=[AuditEntryOut.model_validate(r) for r in rows])

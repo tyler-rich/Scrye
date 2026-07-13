@@ -42,6 +42,7 @@ from app.api.scan_schemas import (
     FindingsPage,
     ScanCreateIn,
     ScanOut,
+    ScanSummaryOut,
 )
 from app.api.uploads import read_upload_capped
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
@@ -66,6 +67,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.reports import ExportFormat, diff_findings, export_history, export_scan
+from app.scanners.support import scanner_supports
 from app.scanners.targets import TargetError, resolve_filesystem_path
 
 logger = logging.getLogger(__name__)
@@ -74,14 +76,6 @@ router = APIRouter(prefix="/scans", tags=["scans"])
 
 _viewer = require_role(Role.VIEWER)
 _operator = require_role(Role.OPERATOR)
-
-#: Which scanners may run against each target type (docs/PLAN.md §4).
-_ALLOWED_SCANNERS: dict[TargetType, set[Scanner]] = {
-    TargetType.IMAGE: {Scanner.TRIVY, Scanner.GRYPE},
-    TargetType.REPOSITORY: {Scanner.TRIVY},
-    TargetType.FILESYSTEM: {Scanner.GRYPE},
-    TargetType.SBOM: {Scanner.GRYPE},
-}
 
 #: Filename used to store an uploaded SBOM (the display target keeps the original).
 _UPLOADED_SBOM_FILENAME = "uploaded-sbom.json"
@@ -117,7 +111,7 @@ def _get_scan_or_404(db: Session, scan_id: int) -> Scan:
 
 def _reject_unsupported_combo(target_type: TargetType, scanner: Scanner) -> None:
     """Raise 422 if ``scanner`` cannot run against ``target_type``."""
-    if scanner not in _ALLOWED_SCANNERS[target_type]:
+    if not scanner_supports(target_type, scanner):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"{scanner.value} does not support {target_type.value} targets.",
@@ -275,7 +269,7 @@ async def create_sbom_scan(
     return await _queue_scan(request, db, scan, auth)
 
 
-@router.get("", response_model=list[ScanOut])
+@router.get("", response_model=list[ScanSummaryOut])
 def list_scans(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
@@ -283,9 +277,9 @@ def list_scans(
     scan_status: ScanStatus | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-) -> list[ScanOut]:
+) -> list[ScanSummaryOut]:
     """List scans, newest first (basic filters; full history in Phase 4)."""
-    # Eager-load tags to avoid an N+1 SELECT per row when ScanOut reads them (API-1).
+    # Eager-load tags to avoid an N+1 SELECT per row when the row reads them (API-1).
     stmt = (
         select(Scan)
         .options(selectinload(Scan.tag_rows))
@@ -296,7 +290,7 @@ def list_scans(
     if scan_status is not None:
         stmt = stmt.where(Scan.status == scan_status)
     scans = db.scalars(stmt.limit(limit).offset(offset)).all()
-    return [ScanOut.model_validate(s) for s in scans]
+    return [ScanSummaryOut.model_validate(s) for s in scans]
 
 
 @router.get("/history", response_model=ScanHistoryPage)
@@ -334,7 +328,7 @@ def list_history(
         .offset(offset)
     )
     scans = db.scalars(stmt).all()
-    return ScanHistoryPage(total=total, items=[ScanOut.model_validate(s) for s in scans])
+    return ScanHistoryPage(total=total, items=[ScanSummaryOut.model_validate(s) for s in scans])
 
 
 @router.get("/filter-options", response_model=FilterOptionsOut)
@@ -365,8 +359,12 @@ def export_history_view(
     The export follows the same filters as the history view (newest first) and is
     capped at a generous row limit to keep a single download bounded.
     """
+    base = filters.apply(select(Scan))
+    # Count the full matching set so the export can flag when the cap truncated it
+    # (APIR-4); the count query is cheap next to materializing thousands of rows.
+    total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
     stmt = (
-        filters.apply(select(Scan))
+        base
         # Every exporter reads scan.tags; eager-load them in one query instead
         # of one lazy SELECT per exported scan (the cap allows thousands).
         .options(selectinload(Scan.tag_rows))
@@ -374,11 +372,16 @@ def export_history_view(
         .limit(_MAX_HISTORY_EXPORT_SCANS)
     )
     scans = list(db.scalars(stmt).all())
-    result = export_history(scans, fmt, filters=filters.as_metadata())
+    result = export_history(scans, fmt, filters=filters.as_metadata(), total=total)
+    headers = {"Content-Disposition": f'attachment; filename="{result.filename}"'}
+    if total > len(scans):
+        # Machine-readable signal that works for every format, including CSV.
+        headers["X-Scrye-Truncated"] = "true"
+        headers["X-Scrye-Total"] = str(total)
     return Response(
         content=result.content,
         media_type=result.media_type,
-        headers={"Content-Disposition": f'attachment; filename="{result.filename}"'},
+        headers=headers,
     )
 
 
