@@ -115,7 +115,7 @@ RUN set -eux; \
       "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}" \
       "grype_${GRYPE_VERSION}_${ANCHORE_ARCH}.tar.gz" \
       "grype_${GRYPE_VERSION}_checksums.txt" \
-      "^https://github\.com/anchore/grype/\.github/workflows/.+@refs/tags/v[0-9.]+$" \
+      "^https://github\.com/anchore/grype/\.github/workflows/.+@refs/(heads|tags)/.+$" \
       certsig & \
     grype_pid=$!; \
     \
@@ -123,7 +123,7 @@ RUN set -eux; \
       "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}" \
       "syft_${SYFT_VERSION}_${ANCHORE_ARCH}.tar.gz" \
       "syft_${SYFT_VERSION}_checksums.txt" \
-      "^https://github\.com/anchore/syft/\.github/workflows/.+@refs/tags/v[0-9.]+$" \
+      "^https://github\.com/anchore/syft/\.github/workflows/.+@refs/(heads|tags)/.+$" \
       certsig & \
     syft_pid=$!; \
     \
