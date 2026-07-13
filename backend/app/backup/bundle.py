@@ -81,6 +81,17 @@ class BackupError(RuntimeError):
     """Raised when a backup cannot be built or a restore cannot be applied."""
 
 
+class RestoreConflictError(BackupError):
+    """Raised when a restore is refused because scans are queued or running.
+
+    Distinct from :class:`BackupError` so the API can answer 409 (conflict,
+    retry later) rather than 400 (bad bundle). Raised from *inside* the restore
+    write transaction — the endpoint's own pre-check happens before the upload
+    is read, and a scan queued across that await must still abort the wipe
+    (CON-3).
+    """
+
+
 @dataclass(frozen=True)
 class RestoreSummary:
     """Non-sensitive summary of a completed restore."""
@@ -258,15 +269,17 @@ def restore_bundle(db: Session, data: bytes, passphrase: str) -> RestoreSummary:
     # Honor the KDF parameters the bundle recorded rather than the current module
     # constants (item (g)): a bundle made under an older scrypt work factor must
     # still derive the same key and restore. Missing fields (older bundles) fall
-    # back to the current defaults.
+    # back to the current defaults. The values are untrusted input: they are
+    # parsed defensively here and bounds-checked in derive_key (SEC-2) before
+    # any memory is committed to the derivation.
     try:
-        pass_cipher = passphrase_cipher(
-            passphrase,
-            salt,
-            n=int(kdf.get("n", SCRYPT_N)),
-            r=int(kdf.get("r", SCRYPT_R)),
-            p=int(kdf.get("p", SCRYPT_P)),
-        )
+        kdf_n = int(kdf.get("n", SCRYPT_N))
+        kdf_r = int(kdf.get("r", SCRYPT_R))
+        kdf_p = int(kdf.get("p", SCRYPT_P))
+    except (TypeError, ValueError) as exc:
+        raise BackupError("Backup bundle key-derivation parameters are malformed.") from exc
+    try:
+        pass_cipher = passphrase_cipher(passphrase, salt, n=kdf_n, r=kdf_r, p=kdf_p)
     except PassphraseKdfError as exc:
         raise BackupError(str(exc)) from exc
 
@@ -282,6 +295,28 @@ def restore_bundle(db: Session, data: bytes, passphrase: str) -> RestoreSummary:
 
     master = get_secret_cipher()
     managed = _backup_tables()
+
+    # Acquire the database write lock up front (pysqlite's legacy isolation
+    # would otherwise defer BEGIN to the first DELETE) and re-check the
+    # active-scan guard *inside* the write transaction. The endpoint checks the
+    # same condition before reading the upload, but that is check-then-act
+    # across a long await — a scan queued (or claimed) in that window must
+    # abort the restore here, before anything is wiped (CON-3). Once BEGIN
+    # IMMEDIATE succeeds no other writer can queue or claim a scan until this
+    # transaction ends, so the check cannot go stale.
+    db.execute(text("BEGIN IMMEDIATE"))
+    scans = Base.metadata.tables["scans"]
+    active = (
+        db.execute(
+            select(func.count()).select_from(scans).where(scans.c.status.in_(("queued", "running")))
+        ).scalar()
+        or 0
+    )
+    if active:
+        raise RestoreConflictError(
+            "A scan was queued or started while the restore was being uploaded; "
+            "wait for it to finish before restoring."
+        )
 
     # Clear every table except the host-owned catalogue/version marker, in
     # reverse FK order. Transient state (sessions, oidc_login_flows) and raw

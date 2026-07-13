@@ -32,6 +32,7 @@ from app.api.uploads import read_upload_capped
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.backup import (
     BackupError,
+    RestoreConflictError,
     build_bundle,
     restore_bundle,
 )
@@ -242,6 +243,9 @@ async def restore_backup(
     # Refuse to restore while scans are in flight: restore wipes and repopulates
     # every table, and a worker committing findings for a queued/running scan
     # mid-wipe would attach them to a replaced (or vanished) scan row (API-11).
+    # This fast-fail is a courtesy check only — it runs before the (long) upload
+    # await, so restore_bundle re-checks it inside its write transaction, where
+    # it cannot go stale (CON-3).
     active_scans = db.execute(
         select(func.count())
         .select_from(Scan)
@@ -259,25 +263,40 @@ async def restore_backup(
 
     actor_username = auth.user.username
     actor_ip = client_ip(request)
+    # Pause the worker for the duration: submissions still land (their tasks
+    # hold at the gate) but nothing can claim queued -> running while the
+    # database is wiped and rebuilt (CON-3).
+    worker = request.app.state.scan_worker
+    worker.pause()
     try:
-        # scrypt + a full-DB rebuild is heavy synchronous work; run it off the
-        # event loop so /healthz (and the container healthcheck) stay responsive
-        # during a large restore (API-2).
-        summary = await run_in_threadpool(restore_bundle, db, data, passphrase)
-    except BackupError as exc:
-        db.rollback()
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        try:
+            # scrypt + a full-DB rebuild is heavy synchronous work; run it off
+            # the event loop so /healthz (and the container healthcheck) stay
+            # responsive during a large restore (API-2).
+            summary = await run_in_threadpool(restore_bundle, db, data, passphrase)
+        except RestoreConflictError as exc:
+            db.rollback()
+            raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        except BackupError as exc:
+            db.rollback()
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    # The audit log itself was just repopulated from the bundle; record the
-    # restore with no actor FK (the user table was replaced) to avoid dangling
-    # references, keeping the acting username in details.
-    record_audit(
-        db,
-        action="backup.restored",
-        ip=actor_ip,
-        details={"restored_by": actor_username, "rows": summary.rows, "tables": summary.tables},
-    )
-    db.commit()
+        # The audit log itself was just repopulated from the bundle; record the
+        # restore with no actor FK (the user table was replaced) to avoid
+        # dangling references, keeping the acting username in details.
+        record_audit(
+            db,
+            action="backup.restored",
+            ip=actor_ip,
+            details={
+                "restored_by": actor_username,
+                "rows": summary.rows,
+                "tables": summary.tables,
+            },
+        )
+        db.commit()
+    finally:
+        worker.resume()
     return RestoreOut(tables=summary.tables, rows=summary.rows, app_version=summary.app_version)
 
 
