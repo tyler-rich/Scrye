@@ -297,6 +297,45 @@ def test_repository_scan_runs(client: TestClient, monkeypatch) -> None:
     assert scanner.calls["repo"]["target"] == "https://github.com/org/repo.git"
 
 
+@pytest.mark.parametrize("target", ["/data", "/run/secrets", "/", "/app", "file:///etc/passwd"])
+def test_repository_scan_rejects_local_path_target(
+    client: TestClient, monkeypatch, target: str
+) -> None:
+    # SEC-1 regression: a `repository` scan must not accept a local filesystem
+    # path. Trivy `repo` would walk it, leaking host files (the SQLite DB, the
+    # master-key file) as downloadable scan output — the exact bypass the
+    # SCRYE_FILESYSTEM_SCAN_ROOTS allowlist exists to prevent.
+    scanner = _install_multitarget(client, monkeypatch)
+    csrf = _setup_admin(client)
+    resp = client.post(
+        "/api/scans",
+        headers={CSRF: csrf},
+        json={"scanner": "trivy", "target": target, "target_type": "repository"},
+    )
+    assert resp.status_code == 422, resp.text
+    # The scanner is never reached — nothing is queued or run.
+    assert "repo" not in scanner.calls
+
+
+def test_repository_scan_accepts_remote_clone_url(client: TestClient, monkeypatch) -> None:
+    # SEC-1 regression: a legitimate remote clone URL is still accepted and runs.
+    scanner = _install_multitarget(client, monkeypatch)
+    csrf = _setup_admin(client)
+    resp = client.post(
+        "/api/scans",
+        headers={CSRF: csrf},
+        json={
+            "scanner": "trivy",
+            "target": "https://github.com/org/repo.git",
+            "target_type": "repository",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    settled = _wait_for_status(client, resp.json()["id"], {"succeeded", "failed"})
+    assert settled["status"] == "succeeded"
+    assert scanner.calls["repo"]["target"] == "https://github.com/org/repo.git"
+
+
 def test_repository_scan_with_git_credential_injects_token(client: TestClient, monkeypatch) -> None:
     scanner = _install_multitarget(client, monkeypatch)
     csrf = _setup_admin(client)

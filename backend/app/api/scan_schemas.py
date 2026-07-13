@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.db.models import (
     ArtifactKind,
@@ -20,6 +20,7 @@ from app.db.models import (
     Severity,
     TargetType,
 )
+from app.scanners.credentials import is_remote_repo_url
 
 #: Trivy scanner tokens a caller may select (default: all).
 TrivyScannerName = Literal["vuln", "misconfig", "secret", "license"]
@@ -98,6 +99,24 @@ class ScanCreateIn(BaseModel):
         if stripped.startswith("-"):
             raise ValueError("A git ref must not begin with '-'.")
         return stripped
+
+    @model_validator(mode="after")
+    def _require_remote_repository_url(self) -> ScanCreateIn:
+        """Reject a repository target that is a local path rather than a clone URL.
+
+        Trivy's ``repo`` subcommand accepts a local filesystem path, so a bare
+        target like ``/data`` or ``/run/secrets`` would walk the container
+        filesystem and expose its contents as downloadable scan output —
+        bypassing the ``SCRYE_FILESYSTEM_SCAN_ROOTS`` allowlist that exists to
+        keep the SQLite DB and master-key file unreadable. A repository scan may
+        therefore only target a remote clone URL (http/https/ssh/git).
+        """
+        if self.target_type is TargetType.REPOSITORY and not is_remote_repo_url(self.target):
+            raise ValueError(
+                "A repository target must be a remote clone URL "
+                "(http, https, ssh, or git); a local path is not allowed."
+            )
+        return self
 
     def to_options(self) -> dict[str, object]:
         """Build the stored ``options`` dict for the scanner and target type."""
