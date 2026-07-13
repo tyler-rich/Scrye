@@ -23,6 +23,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session, load_only, selectinload
@@ -123,15 +124,15 @@ def _reject_unsupported_combo(target_type: TargetType, scanner: Scanner) -> None
         )
 
 
-async def _queue_scan(request: Request, db: Session, scan: Scan, auth: AuthContext) -> ScanOut:
-    """Persist a queued scan, audit it, hand it to the worker, and return it."""
+def _persist_queued_scan(db: Session, scan: Scan, *, actor: AuthContext, ip: str | None) -> None:
+    """Insert a queued scan and its audit row, then commit (synchronous)."""
     db.add(scan)
     db.flush()
     record_audit(
         db,
         action="scan.created",
-        actor=auth.user,
-        ip=client_ip(request),
+        actor=actor.user,
+        ip=ip,
         target_type="scan",
         target_id=str(scan.id),
         details={
@@ -141,6 +142,14 @@ async def _queue_scan(request: Request, db: Session, scan: Scan, auth: AuthConte
         },
     )
     db.commit()
+
+
+async def _queue_scan(request: Request, db: Session, scan: Scan, auth: AuthContext) -> ScanOut:
+    """Persist a queued scan, audit it, hand it to the worker, and return it."""
+    # The insert/flush/audit/commit run on the event loop; hop them off so a
+    # concurrent long writer holding the SQLite lock can't stall the loop inside
+    # busy_timeout (CON-5). expire_on_commit=False keeps ``scan`` usable after.
+    await run_in_threadpool(_persist_queued_scan, db, scan, actor=auth, ip=client_ip(request))
     await request.app.state.scan_worker.submit(scan.id)
     logger.info(
         "Queued scan %d (%s %s %s).",

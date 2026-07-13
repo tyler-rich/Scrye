@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import logging
 
+import anyio.to_thread
+
 from app.core.app_settings import SettingsService
 from app.core.config import get_settings
 from app.db.session import SessionLocal
@@ -78,7 +80,11 @@ async def maybe_update_scanner_dbs(*, now: float) -> bool:
         True if an update run was performed this call, else False.
     """
     global _last_update_monotonic
-    enabled, interval_hours = _read_policy()
+    # This runs on the event loop (the maintenance tick's async path), so the
+    # policy read — a fresh session + query on every 60 s tick — is hopped off
+    # the loop; a slow writer holding the SQLite lock must not stall the loop
+    # inside busy_timeout (CON-5).
+    enabled, interval_hours = await anyio.to_thread.run_sync(_read_policy)
     if not enabled:
         return False
     if (

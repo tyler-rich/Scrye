@@ -433,12 +433,18 @@ class InProcessScanWorker(ScanWorker):
         the global Grype ignore config the same way, materialized into tmpfs and
         handed to the runner as a ``-c`` config path (FEAT-6).
         """
+        # The policy/ignore reads touch the DB (and decrypt secrets); run on the
+        # event loop, one arriving while a long writer holds the SQLite lock would
+        # stall the whole loop inside busy_timeout, so hop them off (CON-5). Both
+        # return detached values (a frozen dataclass / a str) safe to use back on
+        # the loop.
         if scan.scanner is Scanner.TRIVY:
-            policy = load_trivy_policy(session)
+            policy = await anyio.to_thread.run_sync(load_trivy_policy, session)
             with materialize_trivy_policy(policy) as policy_env:
                 return await self._dispatch_target(session, scan, policy_env)
         if scan.scanner is Scanner.GRYPE:
-            with materialize_grype_config(load_grype_ignore(session)) as grype_env:
+            grype_ignore = await anyio.to_thread.run_sync(load_grype_ignore, session)
+            with materialize_grype_config(grype_ignore) as grype_env:
                 return await self._dispatch_target(session, scan, grype_env)
         return await self._dispatch_target(session, scan, {})
 
