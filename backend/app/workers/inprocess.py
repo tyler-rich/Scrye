@@ -428,7 +428,12 @@ class InProcessScanWorker(ScanWorker):
     async def _notify(self, session: Session, scan_id: int) -> None:
         """Dispatch finished-scan notifications; never raise into the worker."""
         try:
-            scan = session.get(Scan, scan_id)
+            # populate_existing re-reads the row instead of trusting the
+            # identity-map copy (``expire_on_commit=False`` keeps the just-
+            # committed scan cached): a scan deleted in the instant after it
+            # reached a terminal state is then seen as gone and correctly not
+            # announced with a link that 404s (CON-19).
+            scan = session.get(Scan, scan_id, populate_existing=True)
             if scan is not None:
                 await dispatch_scan_event(session, scan)
         except Exception:  # noqa: BLE001 - notification failures never fail a scan

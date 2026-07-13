@@ -434,6 +434,43 @@ class TestTaskLifecycle:
         assert db.get(Scan, scan_id).status is ScanStatus.QUEUED
 
 
+class TestNotifyStaleRead:
+    @pytest.mark.asyncio
+    async def test_no_notification_for_a_concurrently_deleted_scan(self, db, monkeypatch) -> None:
+        """A scan deleted the instant after it finished must not be announced;
+        _notify re-reads the row rather than trusting the identity map (CON-19)."""
+        dispatched: list[int] = []
+
+        async def _spy_dispatch(session, scan):
+            dispatched.append(scan.id)
+
+        monkeypatch.setattr(inprocess, "dispatch_scan_event", _spy_dispatch)
+
+        scan_id = _insert_scan(ScanStatus.SUCCEEDED)
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+        session = SessionLocal()
+        try:
+            # Prime the worker session's identity map with the scan and hold a
+            # strong reference so the (weak) identity map keeps the stale copy —
+            # exactly the just-committed scan the worker holds after persistence.
+            primed = session.get(Scan, scan_id)
+            assert primed is not None
+            # ...then delete it through a different session.
+            other = SessionLocal()
+            try:
+                other.delete(other.get(Scan, scan_id))
+                other.commit()
+            finally:
+                other.close()
+
+            await worker._notify(session, scan_id)
+            assert primed is not None  # keep the reference alive across _notify
+        finally:
+            session.close()
+
+        assert dispatched == [], "notified for a scan that was already deleted"
+
+
 class TestPauseGate:
     @pytest.mark.asyncio
     async def test_paused_worker_defers_execution_until_resume(self, db, monkeypatch) -> None:
