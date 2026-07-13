@@ -238,6 +238,35 @@ async def test_generic_clone_shreds_workspace_on_scan_exception(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
+async def test_generic_clone_removes_checkout_off_the_event_loop(monkeypatch) -> None:
+    """CON-20: the (potentially multi-GB) checkout removal is hopped to a thread
+    so it doesn't stall the event loop; the small tmpfs cred dir stays inline."""
+    import shutil
+    import threading
+
+    _stub_clone(monkeypatch)
+    loop_thread = threading.get_ident()
+    seen: dict[str, int] = {}
+    real_rmtree = shutil.rmtree
+
+    def _spy_rmtree(path, *args, **kwargs):
+        seen[str(path)] = threading.get_ident()
+        return real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "rmtree", _spy_rmtree)
+    auth = GitAuth(provider=GitProvider.GENERIC, token="tok", username="u")
+
+    async with generic_repo_checkout("https://h/r.git", auth, {}, timeout=30):
+        pass
+
+    checkout_removals = {p: t for p, t in seen.items() if "scrye-gitclone-" in p}
+    assert checkout_removals, "the checkout dir was never removed"
+    assert all(
+        thread != loop_thread for thread in checkout_removals.values()
+    ), "the checkout removal ran on the event-loop thread"
+
+
+@pytest.mark.asyncio
 async def test_generic_clone_without_username_uses_token_as_user(monkeypatch) -> None:
     calls = _stub_clone(monkeypatch)
     auth = GitAuth(provider=GitProvider.GENERIC, token="tok-only")

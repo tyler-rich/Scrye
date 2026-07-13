@@ -27,8 +27,10 @@ Two mechanisms:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import contextlib
+import functools
 import json
 import os
 import shutil
@@ -37,6 +39,8 @@ from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
+
+import anyio.to_thread
 
 from app.core.config import get_settings
 from app.db.models import CREDENTIAL_HELPERS, GitProvider, RegistryAuthType
@@ -304,5 +308,13 @@ async def generic_repo_checkout(
         _shred_file(script_path)
         with contextlib.suppress(OSError):
             shutil.rmtree(cred_dir, ignore_errors=True)
+        # The checkout can be an arbitrarily large working tree (multi-GB), so
+        # walking and unlinking it inline would stall the event loop for seconds
+        # (CON-20). Hop it to a thread, shielded so the cleanup still completes
+        # even though this finally can run under cancellation (worker shutdown).
         with contextlib.suppress(OSError):
-            shutil.rmtree(clone_dir, ignore_errors=True)
+            await asyncio.shield(
+                anyio.to_thread.run_sync(
+                    functools.partial(shutil.rmtree, clone_dir, ignore_errors=True)
+                )
+            )
