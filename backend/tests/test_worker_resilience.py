@@ -402,18 +402,21 @@ class TestTaskLifecycle:
         assert db.get(Scan, scan_id).status is ScanStatus.QUEUED
 
     @pytest.mark.asyncio
-    async def test_done_callback_logs_a_crashed_task(self, caplog) -> None:
+    async def test_done_callback_logs_a_crashed_task(self, monkeypatch) -> None:
         """The done callback retrieves and logs an escaped task exception."""
         worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+        logged: list[tuple] = []
+        monkeypatch.setattr(inprocess.logger, "error", lambda *a, **k: logged.append((a, k)))
 
         async def _boom() -> None:
             raise RuntimeError("kaboom")
 
         task = asyncio.create_task(_boom())
         await asyncio.gather(task, return_exceptions=True)
-        with caplog.at_level("ERROR"):
-            worker._on_task_done(task, 42)  # must not raise
-        assert any("42" in rec.message for rec in caplog.records)
+        worker._on_task_done(task, 42)  # must not raise
+
+        assert logged, "a crashed task must be logged"
+        assert 42 in logged[0][0], "the log must identify the crashed scan"
 
     @pytest.mark.asyncio
     async def test_submit_defers_when_task_cap_reached(self, db) -> None:
