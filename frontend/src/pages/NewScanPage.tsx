@@ -241,6 +241,7 @@ export function NewScanPage() {
                 Target type
               </Text>
               <SegmentedControl
+                aria-label="Target type"
                 value={targetType}
                 onChange={(v) => setTargetType(v as TargetType)}
                 data={TARGET_TYPES}
@@ -253,6 +254,7 @@ export function NewScanPage() {
                 Scanner
               </Text>
               <SegmentedControl
+                aria-label="Scanner"
                 value={scanner}
                 onChange={(v) => setScanner(v as Scanner)}
                 data={SCANNERS_FOR[targetType].map((s) => ({

@@ -435,6 +435,7 @@ export function ScanDetailPage() {
             <Group align="flex-end" gap="sm">
               <TagsInput
                 flex={1}
+                aria-label="Scan tags"
                 placeholder="Add a tag and press Enter"
                 value={tagDraft}
                 onChange={setTagDraft}
@@ -492,6 +493,7 @@ export function ScanDetailPage() {
               <Title order={4}>Findings</Title>
               <Group gap="sm">
                 <Select
+                  aria-label="Filter findings by severity"
                   placeholder="All severities"
                   clearable
                   size="xs"
@@ -500,6 +502,7 @@ export function ScanDetailPage() {
                   onChange={(v) => setSeverityFilter(v as Severity | null)}
                 />
                 <Select
+                  aria-label="Filter findings by class"
                   placeholder="All classes"
                   clearable
                   size="xs"

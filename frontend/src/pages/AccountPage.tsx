@@ -209,7 +209,14 @@ function MfaSection() {
             <Text size="xs" c="dimmed" style={{ wordBreak: 'break-all' }}>
               {enrollment.otpauth_uri}
             </Text>
-            <PinInput length={6} type="number" value={code} onChange={setCode} oneTimeCode />
+            <PinInput
+              length={6}
+              type="number"
+              aria-label="Authentication code"
+              value={code}
+              onChange={setCode}
+              oneTimeCode
+            />
             <Group>
               <Button onClick={confirm} disabled={code.length < 6} loading={confirming}>
                 Confirm & enable
