@@ -22,6 +22,9 @@ from app.core.secret_store import AAD_MFA_SECRET, decrypt_secret, encrypt_secret
 _TOTP_VALID_WINDOW = 1
 #: Lifetime of a pending-MFA challenge token (seconds).
 _CHALLENGE_TTL_SECONDS = 300
+#: Max concurrent pending challenges per user; issuing beyond this drops the
+#: oldest so one account can't accumulate live challenges up to the TTL (SEC-10).
+_MAX_PENDING_PER_USER = 5
 
 
 def generate_secret() -> str:
@@ -91,6 +94,7 @@ class PendingMfaStore:
         token = secrets.token_urlsafe(32)
         with self._lock:
             self._prune()
+            self._evict_over_cap(user_id)
             self._pending[token] = _PendingChallenge(
                 user_id=user_id,
                 purpose=purpose,
@@ -111,4 +115,18 @@ class PendingMfaStore:
         """Drop expired challenges. Caller must hold ``self._lock``."""
         now = time.monotonic()
         for token in [t for t, c in self._pending.items() if c.expires_at <= now]:
+            self._pending.pop(token, None)
+
+    def _evict_over_cap(self, user_id: int) -> None:
+        """Bound a single user's live challenges, dropping the oldest first.
+
+        Caller must hold ``self._lock``. Keeps room for the one about to be
+        issued, so the per-user total never exceeds ``_MAX_PENDING_PER_USER``.
+        """
+        tokens = [t for t, c in self._pending.items() if c.user_id == user_id]
+        excess = len(tokens) - (_MAX_PENDING_PER_USER - 1)
+        if excess <= 0:
+            return
+        tokens.sort(key=lambda t: self._pending[t].expires_at)  # oldest first
+        for token in tokens[:excess]:
             self._pending.pop(token, None)
