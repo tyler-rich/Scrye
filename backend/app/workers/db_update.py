@@ -48,25 +48,30 @@ def _read_policy() -> tuple[bool, int]:
         session.close()
 
 
-async def _run_update(binary_setting: str, argv_tail: list[str], engine: str) -> None:
-    """Run one scanner's DB-update command best-effort (logged, never raised)."""
+async def _run_update(binary_setting: str, argv_tail: list[str], engine: str) -> bool:
+    """Run one scanner's DB-update command best-effort (logged, never raised).
+
+    Returns True only when the update actually succeeded (exit 0), so the caller
+    can decide whether the DBs are fresh enough to defer the next attempt.
+    """
     env = {**inherited_env(), **scanner_cache_env()}
     try:
         binary = resolve_binary(binary_setting)
     except ScannerError as exc:
         logger.warning("Skipping %s DB update: %s", engine, exc)
-        return
+        return False
     try:
         result = await run_command(
             [binary, *argv_tail], timeout=_DB_UPDATE_TIMEOUT_SECONDS, env=env
         )
     except ScannerError as exc:
         logger.warning("%s DB update failed to run: %s", engine, exc)
-        return
+        return False
     if result.returncode == 0:
         logger.info("%s vulnerability DB updated.", engine)
-    else:
-        logger.warning("%s DB update exited %d.", engine, result.returncode)
+        return True
+    logger.warning("%s DB update exited %d.", engine, result.returncode)
+    return False
 
 
 async def maybe_update_scanner_dbs(*, now: float) -> bool:
@@ -94,9 +99,20 @@ async def maybe_update_scanner_dbs(*, now: float) -> bool:
         return False
 
     settings = get_settings()
-    _last_update_monotonic = now
-    await _run_update(settings.trivy_binary, ["image", "--download-db-only"], "Trivy")
-    await _run_update(settings.grype_binary, ["db", "update"], "Grype")
+    trivy_ok = await _run_update(settings.trivy_binary, ["image", "--download-db-only"], "Trivy")
+    grype_ok = await _run_update(settings.grype_binary, ["db", "update"], "Grype")
+    # Only mark the interval as satisfied when at least one DB actually updated.
+    # On a total failure (e.g. a transient registry outage) the marker stays
+    # unset so the next tick retries, rather than letting the DBs silently go
+    # stale for a full db_update_interval_hours while the UI implies freshness
+    # (CON-12).
+    if trivy_ok or grype_ok:
+        _last_update_monotonic = now
+    else:
+        logger.warning(
+            "Scanner vulnerability-DB auto-update failed for both engines; "
+            "will retry on the next maintenance tick."
+        )
     return True
 
 
