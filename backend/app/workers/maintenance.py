@@ -62,6 +62,10 @@ class MaintenanceScheduler:
         self._worker = worker
         self._interval = tick_seconds
         self._task: asyncio.Task[None] | None = None
+        # The scanner-DB refresh runs as its own detached task (up to two
+        # 600 s subprocesses) so a slow update can't delay the next tick's due
+        # schedules/retention (CON-13). At most one runs at a time.
+        self._db_update_task: asyncio.Task[None] | None = None
         self._stopping = asyncio.Event()
 
     def start(self) -> None:
@@ -70,24 +74,28 @@ class MaintenanceScheduler:
             self._task = asyncio.create_task(self._run_loop())
 
     async def shutdown(self) -> None:
-        """Stop the loop and wait (bounded) for the task to finish.
+        """Stop the loop and wait (bounded) for the tasks to finish.
 
-        Uses :func:`asyncio.wait` rather than :func:`asyncio.wait_for`: the tick
-        can be suspended at a non-cancellable ``to_thread`` pass whose delivered
-        cancellation won't land until the thread returns, and ``wait_for`` would
-        block awaiting that cancellation. ``wait`` returns after the timeout and
-        the still-running task is abandoned (the process is stopping anyway).
+        Uses :func:`asyncio.wait` rather than :func:`asyncio.wait_for`: a task
+        can be suspended at a non-cancellable ``to_thread`` pass (or an
+        in-flight DB-update subprocess) whose delivered cancellation won't land
+        immediately, and ``wait_for`` would block awaiting it. ``wait`` returns
+        after the timeout and any still-running task is abandoned (the process
+        is stopping anyway).
         """
         self._stopping.set()
-        if self._task is not None:
-            self._task.cancel()
-            _, pending = await asyncio.wait({self._task}, timeout=_SHUTDOWN_TASK_TIMEOUT_SECONDS)
+        tasks = {t for t in (self._task, self._db_update_task) if t is not None}
+        if tasks:
+            for task in tasks:
+                task.cancel()
+            _, pending = await asyncio.wait(tasks, timeout=_SHUTDOWN_TASK_TIMEOUT_SECONDS)
             if pending:
                 logger.warning(
-                    "Maintenance task did not stop within %ds; abandoning it.",
+                    "Maintenance tasks did not stop within %ds; abandoning them.",
                     _SHUTDOWN_TASK_TIMEOUT_SECONDS,
                 )
-            self._task = None
+        self._task = None
+        self._db_update_task = None
 
     async def tick(self) -> None:
         """Run one maintenance pass: watchdog, schedules, retention, DB refresh."""
@@ -100,9 +108,29 @@ class MaintenanceScheduler:
         # Retention can unlink thousands of files + delete their rows on the
         # first pass over a large history; keep it off the event loop (API-15).
         await anyio.to_thread.run_sync(self._run_retention)
-        # Refresh the scanner vulnerability DBs when due (FEAT-4). The subprocess
-        # calls are genuinely async; a failure here is logged, never raised.
-        await maybe_update_scanner_dbs(now=time.monotonic())
+        # Refresh the scanner vulnerability DBs when due (FEAT-4) as a detached
+        # task: the two updates can each run up to 600 s, and awaiting them here
+        # would keep the tick from returning — delaying the next tick's due
+        # schedules/retention by up to ~20 min (CON-13).
+        self._maybe_start_db_update()
+
+    def _maybe_start_db_update(self) -> None:
+        """Kick a scanner-DB refresh unless a previous one is still running.
+
+        The update has its own interval due-check, but a fresh subprocess pair
+        must not stack on top of an in-flight one (which can outlast the tick),
+        so a new task is only started once the previous has finished.
+        """
+        if self._db_update_task is not None and not self._db_update_task.done():
+            return
+        self._db_update_task = asyncio.create_task(self._run_db_update())
+
+    async def _run_db_update(self) -> None:
+        """Run the due scanner-DB refresh, logging (never raising) any failure."""
+        try:
+            await maybe_update_scanner_dbs(now=time.monotonic())
+        except Exception:  # noqa: BLE001 - a refresh failure must not kill the loop
+            logger.exception("Scanner-DB auto-update failed; continuing.")
 
     async def _fire_schedules(self) -> None:
         """Create scans for due schedules and submit them to the worker."""

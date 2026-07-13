@@ -263,6 +263,7 @@ class TestStaleScanWatchdog:
         worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
         scheduler = MaintenanceScheduler(SessionLocal, worker)
         await scheduler.tick()
+        await scheduler.shutdown()  # drains the detached DB-update task
         await worker.shutdown()
         db.expire_all()
         assert db.get(Scan, scan_id).status is ScanStatus.SUCCEEDED
@@ -305,6 +306,44 @@ class TestBoundedSchedulerShutdown:
         wedged.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await wedged
+
+
+class TestMaintenanceDbUpdateDecoupled:
+    @pytest.mark.asyncio
+    async def test_slow_db_update_does_not_block_the_tick(self, db, monkeypatch) -> None:
+        """A tick must return promptly even while a slow scanner-DB refresh runs;
+        the refresh proceeds as a detached task (CON-13)."""
+        from app.workers import maintenance as maintenance_mod
+        from app.workers.maintenance import MaintenanceScheduler
+
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def _slow_update(*, now):
+            started.set()
+            await release.wait()  # stand in for a multi-minute DB pull
+            return True
+
+        monkeypatch.setattr(maintenance_mod, "maybe_update_scanner_dbs", _slow_update)
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+        scheduler = MaintenanceScheduler(SessionLocal, worker)
+
+        loop = asyncio.get_running_loop()
+        t0 = loop.time()
+        await scheduler.tick()  # must not wait for the slow update
+        assert loop.time() - t0 < 1.0
+        await started.wait()  # the update did start, detached
+        assert scheduler._db_update_task is not None and not scheduler._db_update_task.done()
+
+        # A second tick while the first update is still running must not stack
+        # another update task.
+        first_task = scheduler._db_update_task
+        await scheduler.tick()
+        assert scheduler._db_update_task is first_task
+
+        release.set()
+        await scheduler.shutdown()
+        await worker.shutdown()
 
 
 class TestPauseGate:
