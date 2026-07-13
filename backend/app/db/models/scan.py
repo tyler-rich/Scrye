@@ -152,6 +152,15 @@ class Scan(Base):
         """Return this scan's labels as a sorted list of strings (history filter)."""
         return sorted(row.tag for row in self.tag_rows)
 
+    @property
+    def has_error(self) -> bool:
+        """Whether this scan recorded an error message.
+
+        Lets list/summary views signal a failure without shipping the unbounded
+        ``error`` text they never render (APIR-9).
+        """
+        return bool(self.error)
+
 
 class ScanTag(Base):
     """A free-form label attached to a scan for history filtering (docs/PLAN.md §4.4).

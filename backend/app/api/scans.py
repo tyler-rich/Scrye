@@ -42,6 +42,7 @@ from app.api.scan_schemas import (
     FindingsPage,
     ScanCreateIn,
     ScanOut,
+    ScanSummaryOut,
 )
 from app.api.uploads import read_upload_capped
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
@@ -275,7 +276,7 @@ async def create_sbom_scan(
     return await _queue_scan(request, db, scan, auth)
 
 
-@router.get("", response_model=list[ScanOut])
+@router.get("", response_model=list[ScanSummaryOut])
 def list_scans(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
@@ -283,9 +284,9 @@ def list_scans(
     scan_status: ScanStatus | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-) -> list[ScanOut]:
+) -> list[ScanSummaryOut]:
     """List scans, newest first (basic filters; full history in Phase 4)."""
-    # Eager-load tags to avoid an N+1 SELECT per row when ScanOut reads them (API-1).
+    # Eager-load tags to avoid an N+1 SELECT per row when the row reads them (API-1).
     stmt = (
         select(Scan)
         .options(selectinload(Scan.tag_rows))
@@ -296,7 +297,7 @@ def list_scans(
     if scan_status is not None:
         stmt = stmt.where(Scan.status == scan_status)
     scans = db.scalars(stmt.limit(limit).offset(offset)).all()
-    return [ScanOut.model_validate(s) for s in scans]
+    return [ScanSummaryOut.model_validate(s) for s in scans]
 
 
 @router.get("/history", response_model=ScanHistoryPage)
@@ -334,7 +335,7 @@ def list_history(
         .offset(offset)
     )
     scans = db.scalars(stmt).all()
-    return ScanHistoryPage(total=total, items=[ScanOut.model_validate(s) for s in scans])
+    return ScanHistoryPage(total=total, items=[ScanSummaryOut.model_validate(s) for s in scans])
 
 
 @router.get("/filter-options", response_model=FilterOptionsOut)

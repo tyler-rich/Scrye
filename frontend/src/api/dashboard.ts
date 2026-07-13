@@ -1,7 +1,7 @@
 /** API types and calls for the dashboard aggregate widgets (docs/PLAN.md §4.6). */
 
 import { api } from './client';
-import type { Scan } from './scans';
+import type { ScanSummary } from './scans';
 
 export interface TargetPosture {
   scanner: string;
@@ -42,7 +42,7 @@ export interface Dashboard {
   open_high: number;
   scans_over_time: TimePoint[];
   top_vulnerable_targets: TargetPosture[];
-  recent_scans: Scan[];
+  recent_scans: ScanSummary[];
   failed_alerts: FailedAlert[];
   scanner_db: ScannerDbInfo[];
   schedules_enabled: number;

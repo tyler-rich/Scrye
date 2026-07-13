@@ -21,23 +21,35 @@ export const SEVERITY_ORDER: Severity[] = [
   'unknown',
 ];
 
-export interface Scan {
+/**
+ * A scan as it appears in list/history/dashboard rows (APIR-9).
+ *
+ * These views never render a scan's `options` or full `error` text, so the
+ * backend trims them from list payloads and ships only a `has_error` flag; the
+ * full {@link Scan} (with `options` and `error`) comes from the detail endpoint.
+ */
+export interface ScanSummary {
   id: number;
   scanner: Scanner;
   target_type: TargetType;
   target: string;
   status: ScanStatus;
-  options: Record<string, unknown>;
   severity_counts: Record<string, number>;
   highest_severity: Severity | null;
   findings_count: number;
   scanner_version: string | null;
-  error: string | null;
+  has_error: boolean;
   created_by_username: string | null;
   tags: string[];
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
+}
+
+/** The full single-scan view returned by the detail endpoint. */
+export interface Scan extends ScanSummary {
+  options: Record<string, unknown>;
+  error: string | null;
 }
 
 export interface Finding {
@@ -92,12 +104,12 @@ export function isActive(status: ScanStatus): boolean {
 
 export function listScans(
   params: { scanner?: Scanner; status?: ScanStatus } = {},
-): Promise<Scan[]> {
+): Promise<ScanSummary[]> {
   const query = new URLSearchParams();
   if (params.scanner) query.set('scanner', params.scanner);
   if (params.status) query.set('status', params.status);
   const suffix = query.toString() ? `?${query.toString()}` : '';
-  return api<Scan[]>(`/api/scans${suffix}`);
+  return api<ScanSummary[]>(`/api/scans${suffix}`);
 }
 
 export function createScan(input: CreateScanInput): Promise<Scan> {
@@ -187,7 +199,7 @@ export interface HistoryQuery extends HistoryFilters {
 
 export interface ScanHistoryPage {
   total: number;
-  items: Scan[];
+  items: ScanSummary[];
 }
 
 export interface FilterOptions {

@@ -102,6 +102,22 @@ def test_history_returns_paginated_envelope(client: TestClient) -> None:
     assert body["items"][0]["target"] == "img:2"
 
 
+def test_history_rows_are_trimmed_summaries(client: TestClient) -> None:
+    """History rows omit options/error and expose has_error; detail keeps them (APIR-9)."""
+    _setup_admin(client)
+    sid = _insert_scan(target="img", findings=[])
+
+    row = client.get("/api/scans/history").json()["items"][0]
+    assert "options" not in row
+    assert "error" not in row
+    assert row["has_error"] is False
+
+    detail = client.get(f"/api/scans/{sid}").json()
+    assert "options" in detail
+    assert "error" in detail
+    assert detail["has_error"] is False
+
+
 def test_history_filters_by_scanner_and_status(client: TestClient) -> None:
     _setup_admin(client)
     _insert_scan(scanner=Scanner.TRIVY, status=ScanStatus.SUCCEEDED)

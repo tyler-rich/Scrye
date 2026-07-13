@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app.api.scan_schemas import ScanOut
+from app.api.scan_schemas import ScanSummaryOut
 from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, require_role
 from app.core.dashboard import (
@@ -77,7 +77,7 @@ class DashboardOut(BaseModel):
     open_high: int
     scans_over_time: list[dict[str, object]]
     top_vulnerable_targets: list[TargetPostureOut]
-    recent_scans: list[ScanOut]
+    recent_scans: list[ScanSummaryOut]
     failed_alerts: list[FailedAlertOut]
     scanner_db: list[ScannerDbOut]
     schedules_enabled: int
@@ -126,7 +126,7 @@ async def get_dashboard(
         open_high=data.open_high,
         scans_over_time=data.scans_over_time,
         top_vulnerable_targets=[TargetPostureOut(**vars(p)) for p in data.top_vulnerable_targets],
-        recent_scans=[ScanOut.model_validate(s) for s in recent],
+        recent_scans=[ScanSummaryOut.model_validate(s) for s in recent],
         failed_alerts=[
             FailedAlertOut(
                 id=s.id,

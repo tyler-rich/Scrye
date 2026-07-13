@@ -39,8 +39,8 @@ import {
   type FilterOptions,
   type HistoryFilters,
   type HistorySort,
-  type Scan,
   type ScanStatus,
+  type ScanSummary,
   type Severity,
   type SortOrder,
   type TargetType,
@@ -82,12 +82,12 @@ export function ScansPage() {
   const [order, setOrder] = useState<SortOrder>('desc');
   const [page, setPage] = useState(1);
 
-  const [data, setData] = useState<{ total: number; items: Scan[] } | null>(null);
+  const [data, setData] = useState<{ total: number; items: ScanSummary[] } | null>(null);
   const [options, setOptions] = useState<FilterOptions>({ initiators: [], tags: [] });
   const [presets, setPresets] = useState<FilterPreset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
-  const [compare, setCompare] = useState<Scan[]>([]);
+  const [compare, setCompare] = useState<ScanSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const effectiveFilters = useMemo(
@@ -191,7 +191,7 @@ export function ScansPage() {
     }
   };
 
-  const toggleCompare = (scan: Scan, checked: boolean) => {
+  const toggleCompare = (scan: ScanSummary, checked: boolean) => {
     setCompare((prev) => {
       if (checked) return [...prev, scan].slice(-2);
       return prev.filter((s) => s.id !== scan.id);
@@ -263,7 +263,7 @@ export function ScansPage() {
               clearable
               data={SCANNERS}
               value={filters.scanner ?? null}
-              onChange={(v) => patch({ scanner: (v as Scan['scanner']) ?? null })}
+              onChange={(v) => patch({ scanner: (v as ScanSummary['scanner']) ?? null })}
             />
             <Select
               label="Target type"
