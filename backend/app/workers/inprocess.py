@@ -346,29 +346,37 @@ class InProcessScanWorker(ScanWorker):
 
     async def _execute(self, scan_id: int) -> None:
         """Run a single scan end-to-end, holding a concurrency slot."""
-        async with self._semaphore:
-            # Hold here while the worker is paused (a restore is rewriting the
-            # database); the scan row stays queued and runs after resume.
-            await self._resume_gate.wait()
-            session = self._session_factory()
+        session = self._session_factory()
+        try:
+            notify = False
             try:
-                scan = session.get(Scan, scan_id)
-                if scan is None:
-                    logger.warning("Scan %d vanished before execution.", scan_id)
-                    return
-                if scan.status != ScanStatus.QUEUED:
-                    # Canceled while queued, or already handled — skip.
-                    return
-                await self._run(session, scan)
+                async with self._semaphore:
+                    # Hold here while the worker is paused (a restore is rewriting
+                    # the database); the scan row stays queued and runs after
+                    # resume.
+                    await self._resume_gate.wait()
+                    scan = session.get(Scan, scan_id)
+                    if scan is None:
+                        logger.warning("Scan %d vanished before execution.", scan_id)
+                        return
+                    if scan.status != ScanStatus.QUEUED:
+                        # Canceled while queued, or already handled — skip.
+                        return
+                    notify = await self._run(session, scan)
             except Exception:  # noqa: BLE001 - last-resort guard; detail logged below
                 logger.exception("Unexpected failure while executing scan %d.", scan_id)
                 session.rollback()
                 await anyio.to_thread.run_sync(
                     self._fail, session, scan_id, "Unexpected internal error during scan execution."
                 )
+                notify = True
+            # Dispatch notifications only after the semaphore slot is released, so
+            # a slow or dead notification channel can't hold scan capacity while
+            # queued scans wait (CON-15).
+            if notify:
                 await self._notify(session, scan_id)
-            finally:
-                session.close()
+        finally:
+            session.close()
 
     async def _notify(self, session: Session, scan_id: int) -> None:
         """Dispatch finished-scan notifications; never raise into the worker."""
@@ -409,10 +417,17 @@ class InProcessScanWorker(ScanWorker):
         session.refresh(scan)
         return True
 
-    async def _run(self, session: Session, scan: Scan) -> None:
-        """Mark the scan running, invoke the scanner, and persist results."""
+    async def _run(self, session: Session, scan: Scan) -> bool:
+        """Mark the scan running, invoke the scanner, and persist results.
+
+        Returns True when the scan reached a terminal state (succeeded or
+        failed) whose completion should be notified, or False when the claim was
+        lost (cancelled/already handled) so there is nothing to announce. The
+        caller dispatches the notification *after* releasing the semaphore slot
+        (CON-15).
+        """
         if not await anyio.to_thread.run_sync(self._claim, session, scan):
-            return
+            return False
         logger.info(
             "Scan %d started: %s %s %s",
             scan.id,
@@ -435,8 +450,7 @@ class InProcessScanWorker(ScanWorker):
             # redact() strips URL userinfo before the message is stored/logged.
             await anyio.to_thread.run_sync(self._fail, session, scan.id, str(exc))
             logger.info("Scan %d failed: %s", scan.id, redact(str(exc)))
-            await self._notify(session, scan.id)
-            return
+            return True
 
         # Persisting 10k+ findings + a large raw-JSON write is heavy synchronous
         # DB/disk work; run it in a thread so the event loop (and /healthz, and
@@ -448,7 +462,7 @@ class InProcessScanWorker(ScanWorker):
             scan.findings_count,
             scan.highest_severity.value if scan.highest_severity else "none",
         )
-        await self._notify(session, scan.id)
+        return True
 
     async def _dispatch(
         self, session: Session, scan: Scan

@@ -346,6 +346,42 @@ class TestMaintenanceDbUpdateDecoupled:
         await worker.shutdown()
 
 
+class TestNotificationSlotRelease:
+    @pytest.mark.asyncio
+    async def test_notification_does_not_hold_the_concurrency_slot(self, db, monkeypatch) -> None:
+        """A scan's finished-notification runs after its semaphore slot is
+        released, so a slow/dead channel can't starve queued scans (CON-15).
+        With max_concurrent=1, a second scan must run to completion while the
+        first scan's notification is still blocked."""
+        notify_started = asyncio.Event()
+        release_notify = asyncio.Event()
+
+        async def _blocking_dispatch(session, scan):
+            notify_started.set()
+            await release_notify.wait()
+
+        monkeypatch.setattr(inprocess, "dispatch_scan_event", _blocking_dispatch)
+        monkeypatch.setattr(inprocess, "get_scanner", lambda s: _FakeScanner(_make_execution()))
+
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+        first = _queue_scan(db)
+        second = _queue_scan(db)
+        try:
+            await worker.submit(first)
+            await asyncio.wait_for(notify_started.wait(), timeout=5)
+            # First scan is done and stuck in notify; its slot must be free.
+            await worker.submit(second)
+            for _ in range(100):
+                db.expire_all()
+                if db.get(Scan, second).status is ScanStatus.SUCCEEDED:
+                    break
+                await asyncio.sleep(0.02)
+            assert db.get(Scan, second).status is ScanStatus.SUCCEEDED
+        finally:
+            release_notify.set()
+            await worker.shutdown()
+
+
 class TestPauseGate:
     @pytest.mark.asyncio
     async def test_paused_worker_defers_execution_until_resume(self, db, monkeypatch) -> None:
