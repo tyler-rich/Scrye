@@ -139,13 +139,16 @@ export function NewScanPage() {
 
   // Prefill the severity filter and ignore-unfixed toggle from the instance
   // defaults (Settings → Scanners) so changing those defaults actually affects
-  // new scans (FEAT-7). Runs once on mount, before the user edits the form; a
-  // fetch failure just leaves the built-in defaults in place.
+  // new scans (FEAT-7). Runs once on mount; a fetch failure just leaves the
+  // built-in defaults in place. On a slow backend the user may have already
+  // started editing before this resolves, so only apply the prefill to a
+  // pristine form — otherwise a late response silently reverts their edits
+  // (M19 / P1-2).
   useEffect(() => {
     let active = true;
     getScannerSettings()
       .then((s) => {
-        if (!active) return;
+        if (!active || form.isDirty()) return;
         const severities = s.default_severities.filter((v): v is TrivySeverity =>
           (TRIVY_SEVERITIES as string[]).includes(v),
         );
