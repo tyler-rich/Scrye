@@ -500,6 +500,14 @@ once with `openssl rand -base64 48` and provide it as a Docker secret. Stored
 credentials are encrypted with a key derived from it (HKDF-SHA256 → AES-256-GCM).
 In production the app **refuses to start** without a valid key file.
 
+**High-entropy key required.** The key file must be **valid base64 that decodes to
+at least 32 bytes** — exactly what `openssl rand -base64 48` produces. A raw
+passphrase (anything that isn't valid base64) is **rejected** on startup, because a
+low-entropy key could be brute-forced offline against a stolen database at HKDF
+speed. If you are upgrading a deployment that used a passphrase key, set
+`SCRYE_ALLOW_WEAK_MASTER_KEY=1` to boot **just long enough to rotate** to a proper
+key — it logs a warning on every start and is not meant to be left enabled.
+
 **Key rotation.** The key file may hold multiple versions, one per line, as
 `v<N>:<base64>` entries (a plain single-line key is version 1). New secrets are
 encrypted under the highest version and older versions remain readable, so you can
