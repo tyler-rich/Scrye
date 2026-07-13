@@ -40,19 +40,31 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl tar \
     && rm -rf /var/lib/apt/lists/*
 
+# cosign, pinned by digest from the official ko-built Sigstore image (SC-8). Used
+# below to verify the upstream projects' cosign signature over each checksums.txt
+# before the sha256sum check — upgrading the guarantee from "matches what GitHub
+# serves" (a same-origin checksum an attacker who replaced the tarball could
+# regenerate) to "signed by the upstream project's own GitHub Actions release
+# pipeline" (keyless Fulcio identity + Rekor transparency-log inclusion).
+COPY --from=ghcr.io/sigstore/cosign/cosign:v2.5.3@sha256:f1946d0f30fc8e3777b02f2201e02efdba9fe38f4918162f937052fac98e083f \
+    /ko-app/cosign /usr/local/bin/cosign
+
 WORKDIR /scanners
-# Each binary: download the asset + the publisher's signed checksums file,
-# verify with `sha256sum -c`, then extract. A checksum mismatch fails the build.
+# Each binary: download the asset + the publisher's signed checksums file, verify
+# the publisher's cosign signature over the checksums file (keyless, identity
+# pinned to the upstream repo's release workflow + the GitHub Actions OIDC
+# issuer), then verify the tarball with `sha256sum -c`, then extract. A signature
+# OR checksum mismatch fails the build.
 # The three downloads are independent, so they run concurrently (each in its own
 # background subshell) instead of sequentially — this halves the wall-clock of a
 # cold scanner stage, which matters most on the QEMU-emulated arm64 leg where
 # each fetch+verify+extract is slow. Concurrency changes nothing about the
-# integrity guarantee: every binary is still checksum-verified against the
-# publisher's file before extraction, and a failure in any subshell (download
-# error OR checksum mismatch) exits it non-zero, which `wait` propagates under
-# `set -e` to fail the whole build. Do NOT collapse this back to a plain
-# `curl | tar` — the download-then-verify-then-extract order is the supply-chain
-# control (CLAUDE.md § Hard security rules); see docs/PLAN.md § Build performance.
+# integrity guarantee: every binary is still cosign- AND checksum-verified before
+# extraction, and a failure in any subshell (download error, bad signature, OR
+# checksum mismatch) exits it non-zero, which `wait` propagates under `set -e` to
+# fail the whole build. Do NOT collapse this back to a plain `curl | tar` — the
+# download-then-verify-then-extract order is the supply-chain control (CLAUDE.md
+# § Hard security rules); see docs/ARCHIVE.md § Build performance.
 RUN set -eux; \
     case "${TARGETARCH}" in \
       amd64) TRIVY_ARCH="Linux-64bit"; ANCHORE_ARCH="linux_amd64" ;; \
@@ -62,9 +74,17 @@ RUN set -eux; \
     \
     fetch_verify_extract() { \
       set -eux; \
-      bin="$1"; base_url="$2"; tgz="$3"; checksums="$4"; \
+      bin="$1"; base_url="$2"; tgz="$3"; checksums="$4"; identity="$5"; \
       curl -fsSL -O "${base_url}/${tgz}"; \
       curl -fsSL -O "${base_url}/${checksums}"; \
+      curl -fsSL -O "${base_url}/${checksums}.sig"; \
+      curl -fsSL -O "${base_url}/${checksums}.pem"; \
+      cosign verify-blob \
+        --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+        --certificate-identity-regexp "${identity}" \
+        --certificate "${checksums}.pem" \
+        --signature "${checksums}.sig" \
+        "${checksums}"; \
       grep " ${tgz}\$" "${checksums}" | sha256sum -c -; \
       tar -xzf "${tgz}" "${bin}"; \
     }; \
@@ -72,19 +92,22 @@ RUN set -eux; \
     fetch_verify_extract trivy \
       "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}" \
       "trivy_${TRIVY_VERSION}_${TRIVY_ARCH}.tar.gz" \
-      "trivy_${TRIVY_VERSION}_checksums.txt" & \
+      "trivy_${TRIVY_VERSION}_checksums.txt" \
+      "^https://github\.com/aquasecurity/trivy/\.github/workflows/.+@refs/tags/v[0-9.]+$" & \
     trivy_pid=$!; \
     \
     fetch_verify_extract grype \
       "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}" \
       "grype_${GRYPE_VERSION}_${ANCHORE_ARCH}.tar.gz" \
-      "grype_${GRYPE_VERSION}_checksums.txt" & \
+      "grype_${GRYPE_VERSION}_checksums.txt" \
+      "^https://github\.com/anchore/grype/\.github/workflows/.+@refs/tags/v[0-9.]+$" & \
     grype_pid=$!; \
     \
     fetch_verify_extract syft \
       "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}" \
       "syft_${SYFT_VERSION}_${ANCHORE_ARCH}.tar.gz" \
-      "syft_${SYFT_VERSION}_checksums.txt" & \
+      "syft_${SYFT_VERSION}_checksums.txt" \
+      "^https://github\.com/anchore/syft/\.github/workflows/.+@refs/tags/v[0-9.]+$" & \
     syft_pid=$!; \
     \
     wait "${trivy_pid}"; \

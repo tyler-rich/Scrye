@@ -6,6 +6,8 @@ Dockerfile edit can't silently drop them:
 - backend dependencies are installed from the hash-pinned lock with
   ``pip install --require-hashes`` (SC-1), never a bare ``pip install .`` that
   would resolve unpinned transitives fresh from PyPI at build time.
+- the scanner binaries' checksum files are cosign-signature-verified before the
+  sha256sum check (SC-8).
 """
 
 from __future__ import annotations
@@ -42,6 +44,20 @@ def test_backend_deps_install_with_require_hashes() -> None:
         "the image must install backend dependencies from the committed "
         "requirements.lock, not resolve them fresh from PyPI"
     )
+
+
+def test_scanner_checksums_are_cosign_verified() -> None:
+    text = _dockerfile_text()
+    assert "cosign verify-blob" in text, (
+        "each scanner's checksums.txt must be cosign-signature-verified before the "
+        "sha256sum check (SC-8) so a compromised release can't regenerate a matching "
+        "same-origin checksum"
+    )
+    # The verification must be identity- and issuer-pinned (keyless), not blind.
+    assert "--certificate-identity-regexp" in text
+    assert "token.actions.githubusercontent.com" in text
+    # cosign itself is pinned by digest, not fetched loose at build time.
+    assert "ghcr.io/sigstore/cosign/cosign" in text and "@sha256:" in text
 
 
 def test_backend_bare_pip_install_dot_is_scoped_to_no_deps() -> None:
