@@ -263,6 +263,30 @@ def test_history_export_respects_filters(client: TestClient) -> None:
     assert resp.status_code == 200
     assert "keep" in resp.text and "drop" not in resp.text
     assert resp.headers["content-disposition"].endswith('scrye-history.csv"')
+    # No truncation signal when the full set fits under the cap.
+    assert "x-scrye-truncated" not in resp.headers
+
+
+def test_history_export_signals_truncation(client: TestClient, monkeypatch) -> None:
+    """When the export cap fires, every format and the response header say so (APIR-4)."""
+    _setup_admin(client)
+    monkeypatch.setattr("app.api.scans._MAX_HISTORY_EXPORT_SCANS", 2)
+    for i in range(3):
+        _insert_scan(target=f"img:{i}")
+
+    js = client.get("/api/scans/export", params={"format": "json"})
+    assert js.headers["x-scrye-truncated"] == "true"
+    assert js.headers["x-scrye-total"] == "3"
+    body = js.json()
+    assert body["truncated"] is True
+    assert body["total"] == 3
+    assert body["count"] == 2
+
+    md = client.get("/api/scans/export", params={"format": "markdown"}).text
+    assert "Truncated" in md and "of 3 matching scans" in md
+
+    csv_text = client.get("/api/scans/export", params={"format": "csv"}).text
+    assert csv_text.startswith("# Truncated: showing the newest 2 of 3")
 
 
 # --- Diff --------------------------------------------------------------------

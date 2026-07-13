@@ -365,8 +365,12 @@ def export_history_view(
     The export follows the same filters as the history view (newest first) and is
     capped at a generous row limit to keep a single download bounded.
     """
+    base = filters.apply(select(Scan))
+    # Count the full matching set so the export can flag when the cap truncated it
+    # (APIR-4); the count query is cheap next to materializing thousands of rows.
+    total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
     stmt = (
-        filters.apply(select(Scan))
+        base
         # Every exporter reads scan.tags; eager-load them in one query instead
         # of one lazy SELECT per exported scan (the cap allows thousands).
         .options(selectinload(Scan.tag_rows))
@@ -374,11 +378,16 @@ def export_history_view(
         .limit(_MAX_HISTORY_EXPORT_SCANS)
     )
     scans = list(db.scalars(stmt).all())
-    result = export_history(scans, fmt, filters=filters.as_metadata())
+    result = export_history(scans, fmt, filters=filters.as_metadata(), total=total)
+    headers = {"Content-Disposition": f'attachment; filename="{result.filename}"'}
+    if total > len(scans):
+        # Machine-readable signal that works for every format, including CSV.
+        headers["X-Scrye-Truncated"] = "true"
+        headers["X-Scrye-Total"] = str(total)
     return Response(
         content=result.content,
         media_type=result.media_type,
-        headers={"Content-Disposition": f'attachment; filename="{result.filename}"'},
+        headers=headers,
     )
 
 
