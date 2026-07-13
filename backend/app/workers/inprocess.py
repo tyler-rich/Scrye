@@ -20,6 +20,7 @@ import logging
 import time
 from collections.abc import Callable
 from contextlib import nullcontext
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import anyio.to_thread
@@ -55,6 +56,8 @@ from app.scanners import (
 )
 from app.scanners.credentials import (
     REPO_REF_KEYS,
+    GitAuth,
+    RegistryAuth,
     docker_config_env,
     generic_repo_checkout,
     git_env_token,
@@ -105,6 +108,28 @@ _LOCK_RETRY_BACKOFF_FACTOR = 2.0
 #: Generous enough that a scan legitimately in flight between "row committed"
 #: and "task registered" is never touched.
 _STALE_SCAN_GRACE_SECONDS = 60
+
+
+@dataclass(frozen=True)
+class _RunInputs:
+    """Everything a scan's subprocess needs, resolved from the DB up front.
+
+    Captured as detached values (dataclasses / strings / plain dicts) so the
+    worker can return its pooled connection to the pool before the minutes-long
+    scanner subprocess runs — the run phase never touches the ORM session or the
+    (now-expired) scan row, so it holds no pool capacity (CON-10).
+    """
+
+    scanner: BaseScanner
+    target_type: TargetType
+    target: str
+    options: dict
+    trivy_policy: object | None
+    grype_ignore: str | None
+    registry_auth: RegistryAuth | None
+    git_auth: GitAuth | None
+    filesystem_path: str | None
+    sbom_path: str | None
 
 
 def _highest_severity(counts: dict[Severity, int]) -> Severity | None:
@@ -428,60 +453,116 @@ class InProcessScanWorker(ScanWorker):
     async def _dispatch(
         self, session: Session, scan: Scan
     ) -> tuple[ScanExecution, SbomResult | None]:
-        """Run the scan for its target type, applying any Trivy policy.
+        """Resolve every DB input, release the pooled connection, then scan.
 
-        For Trivy scans the managed VEX documents and ignore rules are resolved
-        and materialized into tmpfs for the duration of the run (passed through
-        Trivy's ``TRIVY_IGNOREFILE`` / ``TRIVY_VEX`` env vars). Grype scans apply
-        the global Grype ignore config the same way, materialized into tmpfs and
-        handed to the runner as a ``-c`` config path (FEAT-6).
+        All DB reads the run needs — the Trivy/Grype policy and the registry/git
+        credentials or resolved paths, including their secret decrypts — are done
+        up front in a thread and captured as detached values (also satisfying
+        CON-5). The session's read transaction is then rolled back so its pooled
+        connection is returned to the pool for the whole (minutes-long) scanner
+        subprocess instead of being pinned across it (CON-10); the next session
+        use — result persistence — re-acquires a connection.
         """
-        # The policy/ignore reads touch the DB (and decrypt secrets); run on the
-        # event loop, one arriving while a long writer holds the SQLite lock would
-        # stall the whole loop inside busy_timeout, so hop them off (CON-5). Both
-        # return detached values (a frozen dataclass / a str) safe to use back on
-        # the loop.
-        if scan.scanner is Scanner.TRIVY:
-            policy = await anyio.to_thread.run_sync(load_trivy_policy, session)
-            with materialize_trivy_policy(policy) as policy_env:
-                return await self._dispatch_target(session, scan, policy_env)
-        if scan.scanner is Scanner.GRYPE:
-            grype_ignore = await anyio.to_thread.run_sync(load_grype_ignore, session)
-            with materialize_grype_config(grype_ignore) as grype_env:
-                return await self._dispatch_target(session, scan, grype_env)
-        return await self._dispatch_target(session, scan, {})
+        inputs = await anyio.to_thread.run_sync(self._resolve_run_inputs, session, scan)
+        await anyio.to_thread.run_sync(self._release_connection, session)
+        return await self._run_scanner(inputs)
 
-    async def _dispatch_target(
-        self, session: Session, scan: Scan, base_env: dict[str, str]
-    ) -> tuple[ScanExecution, SbomResult | None]:
-        """Run the scan appropriate to its target type, resolving credentials.
+    def _resolve_run_inputs(self, session: Session, scan: Scan) -> _RunInputs:
+        """Read everything the scan subprocess needs from the DB (runs in a thread).
 
-        Returns the parsed execution plus an optional Syft SBOM (when the scan
-        requested one). Registry/git secrets are decrypted here and materialized
-        into tmpfs only for the duration of the subprocess. ``base_env`` is a
-        non-secret environment overlay (e.g. the Trivy policy) merged under any
-        credential overlay.
+        Registry/git secrets are decrypted here into detached dataclasses so the
+        run phase can proceed with the connection released. Raises
+        :class:`TargetError` (a :class:`ScannerError`) for a missing/disabled/
+        undecryptable credential or an unsupported target, routing to the same
+        failure handling as before.
         """
         scanner = get_scanner(scan.scanner)
-        options = scan.options or {}
+        options = dict(scan.options or {})
         target_type = scan.target_type
+        trivy_policy = load_trivy_policy(session) if scan.scanner is Scanner.TRIVY else None
+        grype_ignore = load_grype_ignore(session) if scan.scanner is Scanner.GRYPE else None
 
+        registry_auth: RegistryAuth | None = None
+        git_auth: GitAuth | None = None
+        filesystem_path: str | None = None
+        sbom_path: str | None = None
         if target_type is TargetType.IMAGE:
-            return await self._scan_image(session, scanner, scan, options, base_env)
-        if target_type is TargetType.REPOSITORY:
-            return await self._scan_repo(session, scanner, scan, options, base_env), None
-        if target_type is TargetType.FILESYSTEM:
-            path = resolve_filesystem_path(scan.target)
+            registry_auth = resolve_registry_auth(session, options)
+        elif target_type is TargetType.REPOSITORY:
+            git_auth = resolve_git_auth(session, options)
+        elif target_type is TargetType.FILESYSTEM:
+            filesystem_path = resolve_filesystem_path(scan.target)
+        elif target_type is TargetType.SBOM:
+            sbom_path = resolve_sbom_path(session, scan)
+        else:
+            raise TargetError(f"Unsupported target type {target_type.value!r}.")
+
+        return _RunInputs(
+            scanner=scanner,
+            target_type=target_type,
+            target=scan.target,
+            options=options,
+            trivy_policy=trivy_policy,
+            grype_ignore=grype_ignore,
+            registry_auth=registry_auth,
+            git_auth=git_auth,
+            filesystem_path=filesystem_path,
+            sbom_path=sbom_path,
+        )
+
+    def _release_connection(self, session: Session) -> None:
+        """Return the session's pooled connection to the pool (runs in a thread).
+
+        A rollback ends the read-only transaction opened by the claim/resolve
+        reads without touching the already-committed claim, so the connection is
+        not pinned across the scanner subprocess (CON-10). Every input the run
+        needs is already captured in :class:`_RunInputs`, so the expiry of the
+        scan row's attributes here is harmless — the run phase never reads it.
+        """
+        session.rollback()
+
+    async def _run_scanner(self, inputs: _RunInputs) -> tuple[ScanExecution, SbomResult | None]:
+        """Materialize the resolved policy into tmpfs and run the scan subprocess.
+
+        Holds no pooled DB connection: every input is already resolved (CON-10).
+        For Trivy the managed VEX/ignore rules, and for Grype the global ignore
+        config, are materialized into tmpfs for the run's duration and passed via
+        the scanners' native env vars / ``-c`` config path (FEAT-6).
+        """
+        if inputs.trivy_policy is not None:
+            with materialize_trivy_policy(inputs.trivy_policy) as policy_env:
+                return await self._run_target(inputs, policy_env)
+        if inputs.grype_ignore is not None:
+            with materialize_grype_config(inputs.grype_ignore) as grype_env:
+                return await self._run_target(inputs, grype_env)
+        return await self._run_target(inputs, {})
+
+    async def _run_target(
+        self, inputs: _RunInputs, base_env: dict[str, str]
+    ) -> tuple[ScanExecution, SbomResult | None]:
+        """Run the scan for its target type using only detached inputs.
+
+        ``base_env`` is the non-secret policy overlay merged under any credential
+        overlay. No session is touched here (CON-10).
+        """
+        scanner = inputs.scanner
+        options = inputs.options
+
+        if inputs.target_type is TargetType.IMAGE:
+            return await self._scan_image(inputs, base_env)
+        if inputs.target_type is TargetType.REPOSITORY:
+            return await self._scan_repo(inputs, base_env), None
+        if inputs.target_type is TargetType.FILESYSTEM:
+            path = inputs.filesystem_path
             sbom = await self._maybe_sbom(f"dir:{path}", options, base_env or None)
             execution = await scanner.scan_filesystem(path, options, env=base_env or None)
             return execution, sbom
-        if target_type is TargetType.SBOM:
-            path = resolve_sbom_path(session, scan)
-            return await scanner.scan_sbom(path, options, env=base_env or None), None
-        raise TargetError(f"Unsupported target type {target_type.value!r}.")
+        if inputs.target_type is TargetType.SBOM:
+            return await scanner.scan_sbom(inputs.sbom_path, options, env=base_env or None), None
+        raise TargetError(f"Unsupported target type {inputs.target_type.value!r}.")
 
     async def _scan_image(
-        self, session: Session, scanner: BaseScanner, scan: Scan, options: dict, base_env: dict
+        self, inputs: _RunInputs, base_env: dict
     ) -> tuple[ScanExecution, SbomResult | None]:
         """Scan an image, materializing registry credentials into tmpfs if set.
 
@@ -490,17 +571,15 @@ class InProcessScanWorker(ScanWorker):
         is shredded on exit, even on cancellation or error. The credential
         overlay is layered over ``base_env`` (e.g. the Trivy policy).
         """
-        auth = resolve_registry_auth(session, options)
+        auth = inputs.registry_auth
         context = docker_config_env(auth) if auth is not None else nullcontext({})
         with context as overlay:
             env = {**base_env, **(overlay or {})} or None
-            sbom = await self._maybe_sbom(scan.target, options, env)
-            execution = await scanner.scan_image(scan.target, options, env=env)
+            sbom = await self._maybe_sbom(inputs.target, inputs.options, env)
+            execution = await inputs.scanner.scan_image(inputs.target, inputs.options, env=env)
         return execution, sbom
 
-    async def _scan_repo(
-        self, session: Session, scanner: BaseScanner, scan: Scan, options: dict, base_env: dict
-    ) -> ScanExecution:
+    async def _scan_repo(self, inputs: _RunInputs, base_env: dict) -> ScanExecution:
         """Scan a git repository, authenticating a private clone if configured.
 
         Public repos and hosted providers (GitHub/GitLab) let Trivy clone the
@@ -510,22 +589,25 @@ class InProcessScanWorker(ScanWorker):
         argv, then Trivy scans the local checkout. ``base_env`` (the Trivy policy)
         is merged under any credential overlay.
         """
-        auth = resolve_git_auth(session, options)
+        auth = inputs.git_auth
+        scanner = inputs.scanner
+        options = inputs.options
+        target = inputs.target
         if auth is None:
-            return await scanner.scan_repo(scan.target, options, env=base_env or None)
+            return await scanner.scan_repo(target, options, env=base_env or None)
         if auth.provider is not GitProvider.GENERIC:
             overlay = git_env_token(auth)
             env = {**base_env, **(overlay or {})} or None
-            return await scanner.scan_repo(scan.target, options, env=env)
-        if not is_http_url(scan.target):
+            return await scanner.scan_repo(target, options, env=env)
+        if not is_http_url(target):
             # A non-HTTP generic target (e.g. ssh://) carries no URL credential to
             # inject; let Trivy clone it with its own mechanisms.
-            return await scanner.scan_repo(scan.target, options, env=base_env or None)
+            return await scanner.scan_repo(target, options, env=base_env or None)
 
         timeout = get_settings().scan_timeout_seconds
         # The ref is already materialized by our clone; don't re-pass it to Trivy.
         local_options = {k: v for k, v in options.items() if k not in REPO_REF_KEYS}
-        async with generic_repo_checkout(scan.target, auth, options, timeout=timeout) as checkout:
+        async with generic_repo_checkout(target, auth, options, timeout=timeout) as checkout:
             return await scanner.scan_repo(checkout, local_options, env=base_env or None)
 
     async def _maybe_sbom(

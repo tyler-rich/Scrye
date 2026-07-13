@@ -147,7 +147,12 @@ class Settings(BaseSettings):
     )
     max_concurrent_scans: int = Field(
         default=2,
-        description="Maximum number of scans the in-process worker runs concurrently.",
+        ge=1,
+        le=32,
+        description=(
+            "Maximum number of scans the in-process worker runs concurrently "
+            "(1-32; the DB pool is sized from this value)."
+        ),
     )
     scan_timeout_seconds: int = Field(
         default=1800,
