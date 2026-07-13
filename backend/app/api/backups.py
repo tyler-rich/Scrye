@@ -353,7 +353,9 @@ def update_schedule(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Passphrase must be at least {_MIN_PASSPHRASE_LEN} characters.",
             )
-        schedule.passphrase_ciphertext = encrypt_secret(secret, aad=AAD_BACKUP_PASSPHRASE)
+        schedule.passphrase_ciphertext = encrypt_secret(
+            secret, aad=AAD_BACKUP_PASSPHRASE, row_id=schedule.id
+        )
         schedule.secret_updated_at = utcnow()
 
     if schedule.enabled and not schedule.passphrase_ciphertext:

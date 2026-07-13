@@ -114,7 +114,7 @@ def create_registry(
     )
     if payload.secret is not None:
         registry.secret_ciphertext = encrypt_secret(
-            payload.secret.get_secret_value(), aad=AAD_REGISTRY_SECRET
+            payload.secret.get_secret_value(), aad=AAD_REGISTRY_SECRET, row_id=registry.id
         )
         registry.secret_updated_at = utcnow()
     db.add(registry)
@@ -178,7 +178,9 @@ def update_registry(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Auth type '{registry.auth_type.value}' does not take a secret.",
             )
-        registry.secret_ciphertext = encrypt_secret(secret_value, aad=AAD_REGISTRY_SECRET)
+        registry.secret_ciphertext = encrypt_secret(
+            secret_value, aad=AAD_REGISTRY_SECRET, row_id=registry.id
+        )
         registry.secret_updated_at = utcnow()
         changes["secret"] = "updated"  # metadata only; never the value
 
@@ -251,7 +253,9 @@ async def test_registry(
     if not registry.secret_ciphertext:
         return RegistryTestOut(ok=False, detail="No stored credential to test.")
     try:
-        secret = decrypt_secret(registry.secret_ciphertext, aad=AAD_REGISTRY_SECRET)
+        secret = decrypt_secret(
+            registry.secret_ciphertext, aad=AAD_REGISTRY_SECRET, row_id=registry.id
+        )
     except SecretDecryptError:
         return RegistryTestOut(ok=False, detail="Stored credential could not be decrypted.")
 

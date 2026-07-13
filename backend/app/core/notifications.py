@@ -39,7 +39,7 @@ def _channel_secret(channel: NotificationChannel) -> str | None:
     """Decrypt the channel's stored secret, or return ``None`` if unset."""
     if not channel.secret_ciphertext:
         return None
-    return decrypt_secret(channel.secret_ciphertext, aad=AAD_NOTIFICATION_SECRET)
+    return decrypt_secret(channel.secret_ciphertext, aad=AAD_NOTIFICATION_SECRET, row_id=channel.id)
 
 
 async def _send_webhook(channel: NotificationChannel, message: str, secret: str | None) -> None:

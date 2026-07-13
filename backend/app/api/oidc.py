@@ -173,7 +173,9 @@ def update_oidc_config(
     if "client_secret" in data:
         secret = payload.client_secret.get_secret_value() if payload.client_secret else ""
         if secret:
-            config.client_secret_ciphertext = encrypt_secret(secret, aad=AAD_OIDC_CLIENT_SECRET)
+            config.client_secret_ciphertext = encrypt_secret(
+                secret, aad=AAD_OIDC_CLIENT_SECRET, row_id=config.id
+            )
             config.secret_updated_at = utcnow()
         else:
             config.client_secret_ciphertext = None
@@ -393,7 +395,7 @@ async def oidc_callback(
     if config.client_secret_ciphertext:
         try:
             client_secret = decrypt_secret(
-                config.client_secret_ciphertext, aad=AAD_OIDC_CLIENT_SECRET
+                config.client_secret_ciphertext, aad=AAD_OIDC_CLIENT_SECRET, row_id=config.id
             )
         except SecretDecryptError:
             return _fail("config")

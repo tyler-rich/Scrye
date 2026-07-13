@@ -153,7 +153,9 @@ def update_git_credential(
         token_value = payload.token.get_secret_value()
         if not token_value:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Token is empty.")
-        credential.token_ciphertext = encrypt_secret(token_value, aad=AAD_GIT_TOKEN)
+        credential.token_ciphertext = encrypt_secret(
+            token_value, aad=AAD_GIT_TOKEN, row_id=credential.id
+        )
         credential.secret_updated_at = utcnow()
         changes["token"] = "updated"  # metadata only; never the value
 

@@ -42,14 +42,14 @@ def verify_code(secret: str, code: str) -> bool:
     return pyotp.TOTP(secret).verify(cleaned, valid_window=_TOTP_VALID_WINDOW)
 
 
-def encrypt_mfa_secret(secret: str) -> str:
-    """Encrypt a TOTP secret for storage (bound to the MFA AAD)."""
-    return encrypt_secret(secret, aad=AAD_MFA_SECRET)
+def encrypt_mfa_secret(secret: str, *, user_id: object) -> str:
+    """Encrypt a TOTP secret for storage (bound to the MFA AAD and the user row)."""
+    return encrypt_secret(secret, aad=AAD_MFA_SECRET, row_id=user_id)
 
 
-def decrypt_mfa_secret(token: str) -> str:
-    """Decrypt a stored TOTP secret (bound to the MFA AAD)."""
-    return decrypt_secret(token, aad=AAD_MFA_SECRET)
+def decrypt_mfa_secret(token: str, *, user_id: object) -> str:
+    """Decrypt a stored TOTP secret (bound to the MFA AAD and the user row, SEC-7)."""
+    return decrypt_secret(token, aad=AAD_MFA_SECRET, row_id=user_id)
 
 
 #: Challenge purposes. ``verify`` completes an existing enrolled login; ``enroll``
