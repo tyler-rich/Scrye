@@ -271,9 +271,16 @@ def update_channel(
         if secret_value:
             channel.secret_ciphertext = encrypt_secret(secret_value, aad=AAD_NOTIFICATION_SECRET)
             channel.secret_updated_at = utcnow()
-        else:
+        elif channel.type in SECRET_OPTIONAL_TYPES:
             channel.secret_ciphertext = None
             channel.secret_updated_at = None
+        else:
+            # Create forbids a channel of this type with no secret; the update
+            # path must not be able to reach that state either (APIR-6).
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"A secret is required for '{channel.type.value}' channels.",
+            )
         changes["secret"] = "updated"  # metadata only; never the value
 
     if changes:
