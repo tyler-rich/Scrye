@@ -4,11 +4,13 @@ import {
   Alert,
   Anchor,
   Badge,
+  Box,
   Button,
   Card,
   Center,
   Group,
   Loader,
+  LoadingOverlay,
   Menu,
   Modal,
   Select,
@@ -24,6 +26,7 @@ import { IconAlertCircle, IconArrowLeft, IconDownload, IconTrash } from '@tabler
 import { ApiError } from '../api/client';
 import { sameItems } from '../lib/arrays';
 import { formatWhen } from '../lib/dates';
+import { createLatestGuard } from '../lib/latest';
 import { MAX_POLL_FAILURES, POLL_BASE_MS, pollBackoffMs } from '../lib/polling';
 import { safeHttpUrl } from '../lib/url';
 import {
@@ -88,6 +91,11 @@ export function ScanDetailPage() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [findingsTotal, setFindingsTotal] = useState(0);
+  const [findingsLoading, setFindingsLoading] = useState(false);
+  const [findingsLoaded, setFindingsLoaded] = useState(false);
+  // Latest-wins guard so rapid severity/class filter toggles can't render an
+  // earlier filter's response over a later one (L18 / P2-3).
+  const findingsGuard = useRef(createLatestGuard());
   const [severityFilter, setSeverityFilter] = useState<Severity | null>(null);
   const [classFilter, setClassFilter] = useState<FindingClass | null>(null);
   const [tagDraft, setTagDraft] = useState<string[]>([]);
@@ -142,17 +150,24 @@ export function ScanDetailPage() {
   };
 
   const loadFindings = useCallback(async () => {
+    const token = findingsGuard.current.begin();
+    setFindingsLoading(true);
     try {
       const page = await listFindings(id, {
         severity: severityFilter ?? undefined,
         finding_class: classFilter ?? undefined,
         limit: FINDINGS_LIMIT,
       });
+      if (!findingsGuard.current.isCurrent(token)) return;
       setFindings(page.items);
       setFindingsTotal(page.total);
+      setFindingsLoaded(true);
       setError(null);
     } catch (err: unknown) {
+      if (!findingsGuard.current.isCurrent(token)) return;
       setError(err instanceof ApiError ? err.message : 'Failed to load findings.');
+    } finally {
+      if (findingsGuard.current.isCurrent(token)) setFindingsLoading(false);
     }
   }, [id, severityFilter, classFilter]);
 
@@ -167,6 +182,9 @@ export function ScanDetailPage() {
     setArtifacts([]);
     setFindings([]);
     setFindingsTotal(0);
+    setFindingsLoaded(false);
+    setFindingsLoading(false);
+    findingsGuard.current.begin();
     setSeverityFilter(null);
     setClassFilter(null);
     setTagDraft([]);
@@ -492,12 +510,25 @@ export function ScanDetailPage() {
               </Group>
             </Group>
 
-            {findings.length === 0 ? (
+            {findings.length === 0 && !findingsLoaded && findingsLoading ? (
+              <Center py="md">
+                <Loader size="sm" color="teal" />
+              </Center>
+            ) : findings.length === 0 ? (
               <Text c="dimmed" size="sm">
                 No findings match the current filters.
               </Text>
             ) : (
-              <>
+              <Box pos="relative">
+                {/* Dim the current rows while a filter change is in flight
+                    rather than showing the previous filter's rows as if
+                    current (L18 / P2-3). */}
+                <LoadingOverlay
+                  visible={findingsLoading}
+                  zIndex={1}
+                  overlayProps={{ blur: 0.5 }}
+                  loaderProps={{ size: 'sm', color: 'teal' }}
+                />
                 <Table.ScrollContainer minWidth={820}>
                   <Table striped highlightOnHover>
                     <Table.Thead>
@@ -568,7 +599,7 @@ export function ScanDetailPage() {
                     Download the raw artifact for the complete set.
                   </Text>
                 )}
-              </>
+              </Box>
             )}
           </Stack>
         </Card>
