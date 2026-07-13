@@ -1987,3 +1987,50 @@ the immutable `0.1.0` tag) so the check is on the record and the next person see
 upstream-fix-version mapping to re-test against.
 **Plan section affected:** §9.1 (bundled scanner pins), CLAUDE.md § Dependency hygiene, README §
 Integrations / ROADMAP § Known limitations (bundled-binary CVE tracking).
+
+### 2026-07-13 — Infra — runtime-stage curl/libcurl explicitly version-pinned for CVE-2026-5773
+**What changed:** The CI dogfood self-scan flagged `curl` / `libcurl3-gnutls` / `libcurl4`
+`7.88.1-10+deb12u14` (HIGH, CVE-2026-5773, fixed in `7.88.1-10+deb12u15`) in the runtime image.
+Rather than the usual "apt packages are unpinned, tracking the digest-pinned base image" pattern
+(§9.1, the Phase 3 git-package note), `docker/Dockerfile`'s runtime-stage `apt-get install` now
+pins these three packages to the exact fixed version `7.88.1-10+deb12u15`, since that version is
+already present in the base image's frozen apt snapshot — no base-image digest bump needed.
+**Why:** The fix is available at the package level without moving the base image, so a targeted
+version pin is the smaller, more surgical change; it also serves as a deliberate exception to the
+"apt packages track the base snapshot" convention, recorded here so a future session doesn't read
+these three explicit pins as stray/accidental and "clean them up" back to unpinned. When the base
+image digest is next bumped for an unrelated reason, these three pins should be reviewed — if the
+new base snapshot already carries `7.88.1-10+deb12u15` or later as the default, the explicit pins
+can be dropped.
+**Plan section affected:** §9.1 (Dockerfile / apt packages).
+
+### 2026-07-13 — Infra/Process — CPython interpreter CVEs on 3.13 accepted as tracked risk; 3.14 deferred
+**What changed:** The CI dogfood Grype self-scan flags four CPython interpreter-binary CVEs on the
+runtime base image (`python:3.13-slim-bookworm`, interpreter 3.13.14 — current latest 3.13.x). Two
+have fixes merged to the 3.13 maintenance branch but not yet in any released point version —
+CVE-2026-15308 (HIGH, `html.parser` quadratic-complexity CPU DoS) and CVE-2026-12003 (MEDIUM,
+`getpath.py` in-tree search-path fallback); two were explicitly declined for backport to the 3.13
+line by upstream and are fixed only in 3.15+ — CVE-2025-15366 and CVE-2025-15367 (both MEDIUM,
+`imaplib`/`poplib` command injection). Under the gate (`grype --only-fixed --fail-on high`) only
+CVE-2026-15308 (HIGH) actually trips the threshold; the other three are reported-but-non-gating
+Mediums. Decision: **stay on Python 3.13 for now** and accept all four as tracked risk — suppressed
+in `ci/grype.yaml` with per-group review dates (Group A / 2026-15308 + 2026-12003 sooner, tied to
+CPython point-release cadence; Group B / 2025-15366 + 2025-15367 later, tied to the 3.14 upgrade
+horizon), each referencing tracking issue #52. The now-stale `ci/grype.yaml` note claiming 3.13's
+current patch carries the interpreter fixes is corrected in the same change. The move to Python 3.14
+was evaluated and **deferred to a separate, deliberately-scoped project** (handoff doc:
+`docs/upgrades/python-3.14.md`), not undertaken as a reaction to this scan.
+**Why:** All four are genuinely unfixable-by-us on 3.13 today — two await an unreleased 3.13.x point
+release, two are permanently 3.15+-only — which is exactly the "only genuinely unfixable upstream/
+OS-level items may remain, tracked" carve-out in CLAUDE.md § Dependency hygiene. Moving to 3.14 is
+not a clean win: it is a hard dependency bump (pydantic ≥2.12 for a cp314 `pydantic-core` wheel,
+uvicorn ≥0.38.0, an explicit `greenlet` pin for SQLAlchemy async) that still leaves
+CVE-2026-15308/-12003 unresolved on 3.14, so it warrants its own scoped compatibility pass rather
+than a rushed CVE-driven bump. **No CLAUDE.md amendment is required:** §2 already locks the runtime
+to "Python 3.13" with no CVE caveat, so staying on 3.13 changes no standing rule (checked this
+session). Resolution triggers, tracked in #52: 15366/15367 close when the 3.14 upgrade lands;
+15308/12003 close on the next 3.13.x point release, pending Grype-DB recognition of the backport
+(its `FIXED IN` currently reports 3.15.x only).
+**Plan section affected:** §0 (#7, runtime lock — reaffirmed, not changed), §2 (tech stack —
+unchanged), §9.1 (base image / dogfood self-scan), §12 (Phase 6 self-scan), CLAUDE.md
+§ Dependency hygiene.

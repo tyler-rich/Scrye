@@ -13,9 +13,10 @@
 # report. The gate still covers the base image, OS packages (incl. git), Python
 # and JS dependencies, and the app itself.
 #
-# NOTE: the base-image CPython interpreter binary is intentionally NOT excluded —
-# Scrye runs on Python 3.13, whose current patch release carries the fixes for the
-# interpreter CVEs that only existed in the 3.12 line.
+# NOTE: the base-image CPython interpreter binary is NOT blanket-excluded — it is
+# scanned and gated like everything else. Specific interpreter CVEs that are
+# unfixable on the current 3.13.x line are waived individually below, each with a
+# review date and a tracking issue, rather than by excluding the binary wholesale.
 #
 # To triage a genuinely-fixable finding that cannot be resolved immediately, add
 # a `vulnerability:` entry with a dated justification comment.
@@ -31,4 +32,23 @@ ignore:
       location: "**/usr/local/bin/grype"
   - package:
       location: "**/usr/local/bin/syft"
-  # (No triaged CVE exceptions at authoring time.)
+
+  # ── CPython interpreter-binary CVEs on Python 3.13 — accepted risk ──────────────
+  # Scrye stays on Python 3.13; the interpreter binary in python:3.13-slim-bookworm
+  # (3.13.14, current latest 3.13.x) carries these. Tracked in issue #52
+  # (https://github.com/tyler-rich/Scrye/issues/52) and docs/ARCHIVE.md §14
+  # (2026-07-13). The 3.14 move is a separate scoped project (docs/upgrades/
+  # python-3.14.md). Of the four, only CVE-2026-15308 (HIGH) trips --fail-on high;
+  # the rest are reported-but-non-gating Mediums, waived here for a clean report.
+  #
+  # Group A — fix merged to the 3.13 maintenance branch, awaiting the next 3.13.x
+  # point release. REVIEW BY 2026-10-13 (covers the next 1-2 CPython point releases
+  # at their ~2-month cadence, plus Grype-DB refresh lag on the backport).
+  - vulnerability: CVE-2026-15308   # html.parser quadratic-complexity CPU DoS (HIGH)
+  - vulnerability: CVE-2026-12003   # getpath.py in-tree search-path fallback (MEDIUM)
+  #
+  # Group B — upstream declined the backport to 3.13; fixed only in 3.15+, so these
+  # close only when the 3.14 upgrade lands. REVIEW BY 2027-01-13 (tied to the 3.14
+  # upgrade project horizon, a larger scoped effort with no committed date).
+  - vulnerability: CVE-2025-15366   # imaplib command injection (MEDIUM)
+  - vulnerability: CVE-2025-15367   # poplib command injection (MEDIUM)
