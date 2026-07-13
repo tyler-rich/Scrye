@@ -156,6 +156,25 @@ export function ScanDetailPage() {
     }
   }, [id, severityFilter, classFilter]);
 
+  // Reset all per-scan state when the :scanId param changes. React Router
+  // reuses this component instance across /scans/:id navigations, so without
+  // this the header, findings, artifacts, tag draft, and poll state of the
+  // previous scan linger — and the artifacts/findings effects (gated on the
+  // stale scan.status) would fire for the new id against the old status
+  // (L17 / P2-2).
+  useEffect(() => {
+    setScan(null);
+    setArtifacts([]);
+    setFindings([]);
+    setFindingsTotal(0);
+    setSeverityFilter(null);
+    setClassFilter(null);
+    setTagDraft([]);
+    lastSyncedTags.current = [];
+    setError(null);
+    setPollHalt(null);
+  }, [id]);
+
   useEffect(() => {
     void loadScan();
   }, [loadScan]);
