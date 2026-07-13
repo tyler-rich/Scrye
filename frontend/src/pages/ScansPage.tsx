@@ -201,6 +201,7 @@ export function ScansPage() {
   const canCompare =
     compare.length === 2 &&
     compare[0].scanner === compare[1].scanner &&
+    compare[0].target_type === compare[1].target_type &&
     compare[0].target === compare[1].target;
 
   const runCompare = () => {

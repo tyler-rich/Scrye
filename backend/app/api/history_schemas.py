@@ -73,6 +73,10 @@ class DiffFindingOut(BaseModel):
     installed_version: str | None
     fixed_version: str | None
     title: str | None
+    # Part of the diff identity for every non-vulnerability class (one rule
+    # commonly fires in many files); without it, distinct per-file occurrences
+    # serialize as byte-identical rows the consumer can't tell apart (APIR-3).
+    location: str | None
 
 
 class ScanDiffOut(BaseModel):

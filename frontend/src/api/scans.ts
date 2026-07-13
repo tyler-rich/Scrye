@@ -203,6 +203,7 @@ export interface DiffFinding {
   installed_version: string | null;
   fixed_version: string | null;
   title: string | null;
+  location: string | null;
 }
 
 export interface ScanDiff {

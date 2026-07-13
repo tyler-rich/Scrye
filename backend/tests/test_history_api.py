@@ -289,6 +289,41 @@ def test_diff_two_scans_of_same_target(client: TestClient) -> None:
     assert body["unchanged_count"] == 1
 
 
+def test_diff_payload_includes_location_for_non_vuln_findings(client: TestClient) -> None:
+    """The same misconfig rule firing in two files must stay distinguishable (APIR-3).
+
+    ``location`` is part of the diff identity for every non-vulnerability class,
+    so the payload must carry it — otherwise a rule fixed in one file and newly
+    firing in another serializes as two byte-identical rows.
+    """
+    _setup_admin(client)
+
+    def _misconfig(location: str) -> dict:
+        return {
+            "finding_class": FindingClass.MISCONFIGURATION,
+            "severity": Severity.HIGH,
+            "vuln_id": "DS002",
+            "title": "Image user should not be root",
+            "location": location,
+        }
+
+    base = _insert_scan(
+        scanner=Scanner.TRIVY,
+        target_type=TargetType.REPOSITORY,
+        target="repo",
+        findings=[_misconfig("a/Dockerfile")],
+    )
+    compare = _insert_scan(
+        scanner=Scanner.TRIVY,
+        target_type=TargetType.REPOSITORY,
+        target="repo",
+        findings=[_misconfig("b/Dockerfile")],
+    )
+    body = client.get(f"/api/scans/{base}/diff/{compare}").json()
+    assert [f["location"] for f in body["removed"]] == ["a/Dockerfile"]
+    assert [f["location"] for f in body["added"]] == ["b/Dockerfile"]
+
+
 def test_diff_rejects_different_targets(client: TestClient) -> None:
     _setup_admin(client)
     a = _insert_scan(target="app:1")
