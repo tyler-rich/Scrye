@@ -46,6 +46,15 @@ def test_backend_deps_install_with_require_hashes() -> None:
     )
 
 
+def test_buildkit_syntax_frontend_is_digest_pinned() -> None:
+    # SC-9: the `# syntax=` BuildKit frontend must be digest-pinned, not resolved
+    # by mutable tag at build time.
+    text = _dockerfile_text()
+    first_line = text.splitlines()[0]
+    assert first_line.startswith("# syntax=docker/dockerfile:"), first_line
+    assert "@sha256:" in first_line, "the BuildKit syntax frontend must be pinned by digest (SC-9)"
+
+
 def test_scanner_checksums_are_cosign_verified() -> None:
     text = _dockerfile_text()
     assert "cosign verify-blob" in text, (
