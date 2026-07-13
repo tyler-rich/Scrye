@@ -17,7 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type hints only
 
 
 class Role(enum.StrEnum):
-    """RBAC roles, ordered by increasing privilege (docs/PLAN.md §5)."""
+    """RBAC roles, ordered by increasing privilege (docs/ARCHIVE.md §5)."""
 
     VIEWER = "viewer"
     OPERATOR = "operator"

@@ -1,4 +1,4 @@
-"""Scheduled-backup execution and retention (docs/PLAN.md §8).
+"""Scheduled-backup execution and retention (docs/ARCHIVE.md §8).
 
 Pure, synchronous helpers the in-process scheduler calls on a timer. Kept out of
 the worker so they can be unit-tested directly against a session. The scheduled

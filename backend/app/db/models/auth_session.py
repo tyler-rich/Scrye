@@ -1,6 +1,6 @@
 """Server-side login session model.
 
-Sessions are stored in SQLite so they are revocable (docs/PLAN.md §5). Only a
+Sessions are stored in SQLite so they are revocable (docs/ARCHIVE.md §5). Only a
 SHA-256 **hash** of the opaque session token is persisted — a database read
 cannot recover a usable cookie value. Each session carries its own CSRF token,
 required on state-changing requests.

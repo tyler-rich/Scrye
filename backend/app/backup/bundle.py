@@ -1,4 +1,4 @@
-"""Portable, passphrase-protected backup & restore (docs/PLAN.md §8).
+"""Portable, passphrase-protected backup & restore (docs/ARCHIVE.md §8).
 
 A backup is a **logical dump** of the database (one JSON record per row, per
 table) rather than a raw SQLite file, which keeps it independent of the on-disk

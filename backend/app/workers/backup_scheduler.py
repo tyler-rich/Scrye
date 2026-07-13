@@ -1,4 +1,4 @@
-"""In-process scheduled-backup worker (docs/PLAN.md §8).
+"""In-process scheduled-backup worker (docs/ARCHIVE.md §8).
 
 Mirrors the scan worker's shape: a single asyncio task on a timer that, when a
 scheduled backup is due, runs it in a thread (so the CPU-bound scrypt derivation

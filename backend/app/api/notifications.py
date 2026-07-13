@@ -1,4 +1,4 @@
-"""Notification channel management (docs/PLAN.md §4.5).
+"""Notification channel management (docs/ARCHIVE.md §4.5).
 
 Admin-only CRUD for notification destinations. The per-channel secret is
 write-only and field-encrypted; reads return a mask plus a timestamp. A ``test``

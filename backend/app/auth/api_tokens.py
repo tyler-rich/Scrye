@@ -1,4 +1,4 @@
-"""Personal API token generation helpers (docs/PLAN.md §5).
+"""Personal API token generation helpers (docs/ARCHIVE.md §5).
 
 A token is an opaque random string with a recognizable prefix. Only its SHA-256
 hash is stored (via :func:`app.auth.service.hash_token`); the plaintext is shown

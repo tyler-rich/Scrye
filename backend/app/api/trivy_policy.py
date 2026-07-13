@@ -1,4 +1,4 @@
-"""Trivy VEX document and ignore-rule management (docs/PLAN.md §4.1/§4.5, Phase 6).
+"""Trivy VEX document and ignore-rule management (docs/ARCHIVE.md §4.1/§4.5, Phase 6).
 
 Admin-managed policy that shapes Trivy scan results: VEX documents (used to mark
 vulnerabilities not-affected) and structured ``.trivyignore`` rules. Both are

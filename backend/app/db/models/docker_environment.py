@@ -1,4 +1,4 @@
-"""Docker-environment model for "scan running images" (docs/PLAN.md §3, §4.1).
+"""Docker-environment model for "scan running images" (docs/ARCHIVE.md §3, §4.1).
 
 A :class:`DockerEnvironment` records a read-only ``docker-socket-proxy`` URL that
 Scrye can query to *enumerate* images — never to control Docker. The app must

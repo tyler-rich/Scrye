@@ -543,6 +543,35 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-13 — Docs/Process — Squash-merge authorship follows the GitHub profile display name (D4 doc-side)
+**What changed:** `CLAUDE.md` § Git & PR conventions (the author-identity rule) now records that a
+GitHub **squash-merge** authors the squashed commit with the merging account's *profile display name*,
+which the repo-local `git config user.name "tyler-rich"` cannot override. The rule therefore requires
+the GitHub profile display name to also read `tyler-rich` for the identity convention to hold
+end-to-end.
+**Why:** The CLAUDE.md compliance audit (`docs/reviews/claude-md-compliance.md`, GP4/D4) found 8
+squash-merge promotion commits authored as "Tyler Richardson" (the account's display name) rather than
+`tyler-rich` — same account, same mandated no-reply email, only the *name* diverging. This is not
+something a session can fix via `git config`: squash authorship is assigned server-side at merge time
+from the profile display name, so the operating contract must state the profile-alignment requirement
+explicitly. This is the documentation counterpart to drift finding D4 (the actual display-name fix is a
+GitHub profile setting made outside the repo, handled by the maintainer).
+**Plan section affected:** CLAUDE.md § Git & PR conventions (author identity). Process/docs only; no
+build-phase, schema, security-model, or job-model change.
+
+### 2026-07-13 — Docs/Process — dev→main promotion PRs use a plain "Promote dev to main: …" title
+**What changed:** `CLAUDE.md` § Coding standards (the "Commits: Conventional Commits" rule) now records
+an explicit exception: `dev` → `main` **promotion** PRs use a plain `Promote dev to main: …` title
+rather than a Conventional-Commit prefix, matching `CONTRIBUTING.md` § Releasing.
+**Why:** Promotions are deliberate, maintainer-initiated release steps (not routine feature work); the
+squash-merge subject names the release action rather than a code change, so a `feat:`/`fix:` prefix
+would misdescribe it. The CLAUDE.md compliance audit (`docs/reviews/claude-md-compliance.md`, GP6) noted
+the promotion titles were not Conventional-Commit-shaped; recording the convention as a stated
+exception — rather than "fixing" compliant release titles toward a prefix — matches the release process
+already documented in `CONTRIBUTING.md` § Releasing.
+**Plan section affected:** CLAUDE.md § Coding standards (Commits). Process/docs only; no build-phase,
+schema, security-model, or job-model change.
+
 ### 2026-07-13 — Post-release — Security + supply-chain review batch (H11, M2–M5, M22–M26, L1–L4, L23)
 **What changed:** Worked the security-review (`docs/reviews/security-review.md`, SEC-*) and
 supply-chain-review (`docs/reviews/supply-chain-review.md`, SC-*) findings summarized in

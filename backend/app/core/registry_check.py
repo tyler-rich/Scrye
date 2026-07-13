@@ -1,4 +1,4 @@
-"""Best-effort container-registry credential test (docs/PLAN.md §4.5).
+"""Best-effort container-registry credential test (docs/ARCHIVE.md §4.5).
 
 Given a decrypted registry credential, probe the registry's Docker Registry v2
 API to confirm the host is reachable and the credential is accepted. Supports

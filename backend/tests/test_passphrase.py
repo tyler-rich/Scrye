@@ -1,4 +1,4 @@
-"""Tests for the backup passphrase KDF (docs/PLAN.md §8).
+"""Tests for the backup passphrase KDF (docs/ARCHIVE.md §8).
 
 These lock in the scrypt work factor and confirm the derived key drives a
 working AES-256-GCM round-trip, so a regression that weakens the parameters (or

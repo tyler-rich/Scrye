@@ -1,4 +1,4 @@
-"""Prometheus metrics rendering (docs/PLAN.md §12, Phase 6).
+"""Prometheus metrics rendering (docs/ARCHIVE.md §12, Phase 6).
 
 Exposes Scrye's operational state as Prometheus text-format gauges derived from
 the database on scrape: scan counts by status/scanner, the current open

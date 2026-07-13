@@ -1,4 +1,4 @@
-"""Notification channel model (docs/PLAN.md §4.5).
+"""Notification channel model (docs/ARCHIVE.md §4.5).
 
 A :class:`NotificationChannel` records where Scrye can post messages: a generic
 webhook, a Discord webhook, an SMTP server, or a Matrix room. Non-secret routing
@@ -31,7 +31,7 @@ class NotificationType(enum.StrEnum):
 
 
 class NotificationEvent(enum.StrEnum):
-    """Events a channel can subscribe to (docs/PLAN.md §4.6, Phase 6).
+    """Events a channel can subscribe to (docs/ARCHIVE.md §4.6, Phase 6).
 
     Dispatch is opt-in per channel: a channel is only notified about the events
     listed in its ``events`` array.

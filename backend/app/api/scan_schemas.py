@@ -33,7 +33,7 @@ SbomFormat = Literal["cyclonedx-json", "spdx-json", "syft-json"]
 class ScanCreateIn(BaseModel):
     """Request payload to launch an image, repository, or filesystem scan.
 
-    Target support (docs/PLAN.md §4): ``image`` (Trivy or Grype), ``repository``
+    Target support (docs/ARCHIVE.md §4): ``image`` (Trivy or Grype), ``repository``
     (Trivy), and ``filesystem`` (Grype). ``sbom`` targets are launched via the
     dedicated upload endpoint, not this JSON body. Trivy honors scanner
     selection, severity filtering, and ``ignore_unfixed``; Grype (vulnerabilities

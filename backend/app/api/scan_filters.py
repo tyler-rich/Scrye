@@ -1,4 +1,4 @@
-"""Shared scan-history filter parsing and query building (docs/PLAN.md §4.4).
+"""Shared scan-history filter parsing and query building (docs/ARCHIVE.md §4.4).
 
 The history view and the filtered-history export accept the same filter set, so
 it lives here once as a FastAPI dependency (:func:`history_filters`) plus the

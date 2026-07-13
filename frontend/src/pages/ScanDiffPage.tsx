@@ -93,7 +93,7 @@ function DiffTable({
   );
 }
 
-/** Compare two scans of the same target: new vs. fixed findings (docs/PLAN.md §4.4). */
+/** Compare two scans of the same target: new vs. fixed findings (docs/ARCHIVE.md §4.4). */
 export function ScanDiffPage() {
   const { baseId, compareId } = useParams();
   const navigate = useNavigate();

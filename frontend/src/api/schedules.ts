@@ -1,4 +1,4 @@
-/** API types and calls for scheduled/recurring scans (docs/PLAN.md §4.6). */
+/** API types and calls for scheduled/recurring scans (docs/ARCHIVE.md §4.6). */
 
 import { api } from './client';
 import type { Scanner, TargetType, TrivyScannerName, TrivySeverity } from './scans';

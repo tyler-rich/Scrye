@@ -1,4 +1,4 @@
-"""In-process maintenance scheduler (docs/PLAN.md §12, Phase 6).
+"""In-process maintenance scheduler (docs/ARCHIVE.md §12, Phase 6).
 
 A single asyncio task on a one-minute tick that drives the periodic background
 work Phase 6 adds:

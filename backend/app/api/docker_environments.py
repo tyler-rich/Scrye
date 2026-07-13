@@ -1,4 +1,4 @@
-"""Docker-environment management + image enumeration (docs/PLAN.md §3, §4.5).
+"""Docker-environment management + image enumeration (docs/ARCHIVE.md §3, §4.5).
 
 A Docker environment is a read-only ``docker-socket-proxy`` endpoint Scrye can
 query to *enumerate* images for the "scan running images" flow. The app never

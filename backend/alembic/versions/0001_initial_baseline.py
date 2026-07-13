@@ -1,7 +1,7 @@
 """initial baseline
 
 Establishes the Alembic migration chain for Scrye. Phase 0 introduces no domain
-tables (per docs/PLAN.md §7 those arrive in later phases); this revision exists
+tables (per docs/ARCHIVE.md §7 those arrive in later phases); this revision exists
 so the database is migration-managed from the very first deploy and later
 revisions have a stable base to build on.
 

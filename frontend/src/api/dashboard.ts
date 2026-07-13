@@ -1,4 +1,4 @@
-/** API types and calls for the dashboard aggregate widgets (docs/PLAN.md §4.6). */
+/** API types and calls for the dashboard aggregate widgets (docs/ARCHIVE.md §4.6). */
 
 import { api } from './client';
 import type { ScanSummary } from './scans';

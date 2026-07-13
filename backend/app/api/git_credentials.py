@@ -1,10 +1,10 @@
-"""Git-provider credential management (docs/PLAN.md §4.5).
+"""Git-provider credential management (docs/ARCHIVE.md §4.5).
 
 Access tokens for cloning private git repositories are **write-only** and
 field-encrypted: accepted on write, stored as ciphertext, and never returned
 (reads get a mask). Admins manage credentials and see their full metadata;
 operators get only an id/name options list (``GET /git-credentials/options``)
-to select a credential when launching a ``trivy repo`` scan (docs/PLAN.md §14).
+to select a credential when launching a ``trivy repo`` scan (docs/ARCHIVE.md §14).
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def list_git_credentials(
 
     Metadata (provider, host, username) is credential material, so the full view
     is admin-only. Operators launching a scan use ``GET /git-credentials/options``
-    for id/name selection instead (docs/PLAN.md §14).
+    for id/name selection instead (docs/ARCHIVE.md §14).
     """
     rows = db.scalars(select(GitCredential).order_by(GitCredential.name)).all()
     return [_to_out(c) for c in rows]

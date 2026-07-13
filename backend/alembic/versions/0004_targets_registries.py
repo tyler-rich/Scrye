@@ -3,7 +3,7 @@
 Phase 3 — targets & registries. Adds credential storage for private container
 registries and git providers, plus read-only Docker-environment endpoints for
 image enumeration. Secret columns hold ciphertext only (field-encrypted, per
-docs/PLAN.md §6); usernames/hosts/proxy URLs are non-sensitive metadata.
+docs/ARCHIVE.md §6); usernames/hosts/proxy URLs are non-sensitive metadata.
 
 Revision ID: 0004_targets_registries
 Revises: 0003_scan_tables

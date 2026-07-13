@@ -1,4 +1,4 @@
-"""Scan-time target and credential resolution (docs/PLAN.md §4.1, §4.2, §6).
+"""Scan-time target and credential resolution (docs/ARCHIVE.md §4.1, §4.2, §6).
 
 Bridges the database (stored registry/git credentials, uploaded SBOM artifacts)
 and the credential materialization layer. Secrets are decrypted **here, at scan

@@ -1,4 +1,4 @@
-"""Scheduled/recurring scan model (docs/PLAN.md §4.6/§12, Phase 6).
+"""Scheduled/recurring scan model (docs/ARCHIVE.md §4.6/§12, Phase 6).
 
 A :class:`ScanSchedule` is a saved scan template plus a cron cadence. The
 in-process maintenance scheduler fires due schedules, creating a real

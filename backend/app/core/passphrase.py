@@ -1,4 +1,4 @@
-"""Passphrase-derived encryption for portable backups (docs/PLAN.md §8).
+"""Passphrase-derived encryption for portable backups (docs/ARCHIVE.md §8).
 
 A backup bundle must survive a move to a fresh host that has a *different*
 application master key, so its secrets cannot stay wrapped under that master key.

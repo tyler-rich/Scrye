@@ -1,7 +1,7 @@
 """API schemas for registries, git credentials, and Docker environments.
 
 Secret fields (registry password/token, git access token) are **write-only**
-(docs/PLAN.md §6): accepted as :class:`~pydantic.SecretStr` on write and never
+(docs/ARCHIVE.md §6): accepted as :class:`~pydantic.SecretStr` on write and never
 returned on read. Read models expose a :class:`~app.core.masking.MaskedSecret`
 (mask + "last updated") instead of any plaintext or ciphertext.
 """
@@ -22,7 +22,7 @@ class CredentialOption(BaseModel):
 
     Operators pick a registry or git credential by name when starting a scan but
     have no need for its host, username, or any other detail — this exposes only
-    the id and label, so credential metadata stays admin-only (docs/PLAN.md §14,
+    the id and label, so credential metadata stays admin-only (docs/ARCHIVE.md §14,
     Phase 3 Security Review #5).
     """
 

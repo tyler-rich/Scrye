@@ -57,7 +57,7 @@ interface FormValues {
   enabled: boolean;
 }
 
-/** Scheduled/recurring scans on a cron cadence (docs/PLAN.md §4.6). */
+/** Scheduled/recurring scans on a cron cadence (docs/ARCHIVE.md §4.6). */
 export function ScheduledScansPanel() {
   const { user } = useAuth();
   const canOperate = !!user && user.role !== 'viewer';
