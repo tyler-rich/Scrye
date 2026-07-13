@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.core.audit import record_audit
 from app.core.timeutil import to_naive_utc
@@ -48,8 +49,8 @@ class VexDocumentOut(BaseModel):
     format: VexFormat
     content: str
     created_by_username: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class VexDocumentIn(BaseModel):
@@ -198,11 +199,11 @@ class IgnoreRuleOut(BaseModel):
     id: int
     vuln_id: str
     reason: str | None
-    expires_at: datetime | None
+    expires_at: UtcDatetime | None
     enabled: bool
     created_by_username: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class IgnoreRuleIn(BaseModel):

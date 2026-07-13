@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -10,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, require_role
 from app.db.models import AuditLog, Role
 from app.db.session import get_db
@@ -25,7 +25,7 @@ class AuditEntryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    created_at: datetime
+    created_at: UtcDatetime
     actor_id: int | None
     actor_username: str | None
     action: str

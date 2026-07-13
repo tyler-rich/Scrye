@@ -7,11 +7,11 @@ credentials for private images arrive in Phase 3 and are handled separately
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.api.schema_types import UtcDatetime
 from app.db.models import (
     ArtifactKind,
     FindingClass,
@@ -163,9 +163,9 @@ class ScanOut(BaseModel):
     error: str | None
     created_by_username: str | None
     tags: list[str] = []
-    created_at: datetime
-    started_at: datetime | None
-    finished_at: datetime | None
+    created_at: UtcDatetime
+    started_at: UtcDatetime | None
+    finished_at: UtcDatetime | None
 
 
 class FindingOut(BaseModel):
@@ -204,4 +204,4 @@ class ArtifactOut(BaseModel):
     content_type: str
     size_bytes: int
     sha256: str
-    created_at: datetime
+    created_at: UtcDatetime

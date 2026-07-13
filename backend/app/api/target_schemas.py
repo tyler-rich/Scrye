@@ -8,11 +8,11 @@ returned on read. Read models expose a :class:`~app.core.masking.MaskedSecret`
 
 from __future__ import annotations
 
-from datetime import datetime
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
+from app.api.schema_types import UtcDatetime
 from app.core.masking import MaskedSecret
 from app.db.models import SECRET_BEARING_AUTH_TYPES, GitProvider, RegistryAuthType
 
@@ -94,8 +94,8 @@ class RegistryOut(BaseModel):
     enabled: bool
     secret: MaskedSecret
     created_by_username: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class RegistryTestOut(BaseModel):
@@ -153,8 +153,8 @@ class GitCredentialOut(BaseModel):
     username: str | None
     token: MaskedSecret
     created_by_username: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 # --- Docker environments -----------------------------------------------------
@@ -212,8 +212,8 @@ class DockerEnvironmentOut(BaseModel):
     risk_acknowledged: bool
     enabled: bool
     created_by_username: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class DockerImageOut(BaseModel):

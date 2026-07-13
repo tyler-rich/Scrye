@@ -8,7 +8,6 @@ stored credential without waiting for a real event.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -16,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.core.audit import record_audit
 from app.core.masking import MaskedSecret, masked_secret
@@ -97,8 +97,8 @@ class NotificationChannelOut(BaseModel):
     enabled: bool
     secret: MaskedSecret
     created_by_username: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class NotificationChannelCreateIn(BaseModel):

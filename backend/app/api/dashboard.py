@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -17,6 +16,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.api.scan_schemas import ScanOut
+from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, require_role
 from app.core.dashboard import (
     DashboardData,
@@ -63,8 +63,8 @@ class FailedAlertOut(BaseModel):
     scanner: str
     target: str
     error: str | None
-    created_at: datetime
-    finished_at: datetime | None
+    created_at: UtcDatetime
+    finished_at: UtcDatetime | None
 
 
 class DashboardOut(BaseModel):

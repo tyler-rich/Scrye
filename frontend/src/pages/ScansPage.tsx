@@ -46,7 +46,7 @@ import {
   type TargetType,
 } from '../api/scans';
 import { createPreset, deletePreset, listPresets, type FilterPreset } from '../api/presets';
-import { formatWhen } from '../lib/dates';
+import { formatWhen, parseUtc } from '../lib/dates';
 import { ScanStatusBadge } from '../components/ScanStatusBadge';
 import { SeverityBadge } from '../components/SeverityBadge';
 
@@ -205,7 +205,7 @@ export function ScansPage() {
 
   const runCompare = () => {
     const [a, b] = [...compare].sort(
-      (x, y) => new Date(x.created_at).getTime() - new Date(y.created_at).getTime(),
+      (x, y) => parseUtc(x.created_at).getTime() - parseUtc(y.created_at).getTime(),
     );
     navigate(`/scans/diff/${a.id}/${b.id}`);
   };

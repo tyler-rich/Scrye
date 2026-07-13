@@ -6,12 +6,12 @@ finding summaries. No scan payload here holds secret material.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.scan_schemas import ScanOut
+from app.api.schema_types import UtcDatetime
 
 #: Maximum number of tags a single scan may carry.
 MAX_TAGS_PER_SCAN = 20
@@ -114,8 +114,8 @@ class FilterPresetOut(BaseModel):
     id: int
     name: str
     filters: dict[str, Any]
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 __all__ = [

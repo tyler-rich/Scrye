@@ -9,8 +9,6 @@ passphrase is field-encrypted like every other stored secret.
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from fastapi import (
     APIRouter,
     Depends,
@@ -28,6 +26,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app import __version__
+from app.api.schema_types import UtcDatetime
 from app.api.uploads import read_upload_capped
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.backup import (
@@ -72,7 +71,7 @@ class BackupOut(BaseModel):
     checksum_sha256: str
     kind: BackupKind
     app_version: str
-    created_at: datetime
+    created_at: UtcDatetime
     created_by_username: str | None
     note: str | None
 
@@ -99,7 +98,7 @@ class ScheduleOut(BaseModel):
     interval_hours: int
     retention_count: int
     passphrase: MaskedSecret
-    last_run_at: datetime | None
+    last_run_at: UtcDatetime | None
     last_status: str | None
 
 

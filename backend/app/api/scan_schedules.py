@@ -11,14 +11,13 @@ scans); reading them requires ``viewer``. Writes are CSRF-guarded.
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.scan_schemas import ScanCreateIn
+from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.core.audit import record_audit
 from app.core.cron import CronError, validate_cron
@@ -80,12 +79,12 @@ class ScanScheduleOut(BaseModel):
     options: dict
     registry_id: int | None
     git_credential_id: int | None
-    last_run_at: datetime | None
+    last_run_at: UtcDatetime | None
     last_scan_id: int | None
     last_status: str | None
     created_by_username: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 def _get_or_404(db: Session, schedule_id: int) -> ScanSchedule:
