@@ -102,15 +102,28 @@ WORKDIR /build/backend
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 
-# Install the application and its pinned runtime dependencies into the venv.
+# Install the pinned, hash-verified runtime dependencies BEFORE copying app
+# code, so a code-only change doesn't invalidate this (slow) dependency layer.
+# requirements.lock is the fully-resolved transitive closure of pyproject.toml,
+# generated with `uv pip compile --generate-hashes` (see CONTRIBUTING.md
+# § Backend dependency lock). `--require-hashes` makes pip refuse to install any
+# artifact whose hash isn't pinned in the lock, so every transitive package is
+# verified at build time and two builds of the same commit resolve identically
+# — closing the unpinned-transitive supply-chain gap (SC-1).
 # The BuildKit cache mount persists pip's wheel download cache across builds so
 # an unchanged dependency isn't re-fetched from PyPI when this layer rebuilds
 # (PIP_NO_CACHE_DIR is intentionally NOT set — the cache now lives in the mount,
 # not the image layer, and this is a discarded builder stage, so nothing bloats
 # the final image).
-COPY backend/pyproject.toml ./
+COPY backend/pyproject.toml backend/requirements.lock ./
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    pip install --require-hashes -r requirements.lock
+
+# Install the application package itself. Its runtime dependencies are already
+# present (installed and hash-verified from the lock above), so --no-deps keeps
+# the resolver from reaching back out to PyPI for an unpinned copy.
 COPY backend/app ./app
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked pip install .
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked pip install --no-deps .
 
 
 # --- Final stage: minimal runtime image --------------------------------------

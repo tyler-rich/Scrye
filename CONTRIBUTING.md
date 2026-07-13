@@ -82,6 +82,27 @@ python -m scripts.gen_env_example            # writes ../.env.example
 python -m scripts.gen_env_example --check    # CI-style check (no write)
 ```
 
+**Backend dependency lock (`requirements.lock`).** `pyproject.toml` pins only the
+direct runtime dependencies; the container image installs the fully-resolved,
+hash-pinned transitive closure from `backend/requirements.lock` so every build is
+reproducible and every package is hash-verified (`pip install --require-hashes`,
+supply-chain finding SC-1). The lock is compiled with [`uv`](https://docs.astral.sh/uv/)
+— a build/dev-time tool only; it is **not** added to the runtime image, and the
+image still installs with plain `pip`. After changing any dependency in
+`pyproject.toml`, regenerate the lock with the **pinned** uv version (CI runs the
+identical command and fails if the committed lock drifts):
+
+```bash
+cd backend
+pip install uv==0.8.17     # pin kept in sync with .github/workflows/ci.yml
+uv pip compile pyproject.toml --generate-hashes --python-version 3.13 \
+  --output-file requirements.lock
+```
+
+`uv` reads the existing `requirements.lock` as a preference set, so a routine
+regeneration only changes what a `pyproject.toml` edit actually requires — an
+unrelated new transitive release on PyPI does not rewrite the lock.
+
 ### Frontend (React + Vite)
 
 ```bash
