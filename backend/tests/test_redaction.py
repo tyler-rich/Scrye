@@ -13,10 +13,25 @@ from app.core.masking import SECRET_MASK, masked_secret
 class TestRedact:
     def test_key_value_forms(self) -> None:
         assert redact("password=hunter2") == f"password={REDACTED}"
-        assert redact("login with passwd: hunter2 ok") == f"login with passwd: {REDACTED} ok"
+        # An unquoted value now consumes to end-of-line (or the next key=pair), so
+        # trailing free text is over-redacted rather than risk leaking a spaced
+        # secret (SEC-4) — see test_spaced_unquoted_secret_is_fully_redacted.
+        assert redact("login with passwd: hunter2 ok") == f"login with passwd: {REDACTED}"
         assert redact('{"token": "abc.def.ghi"}') == f'{{"token": "{REDACTED}"}}'
         assert redact("client_secret = s3cr3t!") == f"client_secret = {REDACTED}"
+        # A following structured key=value pair still bounds the redaction.
         assert redact("api_key=AKIA123 region=us") == f"api_key={REDACTED} region=us"
+
+    def test_spaced_unquoted_secret_is_fully_redacted(self) -> None:
+        # SEC-4: an unquoted secret containing spaces/commas was only masked up to
+        # its first space/comma, leaking the tail. It must now be redacted whole.
+        assert redact("password=p@ss w0rd here") == f"password={REDACTED}"
+        assert redact("api_key=abc,def") == f"api_key={REDACTED}"
+        assert redact("smtp_password: my mail pass 123") == f"smtp_password: {REDACTED}"
+        for leaked in ("w0rd", "here", ",def", "mail pass"):
+            assert leaked not in redact("password=p@ss w0rd here")
+            assert leaked not in redact("api_key=abc,def")
+            assert leaked not in redact("smtp_password: my mail pass 123")
 
     def test_authorization_headers(self) -> None:
         assert redact("Authorization: Bearer eyJhbGciOi.abc") == f"Authorization: Bearer {REDACTED}"
@@ -96,7 +111,9 @@ class TestRedactionFilter:
 
     def test_plaintext_secret_never_reaches_log_output(self) -> None:
         logger, stream = self._capture()
-        logger.info("storing registry credential password=%s for %s", "SuperSecret42", "ghcr.io")
+        # Non-secret context that precedes the secret is preserved; the secret
+        # (unquoted, last on the line) is consumed to end-of-line (SEC-4).
+        logger.info("storing registry credential for %s password=%s", "ghcr.io", "SuperSecret42")
         output = stream.getvalue()
         assert "SuperSecret42" not in output
         assert REDACTED in output

@@ -124,7 +124,15 @@ services:
   # CIS 5.21/5.22). Anyone able to reach the proxy can enumerate images/containers.
   docker-socket-proxy:
     profiles: ["docker-env"]
-    image: tecnativa/docker-socket-proxy:0.3.0@sha256:9e4b9e7517a6b660f2cc903a19b257b1852d5b3344794e3ea334ff00ae677ac2
+    # Bumped 0.3.0 -> v0.4.2 (SC-7): 0.3.0 was ~15 months stale, and this is the
+    # only sidecar holding the Docker socket. The env-var API below (IMAGES/
+    # CONTAINERS/INFO/POST) is unchanged across the 0.3 -> 0.4 line, and the app
+    # only calls GET /images/json (gated by IMAGES=1). Upstream now prefixes tags
+    # with `v`. Re-verify the hardened boot on a Docker-Hub-reachable host (see the
+    # /run tmpfs NOTE below) — image-pull/boot could not be exercised in the
+    # egress-restricted build environment where this bump was prepared. A future
+    # migration to wollomatic/socket-proxy is tracked separately (issue #63).
+    image: tecnativa/docker-socket-proxy:v0.4.2@sha256:1f3a6f303320723d199d2316a3e82b2e2685d86c275d5e3deeaf182573b47476
     environment:
       - IMAGES=1
       - CONTAINERS=1

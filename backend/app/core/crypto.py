@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import logging
 import os
 import re
 from functools import lru_cache
@@ -35,6 +36,16 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
+
+#: Opt-out that lets a deployment whose master key is a raw passphrase boot long
+#: enough to rotate to a high-entropy key. Off by default; a temporary
+#: boot-and-rotate escape hatch, not a permanent setting (every load under it
+#: warns). Read directly from the environment (not the ``Settings`` surface) so
+#: it stays out of ``.env.example`` and isn't advertised as normal configuration.
+_ALLOW_WEAK_KEY_ENV = "SCRYE_ALLOW_WEAK_MASTER_KEY"
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 #: Serialized-token prefix; tokens look like ``scrye$v1$<b64 nonce>$<b64 ct+tag>``.
 _TOKEN_PREFIX = "scrye"
@@ -55,12 +66,29 @@ class SecretDecryptError(RuntimeError):
     """Raised when a stored secret token cannot be decrypted."""
 
 
-def _decode_key_material(raw: str, *, source: str) -> bytes:
-    """Decode one piece of key material from the key file.
+def _weak_master_key_allowed() -> bool:
+    """Return True if the operator opted in to booting with a low-entropy key.
 
-    Accepts standard base64 (the documented ``openssl rand -base64 48`` form);
-    falls back to the raw UTF-8 bytes for non-base64 content. Either way the
-    material must provide at least 256 bits.
+    Controlled by :data:`_ALLOW_WEAK_KEY_ENV`; a deliberate, temporary escape
+    hatch for rotating a legacy passphrase key, off unless explicitly enabled.
+    """
+    return os.environ.get(_ALLOW_WEAK_KEY_ENV, "").strip().lower() in _TRUTHY
+
+
+def _decode_key_material(raw: str, *, source: str) -> bytes:
+    """Decode and entropy-gate one piece of key material from the key file.
+
+    Requires **valid base64** decoding to at least 256 bits — the documented
+    ``openssl rand -base64 48`` form. Non-base64 content is treated as a raw
+    passphrase and **rejected**: passphrase-shaped material carries far less
+    entropy per byte, so a stolen database could be brute-forced offline at
+    HKDF speed (SEC-3). The rejection can be temporarily lifted with
+    :data:`_ALLOW_WEAK_KEY_ENV` so an existing passphrase-keyed deployment can
+    boot long enough to rotate.
+
+    This is input validation only: for a valid base64 key the returned bytes are
+    exactly what they always were, so key derivation and every existing
+    encrypted value are unchanged.
 
     Args:
         raw: The textual key material.
@@ -70,12 +98,30 @@ def _decode_key_material(raw: str, *, source: str) -> bytes:
         The decoded key bytes.
 
     Raises:
-        MasterKeyError: If the material is shorter than 32 bytes.
+        MasterKeyError: If the material is not valid base64 (and the weak-key
+            opt-out is off) or decodes to fewer than 32 bytes.
     """
     try:
         decoded = base64.b64decode(raw, validate=True)
     except (binascii.Error, ValueError):
+        if not _weak_master_key_allowed():
+            raise MasterKeyError(
+                f"Master key material from {source} is not valid base64 and is "
+                "rejected as a low-entropy passphrase. Generate a high-entropy "
+                "key with `openssl rand -base64 48`. To boot an existing "
+                "deployment with a legacy passphrase key just long enough to "
+                f"rotate it, set {_ALLOW_WEAK_KEY_ENV}=1 (temporary — not for "
+                "permanent use)."
+            ) from None
         decoded = raw.encode("utf-8")
+        logger.warning(
+            "%s is set: accepting a non-base64 (low-entropy) master key from %s. "
+            "This is a temporary boot-and-rotate escape hatch — rotate to a key "
+            "generated with `openssl rand -base64 48` and unset %s.",
+            _ALLOW_WEAK_KEY_ENV,
+            source,
+            _ALLOW_WEAK_KEY_ENV,
+        )
     if len(decoded) < _MIN_KEY_BYTES:
         raise MasterKeyError(
             f"Master key material from {source} is too short: "

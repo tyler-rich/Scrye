@@ -43,6 +43,13 @@ jobs:
     # Never run on forks (scheduled workflows run on forks that enable Actions).
     if: github.repository == 'tyler-rich/Scrye'
     runs-on: ubuntu-latest
+    # Job-level least privilege: base contents:read + packages:write plus the two
+    # scopes the GitHub-signed provenance attestation needs (SC-4).
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout dev
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -85,6 +92,7 @@ jobs:
       # the build that keeps dev-multiarch warm for everything else to read from
       # (see docs/ARCHIVE.md § Build performance).
       - name: Build and push (:dev)
+        id: build
         if: steps.freshness.outputs.skip != 'true'
         uses: ./.github/actions/build-image
         with:
@@ -92,3 +100,16 @@ jobs:
           tags: ghcr.io/tyler-rich/scrye:dev
           cache-scope: dev-multiarch
           extra-cache-scopes: multiarch
+          # Attach BuildKit SLSA provenance + SPDX SBOM to the image manifest (SC-4).
+          provenance: mode=max
+          sbom: "true"
+
+      # GitHub-signed SLSA build provenance for the :dev image (SC-4), verifiable
+      # with `gh attestation verify oci://ghcr.io/tyler-rich/scrye:dev`.
+      - name: Attest build provenance
+        if: steps.freshness.outputs.skip != 'true'
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/tyler-rich/scrye
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

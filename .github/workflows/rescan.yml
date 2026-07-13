@@ -1,0 +1,123 @@
+# Scrye — scheduled re-scan of the PUBLISHED images (SC-5).
+#
+# The dogfood gate in ci.yml only fires on PRs / pushes to main, so a CVE
+# disclosed AFTER an image was published (against `ghcr.io/tyler-rich/scrye:latest`
+# or `:dev`) goes unnoticed until the next unrelated build. This workflow pulls
+# each published image on a schedule and runs the SAME gate scans (Trivy + Grype,
+# fixable HIGH/CRITICAL, bundled trivy/grype/syft binaries excluded because those
+# track upstream's release cadence, not Scrye's). It does NOT gate a merge — on a
+# finding it opens (or comments on) a tracking issue instead. This also automates
+# the bundled-binary CVE treadmill check the archive used to do by hand.
+name: Image re-scan (published)
+
+on:
+  # Weekly, Mondays 05:00 UTC — an hour after the dev-nightly build (04:00).
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+# Least privilege: read the repo + pull the (public) GHCR package; issues:write so
+# a new finding opens a tracking issue.
+permissions:
+  contents: read
+  packages: read
+  issues: write
+
+concurrency:
+  group: rescan-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  rescan:
+    name: Re-scan ghcr.io/tyler-rich/scrye:${{ matrix.tag }}
+    # Never run on forks (scheduled workflows run on forks that enable Actions).
+    if: github.repository == 'tyler-rich/Scrye'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tag: [latest, dev]
+    steps:
+      - name: Checkout (for the triage ignorefiles)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pull the published image and export it to a tar, so the scanners run over
+      # exactly the same input shape as the ci.yml dogfood gate (--input / archive).
+      # If the tag doesn't exist yet (e.g. :dev before the first nightly), skip the
+      # rest of this leg cleanly rather than fail.
+      - name: Pull + export the published image
+        id: pull
+        run: |
+          ref="ghcr.io/tyler-rich/scrye:${{ matrix.tag }}"
+          if ! docker pull "$ref"; then
+            echo "::warning::$ref is not published yet; skipping this leg."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          docker save "$ref" -o /tmp/scrye-image.tar
+
+      # Full informational report (never gates) — keeps the excluded base-image /
+      # bundled-binary findings visible in the run log, same as ci.yml.
+      - name: Trivy — full report (informational)
+        if: steps.pull.outputs.skip != 'true'
+        run: |
+          docker run --rm \
+            -v /tmp/scrye-image.tar:/image.tar:ro \
+            aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --input /image.tar \
+            --scanners vuln --severity LOW,MEDIUM,HIGH,CRITICAL --no-progress || true
+
+      - name: Trivy — gate on fixable HIGH/CRITICAL (excl. bundled scanners)
+        if: steps.pull.outputs.skip != 'true'
+        run: |
+          docker run --rm \
+            -v /tmp/scrye-image.tar:/image.tar:ro \
+            -v "${{ github.workspace }}/ci/trivyignore:/.trivyignore:ro" \
+            aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --input /image.tar \
+            --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL \
+            --skip-files usr/local/bin/trivy \
+            --skip-files usr/local/bin/grype \
+            --skip-files usr/local/bin/syft \
+            --ignorefile /.trivyignore --exit-code 1 --no-progress
+
+      - name: Grype — gate on fixable High+ (excl. bundled scanners)
+        if: steps.pull.outputs.skip != 'true'
+        run: |
+          docker run --rm \
+            -v /tmp/scrye-image.tar:/image.tar:ro \
+            -v "${{ github.workspace }}/ci/grype.yaml:/.grype.yaml:ro" \
+            anchore/grype:v0.115.0@sha256:decd87500a90c1e4faa1706f77b0b2cbc1d2f9364e976f1898ce9037de09cc3a docker-archive:/image.tar \
+            --only-fixed --fail-on high -c /.grype.yaml \
+            --exclude '/usr/local/bin/trivy' \
+            --exclude '/usr/local/bin/grype' \
+            --exclude '/usr/local/bin/syft'
+
+      # On any gate failure, open a tracking issue (or comment on the open one for
+      # this tag) instead of failing silently. Deduped by exact title so a weekly
+      # recurrence appends a comment rather than piling up duplicate issues.
+      - name: Open/append a tracking issue on new findings
+        if: failure() && steps.pull.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="[image-rescan] Fixable HIGH/CRITICAL CVEs in ghcr.io/tyler-rich/scrye:${{ matrix.tag }}"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          body=$(printf '%s\n\n%s\n' \
+            "A scheduled re-scan of the published \`ghcr.io/tyler-rich/scrye:${{ matrix.tag }}\` image found **fixable HIGH/CRITICAL** vulnerabilities (disclosed since the image was built) that the dogfood gate would now reject." \
+            "Scan run (full Trivy/Grype output): ${run_url}")
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title $title" --json number,title \
+            --jq "map(select(.title == \"$title\")) | .[0].number // empty")
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

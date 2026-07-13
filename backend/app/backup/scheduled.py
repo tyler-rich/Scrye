@@ -97,7 +97,9 @@ def run_due_backup(db: Session, *, store: BackupStore | None = None, force: bool
 
     store = store or BackupStore()
     try:
-        passphrase = decrypt_secret(schedule.passphrase_ciphertext, aad=AAD_BACKUP_PASSPHRASE)
+        passphrase = decrypt_secret(
+            schedule.passphrase_ciphertext, aad=AAD_BACKUP_PASSPHRASE, row_id=schedule.id
+        )
     except SecretDecryptError:
         schedule.last_run_at = utcnow()
         schedule.last_status = "error: passphrase could not be decrypted"

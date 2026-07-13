@@ -7,12 +7,15 @@ same tag, so centralizing the tags here keeps the two call sites from drifting (
 mismatch fails authentication rather than silently returning the wrong
 plaintext).
 
-Scope note: the AAD binds the *column*, not the *row*. It therefore detects a
-ciphertext moved between different fields, but not one relocated between two rows
-of the same table. That residual requires DB **write** access, which is outside
-the documented threat model (§6 protects against DB **read**); row-binding the
-AAD is a possible future hardening but would require re-encrypting every existing
-secret under the new tag.
+Row binding (SEC-7): when a caller supplies ``row_id``, the AAD is
+``"<table>.<column>:<row-id>"`` — binding the ciphertext to its specific row, so
+a blob relocated between two rows of the same column (a DB **write**-access
+threat, outside §6's DB-**read** model) no longer authenticates. This is applied
+without a migration: :func:`decrypt_secret` tries the row-bound tag first and
+**falls back** to the bare column tag, so every secret written before row binding
+(or created before its row id exists) still decrypts, and each secret upgrades to
+row binding the next time it is written. Callers that omit ``row_id`` keep the
+original column-only behavior.
 
 Plaintext rules (unchanged from the crypto module): decrypt only at scan time,
 never log the result, never return it from the API.
@@ -20,7 +23,7 @@ never log the result, never return it from the API.
 
 from __future__ import annotations
 
-from app.core.crypto import get_secret_cipher
+from app.core.crypto import SecretDecryptError, get_secret_cipher
 
 #: AAD tag binding a registry password/token blob to its field.
 AAD_REGISTRY_SECRET = "registries.secret"
@@ -48,11 +51,31 @@ SECRET_COLUMNS: tuple[tuple[str, str, str], ...] = (
 )
 
 
-def encrypt_secret(plaintext: str, *, aad: str) -> str:
-    """Encrypt ``plaintext`` under the current key version, bound to ``aad``."""
-    return get_secret_cipher().encrypt(plaintext, aad=aad)
+def row_aad(aad: str, row_id: object | None) -> str:
+    """Compose the row-bound AAD ``"<column-tag>:<row-id>"``, or the bare tag.
+
+    ``row_id=None`` yields the column-only tag (the pre-SEC-7 behavior, and the
+    legacy form :func:`decrypt_secret` falls back to).
+    """
+    return f"{aad}:{row_id}" if row_id is not None else aad
 
 
-def decrypt_secret(token: str, *, aad: str) -> str:
-    """Decrypt a stored secret token that was bound to ``aad`` on write."""
-    return get_secret_cipher().decrypt(token, aad=aad)
+def encrypt_secret(plaintext: str, *, aad: str, row_id: object | None = None) -> str:
+    """Encrypt ``plaintext`` bound to ``aad`` and, when given, its ``row_id`` (SEC-7)."""
+    return get_secret_cipher().encrypt(plaintext, aad=row_aad(aad, row_id))
+
+
+def decrypt_secret(token: str, *, aad: str, row_id: object | None = None) -> str:
+    """Decrypt a stored secret token.
+
+    When ``row_id`` is given, the row-bound AAD is tried first and the bare
+    column tag second, so a value written before row binding (SEC-7) still
+    decrypts. With no ``row_id`` only the column tag is used.
+    """
+    cipher = get_secret_cipher()
+    if row_id is not None:
+        try:
+            return cipher.decrypt(token, aad=row_aad(aad, row_id))
+        except SecretDecryptError:
+            pass  # legacy column-only ciphertext (written before row binding)
+    return cipher.decrypt(token, aad=aad)

@@ -208,7 +208,9 @@ def create_channel(
         created_by_username=auth.user.username,
     )
     if secret_value:
-        channel.secret_ciphertext = encrypt_secret(secret_value, aad=AAD_NOTIFICATION_SECRET)
+        channel.secret_ciphertext = encrypt_secret(
+            secret_value, aad=AAD_NOTIFICATION_SECRET, row_id=channel.id
+        )
         channel.secret_updated_at = utcnow()
     db.add(channel)
     db.flush()
@@ -254,7 +256,9 @@ def update_channel(
             new_config, url_secret = _extract_url_secret(payload.config)
             channel.config = new_config
             if url_secret:
-                channel.secret_ciphertext = encrypt_secret(url_secret, aad=AAD_NOTIFICATION_SECRET)
+                channel.secret_ciphertext = encrypt_secret(
+                    url_secret, aad=AAD_NOTIFICATION_SECRET, row_id=channel.id
+                )
                 channel.secret_updated_at = utcnow()
                 changes["secret"] = "updated"
         else:
@@ -269,7 +273,9 @@ def update_channel(
     if payload.secret is not None:
         secret_value = payload.secret.get_secret_value()
         if secret_value:
-            channel.secret_ciphertext = encrypt_secret(secret_value, aad=AAD_NOTIFICATION_SECRET)
+            channel.secret_ciphertext = encrypt_secret(
+                secret_value, aad=AAD_NOTIFICATION_SECRET, row_id=channel.id
+            )
             channel.secret_updated_at = utcnow()
         elif channel.type in SECRET_OPTIONAL_TYPES:
             channel.secret_ciphertext = None

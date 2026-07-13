@@ -72,7 +72,9 @@ def resolve_registry_auth(session: Session, options: dict) -> RegistryAuth | Non
         if not registry.secret_ciphertext:
             raise TargetError(f"Registry {registry.name!r} has no stored credential.")
         try:
-            secret = decrypt_secret(registry.secret_ciphertext, aad=AAD_REGISTRY_SECRET)
+            secret = decrypt_secret(
+                registry.secret_ciphertext, aad=AAD_REGISTRY_SECRET, row_id=registry.id
+            )
         except SecretDecryptError as exc:
             raise TargetError(
                 f"Registry {registry.name!r} credential could not be decrypted."
@@ -108,7 +110,7 @@ def resolve_git_auth(session: Session, options: dict) -> GitAuth | None:
     if not credential.token_ciphertext:
         raise TargetError(f"Git credential {credential.name!r} has no stored token.")
     try:
-        token = decrypt_secret(credential.token_ciphertext, aad=AAD_GIT_TOKEN)
+        token = decrypt_secret(credential.token_ciphertext, aad=AAD_GIT_TOKEN, row_id=credential.id)
     except SecretDecryptError as exc:
         raise TargetError(f"Git credential {credential.name!r} could not be decrypted.") from exc
     return GitAuth(provider=credential.provider, token=token, username=credential.username)

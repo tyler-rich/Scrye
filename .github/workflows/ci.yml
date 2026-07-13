@@ -53,6 +53,22 @@ jobs:
       - name: Check .env.example is in sync with Settings
         run: python -m scripts.gen_env_example --check
 
+      # requirements.lock is the hash-pinned transitive closure the image installs
+      # from (docker/Dockerfile, SC-1). Regenerate it with the pinned uv and fail
+      # if it drifts from pyproject.toml — uv reads the existing lock as a
+      # preference set, so an unrelated new transitive release does NOT rewrite it;
+      # only a real pyproject dependency change does. Keep the uv pin and the
+      # compile flags identical to CONTRIBUTING.md § Backend dependency lock.
+      - name: Check requirements.lock is in sync with pyproject.toml
+        run: |
+          pip install uv==0.8.17
+          uv pip compile pyproject.toml --generate-hashes --python-version 3.13 \
+            --output-file requirements.lock --quiet
+          if ! git diff --exit-code requirements.lock; then
+            echo "::error::requirements.lock is out of sync with pyproject.toml. Regenerate it with: uv pip compile pyproject.toml --generate-hashes --python-version 3.13 --output-file requirements.lock" >&2
+            exit 1
+          fi
+
       - name: Tests — pytest
         run: pytest -q
 

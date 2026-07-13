@@ -39,7 +39,7 @@ from app.core.passphrase import (
     new_salt,
     passphrase_cipher,
 )
-from app.core.secret_store import SECRET_COLUMNS
+from app.core.secret_store import SECRET_COLUMNS, row_aad
 from app.core.timeutil import utcnow
 from app.db.base import Base
 
@@ -75,6 +75,34 @@ _PRESERVE_ON_RESTORE: frozenset[str] = frozenset({"backups", "alembic_version"})
 _SECRET_MAP: dict[tuple[str, str], str] = {
     (table, column): aad for table, column, aad in SECRET_COLUMNS
 }
+
+
+def _row_pk(table: object, record: object) -> object | None:
+    """Return a row's single-column primary-key value, or ``None`` if not simple.
+
+    Used to reconstruct the row-bound AAD (SEC-7) when re-wrapping secrets. A
+    ``None`` result (composite/absent PK) falls back to the column-only tag.
+    """
+    pk_cols = list(table.primary_key.columns)  # type: ignore[attr-defined]
+    if len(pk_cols) != 1:
+        return None
+    return record.get(pk_cols[0].name)  # type: ignore[attr-defined]
+
+
+def _decrypt_field(cipher: object, value: str, aad: str, pk: object | None) -> tuple[str, str]:
+    """Decrypt a re-wrappable secret, returning ``(plaintext, aad_that_worked)``.
+
+    Tries the row-bound AAD (SEC-7) then the legacy column-only tag, mirroring
+    :func:`app.core.secret_store.decrypt_secret`'s fallback. The returned AAD is
+    used to re-wrap so a value's binding is **preserved** across a backup/restore
+    cycle (a column-only secret stays column-only; a row-bound one stays bound)
+    rather than being silently upgraded.
+    """
+    bound = row_aad(aad, pk)
+    try:
+        return cipher.decrypt(value, aad=bound), bound  # type: ignore[attr-defined]
+    except SecretDecryptError:
+        return cipher.decrypt(value, aad=aad), aad  # type: ignore[attr-defined]
 
 
 class BackupError(RuntimeError):
@@ -182,14 +210,15 @@ def build_bundle(db: Session, passphrase: str) -> bytes:
                     value = record[column.name]
                     aad = _SECRET_MAP.get((table.name, column.name))
                     if aad is not None and value:
+                        pk = _row_pk(table, record)
                         try:
-                            plaintext = master.decrypt(value, aad=aad)
+                            plaintext, used_aad = _decrypt_field(master, value, aad, pk)
                         except SecretDecryptError as exc:
                             raise BackupError(
                                 f"Cannot re-wrap secret {table.name}.{column.name}: "
                                 "it could not be decrypted under the current master key."
                             ) from exc
-                        value = pass_cipher.encrypt(plaintext, aad=aad)
+                        value = pass_cipher.encrypt(plaintext, aad=used_aad)
                     elif isinstance(value, datetime):
                         value = value.isoformat()
                     row[column.name] = value
@@ -354,14 +383,15 @@ def restore_bundle(db: Session, data: bytes, passphrase: str) -> RestoreSummary:
                 value = row[column.name]
                 aad = _SECRET_MAP.get((table.name, column.name))
                 if aad is not None and value:
+                    pk = _row_pk(table, row)
                     try:
-                        plaintext = pass_cipher.decrypt(value, aad=aad)
+                        plaintext, used_aad = _decrypt_field(pass_cipher, value, aad, pk)
                     except SecretDecryptError as exc:
                         raise BackupError(
                             f"Cannot restore secret {table.name}.{column.name}: "
                             "the bundle is corrupt or the passphrase is wrong."
                         ) from exc
-                    value = master.encrypt(plaintext, aad=aad)
+                    value = master.encrypt(plaintext, aad=used_aad)
                 elif isinstance(column.type, DateTime) and isinstance(value, str):
                     value = datetime.fromisoformat(value)
                 values[column.name] = value

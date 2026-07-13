@@ -132,6 +132,11 @@ class TestMfaPolicyEnforcement:
         )
         assert second.status_code == 200
         assert client.get("/api/auth/me").json()["mfa_enabled"] is True
+        # SEC-9: the policy-forced first-enrollment is audited distinctly, so an
+        # admin can spot an unexpected enrollment during the password-only window.
+        entries = client.get("/api/audit").json()["items"]
+        enrolled = [e for e in entries if e["action"] == "auth.mfa_enabled"]
+        assert enrolled and enrolled[0]["details"] == {"forced_by_policy": True}
 
     def test_reenroll_requires_current_password(self, client: TestClient) -> None:
         csrf = setup_admin(client)
@@ -228,3 +233,15 @@ class TestPendingMfaStoreConcurrency:
 
         assert not errors, f"concurrent access raised: {errors[0]!r}"
         assert _CHALLENGE_TTL_SECONDS > 0
+
+    def test_pending_challenges_capped_per_user(self) -> None:
+        # SEC-10: one account must not accumulate live challenges up to the TTL —
+        # issuing beyond the cap drops the oldest, and other users are unaffected.
+        from app.auth.mfa import _MAX_PENDING_PER_USER, PendingMfaStore
+
+        store = PendingMfaStore()
+        for _ in range(_MAX_PENDING_PER_USER + 4):
+            store.issue(user_id=1)
+        assert sum(1 for c in store._pending.values() if c.user_id == 1) == _MAX_PENDING_PER_USER
+        store.issue(user_id=2)
+        assert sum(1 for c in store._pending.values() if c.user_id == 2) == 1

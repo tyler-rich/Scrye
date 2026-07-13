@@ -17,6 +17,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.core.egress import EgressError, validate_egress_url_async
+
 #: Wall-clock timeout for a single proxy request (seconds). Enumeration is cheap;
 #: a slow/hung proxy should fail fast rather than block the request thread.
 _PROXY_TIMEOUT_SECONDS = 10.0
@@ -79,6 +81,14 @@ async def list_images(proxy_url: str) -> list[DockerImage]:
             malformed response.
     """
     base = proxy_url.rstrip("/")
+    # The proxy legitimately lives on the internal network, so private addresses
+    # are allowed here — but a misconfigured/hostile proxy_url pointed at loopback
+    # or the cloud-metadata endpoint is still refused (allow_internal keeps only
+    # RFC-1918 targets in scope).
+    try:
+        await validate_egress_url_async(base, allow_internal=True)
+    except EgressError as exc:
+        raise DockerProxyError(str(exc)) from exc
     try:
         async with httpx.AsyncClient(timeout=_PROXY_TIMEOUT_SECONDS) as http:
             response = await http.get(f"{base}/images/json")
