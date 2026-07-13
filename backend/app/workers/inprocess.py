@@ -109,6 +109,12 @@ _LOCK_RETRY_BACKOFF_FACTOR = 2.0
 #: and "task registered" is never touched.
 _STALE_SCAN_GRACE_SECONDS = 60
 
+#: Cap on concurrently-live executor tasks, as a multiple of the concurrency
+#: limit but never below a floor, so ordinary submission bursts always pass and
+#: only a pathological flood is deferred to the watchdog (CON-16).
+_SUBMIT_CAP_FACTOR = 8
+_SUBMIT_CAP_FLOOR = 64
+
 
 @dataclass(frozen=True)
 class _RunInputs:
@@ -194,8 +200,16 @@ class InProcessScanWorker(ScanWorker):
             max_concurrent: Maximum scans to run at once (>= 1).
         """
         self._session_factory = session_factory
-        self._semaphore = asyncio.Semaphore(max(1, max_concurrent))
+        self._max_concurrent = max(1, max_concurrent)
+        self._semaphore = asyncio.Semaphore(self._max_concurrent)
         self._tasks: dict[int, asyncio.Task[None]] = {}
+        # Runaway guard: the semaphore bounds *running* scans, not *created*
+        # tasks, so a burst of submits (a hammering client, a large schedule
+        # backlog) could pile up unbounded pending tasks. Cap the live task count
+        # generously — normal bursts pass, pathological floods are left QUEUED for
+        # the watchdog to re-submit as tasks drain (CON-16). The DB is the durable
+        # queue, so deferring is lossless.
+        self._submit_cap = max(_SUBMIT_CAP_FLOOR, self._max_concurrent * _SUBMIT_CAP_FACTOR)
         self._accepting = True
         # Set = executing normally; cleared = paused (tasks hold before their
         # claim). A restore pauses the worker so nothing new starts while the
@@ -225,9 +239,35 @@ class InProcessScanWorker(ScanWorker):
             # whose task is alive but waiting on the semaphore) — a second task
             # would only burn a slot to lose the atomic claim.
             return
+        if len(self._tasks) >= self._submit_cap:
+            # Flood guard: leave the scan QUEUED (the DB is the durable queue) so
+            # the maintenance watchdog re-submits it once live tasks drain,
+            # instead of piling up unbounded pending tasks (CON-16).
+            logger.warning(
+                "Worker task cap (%d) reached; leaving scan %d queued for the watchdog.",
+                self._submit_cap,
+                scan_id,
+            )
+            return
         task = asyncio.create_task(self._execute(scan_id))
         self._tasks[scan_id] = task
-        task.add_done_callback(lambda _task, sid=scan_id: self._tasks.pop(sid, None))
+        task.add_done_callback(lambda t, sid=scan_id: self._on_task_done(t, sid))
+
+    def _on_task_done(self, task: asyncio.Task[None], scan_id: int) -> None:
+        """Deregister a finished task and surface any exception it swallowed.
+
+        ``_execute`` guards its own body, but an error escaping it (e.g. the
+        session factory failing in a shutdown race) would otherwise die silently
+        as a GC-time "Task exception was never retrieved". Retrieve and log it so
+        the failure is visible; the scan stays QUEUED and the watchdog re-submits
+        it (CON-16).
+        """
+        self._tasks.pop(scan_id, None)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error("Scan %d executor task crashed: %r", scan_id, exc, exc_info=exc)
 
     async def recover(self) -> None:
         """Reconcile scans interrupted by a previous process.
@@ -346,7 +386,14 @@ class InProcessScanWorker(ScanWorker):
 
     async def _execute(self, scan_id: int) -> None:
         """Run a single scan end-to-end, holding a concurrency slot."""
-        session = self._session_factory()
+        try:
+            session = self._session_factory()
+        except Exception:  # noqa: BLE001 - a factory failure must not kill the task silently
+            logger.exception(
+                "Could not open a session for scan %d; leaving it queued for the watchdog.",
+                scan_id,
+            )
+            return
         try:
             notify = False
             try:

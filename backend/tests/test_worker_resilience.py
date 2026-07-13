@@ -382,6 +382,58 @@ class TestNotificationSlotRelease:
             await worker.shutdown()
 
 
+class TestTaskLifecycle:
+    @pytest.mark.asyncio
+    async def test_session_factory_failure_leaves_scan_queued(self, db, monkeypatch) -> None:
+        """A session-factory failure must be caught and logged (not a silent
+        GC-time 'Task exception was never retrieved'); the scan stays QUEUED for
+        the watchdog (CON-16)."""
+        scan_id = _queue_scan(db)
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+
+        def _boom():
+            raise RuntimeError("engine disposed")
+
+        monkeypatch.setattr(worker, "_session_factory", _boom)
+        await worker.submit(scan_id)
+        await worker.shutdown()  # drains the task
+
+        db.expire_all()
+        assert db.get(Scan, scan_id).status is ScanStatus.QUEUED
+
+    @pytest.mark.asyncio
+    async def test_done_callback_logs_a_crashed_task(self, caplog) -> None:
+        """The done callback retrieves and logs an escaped task exception."""
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+
+        async def _boom() -> None:
+            raise RuntimeError("kaboom")
+
+        task = asyncio.create_task(_boom())
+        await asyncio.gather(task, return_exceptions=True)
+        with caplog.at_level("ERROR"):
+            worker._on_task_done(task, 42)  # must not raise
+        assert any("42" in rec.message for rec in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_submit_defers_when_task_cap_reached(self, db) -> None:
+        """Beyond the task cap, submit leaves the scan QUEUED (no new task) so the
+        watchdog re-submits it later — task spawning stays bounded (CON-16)."""
+        scan_id = _queue_scan(db)
+        worker = InProcessScanWorker(SessionLocal, max_concurrent=1)
+        worker._submit_cap = 1
+        filler = asyncio.create_task(asyncio.sleep(30))
+        worker._tasks[-1] = filler  # occupy the only cap slot
+        try:
+            await worker.submit(scan_id)
+            assert scan_id not in worker._tasks  # deferred, not scheduled
+        finally:
+            filler.cancel()
+            worker._tasks.pop(-1, None)
+        db.expire_all()
+        assert db.get(Scan, scan_id).status is ScanStatus.QUEUED
+
+
 class TestPauseGate:
     @pytest.mark.asyncio
     async def test_paused_worker_defers_execution_until_resume(self, db, monkeypatch) -> None:
