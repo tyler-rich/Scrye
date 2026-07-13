@@ -23,6 +23,7 @@ import { IconAlertCircle, IconArrowLeft, IconDownload, IconTrash } from '@tabler
 
 import { ApiError } from '../api/client';
 import { formatWhen } from '../lib/dates';
+import { MAX_POLL_FAILURES, POLL_BASE_MS, pollBackoffMs } from '../lib/polling';
 import { safeHttpUrl } from '../lib/url';
 import {
   artifactDownloadUrl,
@@ -91,19 +92,28 @@ export function ScanDetailPage() {
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [savingTags, setSavingTags] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Non-null once the status poller gives up: 'gone' = the scan 404s (deleted),
+  // 'error' = repeated fetch failures. Halts the poll and surfaces the state
+  // instead of hammering a failing endpoint behind a stale badge (M20 / P1-3).
+  const [pollHalt, setPollHalt] = useState<'error' | 'gone' | null>(null);
   const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
   const [deleting, setDeleting] = useState(false);
 
-  const loadScan = useCallback(async () => {
+  const loadScan = useCallback(async (): Promise<'ok' | 'error' | 'gone'> => {
     try {
       const s = await getScan(id);
       setScan(s);
       setTagDraft(s.tags);
       setError(null);
-      return s;
+      setPollHalt(null);
+      return 'ok';
     } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 404) {
+        setError('This scan no longer exists — it may have been deleted.');
+        return 'gone';
+      }
       setError(err instanceof ApiError ? err.message : 'Failed to load scan.');
-      return null;
+      return 'error';
     }
   }, [id]);
 
@@ -140,12 +150,46 @@ export function ScanDetailPage() {
     void loadScan();
   }, [loadScan]);
 
-  // Poll while the scan is active; stop once it reaches a terminal state.
+  // Poll while the scan is active. Back off exponentially on fetch errors and
+  // halt after a ceiling (or immediately on a 404) so a restarted backend,
+  // expired session, or deleted scan doesn't get hammered every 2.5s forever
+  // behind a stale "running" badge (M20 / P1-3).
   useEffect(() => {
-    if (!scan || !isActive(scan.status)) return;
-    const interval = window.setInterval(() => void loadScan(), 2500);
-    return () => window.clearInterval(interval);
-  }, [scan, loadScan]);
+    if (!scan || !isActive(scan.status) || pollHalt) return;
+    let cancelled = false;
+    let failures = 0;
+    let timer: number;
+    const tick = async () => {
+      const result = await loadScan();
+      if (cancelled) return;
+      if (result === 'gone') {
+        setPollHalt('gone');
+        return;
+      }
+      if (result === 'error') {
+        failures += 1;
+        if (failures >= MAX_POLL_FAILURES) {
+          setPollHalt('error');
+          return;
+        }
+      } else {
+        // A successful poll changes `scan`, restarting this effect fresh.
+        failures = 0;
+      }
+      timer = window.setTimeout(() => void tick(), pollBackoffMs(failures));
+    };
+    timer = window.setTimeout(() => void tick(), POLL_BASE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [scan, loadScan, pollHalt]);
+
+  const retryPoll = () => {
+    setPollHalt(null);
+    setError(null);
+    void loadScan();
+  };
 
   // Load artifacts once the scan has succeeded (surfacing any fetch error).
   useEffect(() => {
@@ -271,6 +315,24 @@ export function ScanDetailPage() {
       </Modal>
 
       {error && <Text c="red">{error}</Text>}
+
+      {pollHalt === 'error' && isActive(scan.status) && (
+        <Alert
+          color="orange"
+          icon={<IconAlertCircle size={16} />}
+          title="Auto-refresh paused"
+          variant="light"
+        >
+          <Group justify="space-between" align="center">
+            <Text size="sm">
+              Couldn&apos;t reach the server to refresh this scan&apos;s status.
+            </Text>
+            <Button size="xs" variant="light" onClick={retryPoll}>
+              Retry
+            </Button>
+          </Group>
+        </Alert>
+      )}
 
       {scan.status === 'failed' && scan.error && (
         <Alert color="red" icon={<IconAlertCircle size={16} />} title="Scan failed">
