@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import anyio.to_thread
+
 from app.core.config import get_settings
 from app.db.models import FindingClass, Scanner
 from app.scanners.base import (
@@ -183,7 +185,11 @@ class GrypeScanner(BaseScanner):
         )
         check_success(result, _ENGINE)
 
-        findings, version = parse_output(result.stdout)
+        # Parse + normalize is CPU-bound work over a report that can reach
+        # SCRYE_SCANNER_MAX_OUTPUT_BYTES; hop it off the loop so a large scan can't
+        # stall every request (and the /healthz healthcheck) during the parse
+        # (CON-4), matching the anyio.to_thread.run_sync pattern used for CON-5.
+        findings, version = await anyio.to_thread.run_sync(parse_output, result.stdout)
         return ScanExecution(
             raw_output=result.stdout,
             findings=findings,

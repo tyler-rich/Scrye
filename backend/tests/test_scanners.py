@@ -7,7 +7,11 @@ match the shapes documented in docs/ARCHIVE.md §4.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -697,3 +701,110 @@ async def test_trivy_version_probe_failure_does_not_fail_the_scan(monkeypatch, t
 
     assert execution.scanner_version is None
     assert execution.findings == []
+
+
+# --- CON-4: parse/normalize is kept off the event loop -----------------------
+#
+# A large scanner report (the archive's own run produced 7,072 findings; stdout
+# is capped at SCRYE_SCANNER_MAX_OUTPUT_BYTES = 512 MiB) is seconds of pure CPU
+# to json.loads + normalize. Run on the loop it freezes every coroutine —
+# including the /healthz poll the container healthcheck restarts on. The fix hops
+# the parse to a worker thread via anyio.to_thread.run_sync (the same primitive
+# CON-5 used for blocking DB work).
+
+
+@pytest.mark.asyncio
+async def test_trivy_parse_runs_off_the_event_loop(monkeypatch, tmp_path) -> None:
+    """Trivy's parse/normalize executes on a worker thread, not the loop (CON-4)."""
+    _patch_scanner_cache(monkeypatch, tmp_path)
+    run = _VersionAwareRun(
+        scan_stdout=json.dumps({"Results": []}).encode(),
+        version_stdout=json.dumps({"Version": "0.72.0"}).encode(),
+    )
+    monkeypatch.setattr(trivy, "run_command", run)
+
+    loop_thread = threading.get_ident()
+    seen: dict[str, int] = {}
+    real = trivy.parse_output
+
+    def spy(raw: bytes):
+        seen["thread"] = threading.get_ident()
+        return real(raw)
+
+    monkeypatch.setattr(trivy, "parse_output", spy)
+
+    await trivy.TrivyScanner().scan_image("alpine:3.19", {})
+
+    assert seen["thread"] != loop_thread
+
+
+@pytest.mark.asyncio
+async def test_grype_parse_runs_off_the_event_loop(monkeypatch, tmp_path) -> None:
+    """Grype's parse/normalize executes on a worker thread, not the loop (CON-4)."""
+    _patch_scanner_cache(monkeypatch, tmp_path)
+    run = _CapturingRun(json.dumps({"matches": []}).encode())
+    monkeypatch.setattr(grype, "run_command", run)
+
+    loop_thread = threading.get_ident()
+    seen: dict[str, int] = {}
+    real = grype.parse_output
+
+    def spy(raw: bytes):
+        seen["thread"] = threading.get_ident()
+        return real(raw)
+
+    monkeypatch.setattr(grype, "parse_output", spy)
+
+    await grype.GrypeScanner().scan_image("alpine:3.19", {})
+
+    assert seen["thread"] != loop_thread
+
+
+@pytest.mark.asyncio
+async def test_large_scan_parse_does_not_starve_the_event_loop(monkeypatch, tmp_path) -> None:
+    """A slow (large-report) parse must not stall concurrent coroutines (CON-4).
+
+    A deliberately blocking ``parse_output`` stands in for the seconds of CPU a
+    multi-hundred-MB report costs, while a heartbeat coroutine ticks on the loop.
+    Because the parse is hopped to a worker thread, the heartbeat keeps advancing;
+    were the parse still on the loop it would be starved to ~0 ticks for the whole
+    parse — exactly the freeze that fails the /healthz healthcheck.
+    """
+    _patch_scanner_cache(monkeypatch, tmp_path)
+    run = _CapturingRun(json.dumps({"matches": []}).encode())
+    monkeypatch.setattr(grype, "run_command", run)
+
+    parse_seconds = 0.3
+    loop_thread = threading.get_ident()
+    parse_thread: dict[str, int] = {}
+
+    def slow_parse(raw: bytes):
+        # Stand-in for the CPU-bound parse of a large report: a synchronous block
+        # that would pin the event loop for its full duration if run there.
+        parse_thread["thread"] = threading.get_ident()
+        time.sleep(parse_seconds)
+        return ([], None)
+
+    monkeypatch.setattr(grype, "parse_output", slow_parse)
+
+    ticks = 0
+
+    async def heartbeat() -> None:
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.01)
+            ticks += 1
+
+    beat = asyncio.create_task(heartbeat())
+    try:
+        await grype.GrypeScanner().scan_image("alpine:3.19", {})
+    finally:
+        beat.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await beat
+
+    # The parse ran off the loop thread...
+    assert parse_thread["thread"] != loop_thread
+    # ...so the heartbeat kept ticking through the ~0.3 s parse rather than being
+    # frozen. On the loop it would manage ~0 ticks; off the loop, many.
+    assert ticks >= 5

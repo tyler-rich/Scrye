@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import anyio.to_thread
+
 from app.core.config import get_settings
 from app.db.models import FindingClass, Scanner
 from app.scanners.base import (
@@ -282,7 +284,12 @@ class TrivyScanner(BaseScanner):
         )
         check_success(result, _ENGINE)
 
-        findings = parse_output(result.stdout)
+        # Parse + normalize (json.loads over up to SCRYE_SCANNER_MAX_OUTPUT_BYTES
+        # plus the per-finding loop) is seconds of pure CPU on a large report; hop
+        # it off the loop so a big scan can't freeze every request — including the
+        # container healthcheck's /healthz poll — during the parse (CON-4). Matches
+        # the anyio.to_thread.run_sync pattern CON-5 used for blocking DB work.
+        findings = await anyio.to_thread.run_sync(parse_output, result.stdout)
         return ScanExecution(
             raw_output=result.stdout,
             findings=findings,
