@@ -578,6 +578,38 @@ model (§0.2) — the worker stays a single-container in-process async worker.
 **Plan section affected:** §0.2 (worker seam — extended, not reshaped), §8 (restore semantics),
 §12 (post-release hardening; no phase scope changed).
 
+### 2026-07-13 — Security — account-takeover chain fix: XSS sink containment + baseline security headers
+**What changed:** Two coupled changes closing the audit's account-takeover chain (frontend FE-9 +
+the missing response-header baseline):
+- **Frontend URL sink hardened.** Added `frontend/src/lib/url.ts` `safeHttpUrl()`, which admits only
+  well-formed `http:`/`https:` URLs (rejecting `javascript:`/`data:`/`vbscript:`/relative/malformed).
+  `ScanDetailPage.tsx` now renders a finding's scanner-derived `primary_url` as an `<Anchor>` only
+  when it passes `safeHttpUrl`, otherwise as inert text, and adds `rel="noopener noreferrer"`. This
+  is the only place scanner-derived data was rendered as a link (all other `href`s are app-internal
+  API endpoints).
+- **Baseline security-header middleware.** Added `backend/app/core/security_headers.py`
+  (`SecurityHeadersMiddleware`), wired as the outermost middleware in `create_app`. Every response
+  now carries `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, and a Content-Security-Policy tuned for the
+  built Mantine SPA (`script-src 'self'` — no inline scripts; `style-src 'self' 'unsafe-inline'` —
+  Mantine injects theme CSS at runtime; `connect-src 'self'`; `object-src 'none'`;
+  `frame-ancestors 'none'`; `base-uri`/`form-action 'self'`; `img-src 'self' data:`). The CSP was
+  verified against the real built SPA under a headless browser (login shell renders with styles, zero
+  `securitypolicyviolation` events). The interactive API docs (`/docs`, `/redoc`) are exempted from
+  the CSP only — they need inline scripts + CDN assets a SPA CSP would break — but still receive the
+  other three headers. The CSRF cookie's `httponly=False` double-submit design is unchanged, per the
+  report.
+- **Frontend test runner.** Added `vitest` (pinned `3.2.7`) as the frontend unit-test runner with a
+  `test` script, a Node-environment `test` block in `vite.config.ts`, and a new CI step
+  (`npm test`). `src/lib/url.test.ts` covers `safeHttpUrl`; `backend/tests/test_security_headers.py`
+  asserts the headers (and the docs-CSP exemption). This is the first frontend test suite — the CI
+  `frontend` job previously only linted + built.
+**Why:** The audit flagged an unvalidated scanner-derived URL rendered as a link plus the absence of
+any security-header baseline as a chain that could aid account takeover. Containing the sink and
+shipping standard defence-in-depth headers closes it without touching the documented CSRF model.
+**Plan section affected:** § Hard security rules; § Auth & Authorization (§5) — additive hardening,
+no security-model or schema change. § Required deliverables (CI gains a frontend test step).
+
 ### 2026-07-07 — Process — back-merge step after promotion; Dependabot retargeted to `dev`
 **What changed:** Two coupled changes to the `dev`/`main` branching model (adopted 2026-07-04) that
 stop `dev` from silently drifting "behind" `main` after every release:

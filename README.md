@@ -747,6 +747,14 @@ only in memory at scan time.
   bearer/basic tokens, and URL userinfo across messages and tracebacks (and is
   attached to uvicorn's loggers). Scanner subprocesses don't inherit Scrye's
   `SCRYE_*` config.
+- **Baseline security headers.** Every response carries `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
+  and a **Content-Security-Policy** tuned for the SPA (`script-src 'self'` with no
+  inline scripts, `connect-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'`).
+  Externally-derived data — e.g. a finding's scanner-supplied reference URL — is
+  rendered as a link only when it is a valid `http(s)` URL, and never with a
+  `javascript:`/`data:` scheme, so a crafted advisory can't turn a finding row into
+  a script-execution sink.
 - **Scan-time only.** Secrets are decrypted in memory into transient credential
   files on **tmpfs** (Docker `config.json`, `GIT_ASKPASS` helper), used for the
   scanner subprocess, then shredded.

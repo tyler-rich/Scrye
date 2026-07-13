@@ -23,6 +23,7 @@ import { IconAlertCircle, IconArrowLeft, IconDownload, IconTrash } from '@tabler
 
 import { ApiError } from '../api/client';
 import { formatWhen } from '../lib/dates';
+import { safeHttpUrl } from '../lib/url';
 import {
   artifactDownloadUrl,
   cancelScan,
@@ -420,43 +421,53 @@ export function ScanDetailPage() {
                       </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
-                      {findings.map((f) => (
-                        <Table.Tr key={f.id}>
-                          <Table.Td>
-                            <SeverityBadge severity={f.severity} />
-                          </Table.Td>
-                          <Table.Td>
-                            {f.primary_url && f.vuln_id ? (
-                              <Anchor href={f.primary_url} target="_blank" size="sm">
-                                {f.vuln_id}
-                              </Anchor>
-                            ) : (
-                              <Text size="sm">{f.vuln_id ?? '—'}</Text>
-                            )}
-                          </Table.Td>
-                          <Table.Td>
-                            <Text size="sm" c="dimmed">
-                              {f.finding_class}
-                            </Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Text size="sm">{f.pkg_name ?? '—'}</Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Text size="sm">{f.installed_version ?? '—'}</Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Text size="sm" c={f.fixed_version ? 'teal' : 'dimmed'}>
-                              {f.fixed_version ?? '—'}
-                            </Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Text size="sm" lineClamp={2} maw={320}>
-                              {f.title ?? '—'}
-                            </Text>
-                          </Table.Td>
-                        </Table.Tr>
-                      ))}
+                      {findings.map((f) => {
+                        // primary_url is scanner-derived (attacker-influenceable);
+                        // only render it as a link when it's a safe http(s) URL.
+                        const findingUrl = safeHttpUrl(f.primary_url);
+                        return (
+                          <Table.Tr key={f.id}>
+                            <Table.Td>
+                              <SeverityBadge severity={f.severity} />
+                            </Table.Td>
+                            <Table.Td>
+                              {findingUrl && f.vuln_id ? (
+                                <Anchor
+                                  href={findingUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  size="sm"
+                                >
+                                  {f.vuln_id}
+                                </Anchor>
+                              ) : (
+                                <Text size="sm">{f.vuln_id ?? '—'}</Text>
+                              )}
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm" c="dimmed">
+                                {f.finding_class}
+                              </Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm">{f.pkg_name ?? '—'}</Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm">{f.installed_version ?? '—'}</Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm" c={f.fixed_version ? 'teal' : 'dimmed'}>
+                                {f.fixed_version ?? '—'}
+                              </Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm" lineClamp={2} maw={320}>
+                                {f.title ?? '—'}
+                              </Text>
+                            </Table.Td>
+                          </Table.Tr>
+                        );
+                      })}
                     </Table.Tbody>
                   </Table>
                 </Table.ScrollContainer>

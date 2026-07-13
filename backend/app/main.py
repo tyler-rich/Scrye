@@ -44,6 +44,7 @@ from app.core.config import Settings, get_settings
 from app.core.crypto import MasterKeyError, get_secret_cipher
 from app.core.logging import configure_logging
 from app.core.ratelimit import SlidingWindowRateLimiter
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import SessionLocal
 from app.workers import InProcessScanWorker, MaintenanceScheduler
 from app.workers.backup_scheduler import BackupScheduler
@@ -164,6 +165,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    # Baseline security headers (CSP/X-Frame-Options/nosniff/Referrer-Policy) on
+    # every response. Added last so it is the outermost middleware and wraps the
+    # CORS layer, applying to every response the app emits — including errors,
+    # CORS preflight replies, and the served SPA.
+    app.add_middleware(SecurityHeadersMiddleware)
 
     app.include_router(health_router)
     app.include_router(metrics_router)

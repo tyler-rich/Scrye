@@ -82,8 +82,10 @@ jobs:
       - name: Format — Prettier
         run: npm run format:check
 
-      # Type-checks (tsc) and bundles; also the frontend test entrypoint as the
-      # suite grows (`npm test` can be added here in a later phase).
+      - name: Tests — Vitest
+        run: npm test
+
+      # Type-checks (tsc) and bundles the SPA.
       - name: Build
         run: npm run build
 

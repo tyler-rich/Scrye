@@ -243,9 +243,12 @@ a later phase.
 # Backend
 cd backend && pytest
 
-# Frontend (build + static checks)
-cd frontend && npm run build && npm run lint && npm run format:check
+# Frontend (unit tests + build + static checks)
+cd frontend && npm test && npm run build && npm run lint && npm run format:check
 ```
+
+Frontend unit tests run under **Vitest** (`npm test`); place them next to the code
+they cover as `*.test.ts`/`*.test.tsx`.
 
 Security-sensitive code (crypto/secrets, auth) must have direct unit tests:
 encrypt/decrypt round-trips, key derivation, write-only masking, and proof that
