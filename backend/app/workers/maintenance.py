@@ -34,6 +34,12 @@ logger = logging.getLogger(__name__)
 #: tick matches: any finer would fire the same minute repeatedly.
 _TICK_SECONDS = 60
 
+#: How long shutdown waits for the cancelled tick task to unwind before giving
+#: up. A tick can be inside a non-cancellable threaded retention/DB pass whose
+#: cancellation must wait out the thread; bounding the wait keeps shutdown within
+#: the container stop budget rather than blocking on it (CON-6).
+_SHUTDOWN_TASK_TIMEOUT_SECONDS = 5
+
 
 class MaintenanceScheduler:
     """Periodically fires scheduled scans and prunes expired artifacts."""
@@ -64,14 +70,23 @@ class MaintenanceScheduler:
             self._task = asyncio.create_task(self._run_loop())
 
     async def shutdown(self) -> None:
-        """Stop the loop and wait for the task to finish."""
+        """Stop the loop and wait (bounded) for the task to finish.
+
+        Uses :func:`asyncio.wait` rather than :func:`asyncio.wait_for`: the tick
+        can be suspended at a non-cancellable ``to_thread`` pass whose delivered
+        cancellation won't land until the thread returns, and ``wait_for`` would
+        block awaiting that cancellation. ``wait`` returns after the timeout and
+        the still-running task is abandoned (the process is stopping anyway).
+        """
         self._stopping.set()
         if self._task is not None:
             self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+            _, pending = await asyncio.wait({self._task}, timeout=_SHUTDOWN_TASK_TIMEOUT_SECONDS)
+            if pending:
+                logger.warning(
+                    "Maintenance task did not stop within %ds; abandoning it.",
+                    _SHUTDOWN_TASK_TIMEOUT_SECONDS,
+                )
             self._task = None
 
     async def tick(self) -> None:

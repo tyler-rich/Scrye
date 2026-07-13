@@ -25,6 +25,11 @@ services:
       - scrye_net
     ports:
       - "127.0.0.1:8089:8089" # behind Caddy; never bind 0.0.0.0
+    # Docker's default SIGTERM->SIGKILL budget is 10s, which the in-process
+    # worker/scheduler shutdown (drain grace + cancelling tasks whose cancel must
+    # wait out a non-cancellable threaded flush/backup) can exceed — a busy
+    # instance would be SIGKILLed mid-commit (CON-6). Give the graceful path room.
+    stop_grace_period: 30s
     environment:
       - SCRYE_DATABASE_PATH=/data/scrye.db
       - SCRYE_APP_SECRET_KEY_FILE=/run/secrets/app_secret_key

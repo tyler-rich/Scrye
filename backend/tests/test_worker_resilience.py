@@ -10,6 +10,7 @@ hold executions while the database is rewritten.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import sqlite3
 import threading
 from datetime import timedelta
@@ -265,6 +266,45 @@ class TestStaleScanWatchdog:
         await worker.shutdown()
         db.expire_all()
         assert db.get(Scan, scan_id).status is ScanStatus.SUCCEEDED
+
+
+class TestBoundedSchedulerShutdown:
+    @pytest.mark.asyncio
+    async def test_shutdown_gives_up_on_a_wedged_task(self, monkeypatch) -> None:
+        """A tick stuck in a non-cancellable thread must not hold shutdown past
+        the bound — shutdown logs and abandons it instead of blocking (CON-6)."""
+        from app.workers import maintenance as maintenance_mod
+        from app.workers.maintenance import MaintenanceScheduler
+
+        monkeypatch.setattr(maintenance_mod, "_SHUTDOWN_TASK_TIMEOUT_SECONDS", 0.2)
+        scheduler = MaintenanceScheduler(SessionLocal, InProcessScanWorker(SessionLocal, 1))
+        release = asyncio.Event()
+
+        async def _wedged() -> None:
+            # Swallow cancellation (mimics a cancel delivered while inside a
+            # non-cancellable to_thread pass) until the test lets it go, so
+            # shutdown must time out rather than await the cancellation.
+            while not release.is_set():
+                try:
+                    await asyncio.sleep(3600)
+                except asyncio.CancelledError:
+                    continue
+
+        wedged = asyncio.create_task(_wedged())
+        scheduler._task = wedged
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        await scheduler.shutdown()
+        elapsed = loop.time() - started
+
+        assert elapsed < 2, "shutdown must not block on a wedged task"
+        assert scheduler._task is None
+
+        # Let the abandoned task finish so it isn't garbage-collected pending.
+        release.set()
+        wedged.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await wedged
 
 
 class TestPauseGate:

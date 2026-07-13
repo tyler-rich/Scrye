@@ -84,7 +84,10 @@ _RAW_ARTIFACT: dict[Scanner, tuple[str, ArtifactKind]] = {
 #: scan runs for minutes, so a graceful stop can't wait it out (the container
 #: stop grace is seconds); scans still running past this are cancelled and
 #: reconciled to ``failed`` by :meth:`InProcessScanWorker.recover` on restart.
-_SHUTDOWN_GRACE_SECONDS = 10
+#: Kept well under the Compose ``stop_grace_period`` (30 s) so the drain plus the
+#: subsequent cancel/gather — whose cancellation can wait out a non-cancellable
+#: threaded findings flush — still fits the container stop budget (CON-6).
+_SHUTDOWN_GRACE_SECONDS = 5
 
 #: Bounded retry policy for worker DB commits that hit SQLite lock contention.
 #: A long writer (a large findings flush, a restore, a retention pass) can hold
