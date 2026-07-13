@@ -1,6 +1,6 @@
 """Grype image scanner: orchestrate ``grype <image> -o json`` and parse it.
 
-Grype's scope is vulnerability matching only (docs/PLAN.md §4.2), so every match
+Grype's scope is vulnerability matching only (docs/ARCHIVE.md §4.2), so every match
 normalizes into a ``vulnerability`` finding. The raw JSON is returned untouched
 for storage as the source-of-truth artifact.
 """

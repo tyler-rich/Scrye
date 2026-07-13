@@ -1,6 +1,6 @@
 """Authentication endpoints: bootstrap, login/logout, sessions, password.
 
-Security posture (docs/PLAN.md §5):
+Security posture (docs/ARCHIVE.md §5):
 
 - Login/setup are rate-limited per client IP (in-process sliding window).
 - Session cookies are ``HttpOnly`` + ``SameSite=Lax`` (+ ``Secure`` per config);

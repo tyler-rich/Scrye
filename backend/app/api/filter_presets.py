@@ -1,4 +1,4 @@
-"""Saved scan-history filter presets (docs/PLAN.md §4.4).
+"""Saved scan-history filter presets (docs/ARCHIVE.md §4.4).
 
 Presets are **owner-scoped**: every endpoint operates only on the presets owned
 by the authenticated user, so any viewer can save, list, update, and delete

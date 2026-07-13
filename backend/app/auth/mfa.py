@@ -1,4 +1,4 @@
-"""TOTP multi-factor authentication helpers (docs/PLAN.md §5).
+"""TOTP multi-factor authentication helpers (docs/ARCHIVE.md §5).
 
 Optional per-account TOTP MFA built on ``pyotp``. The shared secret is generated
 server-side, shown to the user **once** during enrollment (as a manual key plus

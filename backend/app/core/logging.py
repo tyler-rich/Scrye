@@ -5,7 +5,7 @@ values attached to known secret-ish field names (``password=...``,
 ``"token": "..."``, ``Authorization: Bearer ...``) so plaintext secrets can
 never leak through log output, even from third-party libraries or accidental
 debug statements. This implements the "logging filter redacts known secret
-fields" requirement of ``docs/PLAN.md`` §6.
+fields" requirement of ``docs/ARCHIVE.md`` §6.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ _KV_PATTERN = re.compile(
 # Authorization header style bearer/basic tokens.
 _BEARER_PATTERN = re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+")
 # URL userinfo credentials: https://user:token@host -> https://[REDACTED]@host.
-# Covers transient credential-embedded git clone URLs (docs/PLAN.md §4.1) so a
+# Covers transient credential-embedded git clone URLs (docs/ARCHIVE.md §4.1) so a
 # token can never surface through a logged URL or a stored scanner error. Greedy
 # up to the last '@' before the path so a literal '@' inside the userinfo can't
 # leave a trailing fragment exposed.

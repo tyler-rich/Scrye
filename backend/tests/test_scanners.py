@@ -2,7 +2,7 @@
 
 These exercise the parsers directly with representative Trivy/Grype JSON so no
 real binaries are needed. Command-building tests assert the argument vectors
-match the shapes documented in docs/PLAN.md §4.
+match the shapes documented in docs/ARCHIVE.md §4.
 """
 
 from __future__ import annotations

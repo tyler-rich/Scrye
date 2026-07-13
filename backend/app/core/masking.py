@@ -1,7 +1,7 @@
 """Write-only secret field helpers for API schemas.
 
 Secret fields are accepted on write and **never** returned on read; reads get a
-mask plus a "last updated" timestamp (``docs/PLAN.md`` §6). Schemas for
+mask plus a "last updated" timestamp (``docs/ARCHIVE.md`` §6). Schemas for
 secret-bearing resources (registries, git credentials, OIDC config, ...) should
 expose a :class:`MaskedSecret` in their read models and a plain ``SecretStr``
 in their write models, and use :func:`masked_secret` to build the read view.

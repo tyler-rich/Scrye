@@ -1,4 +1,4 @@
-"""Backup bookkeeping models (docs/PLAN.md §8).
+"""Backup bookkeeping models (docs/ARCHIVE.md §8).
 
 :class:`Backup` records one produced backup bundle (its file name, size, and
 checksum) so the UI can list and offer downloads. :class:`BackupSchedule` is a

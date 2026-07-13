@@ -1,4 +1,4 @@
-"""CSV / Markdown / JSON exporters for scans and history (docs/PLAN.md §4.3).
+"""CSV / Markdown / JSON exporters for scans and history (docs/ARCHIVE.md §4.3).
 
 Two report scopes are supported:
 

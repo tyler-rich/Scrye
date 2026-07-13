@@ -1,4 +1,4 @@
-"""Backup & restore endpoints and scheduled-backup config (docs/PLAN.md §8).
+"""Backup & restore endpoints and scheduled-backup config (docs/ARCHIVE.md §8).
 
 All actions are admin-only and CSRF-guarded. Creating a backup builds a
 passphrase-protected bundle, stores it, and records its metadata. Restore is

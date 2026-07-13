@@ -1,4 +1,4 @@
-"""Personal API token management (docs/PLAN.md §4.5, §5).
+"""Personal API token management (docs/ARCHIVE.md §4.5, §5).
 
 Each user manages their own tokens. A token's role is chosen at mint time and
 capped at the creator's role, so a token can never grant more than its owner

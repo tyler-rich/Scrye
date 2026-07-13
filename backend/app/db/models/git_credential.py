@@ -1,4 +1,4 @@
-"""Git-provider credential model (docs/PLAN.md §4.1, §7).
+"""Git-provider credential model (docs/ARCHIVE.md §4.1, §7).
 
 A :class:`GitCredential` stores an access token for cloning **private** git
 repositories with ``trivy repo``. The token is **field-encrypted**, write-only

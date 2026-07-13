@@ -1,6 +1,6 @@
 """Scan endpoints: launch scans, browse results, download raw artifacts.
 
-RBAC (docs/PLAN.md §5): launching a scan requires ``operator``; reading scans,
+RBAC (docs/ARCHIVE.md §5): launching a scan requires ``operator``; reading scans,
 findings, and artifacts requires ``viewer``. Launch and cancel are CSRF-guarded
 state-changing operations.
 """
@@ -225,7 +225,7 @@ async def create_sbom_scan(
     """Queue a Grype scan of an uploaded SBOM (``grype sbom:<file>``).
 
     The SBOM is stored as the scan's input artifact; the worker feeds it to
-    Grype. Only Grype scans SBOMs (docs/PLAN.md §4.2).
+    Grype. Only Grype scans SBOMs (docs/ARCHIVE.md §4.2).
     """
     _reject_unsupported_combo(TargetType.SBOM, scanner)
 
@@ -303,7 +303,7 @@ def list_history(
     limit: int = Query(default=25, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> ScanHistoryPage:
-    """Return a filtered, sorted, paginated page of scan history (docs/PLAN.md §4.4).
+    """Return a filtered, sorted, paginated page of scan history (docs/ARCHIVE.md §4.4).
 
     Supports the full filter set — scanner, target type, target full-text search,
     status, date range, initiator, highest severity, severity-threshold presence,
@@ -512,7 +512,7 @@ def delete_scan(
     _: AuthContext = Depends(_operator),
     db: Session = Depends(get_db),
 ) -> Response:
-    """Delete a completed scan and every trace of it (docs/PLAN.md §5, RBAC).
+    """Delete a completed scan and every trace of it (docs/ARCHIVE.md §5, RBAC).
 
     Removing the ``scans`` row cascades — via the ORM relationships and the
     ``ON DELETE CASCADE`` foreign keys — to its findings, stored-artifact
@@ -598,7 +598,7 @@ def export_scan_view(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
-    """Export a single scan's findings as CSV, Markdown, or JSON (docs/PLAN.md §4.3)."""
+    """Export a single scan's findings as CSV, Markdown, or JSON (docs/ARCHIVE.md §4.3)."""
     scan = _get_scan_or_404(db, scan_id)
     findings = _scan_findings(db, scan_id)
     result = export_scan(scan, findings, fmt)
@@ -616,7 +616,7 @@ def diff_scans(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
 ) -> ScanDiffOut:
-    """Diff two scans of the same target: new vs. fixed findings (docs/PLAN.md §4.4).
+    """Diff two scans of the same target: new vs. fixed findings (docs/ARCHIVE.md §4.4).
 
     ``scan_id`` is the base (older) scan and ``other_scan_id`` is the comparison
     (newer) scan. Both must share the same scanner and target so the diff is
@@ -666,7 +666,7 @@ def set_scan_tags(
     _: AuthContext = Depends(_operator),
     db: Session = Depends(get_db),
 ) -> ScanOut:
-    """Replace the full set of tags on a scan (docs/PLAN.md §4.4).
+    """Replace the full set of tags on a scan (docs/ARCHIVE.md §4.4).
 
     Tags are free-form labels used to filter scan history. Setting them requires
     the ``operator`` role and is CSRF-guarded; the incoming list is trimmed,

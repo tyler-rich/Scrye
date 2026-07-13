@@ -1,4 +1,4 @@
-"""Unit tests for the envelope-encryption module (docs/PLAN.md §6)."""
+"""Unit tests for the envelope-encryption module (docs/ARCHIVE.md §6)."""
 
 from __future__ import annotations
 

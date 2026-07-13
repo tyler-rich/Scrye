@@ -1,4 +1,4 @@
-"""Trivy VEX documents and ignore rules (docs/PLAN.md §4.1/§4.5, Phase 6).
+"""Trivy VEX documents and ignore rules (docs/ARCHIVE.md §4.1/§4.5, Phase 6).
 
 Two admin-managed policy inputs that shape Trivy's results:
 

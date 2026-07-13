@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from app.db.models import Scanner, TargetType
 
-#: Which scanners may run against each target type (docs/PLAN.md §4).
+#: Which scanners may run against each target type (docs/ARCHIVE.md §4).
 SCANNER_TARGET_SUPPORT: dict[TargetType, frozenset[Scanner]] = {
     TargetType.IMAGE: frozenset({Scanner.TRIVY, Scanner.GRYPE}),
     TargetType.REPOSITORY: frozenset({Scanner.TRIVY}),

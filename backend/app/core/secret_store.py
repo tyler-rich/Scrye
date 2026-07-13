@@ -1,4 +1,4 @@
-"""Field-secret helpers for stored credentials (docs/PLAN.md §6).
+"""Field-secret helpers for stored credentials (docs/ARCHIVE.md §6).
 
 Thin wrappers over :mod:`app.core.crypto` that bind each stored secret to a
 stable **associated-data** (AAD) tag naming its resource **type and field**
@@ -39,7 +39,7 @@ AAD_MFA_SECRET = "auth.mfa_secret"
 AAD_BACKUP_PASSPHRASE = "backup.passphrase"
 
 #: Every stored-secret column and its AAD, in ``(table, column, aad)`` form.
-#: The backup re-wrap machinery (docs/PLAN.md §8) walks this so a new secret
+#: The backup re-wrap machinery (docs/ARCHIVE.md §8) walks this so a new secret
 #: field is portable across hosts the moment it is added here.
 SECRET_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("registries", "secret_ciphertext", AAD_REGISTRY_SECRET),

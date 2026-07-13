@@ -1,6 +1,6 @@
 """Transient credential materialization for scan-time authentication.
 
-Per the locked secrets design (docs/PLAN.md §4.2, §6), stored credentials are
+Per the locked secrets design (docs/ARCHIVE.md §4.2, §6), stored credentials are
 decrypted **only at scan time**, materialized into short-lived files under the
 container's **tmpfs** ``/tmp`` mount, used to authenticate the scanner
 subprocess, and then **shredded** immediately after. Nothing here touches the
@@ -22,7 +22,7 @@ Two mechanisms:
   so :func:`generic_repo_checkout` clones it ourselves with the system ``git``
   binary: the credential is delivered through a transient tmpfs ``GIT_ASKPASS``
   helper (never in argv, never persisted), and Trivy then scans the local
-  checkout. See docs/PLAN.md §14 (Phase 3 Security Review #2 resolution).
+  checkout. See docs/ARCHIVE.md §14 (Phase 3 Security Review #2 resolution).
 """
 
 from __future__ import annotations

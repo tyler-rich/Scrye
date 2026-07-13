@@ -1,10 +1,10 @@
-"""Registry credential management (docs/PLAN.md §4.5).
+"""Registry credential management (docs/ARCHIVE.md §4.5).
 
 Container-registry credentials are **write-only** and field-encrypted: the
 password/token is accepted on write, stored as ciphertext, and never returned
 (reads get a mask). Admins manage registries and see their full metadata;
 operators get only an id/name options list (``GET /registries/options``) to
-select a credential when launching a scan (docs/PLAN.md §14). A ``test`` action
+select a credential when launching a scan (docs/ARCHIVE.md §14). A ``test`` action
 probes the registry to validate connectivity and the stored credential.
 """
 
@@ -70,7 +70,7 @@ def list_registries(
 
     Non-secret metadata (host, username) is still credential material, so the
     full view is admin-only. Operators launching a scan use ``GET
-    /registries/options`` for id/name selection instead (docs/PLAN.md §14).
+    /registries/options`` for id/name selection instead (docs/ARCHIVE.md §14).
     """
     rows = db.scalars(select(Registry).order_by(Registry.name)).all()
     return [_to_out(r) for r in rows]

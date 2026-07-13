@@ -5,7 +5,7 @@ Docker config document shape (auths vs credHelpers), that the transient config
 file is written then **shredded** (removed) on context exit, git auth resolution
 per provider, and — for generic-host clones — that the credential is delivered
 off-argv via a tmpfs GIT_ASKPASS helper and the whole workspace is shredded on
-exit (docs/PLAN.md §14, Phase 3 Security Review #2).
+exit (docs/ARCHIVE.md §14, Phase 3 Security Review #2).
 """
 
 from __future__ import annotations

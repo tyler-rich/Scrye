@@ -1,4 +1,4 @@
-"""Fire due scheduled scans (docs/PLAN.md §4.6/§12, Phase 6).
+"""Fire due scheduled scans (docs/ARCHIVE.md §4.6/§12, Phase 6).
 
 A pure, synchronous helper the maintenance scheduler calls on a timer. For each
 enabled :class:`~app.db.models.scan_schedule.ScanSchedule` whose cron cadence has

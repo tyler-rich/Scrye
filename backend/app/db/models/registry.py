@@ -1,4 +1,4 @@
-"""Container-registry credential model (docs/PLAN.md §4.2, §7).
+"""Container-registry credential model (docs/ARCHIVE.md §4.2, §7).
 
 A :class:`Registry` stores the connection details for a container registry plus
 a **field-encrypted** credential (password or token). The plaintext secret is

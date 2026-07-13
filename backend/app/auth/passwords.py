@@ -1,4 +1,4 @@
-"""Password hashing with argon2id (docs/PLAN.md §5).
+"""Password hashing with argon2id (docs/ARCHIVE.md §5).
 
 Uses the argon2-cffi ``PasswordHasher`` defaults (argon2id variant, RFC 9106
 parameters). Only hashes are ever stored or compared; plaintext passwords must

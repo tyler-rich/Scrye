@@ -1,4 +1,4 @@
-"""OIDC configuration and the authorization-code login flow (docs/PLAN.md §5).
+"""OIDC configuration and the authorization-code login flow (docs/ARCHIVE.md §5).
 
 Two routers live here:
 
@@ -499,7 +499,7 @@ async def oidc_callback(
     # before issuing the ID token. Scrye has no local TOTP challenge in the OIDC
     # handshake, and provisioned OIDC accounts carry no usable local password,
     # so there is no second factor to enforce at this layer. Operators who
-    # require MFA for OIDC users must enforce it at the IdP. See docs/PLAN.md
+    # require MFA for OIDC users must enforce it at the IdP. See docs/ARCHIVE.md
     # § Deviations (2026-07-04 post-P6 hotfix) and the README security model.
     token, session = service.create_session(
         db, user, ip=client_ip(request), user_agent=request.headers.get("user-agent")

@@ -176,7 +176,7 @@ export type HistorySort =
   | 'severity';
 export type SortOrder = 'asc' | 'desc';
 
-/** The full scan-history filter set (docs/PLAN.md §4.4). */
+/** The full scan-history filter set (docs/ARCHIVE.md §4.4). */
 export interface HistoryFilters {
   scanner?: Scanner | null;
   target_type?: TargetType | null;

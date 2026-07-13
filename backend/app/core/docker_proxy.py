@@ -1,4 +1,4 @@
-"""Read-only Docker socket-proxy client for image enumeration (docs/PLAN.md §3).
+"""Read-only Docker socket-proxy client for image enumeration (docs/ARCHIVE.md §3).
 
 Scrye never mounts ``/var/run/docker.sock`` (locked decision §0.3, CIS
 5.21/5.22). Instead it talks HTTP to a **read-only** ``docker-socket-proxy``

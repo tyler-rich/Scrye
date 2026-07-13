@@ -1,4 +1,4 @@
-"""In-process async scan worker (docs/PLAN.md §0.2, §12 Phase 2).
+"""In-process async scan worker (docs/ARCHIVE.md §0.2, §12 Phase 2).
 
 The worker owns scan execution: it is handed a scan id, runs the appropriate
 scanner subprocess under a concurrency limit, stores the raw output, and persists

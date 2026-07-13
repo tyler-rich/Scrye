@@ -471,7 +471,7 @@ def build_env(*overlays: dict[str, str] | None) -> dict[str, str] | None:
 class BaseScanner(ABC):
     """Base for a scanner engine, dispatched by target type.
 
-    Each engine implements the target kinds it supports (docs/PLAN.md §4);
+    Each engine implements the target kinds it supports (docs/ARCHIVE.md §4);
     unsupported combinations raise a clear :class:`ScannerError` rather than
     silently doing nothing. ``env`` is an optional environment **overlay**
     (e.g. transient registry/git credentials) applied on top of the process

@@ -1,4 +1,4 @@
-"""Dashboard aggregation endpoint (docs/PLAN.md §4.6, Phase 6).
+"""Dashboard aggregation endpoint (docs/ARCHIVE.md §4.6, Phase 6).
 
 Serves the aggregate widgets shown on the landing page: total scans, scans over
 time, top vulnerable targets, open critical/high counts, scanner-DB freshness,
@@ -99,7 +99,7 @@ async def get_dashboard(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
 ) -> DashboardOut:
-    """Return the aggregate dashboard widgets (docs/PLAN.md §4.6)."""
+    """Return the aggregate dashboard widgets (docs/ARCHIVE.md §4.6)."""
     # DB aggregation happens off the event loop, concurrently with the
     # (subprocess-backed, TTL-cached) scanner-DB freshness probes.
     # return_exceptions=True so that if the DB branch fails, gather still awaits

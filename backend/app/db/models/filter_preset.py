@@ -1,4 +1,4 @@
-"""Saved scan-history filter presets (docs/PLAN.md §4.4).
+"""Saved scan-history filter presets (docs/ARCHIVE.md §4.4).
 
 A :class:`FilterPreset` stores a named, reusable set of history-view filter
 parameters. Presets are **owner-scoped**: a user sees and edits only their own,

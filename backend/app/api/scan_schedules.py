@@ -1,4 +1,4 @@
-"""Scheduled/recurring scan management (docs/PLAN.md §4.6/§12, Phase 6).
+"""Scheduled/recurring scan management (docs/ARCHIVE.md §4.6/§12, Phase 6).
 
 CRUD for cron-driven scan schedules, plus a "run now" action. A schedule stores a
 scan template (scanner, target type, target, options, and an optional

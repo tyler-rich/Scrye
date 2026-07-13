@@ -1,6 +1,6 @@
 """Application-layer envelope encryption for stored secrets.
 
-Implements the locked secrets-at-rest design (``docs/PLAN.md`` §6):
+Implements the locked secrets-at-rest design (``docs/ARCHIVE.md`` §6):
 
 - The **master key** is read from the Docker secret file referenced by
   ``SCRYE_APP_SECRET_KEY_FILE`` — never an environment variable or image layer.

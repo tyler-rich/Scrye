@@ -188,7 +188,7 @@ def test_sbom_target_via_json_is_rejected(client: TestClient, monkeypatch) -> No
 def test_unsupported_scanner_target_combo_rejected(client: TestClient, monkeypatch) -> None:
     monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _FakeScanner())
     csrf = _setup_admin(client)
-    # Grype has no repository target; Trivy owns repo scans (docs/PLAN.md §4).
+    # Grype has no repository target; Trivy owns repo scans (docs/ARCHIVE.md §4).
     resp = client.post(
         "/api/scans",
         headers={CSRF: csrf},

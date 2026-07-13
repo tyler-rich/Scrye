@@ -1,4 +1,4 @@
-"""Notification delivery for the configured channels (docs/PLAN.md §4.5).
+"""Notification delivery for the configured channels (docs/ARCHIVE.md §4.5).
 
 Sends a message over one of the supported transports — generic webhook, Discord
 webhook, SMTP email, or Matrix room. The per-channel secret (SMTP password,

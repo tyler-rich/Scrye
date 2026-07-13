@@ -6,7 +6,7 @@ import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { ApiError } from '../../api/client';
 import { getRetentionSettings, updateRetentionSettings } from '../../api/settings';
 
-/** Result-retention policy for pruning old raw artifacts (docs/PLAN.md §12). */
+/** Result-retention policy for pruning old raw artifacts (docs/ARCHIVE.md §12). */
 export function RetentionPanel() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);

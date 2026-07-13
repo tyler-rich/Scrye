@@ -1,4 +1,4 @@
-"""Result-retention pruning of old raw scan artifacts (docs/PLAN.md §12, Phase 6).
+"""Result-retention pruning of old raw scan artifacts (docs/ARCHIVE.md §12, Phase 6).
 
 Raw scanner output and SBOMs are the source of truth (§4.3) but the bulk of the
 on-disk footprint. When retention is enabled, artifacts belonging to scans older

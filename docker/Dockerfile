@@ -172,7 +172,7 @@ FROM python:3.13-slim-bookworm@sha256:fcbd8dfc2605ba7c2eca646846c5e892b2931e41f6
 # ca-certificates: scanner DB downloads + TLS. curl: container HEALTHCHECK.
 # git: authenticated clone of generic-host private repos into tmpfs, so the
 # credential is delivered via GIT_ASKPASS instead of an argv-visible clone URL
-# (docs/PLAN.md §14, Phase 3 Security Review #2). Versions track the
+# (docs/ARCHIVE.md §14, Phase 3 Security Review #2). Versions track the
 # digest-pinned base image, consistent with the other apt packages here.
 # curl/libcurl3-gnutls/libcurl4 are explicitly pinned to 7.88.1-10+deb12u15,
 # the Debian bookworm-security fix for CVE-2026-5773, rather than tracking the
