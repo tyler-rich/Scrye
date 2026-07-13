@@ -543,6 +543,41 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-13 — Post-release — CON-1/CON-11/CON-3/SEC-2 remediation; worker seam gains optional hooks
+**What changed:** Three coupled fixes from the 2026-07-12 review batch (`docs/reviews/00-summary.md`
+Top 5 #2), landed as one change-set because they compound into a single failure theme:
+- **CON-1 + CON-11.** The worker's DB commits (the queued→running claim, `_persist_success`,
+  `_fail`, `_store_failure_output`) now run through a bounded retry-with-backoff helper for SQLite
+  lock-contention `OperationalError`s, and a successful scan's artifact files are unlinked only
+  after the *final* commit attempt fails (previously the first failure deleted them). A stale-scan
+  watchdog runs at the top of every maintenance tick: it re-submits `queued` scans older than a
+  grace period with no live task (lost submits — shutdown races, restore pauses) and fails
+  task-less `running` scans via an atomic conditional UPDATE, so both "stuck until restart"
+  families self-heal within a tick. The claim/fail commits also moved off the event loop into
+  threads (the highest-value subset of CON-5).
+- **CON-3.** `restore_bundle` now takes the write lock up front (`BEGIN IMMEDIATE`) and re-checks
+  the "no queued/running scans" guard *inside* the write transaction, raising a new
+  `RestoreConflictError` (→ 409) — the endpoint's pre-check is check-then-act across the upload
+  await and stays only as a fast-fail courtesy. The restore endpoint also pauses the worker for
+  the duration (submissions still land; their tasks hold at a gate until resume).
+- **SEC-2.** Restore-supplied scrypt parameters are clamped (`n<=2**20`, `r<=16`, `p<=4`, plus a
+  memory-budget check) and `maxmem` is a fixed 512 MiB constant instead of being derived from the
+  bundle's own untrusted `n`/`r`; malformed (non-numeric) KDF fields now fail as `BackupError`
+  instead of a 500.
+The `ScanWorker` interface (§0.2's "thin seam") gains three **optional, default-no-op** hooks —
+`reconcile_stale()`, `pause()`, `resume()` — overridden only by the in-process worker; the core
+seam (`submit`/`recover`/`shutdown`) is unchanged, so a future distributed worker still only has
+to implement those three.
+**Why:** The review showed a large findings flush, a restore, or a retention pass holding the
+write lock past the 5 s `busy_timeout` permanently loses a concurrent scan's results and strands
+it `running`; the restore guard raced scan creation across the upload await; and a crafted bundle
+could OOM-kill the container before passphrase validation. The watchdog was the review's own
+recommended mechanism ("retires CON-1 and CON-11 together"), as were the in-transaction re-check,
+the worker pause, and the scrypt clamps. No DB schema change and no change to the locked job
+model (§0.2) — the worker stays a single-container in-process async worker.
+**Plan section affected:** §0.2 (worker seam — extended, not reshaped), §8 (restore semantics),
+§12 (post-release hardening; no phase scope changed).
+
 ### 2026-07-07 — Process — back-merge step after promotion; Dependabot retargeted to `dev`
 **What changed:** Two coupled changes to the `dev`/`main` branching model (adopted 2026-07-04) that
 stop `dev` from silently drifting "behind" `main` after every release:

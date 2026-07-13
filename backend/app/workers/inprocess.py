@@ -17,10 +17,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
+from collections.abc import Callable
 from contextlib import nullcontext
+from datetime import datetime, timedelta
 
 import anyio.to_thread
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.artifacts import artifact_path, store_artifact
@@ -82,6 +86,23 @@ _RAW_ARTIFACT: dict[Scanner, tuple[str, ArtifactKind]] = {
 #: reconciled to ``failed`` by :meth:`InProcessScanWorker.recover` on restart.
 _SHUTDOWN_GRACE_SECONDS = 10
 
+#: Bounded retry policy for worker DB commits that hit SQLite lock contention.
+#: A long writer (a large findings flush, a restore, a retention pass) can hold
+#: the write lock past the 5 s ``busy_timeout``, turning another committer's
+#: ``COMMIT`` into an ``OperationalError``. Losing that commit loses results
+#: (CON-1), so the worker retries a few times with exponential backoff — each
+#: attempt already waits out ``busy_timeout``, so five attempts ride out ~28 s
+#: of sustained contention before giving up.
+_LOCK_RETRY_ATTEMPTS = 5
+_LOCK_RETRY_INITIAL_DELAY_SECONDS = 0.2
+_LOCK_RETRY_BACKOFF_FACTOR = 2.0
+
+#: Age past which a queued/running scan with no live worker task is considered
+#: stranded and is reconciled by :meth:`InProcessScanWorker.reconcile_stale`.
+#: Generous enough that a scan legitimately in flight between "row committed"
+#: and "task registered" is never touched.
+_STALE_SCAN_GRACE_SECONDS = 60
+
 
 def _highest_severity(counts: dict[Severity, int]) -> Severity | None:
     """Return the worst severity with a non-zero count, or ``None``."""
@@ -89,6 +110,49 @@ def _highest_severity(counts: dict[Severity, int]) -> Severity | None:
     if not present:
         return None
     return max(present, key=lambda level: SEVERITY_RANK[level])
+
+
+def _is_lock_error(exc: OperationalError) -> bool:
+    """Return True when ``exc`` is SQLite lock contention (safe to retry)."""
+    message = str(exc.orig if exc.orig is not None else exc).lower()
+    return "database is locked" in message or "database table is locked" in message
+
+
+def _commit_with_retry(session: Session, stage: Callable[[], None], *, what: str) -> None:
+    """Stage changes and commit, retrying bounded times on SQLite lock errors.
+
+    ``stage`` must (re)apply the pending changes to ``session`` from scratch —
+    after a failed attempt the session is rolled back, which expunges pending
+    inserts and reverts attribute changes, so each retry re-stages before the
+    next commit. Runs synchronously (``time.sleep`` backoff), so callers must
+    invoke it from a worker thread, never on the event loop.
+
+    Raises:
+        OperationalError: When the final attempt still hits lock contention.
+        Exception: Any non-lock error, immediately (no retry).
+    """
+    delay = _LOCK_RETRY_INITIAL_DELAY_SECONDS
+    for attempt in range(1, _LOCK_RETRY_ATTEMPTS + 1):
+        try:
+            stage()
+            session.commit()
+            return
+        except OperationalError as exc:
+            session.rollback()
+            if not _is_lock_error(exc) or attempt == _LOCK_RETRY_ATTEMPTS:
+                raise
+            logger.warning(
+                "Database locked while committing %s (attempt %d/%d); retrying in %.1fs.",
+                what,
+                attempt,
+                _LOCK_RETRY_ATTEMPTS,
+                delay,
+            )
+            time.sleep(delay)
+            delay *= _LOCK_RETRY_BACKOFF_FACTOR
+        except Exception:
+            session.rollback()
+            raise
 
 
 class InProcessScanWorker(ScanWorker):
@@ -103,17 +167,39 @@ class InProcessScanWorker(ScanWorker):
         """
         self._session_factory = session_factory
         self._semaphore = asyncio.Semaphore(max(1, max_concurrent))
-        self._tasks: set[asyncio.Task[None]] = set()
+        self._tasks: dict[int, asyncio.Task[None]] = {}
         self._accepting = True
+        # Set = executing normally; cleared = paused (tasks hold before their
+        # claim). A restore pauses the worker so nothing new starts while the
+        # database is wiped and rebuilt (CON-3).
+        self._resume_gate = asyncio.Event()
+        self._resume_gate.set()
+
+    def has_task(self, scan_id: int) -> bool:
+        """Return True while a live executor task exists for ``scan_id``."""
+        return scan_id in self._tasks
+
+    def pause(self) -> None:
+        """Hold new scan executions; submissions still queue behind the gate."""
+        self._resume_gate.clear()
+
+    def resume(self) -> None:
+        """Release executions held by :meth:`pause`."""
+        self._resume_gate.set()
 
     async def submit(self, scan_id: int) -> None:
-        """Schedule a queued scan for execution."""
+        """Schedule a queued scan for execution (idempotent per scan)."""
         if not self._accepting:
             logger.warning("Worker is shutting down; not scheduling scan %d.", scan_id)
             return
+        if scan_id in self._tasks:
+            # Already scheduled (e.g. the watchdog re-submitting a queued scan
+            # whose task is alive but waiting on the semaphore) — a second task
+            # would only burn a slot to lose the atomic claim.
+            return
         task = asyncio.create_task(self._execute(scan_id))
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        self._tasks[scan_id] = task
+        task.add_done_callback(lambda _task, sid=scan_id: self._tasks.pop(sid, None))
 
     async def recover(self) -> None:
         """Reconcile scans interrupted by a previous process.
@@ -141,6 +227,75 @@ class InProcessScanWorker(ScanWorker):
         for scan_id in requeue_ids:
             await self.submit(scan_id)
 
+    async def reconcile_stale(self) -> None:
+        """Self-heal scans stranded with no live executor task (CON-1/CON-11).
+
+        The in-process equivalent of :meth:`recover`, run from the maintenance
+        tick: a ``queued`` scan whose submit was lost (shutdown race, task died
+        before claiming) is re-submitted — harmless if raced, thanks to the
+        atomic claim — and a ``running`` scan whose task is gone (its commit
+        chain failed under lock contention) is marked failed instead of sitting
+        un-cancellable until the next container restart.
+        """
+        cutoff = utcnow() - timedelta(seconds=_STALE_SCAN_GRACE_SECONDS)
+        stale = await anyio.to_thread.run_sync(self._find_stale, cutoff)
+        for scan_id, scan_status in stale:
+            if self.has_task(scan_id):
+                continue
+            if scan_status is ScanStatus.QUEUED:
+                if self._accepting:
+                    logger.warning("Re-submitting stranded queued scan %d.", scan_id)
+                    await self.submit(scan_id)
+            else:
+                logger.warning("Failing stale running scan %d (no live task).", scan_id)
+                await anyio.to_thread.run_sync(self._fail_stale_running, scan_id)
+
+    def _find_stale(self, cutoff: datetime) -> list[tuple[int, ScanStatus]]:
+        """Return (id, status) of queued/running scans older than ``cutoff``."""
+        session = self._session_factory()
+        try:
+            rows = session.execute(
+                select(Scan.id, Scan.status).where(
+                    or_(
+                        (Scan.status == ScanStatus.QUEUED) & (Scan.created_at < cutoff),
+                        (Scan.status == ScanStatus.RUNNING)
+                        & ((Scan.started_at.is_(None)) | (Scan.started_at < cutoff)),
+                    )
+                )
+            ).all()
+            return [(row[0], row[1]) for row in rows]
+        finally:
+            session.close()
+
+    def _fail_stale_running(self, scan_id: int) -> None:
+        """Fail a task-less running scan, only if it is still running.
+
+        The conditional UPDATE mirrors the claim: if the scan finished (or was
+        otherwise settled) between the stale query and this write, the guard
+        makes this a no-op instead of clobbering a terminal state.
+        """
+        session = self._session_factory()
+        try:
+
+            def _stage() -> None:
+                session.execute(
+                    update(Scan)
+                    .where(Scan.id == scan_id, Scan.status == ScanStatus.RUNNING)
+                    .values(
+                        status=ScanStatus.FAILED,
+                        error="Scan was interrupted (no live worker task); "
+                        "reconciled by the maintenance watchdog.",
+                        finished_at=utcnow(),
+                    )
+                )
+
+            _commit_with_retry(session, _stage, what=f"watchdog failure of scan {scan_id}")
+        except Exception:  # noqa: BLE001 - the watchdog must never kill the tick
+            logger.exception("Watchdog could not reconcile stale scan %d.", scan_id)
+            session.rollback()
+        finally:
+            session.close()
+
     async def shutdown(self) -> None:
         """Stop accepting work; drain briefly, then cancel what's still running.
 
@@ -151,7 +306,7 @@ class InProcessScanWorker(ScanWorker):
         the next start.
         """
         self._accepting = False
-        tasks = list(self._tasks)
+        tasks = list(self._tasks.values())
         if not tasks:
             return
         _, pending = await asyncio.wait(tasks, timeout=_SHUTDOWN_GRACE_SECONDS)
@@ -164,6 +319,9 @@ class InProcessScanWorker(ScanWorker):
     async def _execute(self, scan_id: int) -> None:
         """Run a single scan end-to-end, holding a concurrency slot."""
         async with self._semaphore:
+            # Hold here while the worker is paused (a restore is rewriting the
+            # database); the scan row stays queued and runs after resume.
+            await self._resume_gate.wait()
             session = self._session_factory()
             try:
                 scan = session.get(Scan, scan_id)
@@ -177,7 +335,9 @@ class InProcessScanWorker(ScanWorker):
             except Exception:  # noqa: BLE001 - last-resort guard; detail logged below
                 logger.exception("Unexpected failure while executing scan %d.", scan_id)
                 session.rollback()
-                self._fail(session, scan_id, "Unexpected internal error during scan execution.")
+                await anyio.to_thread.run_sync(
+                    self._fail, session, scan_id, "Unexpected internal error during scan execution."
+                )
                 await self._notify(session, scan_id)
             finally:
                 session.close()
@@ -191,24 +351,40 @@ class InProcessScanWorker(ScanWorker):
         except Exception:  # noqa: BLE001 - notification failures never fail a scan
             logger.exception("Notification dispatch failed for scan %d.", scan_id)
 
+    def _claim(self, session: Session, scan: Scan) -> bool:
+        """Atomically claim ``scan`` (queued -> running); True when claimed.
+
+        The conditional UPDATE closes the race with a concurrent cancel (which
+        flips queued -> canceled the same way) — SQLite serializes the two
+        writes, so exactly one wins and a cancel is never silently lost. The
+        commit is lock-retried; runs in a thread (sleeps + synchronous DB I/O).
+        """
+        claimed_rows = 0
+
+        def _stage() -> None:
+            nonlocal claimed_rows
+            result = session.execute(
+                update(Scan)
+                .where(Scan.id == scan.id, Scan.status == ScanStatus.QUEUED)
+                .values(status=ScanStatus.RUNNING, started_at=utcnow())
+            )
+            claimed_rows = result.rowcount
+
+        _commit_with_retry(session, _stage, what=f"claim of scan {scan.id}")
+        if claimed_rows == 0:
+            # Refresh only to log why; the row may even be gone (e.g. wiped by
+            # a concurrent restore), which is equally a reason to skip.
+            with contextlib.suppress(Exception):
+                session.refresh(scan)
+                logger.info("Scan %d was %s before start; skipping.", scan.id, scan.status.value)
+            return False
+        session.refresh(scan)
+        return True
+
     async def _run(self, session: Session, scan: Scan) -> None:
         """Mark the scan running, invoke the scanner, and persist results."""
-        # Atomically claim the scan: transition queued -> running only if it is
-        # still queued. This closes the race with a concurrent cancel (which
-        # flips queued -> canceled the same way) — SQLite serializes the two
-        # writes, so exactly one wins and a cancel is never silently lost.
-        started_at = utcnow()
-        claimed = session.execute(
-            update(Scan)
-            .where(Scan.id == scan.id, Scan.status == ScanStatus.QUEUED)
-            .values(status=ScanStatus.RUNNING, started_at=started_at)
-        )
-        session.commit()
-        if claimed.rowcount == 0:
-            session.refresh(scan)
-            logger.info("Scan %d was %s before start; skipping.", scan.id, scan.status.value)
+        if not await anyio.to_thread.run_sync(self._claim, session, scan):
             return
-        session.refresh(scan)
         logger.info(
             "Scan %d started: %s %s %s",
             scan.id,
@@ -229,7 +405,7 @@ class InProcessScanWorker(ScanWorker):
             # ScannerError/TargetError messages are operator-safe, but repo scans
             # can surface a scanner stderr that echoes a credential-embedded URL;
             # redact() strips URL userinfo before the message is stored/logged.
-            self._fail(session, scan.id, str(exc))
+            await anyio.to_thread.run_sync(self._fail, session, scan.id, str(exc))
             logger.info("Scan %d failed: %s", scan.id, redact(str(exc)))
             await self._notify(session, scan.id)
             return
@@ -354,69 +530,80 @@ class InProcessScanWorker(ScanWorker):
     def _persist_success(
         self, session: Session, scan: Scan, execution: ScanExecution, sbom: SbomResult | None
     ) -> None:
-        """Store artifacts (raw output + optional SBOM) and findings; succeed."""
+        """Store artifacts (raw output + optional SBOM) and findings; succeed.
+
+        The artifact files are written to disk once; the DB rows are staged and
+        committed under the lock-retry helper, re-staged from scratch on each
+        attempt (a rollback expunges the pending inserts). The files are only
+        unlinked after the *final* attempt fails — deleting a successful scan's
+        results because one commit hit transient contention is exactly the
+        data-loss path CON-1 describes.
+        """
         filename, kind = _RAW_ARTIFACT[scan.scanner]
         written: list[str] = []
         stored = store_artifact(scan.id, filename, execution.raw_output)
         written.append(stored.relative_path)
-        session.add(
-            Artifact(
-                scan_id=scan.id,
-                kind=kind,
-                filename=filename,
-                content_type="application/json",
-                relative_path=stored.relative_path,
-                size_bytes=stored.size_bytes,
-                sha256=stored.sha256,
-            )
-        )
-
+        stored_sbom = None
         if sbom is not None:
             stored_sbom = store_artifact(scan.id, sbom.filename, sbom.raw_output)
             written.append(stored_sbom.relative_path)
+
+        def _stage() -> None:
             session.add(
                 Artifact(
                     scan_id=scan.id,
-                    kind=ArtifactKind.SBOM,
-                    filename=sbom.filename,
+                    kind=kind,
+                    filename=filename,
                     content_type="application/json",
-                    relative_path=stored_sbom.relative_path,
-                    size_bytes=stored_sbom.size_bytes,
-                    sha256=stored_sbom.sha256,
+                    relative_path=stored.relative_path,
+                    size_bytes=stored.size_bytes,
+                    sha256=stored.sha256,
                 )
             )
-
-        for nf in execution.findings:
-            session.add(
-                Finding(
-                    scan_id=scan.id,
-                    finding_class=FindingClass(nf.finding_class),
-                    severity=nf.severity,
-                    vuln_id=nf.vuln_id,
-                    pkg_name=nf.pkg_name,
-                    installed_version=nf.installed_version,
-                    fixed_version=nf.fixed_version,
-                    title=nf.title,
-                    description=nf.description,
-                    location=nf.location,
-                    primary_url=nf.primary_url,
+            if sbom is not None and stored_sbom is not None:
+                session.add(
+                    Artifact(
+                        scan_id=scan.id,
+                        kind=ArtifactKind.SBOM,
+                        filename=sbom.filename,
+                        content_type="application/json",
+                        relative_path=stored_sbom.relative_path,
+                        size_bytes=stored_sbom.size_bytes,
+                        sha256=stored_sbom.sha256,
+                    )
                 )
-            )
+            for nf in execution.findings:
+                session.add(
+                    Finding(
+                        scan_id=scan.id,
+                        finding_class=FindingClass(nf.finding_class),
+                        severity=nf.severity,
+                        vuln_id=nf.vuln_id,
+                        pkg_name=nf.pkg_name,
+                        installed_version=nf.installed_version,
+                        fixed_version=nf.fixed_version,
+                        title=nf.title,
+                        description=nf.description,
+                        location=nf.location,
+                        primary_url=nf.primary_url,
+                    )
+                )
+            scan.severity_counts = {
+                level.value: count for level, count in execution.severity_counts.items()
+            }
+            scan.findings_count = len(execution.findings)
+            scan.highest_severity = _highest_severity(execution.severity_counts)
+            scan.scanner_version = execution.scanner_version
+            scan.status = ScanStatus.SUCCEEDED
+            scan.finished_at = utcnow()
 
-        scan.severity_counts = {
-            level.value: count for level, count in execution.severity_counts.items()
-        }
-        scan.findings_count = len(execution.findings)
-        scan.highest_severity = _highest_severity(execution.severity_counts)
-        scan.scanner_version = execution.scanner_version
-        scan.status = ScanStatus.SUCCEEDED
-        scan.finished_at = utcnow()
         try:
-            session.commit()
+            _commit_with_retry(session, _stage, what=f"results of scan {scan.id}")
         except Exception:
             # The artifact bytes were already written to disk; if the rows that
-            # would own them fail to commit, remove the files so they don't
-            # accumulate as orphans. Re-raise so _execute marks the scan failed.
+            # would own them ultimately fail to commit, remove the files so they
+            # don't accumulate as orphans. Re-raise so _execute marks the scan
+            # failed.
             for relative_path in written:
                 with contextlib.suppress(OSError, ValueError):
                     artifact_path(relative_path).unlink(missing_ok=True)
@@ -436,7 +623,8 @@ class InProcessScanWorker(ScanWorker):
         except OSError:
             logger.exception("Could not write raw output for failed scan %d.", scan.id)
             return
-        try:
+
+        def _stage() -> None:
             session.add(
                 Artifact(
                     scan_id=scan.id,
@@ -448,7 +636,9 @@ class InProcessScanWorker(ScanWorker):
                     sha256=stored.sha256,
                 )
             )
-            session.commit()
+
+        try:
+            _commit_with_retry(session, _stage, what=f"raw-output artifact of scan {scan.id}")
         except Exception:  # noqa: BLE001 - never mask the scan's own failure
             logger.exception("Could not record raw-output artifact for scan %d.", scan.id)
             session.rollback()
@@ -456,15 +646,23 @@ class InProcessScanWorker(ScanWorker):
                 artifact_path(stored.relative_path).unlink(missing_ok=True)
 
     def _fail(self, session: Session, scan_id: int, message: str) -> None:
-        """Mark a scan failed with a safe, secret-redacted error message."""
-        try:
+        """Mark a scan failed with a safe, secret-redacted error message.
+
+        The commit is lock-retried so transient contention (the very condition
+        that usually routes a scan here — CON-1) doesn't strand the row
+        ``running`` forever. Sleeps between retries: call from a thread.
+        """
+
+        def _stage() -> None:
             scan = session.get(Scan, scan_id)
             if scan is None:
                 return
             scan.status = ScanStatus.FAILED
             scan.error = redact(message)
             scan.finished_at = utcnow()
-            session.commit()
+
+        try:
+            _commit_with_retry(session, _stage, what=f"failure of scan {scan_id}")
         except Exception:  # noqa: BLE001 - never mask the original failure
             logger.exception("Could not record failure for scan %d.", scan_id)
             session.rollback()

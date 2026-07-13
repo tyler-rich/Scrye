@@ -75,7 +75,12 @@ class MaintenanceScheduler:
             self._task = None
 
     async def tick(self) -> None:
-        """Run one maintenance pass: schedules, retention, then scanner-DB refresh."""
+        """Run one maintenance pass: watchdog, schedules, retention, DB refresh."""
+        # Self-heal scans stranded queued/running with no live worker task
+        # (lost submits on shutdown races, commit chains broken by lock
+        # contention) so they recover within a tick instead of at the next
+        # container restart (CON-1/CON-11).
+        await self._worker.reconcile_stale()
         await self._fire_schedules()
         # Retention can unlink thousands of files + delete their rows on the
         # first pass over a large history; keep it off the event loop (API-15).

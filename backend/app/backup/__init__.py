@@ -2,6 +2,7 @@
 
 from app.backup.bundle import (
     BackupError,
+    RestoreConflictError,
     RestoreSummary,
     build_bundle,
     read_manifest,
@@ -17,6 +18,7 @@ from app.backup.store import (
 __all__ = [
     "BackupError",
     "BackupStore",
+    "RestoreConflictError",
     "RestoreSummary",
     "build_bundle",
     "delete_backup_file",

@@ -27,3 +27,20 @@ class ScanWorker(ABC):
     async def shutdown(self) -> None:
         """Stop accepting work and wait for in-flight scans to settle."""
         raise NotImplementedError
+
+    # The hooks below are optional (default no-ops) so a future distributed
+    # worker only has to implement the three core methods above. The in-process
+    # worker overrides them for its self-healing watchdog (CON-1/CON-11) and
+    # the restore-time execution pause (CON-3).
+
+    async def reconcile_stale(self) -> None:
+        """Self-heal scans stranded without a live executor (periodic; optional)."""
+        return None
+
+    def pause(self) -> None:
+        """Temporarily hold new scan executions (optional; see :meth:`resume`)."""
+        return None
+
+    def resume(self) -> None:
+        """Resume executions held by :meth:`pause` (optional)."""
+        return None
