@@ -543,6 +543,62 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-13 — Post-release — Security + supply-chain review batch (H11, M2–M5, M22–M26, L1–L4, L23)
+**What changed:** Worked the security-review (`docs/reviews/security-review.md`, SEC-*) and
+supply-chain-review (`docs/reviews/supply-chain-review.md`, SC-*) findings summarized in
+`docs/reviews/00-summary.md`, one commit per finding:
+- **H11 / SC-1.** Added a hash-pinned backend lockfile (`backend/requirements.lock`, compiled with
+  `uv pip compile --generate-hashes` — uv is build/dev-time only, pyproject stays PEP 621). The
+  image installs runtime deps with `pip install --require-hashes -r requirements.lock` then the app
+  with `pip install --no-deps .`; CI regenerates the lock with the pinned uv and fails on drift.
+- **M2 / SEC-3.** Master-key entropy floor: the key file must be valid base64 decoding to ≥32 bytes;
+  the raw-passphrase fallback is rejected unless the temporary `SCRYE_ALLOW_WEAK_MASTER_KEY` opt-out
+  is set (logs a warning). **Input validation only** — the KDF and on-disk token format are
+  unchanged, so all existing ciphertext still decrypts (regression-tested). Per the maintainer
+  decision to use option 1 (entropy floor, no crypto-format change).
+- **M5 / SEC-6.** New `core/egress.py` SSRF guard screens the notification/registry/docker-proxy
+  fetchers: loopback + link-local/metadata always refused; RFC-1918/private refused unless the new
+  `SCRYE_ALLOW_INTERNAL_EGRESS` setting (default off) is enabled; the docker proxy allows private
+  (internal by design) but still refuses loopback/metadata. **New Settings field**
+  `allow_internal_egress` → regenerated `.env.example`.
+- **M3 / SEC-4.** Broadened log redaction: the unquoted secret-value branch is now tempered-greedy
+  (consumes to EOL or the next `key=` pair, anchored to a non-space first char) so a spaced/comma-
+  bearing secret is redacted whole. **Behavior change:** trailing free text after an unquoted
+  single-token secret is now over-redacted (accepted trade-off; two tests updated).
+- **M22 / SC-6, M23 / SC-7, L23 / SC-9.** Refreshed the stale `node:22-bookworm-slim` digest; bumped
+  `tecnativa/docker-socket-proxy` 0.3.0 → v0.4.2 (image pull/boot could not be exercised in the
+  egress-restricted environment — re-verify on a Docker-Hub-reachable host; wollomatic migration
+  tracked in issue #63); digest-pinned the `# syntax=docker/dockerfile:1.7` frontend.
+- **M24 / SC-4.** Publish workflows attach BuildKit SLSA provenance (`mode=max`) + SPDX SBOM and a
+  GitHub-signed `attest-build-provenance` (job-level `id-token`/`attestations` write); CI build-only
+  check leaves them off.
+- **M25 / SC-5.** New `rescan.yml` weekly re-scan of the published `:latest`/`:dev` images (same
+  Trivy/Grype gate), opening/commenting a tracking issue on a finding instead of gating a merge.
+- **M26 / SC-8.** Dockerfile now cosign-verifies each scanner's `checksums.txt` (keyless, identity
+  pinned to the upstream release workflow) before `sha256sum -c`; cosign pinned by digest via
+  `COPY --from` the Sigstore image. **The exact upstream signature asset names / certificate
+  identities could not be exercised here (release CDN + api.github.com blocked); the CI image build
+  validates them.**
+- **L1 / SEC-7.** Field-encryption AAD now optionally binds to the row id (`<table>.<column>:<id>`).
+  Backward-compatible and **migration-free**: decrypt tries row-bound then falls back to the column
+  tag, so existing ciphertext still decrypts and each secret upgrades on next write (MFA/OIDC bind
+  immediately; API-resource creates bind on first update). The backup re-wrap preserves each value's
+  existing binding across a cycle.
+- **L2 / SEC-8, L3 / SEC-9.** Both are documented accepted limitations the review flagged as
+  no-behavioral-change (OIDC delegates MFA to the IdP; enroll-on-first-login is inherent). Added
+  audit visibility instead: OIDC logins under a mandatory policy record `mfa_delegated_to_idp`, and
+  the policy-forced first-enrollment records `forced_by_policy`. README security model documents both
+  windows. **No auth behavior changed.**
+- **L4 / SEC-10.** The rate limiter now evicts fully-expired idle keys once the map grows past a
+  threshold (amortized), and `PendingMfaStore` caps concurrent challenges per user.
+**Why:** Remediate the confirmed security/supply-chain findings. Stop-and-ask items were resolved
+with the maintainer up front: H11 lockfile tool (uv, build-time only), M2 crypto approach (entropy
+floor, no format change), and M23 socket-proxy (bump tecnativa now, wollomatic as a tracked follow-up).
+**Plan section affected:** §6 (secrets-at-rest hardening — additive, no format change), §6 locked
+decision context (new `SCRYE_ALLOW_INTERNAL_EGRESS` / `SCRYE_ALLOW_WEAK_MASTER_KEY` operational
+knobs), locked decision §6 publish pipeline (provenance/SBOM attestation + scheduled re-scan). No
+schema or job-model change.
+
 ### 2026-07-13 — Post-release — Frontend-review wave 2 (M19–M21, L16–L22)
 **What changed:** Worked the remaining confirmed frontend-review findings from
 `docs/reviews/frontend-review.md` (summarized in `docs/reviews/00-summary.md`), one commit each.
