@@ -46,7 +46,7 @@ RUN apt-get update \
 # serves" (a same-origin checksum an attacker who replaced the tarball could
 # regenerate) to "signed by the upstream project's own GitHub Actions release
 # pipeline" (keyless Fulcio identity + Rekor transparency-log inclusion).
-COPY --from=ghcr.io/sigstore/cosign/cosign:v2.5.3@sha256:f1946d0f30fc8e3777b02f2201e02efdba9fe38f4918162f937052fac98e083f \
+COPY --from=ghcr.io/sigstore/cosign/cosign:v2.6.1@sha256:68839b7f13dac5a6744a5d8818e984dd39183374e37855c19e14d623d9bc9037 \
     /ko-app/cosign /usr/local/bin/cosign
 
 WORKDIR /scanners
@@ -54,7 +54,11 @@ WORKDIR /scanners
 # the publisher's cosign signature over the checksums file (keyless, identity
 # pinned to the upstream repo's release workflow + the GitHub Actions OIDC
 # issuer), then verify the tarball with `sha256sum -c`, then extract. A signature
-# OR checksum mismatch fails the build.
+# OR checksum mismatch fails the build. The two publishers sign differently, so
+# fetch_verify_extract takes a style: Anchore (grype/syft) ships a detached
+# certificate (.pem) + signature (.sig), while Aqua (trivy) ships a Sigstore
+# protobuf bundle (checksums.txt.sigstore.json) verified with `--bundle
+# --new-bundle-format`.
 # The three downloads are independent, so they run concurrently (each in its own
 # background subshell) instead of sequentially — this halves the wall-clock of a
 # cold scanner stage, which matters most on the QEMU-emulated arm64 leg where
@@ -74,17 +78,27 @@ RUN set -eux; \
     \
     fetch_verify_extract() { \
       set -eux; \
-      bin="$1"; base_url="$2"; tgz="$3"; checksums="$4"; identity="$5"; \
+      bin="$1"; base_url="$2"; tgz="$3"; checksums="$4"; identity="$5"; sig_style="$6"; \
       curl -fsSL -O "${base_url}/${tgz}"; \
       curl -fsSL -O "${base_url}/${checksums}"; \
-      curl -fsSL -O "${base_url}/${checksums}.sig"; \
-      curl -fsSL -O "${base_url}/${checksums}.pem"; \
-      cosign verify-blob \
-        --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-        --certificate-identity-regexp "${identity}" \
-        --certificate "${checksums}.pem" \
-        --signature "${checksums}.sig" \
-        "${checksums}"; \
+      if [ "${sig_style}" = "bundle" ]; then \
+        curl -fsSL -O "${base_url}/${checksums}.sigstore.json"; \
+        cosign verify-blob \
+          --bundle "${checksums}.sigstore.json" \
+          --new-bundle-format \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          --certificate-identity-regexp "${identity}" \
+          "${checksums}"; \
+      else \
+        curl -fsSL -O "${base_url}/${checksums}.sig"; \
+        curl -fsSL -O "${base_url}/${checksums}.pem"; \
+        cosign verify-blob \
+          --certificate "${checksums}.pem" \
+          --signature "${checksums}.sig" \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          --certificate-identity-regexp "${identity}" \
+          "${checksums}"; \
+      fi; \
       grep " ${tgz}\$" "${checksums}" | sha256sum -c -; \
       tar -xzf "${tgz}" "${bin}"; \
     }; \
@@ -93,21 +107,24 @@ RUN set -eux; \
       "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}" \
       "trivy_${TRIVY_VERSION}_${TRIVY_ARCH}.tar.gz" \
       "trivy_${TRIVY_VERSION}_checksums.txt" \
-      "^https://github\.com/aquasecurity/trivy/\.github/workflows/.+@refs/tags/v[0-9.]+$" & \
+      "^https://github\.com/aquasecurity/trivy/\.github/workflows/.+@refs/tags/v[0-9.]+$" \
+      bundle & \
     trivy_pid=$!; \
     \
     fetch_verify_extract grype \
       "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}" \
       "grype_${GRYPE_VERSION}_${ANCHORE_ARCH}.tar.gz" \
       "grype_${GRYPE_VERSION}_checksums.txt" \
-      "^https://github\.com/anchore/grype/\.github/workflows/.+@refs/tags/v[0-9.]+$" & \
+      "^https://github\.com/anchore/grype/\.github/workflows/.+@refs/tags/v[0-9.]+$" \
+      certsig & \
     grype_pid=$!; \
     \
     fetch_verify_extract syft \
       "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}" \
       "syft_${SYFT_VERSION}_${ANCHORE_ARCH}.tar.gz" \
       "syft_${SYFT_VERSION}_checksums.txt" \
-      "^https://github\.com/anchore/syft/\.github/workflows/.+@refs/tags/v[0-9.]+$" & \
+      "^https://github\.com/anchore/syft/\.github/workflows/.+@refs/tags/v[0-9.]+$" \
+      certsig & \
     syft_pid=$!; \
     \
     wait "${trivy_pid}"; \
