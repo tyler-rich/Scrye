@@ -13,12 +13,19 @@ export function GeneralPanel() {
   const canManage = user?.role === 'admin';
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Gate Save/inputs until the live settings load so a slow GET can't be
+  // overwritten with the built-in defaults (M19 / P1-2).
+  const [loaded, setLoaded] = useState(false);
 
   const form = useForm({ initialValues: { instance_name: 'Scrye', admin_note: '' } });
 
   useEffect(() => {
     void getGeneralSettings()
-      .then((v) => form.setValues(v))
+      .then((v) => {
+        // Only seed fetched values into a form the admin hasn't started editing.
+        if (!form.isDirty()) form.setValues(v);
+        setLoaded(true);
+      })
       .catch(() => setError('Failed to load general settings.'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -49,20 +56,22 @@ export function GeneralPanel() {
         )}
         <TextInput
           label="Instance name"
-          disabled={!canManage}
+          disabled={!canManage || !loaded}
           {...form.getInputProps('instance_name')}
         />
         <Textarea
           label="Admin note"
           description="Shown on the About tab (e.g. environment label)."
-          disabled={!canManage}
+          disabled={!canManage || !loaded}
           autosize
           minRows={2}
           {...form.getInputProps('admin_note')}
         />
         {canManage && (
           <Group>
-            <Button type="submit">Save</Button>
+            <Button type="submit" loading={!loaded} disabled={!loaded}>
+              Save
+            </Button>
           </Group>
         )}
       </Stack>

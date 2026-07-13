@@ -45,6 +45,9 @@ export function BackupsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Gate the schedule form until its values load, so it can't be saved with the
+  // built-in defaults before the GET resolves (M19 / P1-2).
+  const [scheduleLoaded, setScheduleLoaded] = useState(false);
   // State (not a ref) so the selected file name re-renders on the destructive
   // restore flow — a ref assignment would leave the label stale (FE-4).
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
@@ -55,26 +58,43 @@ export function BackupsPanel() {
     initialValues: { enabled: false, interval_hours: 24, retention_count: 7, passphrase: '' },
   });
 
+  // Refresh the backups list and the schedule *display* object. Deliberately
+  // does NOT rehydrate the schedule form — this re-runs after every list
+  // mutation (create/delete/restore), and rehydrating here would silently
+  // reset an admin's in-progress schedule edits (M19 / P1-2).
   const load = useCallback(async () => {
     try {
       setItems(await listBackups());
-      const s = await getBackupSchedule();
-      setSchedule(s);
-      scheduleForm.setValues({
-        enabled: s.enabled,
-        interval_hours: s.interval_hours,
-        retention_count: s.retention_count,
-        passphrase: '',
-      });
+      setSchedule(await getBackupSchedule());
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load backups.');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Hydrate the schedule form once on mount, separate from load() so list
+  // mutations never clobber it. Only seeds a pristine form.
+  useEffect(() => {
+    void getBackupSchedule()
+      .then((s) => {
+        if (!scheduleForm.isDirty()) {
+          scheduleForm.setValues({
+            enabled: s.enabled,
+            interval_hours: s.interval_hours,
+            retention_count: s.retention_count,
+            passphrase: '',
+          });
+        }
+        setScheduleLoaded(true);
+      })
+      .catch(() => {
+        // The load-error surface above already reports a failed fetch.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onCreate = createForm.onSubmit(async (values) => {
     setError(null);
@@ -281,6 +301,7 @@ export function BackupsPanel() {
           <Title order={5}>Scheduled backups</Title>
           <Switch
             label="Enable scheduled backups"
+            disabled={!scheduleLoaded}
             {...scheduleForm.getInputProps('enabled', { type: 'checkbox' })}
           />
           <Group grow>
@@ -288,12 +309,14 @@ export function BackupsPanel() {
               label="Interval (hours)"
               min={1}
               max={720}
+              disabled={!scheduleLoaded}
               {...scheduleForm.getInputProps('interval_hours')}
             />
             <NumberInput
               label="Keep last N"
               min={1}
               max={365}
+              disabled={!scheduleLoaded}
               {...scheduleForm.getInputProps('retention_count')}
             />
           </Group>
@@ -305,6 +328,7 @@ export function BackupsPanel() {
                 : 'Required to enable scheduled backups.'
             }
             placeholder={schedule?.passphrase.is_set ? '••••••••' : ''}
+            disabled={!scheduleLoaded}
             {...scheduleForm.getInputProps('passphrase')}
           />
           {schedule?.last_run_at && (
@@ -313,7 +337,9 @@ export function BackupsPanel() {
             </Text>
           )}
           <Group>
-            <Button type="submit">Save schedule</Button>
+            <Button type="submit" loading={!scheduleLoaded} disabled={!scheduleLoaded}>
+              Save schedule
+            </Button>
           </Group>
         </Stack>
       </form>

@@ -10,12 +10,21 @@ import { getRetentionSettings, updateRetentionSettings } from '../../api/setting
 export function RetentionPanel() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // The form renders the built-in defaults until the live policy loads; gate
+  // Save (and the inputs) on this so an admin can't overwrite the live policy
+  // with defaults before the GET resolves (M19 / P1-2).
+  const [loaded, setLoaded] = useState(false);
 
   const form = useForm({ initialValues: { enabled: false, max_age_days: 90 } });
 
   useEffect(() => {
     void getRetentionSettings()
-      .then((v) => form.setValues(v))
+      .then((v) => {
+        // Don't clobber edits the admin has already made while the GET was
+        // in flight; only seed the fetched policy into a pristine form.
+        if (!form.isDirty()) form.setValues(v);
+        setLoaded(true);
+      })
       .catch(() => setError('Failed to load retention settings.'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -53,6 +62,7 @@ export function RetentionPanel() {
         )}
         <Switch
           label="Prune old raw artifacts"
+          disabled={!loaded}
           {...form.getInputProps('enabled', { type: 'checkbox' })}
         />
         <NumberInput
@@ -60,11 +70,13 @@ export function RetentionPanel() {
           description="Raw artifacts of scans older than this are removed."
           min={1}
           max={3650}
-          disabled={!form.values.enabled}
+          disabled={!loaded || !form.values.enabled}
           {...form.getInputProps('max_age_days')}
         />
         <Group>
-          <Button type="submit">Save</Button>
+          <Button type="submit" loading={!loaded} disabled={!loaded}>
+            Save
+          </Button>
         </Group>
       </Stack>
     </form>

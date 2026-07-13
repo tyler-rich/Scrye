@@ -29,6 +29,7 @@ export function UsersPanel() {
   const { user: me } = useAuth();
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [opened, { open, close }] = useDisclosure(false);
 
   const load = useCallback(async () => {
@@ -52,7 +53,9 @@ export function UsersPanel() {
   });
 
   const submit = form.onSubmit(async (values) => {
+    if (creating) return;
     setError(null);
+    setCreating(true);
     try {
       await createUser({ ...values, username: values.username.trim() });
       form.reset();
@@ -60,6 +63,8 @@ export function UsersPanel() {
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to create user.');
+    } finally {
+      setCreating(false);
     }
   });
 
@@ -155,10 +160,12 @@ export function UsersPanel() {
               {...form.getInputProps('role')}
             />
             <Group justify="flex-end">
-              <Button variant="default" onClick={close}>
+              <Button variant="default" onClick={close} disabled={creating}>
                 Cancel
               </Button>
-              <Button type="submit">Create</Button>
+              <Button type="submit" loading={creating}>
+                Create
+              </Button>
             </Group>
           </Stack>
         </form>
