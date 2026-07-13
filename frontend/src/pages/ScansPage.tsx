@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ActionIcon,
+  Anchor,
   Badge,
   Button,
   Card,
@@ -19,6 +20,7 @@ import {
   TextInput,
   Title,
   Tooltip,
+  UnstyledButton,
 } from '@mantine/core';
 import {
   IconArrowsDiff,
@@ -493,21 +495,27 @@ export function ScansPage() {
                         onChange={(e) => toggleCompare(scan, e.currentTarget.checked)}
                       />
                     </Table.Td>
-                    <Table.Td
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => navigate(`/scans/${scan.id}`)}
-                    >
-                      <Badge variant="light" color="teal">
-                        {scan.scanner}
-                      </Badge>
+                    <Table.Td>
+                      <Anchor
+                        component={Link}
+                        to={`/scans/${scan.id}`}
+                        underline="never"
+                        aria-label={`Open scan ${scan.id}`}
+                      >
+                        <Badge variant="light" color="teal" style={{ cursor: 'pointer' }}>
+                          {scan.scanner}
+                        </Badge>
+                      </Anchor>
                     </Table.Td>
-                    <Table.Td
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => navigate(`/scans/${scan.id}`)}
-                    >
-                      <Text size="sm" style={{ wordBreak: 'break-all' }}>
+                    <Table.Td>
+                      <Anchor
+                        component={Link}
+                        to={`/scans/${scan.id}`}
+                        size="sm"
+                        style={{ wordBreak: 'break-all' }}
+                      >
                         {scan.target}
-                      </Text>
+                      </Anchor>
                     </Table.Td>
                     <Table.Td>
                       <ScanStatusBadge status={scan.status} />
@@ -573,17 +581,28 @@ interface SortableThProps {
   onSort: (column: HistorySort) => void;
 }
 
-/** A table header cell that sorts the history by its column when clicked. */
+/**
+ * A sortable history header cell. The trigger is an UnstyledButton so it is
+ * keyboard-focusable and activates on Enter/Space, and the cell carries
+ * `aria-sort` so assistive tech announces the active column/direction
+ * (L20 / P2-5).
+ */
 function SortableTh({ label, column, sort, order, onSort }: SortableThProps) {
   const active = sort === column;
   return (
-    <Table.Th style={{ cursor: 'pointer' }} onClick={() => onSort(column)}>
-      <Group gap={4} wrap="nowrap">
-        <Text size="sm" fw={600}>
-          {label}
-        </Text>
-        {active && (order === 'asc' ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />)}
-      </Group>
+    <Table.Th aria-sort={active ? (order === 'asc' ? 'ascending' : 'descending') : undefined}>
+      <UnstyledButton
+        onClick={() => onSort(column)}
+        style={{ cursor: 'pointer', display: 'inline-flex' }}
+      >
+        <Group gap={4} wrap="nowrap">
+          <Text size="sm" fw={600}>
+            {label}
+          </Text>
+          {active &&
+            (order === 'asc' ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />)}
+        </Group>
+      </UnstyledButton>
     </Table.Th>
   );
 }
