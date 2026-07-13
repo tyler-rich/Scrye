@@ -1,4 +1,5 @@
-# Scrye — hardened, CIS-aligned Compose stack (locally built image; no registry).
+# Scrye — hardened, CIS-aligned Compose stack (builds the image locally; released
+# images are also published to GHCR — locked decision §6).
 #
 # Default `docker compose up` starts only the Scrye app. The optional sidecars
 # (shared Trivy-DB cache, read-only Docker socket proxy) are gated behind Compose
@@ -14,7 +15,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: scrye:0.1.0 # locally built; no registry publishing (locked decision #6)
+    image: scrye:0.1.0 # built locally from docker/Dockerfile; released images publish to ghcr.io/tyler-rich/scrye (locked decision §6)
     user: "1000:1000"
     read_only: true
     security_opt:

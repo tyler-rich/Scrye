@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 # ─────────────────────────────────────────────────────────────────────────────
-# Scrye — multi-stage, CIS-aligned image (built locally; no registry publishing).
+# Scrye — multi-stage, CIS-aligned image (builds locally; published to GHCR by the
+# release/nightly workflows — locked decision §6).
 #
 # Hardening (see CLAUDE.md § Hard security rules):
 #   - Base images pinned by digest (multi-arch manifest lists).
