@@ -815,7 +815,9 @@ only in memory at scan time.
   OIDC logins delegate the second factor to the identity provider — Scrye has no
   local TOTP challenge in the OIDC handshake, and provisioned OIDC accounts carry
   no usable local password. If you require MFA for OIDC users, enforce it at the
-  IdP. When group→role mapping is configured it re-applies on each login, but an
+  IdP. When a mandatory policy would otherwise apply, the OIDC login is recorded
+  in the audit log with `mfa_delegated_to_idp` so you can confirm the IdP is
+  carrying that second factor. When group→role mapping is configured it re-applies on each login, but an
   **absent** groups claim preserves the user's current role rather than demoting
   them, and an OIDC sync can never remove the last admin.
 

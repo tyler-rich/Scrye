@@ -33,6 +33,7 @@ from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.auth.passwords import hash_password
 from app.core.audit import record_audit
 from app.core.config import get_settings
+from app.core.app_settings import MfaPolicy, SettingsService
 from app.core.crypto import SecretDecryptError
 from app.core.masking import MaskedSecret, masked_secret
 from app.core.secret_store import AAD_OIDC_CLIENT_SECRET, decrypt_secret, encrypt_secret
@@ -504,7 +505,22 @@ async def oidc_callback(
         db, user, ip=client_ip(request), user_agent=request.headers.get("user-agent")
     )
     user.last_login_at = session.created_at
-    record_audit(db, action="auth.oidc_login", actor=user, ip=client_ip(request))
+    # Observability for the accepted limitation above (SEC-8): if a mandatory-MFA
+    # policy would require a second factor for this role on local login, record on
+    # the OIDC login that the second factor was delegated to the IdP — so an
+    # operator running mandatory MFA can audit which logins bypassed the local
+    # policy and confirm the IdP enforces MFA. Auth behavior is unchanged.
+    policy = SettingsService(db).auth().mfa_policy
+    mfa_delegated = policy is MfaPolicy.REQUIRED_ALL or (
+        policy is MfaPolicy.REQUIRED_ADMIN and user.role is Role.ADMIN
+    )
+    record_audit(
+        db,
+        action="auth.oidc_login",
+        actor=user,
+        ip=client_ip(request),
+        details={"mfa_delegated_to_idp": True} if mfa_delegated else None,
+    )
     db.commit()
 
     response: Response = RedirectResponse("/", status_code=status.HTTP_302_FOUND)
