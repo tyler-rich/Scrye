@@ -41,6 +41,25 @@ inputs:
       scope (which would consume the 10 GB write budget the partitioning protects).
     required: false
     default: ""
+  provenance:
+    description: >-
+      BuildKit SLSA provenance to attach to the pushed image manifest — e.g.
+      "mode=max" for release/nightly pushes, or "false" (default) for the CI
+      build-only check where nothing is pushed. (SC-4)
+    required: false
+    default: "false"
+  sbom:
+    description: >-
+      Whether BuildKit generates and attaches an SPDX SBOM attestation to the
+      pushed image manifest ("true"/"false"). Off by default (CI build-only);
+      the publish workflows turn it on. (SC-4)
+    required: false
+    default: "false"
+
+outputs:
+  digest:
+    description: The digest of the built (and, when push=true, pushed) image.
+    value: ${{ steps.build.outputs.digest }}
 
 runs:
   using: composite
@@ -85,6 +104,7 @@ runs:
         } >> "${GITHUB_OUTPUT}"
 
     - name: Build image
+      id: build
       uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
       with:
         context: .
@@ -94,3 +114,8 @@ runs:
         tags: ${{ inputs.tags }}
         cache-from: ${{ steps.cache.outputs.from }}
         cache-to: ${{ steps.cache.outputs.to }}
+        # SLSA provenance + SPDX SBOM attached to the image manifest for push
+        # builds (SC-4); both default to off so the CI build-only check (push:
+        # false) is unaffected.
+        provenance: ${{ inputs.provenance }}
+        sbom: ${{ inputs.sbom }}

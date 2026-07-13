@@ -339,9 +339,17 @@ builds for both architectures. Everything is published to a **single registry, G
   (`docker pull ghcr.io/tyler-rich/scrye:dev`) for testing. Use a `:<version>` tag (or `:latest`)
   for production.
 
-Both publish workflows declare their own `permissions: { contents: read, packages: write }`, so
-**Settings → Actions → General → Workflow permissions** can stay on the restrictive read-only
-default (an explicit per-workflow block takes precedence and is not capped by the repo default);
+**Provenance + SBOM.** Both publish paths attach a BuildKit SLSA provenance attestation and an
+SPDX SBOM to the pushed image manifest (`provenance: mode=max` + `sbom: true`), and add a
+**GitHub-signed** build-provenance attestation via `actions/attest-build-provenance`. Consumers can
+verify a pulled image was built by this repo's workflow from a given commit with
+`gh attestation verify oci://ghcr.io/tyler-rich/scrye:<tag> --owner tyler-rich`. The CI build-only
+check (`push: false`) leaves both off.
+
+Both publish workflows declare their own job-level `permissions`: `contents: read` + `packages:
+write` (GHCR push) plus `id-token: write` + `attestations: write` (only for the signed provenance
+attestation). So **Settings → Actions → General → Workflow permissions** can stay on the restrictive
+read-only default (an explicit block takes precedence and is not capped by the repo default);
 `ci.yml` declares only `contents: read` and never publishes. The repo is **public**, so the GHCR
 package is public — no per-package visibility change is needed. Because both publish paths are
 triggered outside `pull_request` (a tag push, and a schedule), a fork's pull request never has a
