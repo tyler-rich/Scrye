@@ -33,18 +33,12 @@ from app.db.models import (
     TargetType,
 )
 from app.db.session import get_db
+from app.scanners.support import scanner_supports
 
 router = APIRouter(prefix="/scan-schedules", tags=["scan-schedules"])
 
 _viewer = require_role(Role.VIEWER)
 _operator = require_role(Role.OPERATOR)
-
-#: Which scanners may run against each target type (mirrors the scans API).
-_ALLOWED_SCANNERS: dict[TargetType, set[Scanner]] = {
-    TargetType.IMAGE: {Scanner.TRIVY, Scanner.GRYPE},
-    TargetType.REPOSITORY: {Scanner.TRIVY},
-    TargetType.FILESYSTEM: {Scanner.GRYPE},
-}
 
 
 class ScanScheduleIn(ScanCreateIn):
@@ -102,7 +96,7 @@ def _validate_template(db: Session, payload: ScanScheduleIn) -> None:
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="SBOM scans cannot be scheduled (they require a file upload).",
         )
-    if payload.scanner not in _ALLOWED_SCANNERS.get(payload.target_type, set()):
+    if not scanner_supports(payload.target_type, payload.scanner):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"{payload.scanner.value} does not support "

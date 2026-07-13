@@ -67,6 +67,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.reports import ExportFormat, diff_findings, export_history, export_scan
+from app.scanners.support import scanner_supports
 from app.scanners.targets import TargetError, resolve_filesystem_path
 
 logger = logging.getLogger(__name__)
@@ -75,14 +76,6 @@ router = APIRouter(prefix="/scans", tags=["scans"])
 
 _viewer = require_role(Role.VIEWER)
 _operator = require_role(Role.OPERATOR)
-
-#: Which scanners may run against each target type (docs/PLAN.md §4).
-_ALLOWED_SCANNERS: dict[TargetType, set[Scanner]] = {
-    TargetType.IMAGE: {Scanner.TRIVY, Scanner.GRYPE},
-    TargetType.REPOSITORY: {Scanner.TRIVY},
-    TargetType.FILESYSTEM: {Scanner.GRYPE},
-    TargetType.SBOM: {Scanner.GRYPE},
-}
 
 #: Filename used to store an uploaded SBOM (the display target keeps the original).
 _UPLOADED_SBOM_FILENAME = "uploaded-sbom.json"
@@ -118,7 +111,7 @@ def _get_scan_or_404(db: Session, scan_id: int) -> Scan:
 
 def _reject_unsupported_combo(target_type: TargetType, scanner: Scanner) -> None:
     """Raise 422 if ``scanner`` cannot run against ``target_type``."""
-    if scanner not in _ALLOWED_SCANNERS[target_type]:
+    if not scanner_supports(target_type, scanner):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"{scanner.value} does not support {target_type.value} targets.",
