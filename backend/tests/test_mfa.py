@@ -188,3 +188,43 @@ class TestMfaDisable:
             "/api/auth/mfa/disable", json={"password": ADMIN_PW}, headers={CSRF: csrf}
         )
         assert resp.status_code == 400
+
+
+class TestPendingMfaStoreConcurrency:
+    def test_concurrent_issue_and_consume_never_raise(self) -> None:
+        """Hammer issue/consume/prune from many threads (mirroring the sync
+        login/verify endpoints running on different threadpool threads). An
+        unlocked ``_prune`` would raise ``RuntimeError: dictionary changed size
+        during iteration``; the lock must keep every operation clean (CON-8)."""
+        import threading
+
+        from app.auth.mfa import _CHALLENGE_TTL_SECONDS, PendingMfaStore
+
+        store = PendingMfaStore()
+        # A mix of live and already-expired challenges so ``_prune`` has rows to
+        # remove on every call, maximizing the chance of a concurrent mutation.
+        for i in range(200):
+            token = store.issue(i)
+            if i % 2 == 0:
+                store._pending[token].expires_at = 0.0  # force-expire half of them
+
+        errors: list[BaseException] = []
+        barrier = threading.Barrier(8)
+
+        def worker(worker_id: int) -> None:
+            barrier.wait()
+            try:
+                for j in range(300):
+                    tok = store.issue(worker_id * 1000 + j)
+                    store.consume(tok)
+            except BaseException as exc:  # noqa: BLE001 - the assertion is "no raise"
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(w,)) for w in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert not errors, f"concurrent access raised: {errors[0]!r}"
+        assert _CHALLENGE_TTL_SECONDS > 0
