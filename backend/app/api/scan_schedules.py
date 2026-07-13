@@ -22,6 +22,7 @@ from app.api.scan_schemas import ScanCreateIn
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.core.audit import record_audit
 from app.core.cron import CronError, validate_cron
+from app.core.timeutil import utcnow
 from app.db.models import (
     GitCredential,
     Registry,
@@ -272,6 +273,11 @@ async def run_schedule_now(
     db.add(scan)
     db.flush()
     schedule.last_scan_id = scan.id
+    # Record this as a run: the cron tick fires on ``last_run_at``, so stamping
+    # it now stops the tick from firing the same schedule again within this
+    # minute — a duplicate back-to-back scan and a raced ``last_scan_id`` (CON-17).
+    schedule.last_run_at = utcnow()
+    schedule.last_status = "ok (manual run)"
     record_audit(
         db,
         action="schedule.run_now",
