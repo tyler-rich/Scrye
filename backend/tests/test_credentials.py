@@ -28,6 +28,7 @@ from app.scanners.credentials import (
     generic_repo_checkout,
     git_env_token,
     is_http_url,
+    is_remote_repo_url,
 )
 
 
@@ -127,6 +128,23 @@ def test_is_http_url() -> None:
     assert is_http_url("http://git.example.com/repo.git")
     assert not is_http_url("ssh://git@host/repo.git")
     assert not is_http_url("git@host:repo.git")
+
+
+def test_is_remote_repo_url_accepts_remote_schemes() -> None:
+    assert is_remote_repo_url("https://git.example.com/repo.git")
+    assert is_remote_repo_url("http://git.example.com/repo.git")
+    assert is_remote_repo_url("ssh://git@host/repo.git")
+    assert is_remote_repo_url("git://host/repo.git")
+
+
+def test_is_remote_repo_url_rejects_local_paths() -> None:
+    # SEC-1: bare paths (what Trivy `repo` would walk on the local filesystem)
+    # and the file:// scheme must not count as remote repositories.
+    assert not is_remote_repo_url("/data")
+    assert not is_remote_repo_url("/run/secrets")
+    assert not is_remote_repo_url("/")
+    assert not is_remote_repo_url("./repo")
+    assert not is_remote_repo_url("file:///etc/passwd")
 
 
 GENERIC_TOKEN = "sup3r-secret-git-token"

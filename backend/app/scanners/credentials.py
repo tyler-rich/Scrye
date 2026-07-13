@@ -142,6 +142,20 @@ def is_http_url(url: str) -> bool:
     return urlparse(url).scheme in {"http", "https"}
 
 
+def is_remote_repo_url(url: str) -> bool:
+    """Return True when ``url`` is a remote git clone URL, not a local path.
+
+    A repository scan runs ``trivy repo`` against the target, and Trivy's ``repo``
+    subcommand accepts a **local filesystem path**, not just a remote URL. A bare
+    path like ``/data`` or ``/run/secrets`` would make Trivy walk the container
+    filesystem and surface its contents as downloadable scan output, bypassing the
+    ``SCRYE_FILESYSTEM_SCAN_ROOTS`` allowlist that gates local-path scanning. Only
+    a target with a remote clone scheme — ``http``/``https`` (see
+    :func:`is_http_url`), ``ssh``, or ``git`` — is a genuine remote repository.
+    """
+    return is_http_url(url) or urlparse(url).scheme in {"ssh", "git"}
+
+
 def git_env_token(auth: GitAuth) -> dict[str, str]:
     """Return Trivy's native token env overlay for a hosted git provider.
 
