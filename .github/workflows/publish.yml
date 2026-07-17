@@ -111,7 +111,7 @@ jobs:
       # verify oci://ghcr.io/tyler-rich/scrye:<version>` (SC-4). Attests the pushed
       # multi-arch index by digest and stores the attestation in GHCR alongside it.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-name: ghcr.io/tyler-rich/scrye
           subject-digest: ${{ steps.build.outputs.digest }}
