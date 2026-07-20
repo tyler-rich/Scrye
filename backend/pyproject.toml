@@ -77,6 +77,17 @@ ignore = ["D203", "D213", "D413", "B008"]
 "tests/*" = ["D"]
 "alembic/*" = ["D"]
 
+[tool.ruff.lint.isort]
+# Pin first-party classification so import ordering is deterministic across ruff
+# versions (D5b). The repo ships a local `alembic/` migrations package whose name
+# collides with the third-party `alembic` distribution; ruff's first-party
+# auto-detection resolved that collision one way under 0.8.6 but flips it on newer
+# ruff (e.g. 0.15.x reclassifies `alembic.config` as third-party), which would
+# re-sort import blocks and break CI on a ruff bump — `test_migrations.py` being
+# the file that tripped it. Declaring the two local packages first-party makes the
+# whole tree's existing, correct import ordering pass identically on every ruff.
+known-first-party = ["alembic", "app"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

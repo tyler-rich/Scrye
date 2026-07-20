@@ -24,9 +24,9 @@ default-branch Dependabot alerts `fix-verification.md` flagged as category-(a).
   only covered the five mid-batch *decisions*, not every merged fix.
 
 Bottom line: **all HIGH and MEDIUM findings are resolved.** Everything still open is
-LOW/INFO — the frontend "Priority 3" polish batch (never summarized), one latent lint
-straggler (D5b), and test debt on already-shipped fixes. SC-12 (supply-chain
-build-backend pin) is resolved in #80.
+LOW/INFO — the frontend "Priority 3" polish batch (never summarized) and test debt on
+already-shipped fixes. The two backlog stragglers SC-12 (supply-chain build-backend pin)
+and D5b (latent lint) are resolved in #80.
 
 ---
 
@@ -56,9 +56,7 @@ re-verified STILL OPEN against current code.
 
 ### TRIVIAL / latent
 
-| ID | Finding | File:line (current) | Source |
-|----|---------|---------------------|--------|
-| D5b | `test_migrations.py` import block trips `I001` under ruff ≥0.15.x; clean only because ruff is still pinned `0.8.6` — a future ruff bump breaks CI | `backend/tests/test_migrations.py:11-19`; ruff pin `backend/pyproject.toml:33` | compliance D5 (omitted) |
+_None open — D5b (the last latent lint straggler) resolved in #80._
 
 ### Test debt on already-shipped fixes (fixes are real; proof is absent)
 
@@ -160,6 +158,7 @@ resolved (#67). One-line index below; full detail lives in the per-report files 
 | P3-3 | Credential/filter option-fetch failures surfaced (warning + retry) instead of silently emptying the pickers — closes the "looks like none configured → scan private target anonymously" path (`NewScanPage.tsx`, `ScansPage.tsx`) | #77 |
 | SC-14 | `backend/tests/` + `backend/scripts/` excluded from the runtime image via root `.dockerignore` (regression-guarded) — dev-only trees no longer ship on the published scanner image | #77 |
 | SC-12 | Build backend pinned `setuptools==83.0.0` and hash-locked in `requirements.lock` via a PEP 735 `build` group (`uv pip compile --group build`); image builds the app with `--no-deps --no-build-isolation` so it reuses the hash-verified setuptools instead of an unpinned isolated-build fetch — last floating build-time dep closed | #80 |
+| D5b | `test_migrations.py` import ordering made version-stable via `[tool.ruff.lint.isort] known-first-party = ["alembic", "app"]` — pins the local-vs-third-party `alembic` classification so a future ruff bump can't re-sort the block (ruff pin itself intentionally not bumped) | #80 |
 | L23 / SC-9 | `docker/dockerfile:1.7` syntax digest-pinned | #64 |
 | L24 / SC-11 | `persist-credentials: false` on all `ci.yml` checkouts | #67 |
 | L25 / D3 / SC-10 | Composite-action vs. `ci.yml` action versions converged to identical SHAs; Dependabot covers the composite dir | #57 |

@@ -570,6 +570,28 @@ the CI compile command is idempotent (no lock drift).
 (no floating deps / hash-pinned build), Coding standards § Dependency hygiene (hash-pinned lockfile).
 `docs/reviews/supply-chain-review.md` SC-12.
 
+### 2026-07-20 — Post-release — D5b: pin ruff isort first-party classification so import ordering is version-stable
+**What changed:** `backend/tests/test_migrations.py`'s import block passed ruff's `I001` (import sorting)
+check only because ruff is pinned at `0.8.6`; a newer ruff (e.g. `0.15.x`) reclassifies `alembic.config`
+from first-party to third-party and would re-sort the block, failing CI on a future ruff bump. Root cause:
+the repo ships a local `alembic/` migrations package whose name collides with the third-party `alembic`
+distribution, and ruff's first-party auto-detection resolves that collision differently across versions.
+Because the two ruff versions disagree on the **section** `alembic.config` belongs to (not merely the
+ordering within a section), no pure reordering of the file satisfies both — so the deterministic fix is a
+config pin: `[tool.ruff.lint.isort] known-first-party = ["alembic", "app"]` in `backend/pyproject.toml`.
+That makes ruff classify the two local packages first-party on every version, so the whole tree's existing
+(and already-correct) import ordering — `test_migrations.py` included — sorts identically under `0.8.6`
+and current ruff, with **no** import reordering needed anywhere in the backend.
+**Why:** D5b (claude-md-compliance review, TRIVIAL/latent; omitted from `00-summary.md`). Pinning the
+classification the codebase already assumes is the minimal, faithful fix — the alternative
+(`known-third-party = ["alembic"]`) is more semantically literal but reshuffles import blocks across ~8
+files including the migration scripts, which is neither minimal nor in scope. The ruff pin itself is
+intentionally **not** bumped in this change — that remains separate, deliberate work per the existing
+§14 / `#59` note (bumping ruff needs its own review of new lint findings). Confirmed clean under both
+ruff `0.8.6` (pinned/CI) and `0.15.22` across the whole backend.
+**Plan section affected:** none — lint determinism only; no schema, security-model, or job-model change.
+`docs/reviews/claude-md-compliance-review.md` D5.
+
 ### 2026-07-20 — Post-release — SC-14: keep the backend test suite and dev scripts out of the runtime image
 **What changed:** The final image stage copies the backend tree wholesale
 (`COPY --chown=1000:1000 backend/ /app/backend/`), which shipped `backend/tests/` (the full pytest
