@@ -1,4 +1,5 @@
-# Scrye — hardened, CIS-aligned Compose stack (locally built image; no registry).
+# Scrye — hardened, CIS-aligned Compose stack (builds the image locally; released
+# images are also published to GHCR — locked decision §6).
 #
 # Default `docker compose up` starts only the Scrye app. The optional sidecars
 # (shared Trivy-DB cache, read-only Docker socket proxy) are gated behind Compose
@@ -14,7 +15,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: scrye:0.1.0 # locally built; no registry publishing (locked decision #6)
+    image: scrye:0.1.0 # built locally from docker/Dockerfile; released images publish to ghcr.io/tyler-rich/scrye (locked decision §6)
     user: "1000:1000"
     read_only: true
     security_opt:
@@ -25,6 +26,11 @@ services:
       - scrye_net
     ports:
       - "127.0.0.1:8089:8089" # behind Caddy; never bind 0.0.0.0
+    # Docker's default SIGTERM->SIGKILL budget is 10s, which the in-process
+    # worker/scheduler shutdown (drain grace + cancelling tasks whose cancel must
+    # wait out a non-cancellable threaded flush/backup) can exceed — a busy
+    # instance would be SIGKILLed mid-commit (CON-6). Give the graceful path room.
+    stop_grace_period: 30s
     environment:
       - SCRYE_DATABASE_PATH=/data/scrye.db
       - SCRYE_APP_SECRET_KEY_FILE=/run/secrets/app_secret_key
@@ -119,7 +125,15 @@ services:
   # CIS 5.21/5.22). Anyone able to reach the proxy can enumerate images/containers.
   docker-socket-proxy:
     profiles: ["docker-env"]
-    image: tecnativa/docker-socket-proxy:0.3.0@sha256:9e4b9e7517a6b660f2cc903a19b257b1852d5b3344794e3ea334ff00ae677ac2
+    # Bumped 0.3.0 -> v0.4.2 (SC-7): 0.3.0 was ~15 months stale, and this is the
+    # only sidecar holding the Docker socket. The env-var API below (IMAGES/
+    # CONTAINERS/INFO/POST) is unchanged across the 0.3 -> 0.4 line, and the app
+    # only calls GET /images/json (gated by IMAGES=1). Upstream now prefixes tags
+    # with `v`. Re-verify the hardened boot on a Docker-Hub-reachable host (see the
+    # /run tmpfs NOTE below) — image-pull/boot could not be exercised in the
+    # egress-restricted build environment where this bump was prepared. A future
+    # migration to wollomatic/socket-proxy is tracked separately (issue #63).
+    image: tecnativa/docker-socket-proxy:v0.4.2@sha256:1f3a6f303320723d199d2316a3e82b2e2685d86c275d5e3deeaf182573b47476
     environment:
       - IMAGES=1
       - CONTAINERS=1

@@ -45,9 +45,7 @@ class _FakeProc:
         self.stderr = _FakeStream(stderr)
         self.returncode = 0
         self.killed = False
-
-    def kill(self) -> None:
-        self.killed = True
+        self.pid = 4242
 
     async def wait(self) -> int:
         return self.returncode
@@ -55,14 +53,19 @@ class _FakeProc:
 
 class TestScannerOutputCap:
     def test_output_exceeding_cap_is_aborted(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """SCN-1: output past the cap fails as an output error and kills the child."""
+        """SCN-1: output past the cap fails as an output error and killpg's the child's group."""
         proc = _FakeProc(stdout=b"x" * 200000)
 
         async def _fake_exec(*_argv: object, **_kwargs: object) -> _FakeProc:
             return proc
 
+        def _fake_killpg(pid: int, _sig: int) -> None:
+            assert pid == proc.pid
+            proc.killed = True
+
         monkeypatch.setattr(base, "get_settings", lambda: _StubSettings())
         monkeypatch.setattr(base.asyncio, "create_subprocess_exec", _fake_exec)
+        monkeypatch.setattr(base.os, "killpg", _fake_killpg)
         with pytest.raises(ScannerOutputError):
             asyncio.run(run_command(["scanner"], timeout=30))
         assert proc.killed is True

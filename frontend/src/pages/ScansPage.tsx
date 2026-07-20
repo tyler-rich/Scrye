@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ActionIcon,
+  Anchor,
   Badge,
   Button,
   Card,
@@ -19,6 +20,7 @@ import {
   TextInput,
   Title,
   Tooltip,
+  UnstyledButton,
 } from '@mantine/core';
 import {
   IconArrowsDiff,
@@ -39,14 +41,15 @@ import {
   type FilterOptions,
   type HistoryFilters,
   type HistorySort,
-  type Scan,
   type ScanStatus,
+  type ScanSummary,
   type Severity,
   type SortOrder,
   type TargetType,
 } from '../api/scans';
 import { createPreset, deletePreset, listPresets, type FilterPreset } from '../api/presets';
-import { formatWhen } from '../lib/dates';
+import { formatWhen, parseUtc } from '../lib/dates';
+import { createLatestGuard } from '../lib/latest';
 import { ScanStatusBadge } from '../components/ScanStatusBadge';
 import { SeverityBadge } from '../components/SeverityBadge';
 
@@ -82,12 +85,12 @@ export function ScansPage() {
   const [order, setOrder] = useState<SortOrder>('desc');
   const [page, setPage] = useState(1);
 
-  const [data, setData] = useState<{ total: number; items: Scan[] } | null>(null);
+  const [data, setData] = useState<{ total: number; items: ScanSummary[] } | null>(null);
   const [options, setOptions] = useState<FilterOptions>({ initiators: [], tags: [] });
   const [presets, setPresets] = useState<FilterPreset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
-  const [compare, setCompare] = useState<Scan[]>([]);
+  const [compare, setCompare] = useState<ScanSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const effectiveFilters = useMemo(
@@ -95,7 +98,14 @@ export function ScansPage() {
     [filters, dateFrom, dateTo],
   );
 
+  // Latest-wins guard: the debounce delays sending but never cancels in-flight
+  // requests, so a slow response for an old filter could resolve after a newer
+  // one and overwrite the table with rows that contradict the visible filters
+  // (M21 / P1-4). Only the most recent request is allowed to render.
+  const historyGuard = useRef(createLatestGuard());
+
   const load = useCallback(async () => {
+    const token = historyGuard.current.begin();
     try {
       const result = await listHistory({
         ...effectiveFilters,
@@ -104,9 +114,11 @@ export function ScansPage() {
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
       });
+      if (!historyGuard.current.isCurrent(token)) return;
       setData(result);
       setError(null);
     } catch (err: unknown) {
+      if (!historyGuard.current.isCurrent(token)) return;
       setError(err instanceof Error ? err.message : 'Failed to load history.');
     }
   }, [effectiveFilters, sort, order, page]);
@@ -191,7 +203,7 @@ export function ScansPage() {
     }
   };
 
-  const toggleCompare = (scan: Scan, checked: boolean) => {
+  const toggleCompare = (scan: ScanSummary, checked: boolean) => {
     setCompare((prev) => {
       if (checked) return [...prev, scan].slice(-2);
       return prev.filter((s) => s.id !== scan.id);
@@ -201,11 +213,12 @@ export function ScansPage() {
   const canCompare =
     compare.length === 2 &&
     compare[0].scanner === compare[1].scanner &&
+    compare[0].target_type === compare[1].target_type &&
     compare[0].target === compare[1].target;
 
   const runCompare = () => {
     const [a, b] = [...compare].sort(
-      (x, y) => new Date(x.created_at).getTime() - new Date(y.created_at).getTime(),
+      (x, y) => parseUtc(x.created_at).getTime() - parseUtc(y.created_at).getTime(),
     );
     navigate(`/scans/diff/${a.id}/${b.id}`);
   };
@@ -262,7 +275,7 @@ export function ScansPage() {
               clearable
               data={SCANNERS}
               value={filters.scanner ?? null}
-              onChange={(v) => patch({ scanner: (v as Scan['scanner']) ?? null })}
+              onChange={(v) => patch({ scanner: (v as ScanSummary['scanner']) ?? null })}
             />
             <Select
               label="Target type"
@@ -482,21 +495,27 @@ export function ScansPage() {
                         onChange={(e) => toggleCompare(scan, e.currentTarget.checked)}
                       />
                     </Table.Td>
-                    <Table.Td
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => navigate(`/scans/${scan.id}`)}
-                    >
-                      <Badge variant="light" color="teal">
-                        {scan.scanner}
-                      </Badge>
+                    <Table.Td>
+                      <Anchor
+                        component={Link}
+                        to={`/scans/${scan.id}`}
+                        underline="never"
+                        aria-label={`Open scan ${scan.id}`}
+                      >
+                        <Badge variant="light" color="teal" style={{ cursor: 'pointer' }}>
+                          {scan.scanner}
+                        </Badge>
+                      </Anchor>
                     </Table.Td>
-                    <Table.Td
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => navigate(`/scans/${scan.id}`)}
-                    >
-                      <Text size="sm" style={{ wordBreak: 'break-all' }}>
+                    <Table.Td>
+                      <Anchor
+                        component={Link}
+                        to={`/scans/${scan.id}`}
+                        size="sm"
+                        style={{ wordBreak: 'break-all' }}
+                      >
                         {scan.target}
-                      </Text>
+                      </Anchor>
                     </Table.Td>
                     <Table.Td>
                       <ScanStatusBadge status={scan.status} />
@@ -562,17 +581,28 @@ interface SortableThProps {
   onSort: (column: HistorySort) => void;
 }
 
-/** A table header cell that sorts the history by its column when clicked. */
+/**
+ * A sortable history header cell. The trigger is an UnstyledButton so it is
+ * keyboard-focusable and activates on Enter/Space, and the cell carries
+ * `aria-sort` so assistive tech announces the active column/direction
+ * (L20 / P2-5).
+ */
 function SortableTh({ label, column, sort, order, onSort }: SortableThProps) {
   const active = sort === column;
   return (
-    <Table.Th style={{ cursor: 'pointer' }} onClick={() => onSort(column)}>
-      <Group gap={4} wrap="nowrap">
-        <Text size="sm" fw={600}>
-          {label}
-        </Text>
-        {active && (order === 'asc' ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />)}
-      </Group>
+    <Table.Th aria-sort={active ? (order === 'asc' ? 'ascending' : 'descending') : undefined}>
+      <UnstyledButton
+        onClick={() => onSort(column)}
+        style={{ cursor: 'pointer', display: 'inline-flex' }}
+      >
+        <Group gap={4} wrap="nowrap">
+          <Text size="sm" fw={600}>
+            {label}
+          </Text>
+          {active &&
+            (order === 'asc' ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />)}
+        </Group>
+      </UnstyledButton>
     </Table.Th>
   );
 }

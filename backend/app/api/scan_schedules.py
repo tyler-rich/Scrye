@@ -1,4 +1,4 @@
-"""Scheduled/recurring scan management (docs/PLAN.md §4.6/§12, Phase 6).
+"""Scheduled/recurring scan management (docs/ARCHIVE.md §4.6/§12, Phase 6).
 
 CRUD for cron-driven scan schedules, plus a "run now" action. A schedule stores a
 scan template (scanner, target type, target, options, and an optional
@@ -11,17 +11,17 @@ scans); reading them requires ``viewer``. Writes are CSRF-guarded.
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.scan_schemas import ScanCreateIn
+from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.core.audit import record_audit
 from app.core.cron import CronError, validate_cron
+from app.core.timeutil import utcnow
 from app.db.models import (
     GitCredential,
     Registry,
@@ -33,18 +33,12 @@ from app.db.models import (
     TargetType,
 )
 from app.db.session import get_db
+from app.scanners.support import scanner_supports
 
 router = APIRouter(prefix="/scan-schedules", tags=["scan-schedules"])
 
 _viewer = require_role(Role.VIEWER)
 _operator = require_role(Role.OPERATOR)
-
-#: Which scanners may run against each target type (mirrors the scans API).
-_ALLOWED_SCANNERS: dict[TargetType, set[Scanner]] = {
-    TargetType.IMAGE: {Scanner.TRIVY, Scanner.GRYPE},
-    TargetType.REPOSITORY: {Scanner.TRIVY},
-    TargetType.FILESYSTEM: {Scanner.GRYPE},
-}
 
 
 class ScanScheduleIn(ScanCreateIn):
@@ -79,12 +73,12 @@ class ScanScheduleOut(BaseModel):
     options: dict
     registry_id: int | None
     git_credential_id: int | None
-    last_run_at: datetime | None
+    last_run_at: UtcDatetime | None
     last_scan_id: int | None
     last_status: str | None
     created_by_username: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 def _get_or_404(db: Session, schedule_id: int) -> ScanSchedule:
@@ -102,7 +96,7 @@ def _validate_template(db: Session, payload: ScanScheduleIn) -> None:
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="SBOM scans cannot be scheduled (they require a file upload).",
         )
-    if payload.scanner not in _ALLOWED_SCANNERS.get(payload.target_type, set()):
+    if not scanner_supports(payload.target_type, payload.scanner):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"{payload.scanner.value} does not support "
@@ -272,6 +266,11 @@ async def run_schedule_now(
     db.add(scan)
     db.flush()
     schedule.last_scan_id = scan.id
+    # Record this as a run: the cron tick fires on ``last_run_at``, so stamping
+    # it now stops the tick from firing the same schedule again within this
+    # minute — a duplicate back-to-back scan and a raced ``last_scan_id`` (CON-17).
+    schedule.last_run_at = utcnow()
+    schedule.last_status = "ok (manual run)"
     record_audit(
         db,
         action="schedule.run_now",

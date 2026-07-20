@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.timeutil import utcnow
 from app.db.models import Scan, Scanner, ScanSchedule, ScanStatus, TargetType
+from app.db.session import SessionLocal
 from app.workers.schedules import fire_due_schedules
 from tests.test_auth import CSRF, setup_admin
 from tests.test_rbac_users_audit import login_as, make_user
@@ -113,6 +114,40 @@ class TestRunNow:
         assert resp.status_code == 200
         assert resp.json()["last_scan_id"] is not None
         assert submitted == [resp.json()["last_scan_id"]]
+
+    def test_run_now_stamps_last_run_and_blocks_same_minute_tick(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        """CON-17: 'Run now' records the run, so the cron tick does not fire the
+        same schedule again this minute (no duplicate scan, no lost last_scan_id)."""
+        csrf = setup_admin(client)
+
+        async def fake_submit(scan_id: int) -> None:
+            return None
+
+        monkeypatch.setattr(client.app.state.scan_worker, "submit", fake_submit)
+        # An every-minute schedule is always due, so only the run-now stamp can
+        # stop the tick from firing a second scan.
+        sid = client.post(
+            "/api/scan-schedules",
+            json={**IMAGE_SCHEDULE, "cron": "* * * * *"},
+            headers={CSRF: csrf},
+        ).json()["id"]
+
+        resp = client.post(f"/api/scan-schedules/{sid}/run", headers={CSRF: csrf})
+        assert resp.status_code == 200
+        manual_scan_id = resp.json()["last_scan_id"]
+        # APIR-7: the three last_* fields are one record of the latest firing;
+        # run-now must stamp all of them, not just last_scan_id.
+        assert resp.json()["last_run_at"] is not None
+        assert resp.json()["last_status"] == "ok (manual run)"
+
+        # The cron tick, running in the same minute, must find nothing due.
+        with SessionLocal() as db:
+            created = fire_due_schedules(db)
+        assert created == []
+        # last_scan_id still points at the manual run, not a raced tick scan.
+        assert client.get(f"/api/scan-schedules/{sid}").json()["last_scan_id"] == manual_scan_id
 
 
 class TestFireDueSchedules:

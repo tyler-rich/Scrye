@@ -1,4 +1,4 @@
-"""OIDC configuration and identity models (docs/PLAN.md §5).
+"""OIDC configuration and identity models (docs/ARCHIVE.md §5).
 
 Scrye supports generic OIDC (Authlib) alongside local auth. A single
 :class:`OidcConfig` row holds the provider settings; the client secret is

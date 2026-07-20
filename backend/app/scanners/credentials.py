@@ -1,6 +1,6 @@
 """Transient credential materialization for scan-time authentication.
 
-Per the locked secrets design (docs/PLAN.md §4.2, §6), stored credentials are
+Per the locked secrets design (docs/ARCHIVE.md §4.2, §6), stored credentials are
 decrypted **only at scan time**, materialized into short-lived files under the
 container's **tmpfs** ``/tmp`` mount, used to authenticate the scanner
 subprocess, and then **shredded** immediately after. Nothing here touches the
@@ -22,13 +22,15 @@ Two mechanisms:
   so :func:`generic_repo_checkout` clones it ourselves with the system ``git``
   binary: the credential is delivered through a transient tmpfs ``GIT_ASKPASS``
   helper (never in argv, never persisted), and Trivy then scans the local
-  checkout. See docs/PLAN.md §14 (Phase 3 Security Review #2 resolution).
+  checkout. See docs/ARCHIVE.md §14 (Phase 3 Security Review #2 resolution).
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import contextlib
+import functools
 import json
 import os
 import shutil
@@ -37,6 +39,8 @@ from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
+
+import anyio.to_thread
 
 from app.core.config import get_settings
 from app.db.models import CREDENTIAL_HELPERS, GitProvider, RegistryAuthType
@@ -140,6 +144,20 @@ def docker_config_env(auth: RegistryAuth) -> Iterator[dict[str, str]]:
 def is_http_url(url: str) -> bool:
     """Return True when ``url`` uses an ``http``/``https`` scheme."""
     return urlparse(url).scheme in {"http", "https"}
+
+
+def is_remote_repo_url(url: str) -> bool:
+    """Return True when ``url`` is a remote git clone URL, not a local path.
+
+    A repository scan runs ``trivy repo`` against the target, and Trivy's ``repo``
+    subcommand accepts a **local filesystem path**, not just a remote URL. A bare
+    path like ``/data`` or ``/run/secrets`` would make Trivy walk the container
+    filesystem and surface its contents as downloadable scan output, bypassing the
+    ``SCRYE_FILESYSTEM_SCAN_ROOTS`` allowlist that gates local-path scanning. Only
+    a target with a remote clone scheme — ``http``/``https`` (see
+    :func:`is_http_url`), ``ssh``, or ``git`` — is a genuine remote repository.
+    """
+    return is_http_url(url) or urlparse(url).scheme in {"ssh", "git"}
 
 
 def git_env_token(auth: GitAuth) -> dict[str, str]:
@@ -290,5 +308,13 @@ async def generic_repo_checkout(
         _shred_file(script_path)
         with contextlib.suppress(OSError):
             shutil.rmtree(cred_dir, ignore_errors=True)
+        # The checkout can be an arbitrarily large working tree (multi-GB), so
+        # walking and unlinking it inline would stall the event loop for seconds
+        # (CON-20). Hop it to a thread, shielded so the cleanup still completes
+        # even though this finally can run under cancellation (worker shutdown).
         with contextlib.suppress(OSError):
-            shutil.rmtree(clone_dir, ignore_errors=True)
+            await asyncio.shield(
+                anyio.to_thread.run_sync(
+                    functools.partial(shutil.rmtree, clone_dir, ignore_errors=True)
+                )
+            )

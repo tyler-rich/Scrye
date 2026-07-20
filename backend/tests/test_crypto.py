@@ -1,4 +1,4 @@
-"""Unit tests for the envelope-encryption module (docs/PLAN.md §6)."""
+"""Unit tests for the envelope-encryption module (docs/ARCHIVE.md §6)."""
 
 from __future__ import annotations
 
@@ -66,10 +66,43 @@ class TestKeyLoading:
         with pytest.raises(MasterKeyError, match="malformed"):
             load_master_keys(_write_key_file(tmp_path, f"{_random_b64_key()}\nnot-a-key-line\n"))
 
-    def test_raw_non_base64_key_accepted_when_long_enough(self, tmp_path: Path) -> None:
-        # Not valid base64, but >= 32 bytes of raw material.
-        keys = load_master_keys(_write_key_file(tmp_path, "!" * 40))
+    def test_raw_non_base64_key_rejected_by_entropy_floor(self, tmp_path: Path) -> None:
+        # A raw passphrase (not valid base64) is now refused as low-entropy
+        # even when it is >= 32 bytes long (SEC-3), with an actionable error.
+        with pytest.raises(MasterKeyError, match="not valid base64"):
+            load_master_keys(_write_key_file(tmp_path, "correct horse battery staple pw!"))
+
+    def test_weak_key_accepted_under_optout_with_warning(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The temporary boot-and-rotate escape hatch lets a legacy passphrase key
+        # load (>= 32 bytes), but every load under it logs a warning so it can't
+        # quietly become permanent.
+        monkeypatch.setenv("SCRYE_ALLOW_WEAK_MASTER_KEY", "1")
+        with caplog.at_level("WARNING", logger="app.core.crypto"):
+            keys = load_master_keys(_write_key_file(tmp_path, "!" * 40))
         assert len(keys[1]) == 40
+        assert any("SCRYE_ALLOW_WEAK_MASTER_KEY" in rec.message for rec in caplog.records)
+
+    def test_weak_key_optout_still_enforces_length_floor(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Even with the opt-out, the >= 32-byte floor still applies.
+        monkeypatch.setenv("SCRYE_ALLOW_WEAK_MASTER_KEY", "1")
+        with pytest.raises(MasterKeyError, match="too short"):
+            load_master_keys(_write_key_file(tmp_path, "!" * 10))
+
+    def test_valid_base64_key_still_decrypts_existing_data(self, tmp_path: Path) -> None:
+        # INVARIANT (SEC-3 fix must not change at-rest crypto): a fixed, valid
+        # base64 key is accepted unchanged and a value encrypted under it still
+        # round-trips — the entropy floor is input validation only, not a KDF or
+        # format change, so existing ciphertext keeps decrypting.
+        fixed_key = base64.b64encode(b"\x11" * 48).decode("ascii")
+        cipher_before = SecretCipher(load_master_keys(_write_key_file(tmp_path, fixed_key)))
+        token = cipher_before.encrypt("stored-registry-secret", aad="registries.secret")
+        # A fresh cipher built from the same key file (as a restart would) decrypts it.
+        cipher_after = SecretCipher(load_master_keys(_write_key_file(tmp_path, fixed_key)))
+        assert cipher_after.decrypt(token, aad="registries.secret") == "stored-registry-secret"
 
 
 class TestEncryptDecrypt:

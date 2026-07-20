@@ -1,4 +1,4 @@
-"""Report generation: scan/history exporters and scan diffs (docs/PLAN.md §4.3, §4.4).
+"""Report generation: scan/history exporters and scan diffs (docs/ARCHIVE.md §4.3, §4.4).
 
 This package turns persisted scans and their normalized findings into the
 downloadable CSV / Markdown / JSON reports offered per-scan and for filtered

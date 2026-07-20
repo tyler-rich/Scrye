@@ -1,6 +1,6 @@
 """Scan endpoints: launch scans, browse results, download raw artifacts.
 
-RBAC (docs/PLAN.md §5): launching a scan requires ``operator``; reading scans,
+RBAC (docs/ARCHIVE.md §5): launching a scan requires ``operator``; reading scans,
 findings, and artifacts requires ``viewer``. Launch and cancel are CSRF-guarded
 state-changing operations.
 """
@@ -23,6 +23,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session, load_only, selectinload
@@ -41,6 +42,7 @@ from app.api.scan_schemas import (
     FindingsPage,
     ScanCreateIn,
     ScanOut,
+    ScanSummaryOut,
 )
 from app.api.uploads import read_upload_capped
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
@@ -65,6 +67,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.reports import ExportFormat, diff_findings, export_history, export_scan
+from app.scanners.support import scanner_supports
 from app.scanners.targets import TargetError, resolve_filesystem_path
 
 logger = logging.getLogger(__name__)
@@ -73,14 +76,6 @@ router = APIRouter(prefix="/scans", tags=["scans"])
 
 _viewer = require_role(Role.VIEWER)
 _operator = require_role(Role.OPERATOR)
-
-#: Which scanners may run against each target type (docs/PLAN.md §4).
-_ALLOWED_SCANNERS: dict[TargetType, set[Scanner]] = {
-    TargetType.IMAGE: {Scanner.TRIVY, Scanner.GRYPE},
-    TargetType.REPOSITORY: {Scanner.TRIVY},
-    TargetType.FILESYSTEM: {Scanner.GRYPE},
-    TargetType.SBOM: {Scanner.GRYPE},
-}
 
 #: Filename used to store an uploaded SBOM (the display target keeps the original).
 _UPLOADED_SBOM_FILENAME = "uploaded-sbom.json"
@@ -116,22 +111,22 @@ def _get_scan_or_404(db: Session, scan_id: int) -> Scan:
 
 def _reject_unsupported_combo(target_type: TargetType, scanner: Scanner) -> None:
     """Raise 422 if ``scanner`` cannot run against ``target_type``."""
-    if scanner not in _ALLOWED_SCANNERS[target_type]:
+    if not scanner_supports(target_type, scanner):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"{scanner.value} does not support {target_type.value} targets.",
         )
 
 
-async def _queue_scan(request: Request, db: Session, scan: Scan, auth: AuthContext) -> ScanOut:
-    """Persist a queued scan, audit it, hand it to the worker, and return it."""
+def _persist_queued_scan(db: Session, scan: Scan, *, actor: AuthContext, ip: str | None) -> None:
+    """Insert a queued scan and its audit row, then commit (synchronous)."""
     db.add(scan)
     db.flush()
     record_audit(
         db,
         action="scan.created",
-        actor=auth.user,
-        ip=client_ip(request),
+        actor=actor.user,
+        ip=ip,
         target_type="scan",
         target_id=str(scan.id),
         details={
@@ -141,6 +136,14 @@ async def _queue_scan(request: Request, db: Session, scan: Scan, auth: AuthConte
         },
     )
     db.commit()
+
+
+async def _queue_scan(request: Request, db: Session, scan: Scan, auth: AuthContext) -> ScanOut:
+    """Persist a queued scan, audit it, hand it to the worker, and return it."""
+    # The insert/flush/audit/commit run on the event loop; hop them off so a
+    # concurrent long writer holding the SQLite lock can't stall the loop inside
+    # busy_timeout (CON-5). expire_on_commit=False keeps ``scan`` usable after.
+    await run_in_threadpool(_persist_queued_scan, db, scan, actor=auth, ip=client_ip(request))
     await request.app.state.scan_worker.submit(scan.id)
     logger.info(
         "Queued scan %d (%s %s %s).",
@@ -222,7 +225,7 @@ async def create_sbom_scan(
     """Queue a Grype scan of an uploaded SBOM (``grype sbom:<file>``).
 
     The SBOM is stored as the scan's input artifact; the worker feeds it to
-    Grype. Only Grype scans SBOMs (docs/PLAN.md §4.2).
+    Grype. Only Grype scans SBOMs (docs/ARCHIVE.md §4.2).
     """
     _reject_unsupported_combo(TargetType.SBOM, scanner)
 
@@ -266,7 +269,7 @@ async def create_sbom_scan(
     return await _queue_scan(request, db, scan, auth)
 
 
-@router.get("", response_model=list[ScanOut])
+@router.get("", response_model=list[ScanSummaryOut])
 def list_scans(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
@@ -274,9 +277,9 @@ def list_scans(
     scan_status: ScanStatus | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-) -> list[ScanOut]:
+) -> list[ScanSummaryOut]:
     """List scans, newest first (basic filters; full history in Phase 4)."""
-    # Eager-load tags to avoid an N+1 SELECT per row when ScanOut reads them (API-1).
+    # Eager-load tags to avoid an N+1 SELECT per row when the row reads them (API-1).
     stmt = (
         select(Scan)
         .options(selectinload(Scan.tag_rows))
@@ -287,7 +290,7 @@ def list_scans(
     if scan_status is not None:
         stmt = stmt.where(Scan.status == scan_status)
     scans = db.scalars(stmt.limit(limit).offset(offset)).all()
-    return [ScanOut.model_validate(s) for s in scans]
+    return [ScanSummaryOut.model_validate(s) for s in scans]
 
 
 @router.get("/history", response_model=ScanHistoryPage)
@@ -300,7 +303,7 @@ def list_history(
     limit: int = Query(default=25, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> ScanHistoryPage:
-    """Return a filtered, sorted, paginated page of scan history (docs/PLAN.md §4.4).
+    """Return a filtered, sorted, paginated page of scan history (docs/ARCHIVE.md §4.4).
 
     Supports the full filter set — scanner, target type, target full-text search,
     status, date range, initiator, highest severity, severity-threshold presence,
@@ -325,7 +328,7 @@ def list_history(
         .offset(offset)
     )
     scans = db.scalars(stmt).all()
-    return ScanHistoryPage(total=total, items=[ScanOut.model_validate(s) for s in scans])
+    return ScanHistoryPage(total=total, items=[ScanSummaryOut.model_validate(s) for s in scans])
 
 
 @router.get("/filter-options", response_model=FilterOptionsOut)
@@ -356,8 +359,12 @@ def export_history_view(
     The export follows the same filters as the history view (newest first) and is
     capped at a generous row limit to keep a single download bounded.
     """
+    base = filters.apply(select(Scan))
+    # Count the full matching set so the export can flag when the cap truncated it
+    # (APIR-4); the count query is cheap next to materializing thousands of rows.
+    total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
     stmt = (
-        filters.apply(select(Scan))
+        base
         # Every exporter reads scan.tags; eager-load them in one query instead
         # of one lazy SELECT per exported scan (the cap allows thousands).
         .options(selectinload(Scan.tag_rows))
@@ -365,11 +372,16 @@ def export_history_view(
         .limit(_MAX_HISTORY_EXPORT_SCANS)
     )
     scans = list(db.scalars(stmt).all())
-    result = export_history(scans, fmt, filters=filters.as_metadata())
+    result = export_history(scans, fmt, filters=filters.as_metadata(), total=total)
+    headers = {"Content-Disposition": f'attachment; filename="{result.filename}"'}
+    if total > len(scans):
+        # Machine-readable signal that works for every format, including CSV.
+        headers["X-Scrye-Truncated"] = "true"
+        headers["X-Scrye-Total"] = str(total)
     return Response(
         content=result.content,
         media_type=result.media_type,
-        headers={"Content-Disposition": f'attachment; filename="{result.filename}"'},
+        headers=headers,
     )
 
 
@@ -500,7 +512,7 @@ def delete_scan(
     _: AuthContext = Depends(_operator),
     db: Session = Depends(get_db),
 ) -> Response:
-    """Delete a completed scan and every trace of it (docs/PLAN.md §5, RBAC).
+    """Delete a completed scan and every trace of it (docs/ARCHIVE.md §5, RBAC).
 
     Removing the ``scans`` row cascades — via the ORM relationships and the
     ``ON DELETE CASCADE`` foreign keys — to its findings, stored-artifact
@@ -586,7 +598,7 @@ def export_scan_view(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
-    """Export a single scan's findings as CSV, Markdown, or JSON (docs/PLAN.md §4.3)."""
+    """Export a single scan's findings as CSV, Markdown, or JSON (docs/ARCHIVE.md §4.3)."""
     scan = _get_scan_or_404(db, scan_id)
     findings = _scan_findings(db, scan_id)
     result = export_scan(scan, findings, fmt)
@@ -604,7 +616,7 @@ def diff_scans(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
 ) -> ScanDiffOut:
-    """Diff two scans of the same target: new vs. fixed findings (docs/PLAN.md §4.4).
+    """Diff two scans of the same target: new vs. fixed findings (docs/ARCHIVE.md §4.4).
 
     ``scan_id`` is the base (older) scan and ``other_scan_id`` is the comparison
     (newer) scan. Both must share the same scanner and target so the diff is
@@ -654,7 +666,7 @@ def set_scan_tags(
     _: AuthContext = Depends(_operator),
     db: Session = Depends(get_db),
 ) -> ScanOut:
-    """Replace the full set of tags on a scan (docs/PLAN.md §4.4).
+    """Replace the full set of tags on a scan (docs/ARCHIVE.md §4.4).
 
     Tags are free-form labels used to filter scan history. Setting them requires
     the ``operator`` role and is CSRF-guarded; the incoming list is trimmed,

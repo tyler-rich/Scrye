@@ -1,4 +1,4 @@
-"""A small, dependency-free 5-field cron evaluator (docs/PLAN.md §12, Phase 6).
+"""A small, dependency-free 5-field cron evaluator (docs/ARCHIVE.md §12, Phase 6).
 
 Scheduled scans (§4.6/§12) run on a standard cron cadence. Rather than pull in a
 third-party cron library, this module implements the common 5-field syntax

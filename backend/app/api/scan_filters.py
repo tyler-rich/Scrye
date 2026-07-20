@@ -1,4 +1,4 @@
-"""Shared scan-history filter parsing and query building (docs/PLAN.md §4.4).
+"""Shared scan-history filter parsing and query building (docs/ARCHIVE.md §4.4).
 
 The history view and the filtered-history export accept the same filter set, so
 it lives here once as a FastAPI dependency (:func:`history_filters`) plus the
@@ -9,12 +9,13 @@ non-sensitive metadata.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from fastapi import Query
 from sqlalchemy import Select, exists
 
+from app.core.timeutil import to_naive_utc as _to_naive_utc
 from app.db.models import (
     SEVERITY_RANK,
     Scan,
@@ -24,15 +25,6 @@ from app.db.models import (
     Severity,
     TargetType,
 )
-
-
-def _to_naive_utc(value: datetime | None) -> datetime | None:
-    """Normalize an optional datetime to naive UTC (DB timestamps are naive UTC)."""
-    if value is None:
-        return None
-    if value.tzinfo is not None:
-        return value.astimezone(UTC).replace(tzinfo=None)
-    return value
 
 
 def severities_at_or_above(threshold: Severity) -> list[Severity]:

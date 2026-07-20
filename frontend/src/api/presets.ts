@@ -1,4 +1,4 @@
-/** Saved scan-history filter presets (docs/PLAN.md §4.4). Owner-scoped. */
+/** Saved scan-history filter presets (docs/ARCHIVE.md §4.4). Owner-scoped. */
 
 import { api } from './client';
 import type { HistoryFilters } from './scans';

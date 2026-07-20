@@ -82,6 +82,27 @@ python -m scripts.gen_env_example            # writes ../.env.example
 python -m scripts.gen_env_example --check    # CI-style check (no write)
 ```
 
+**Backend dependency lock (`requirements.lock`).** `pyproject.toml` pins only the
+direct runtime dependencies; the container image installs the fully-resolved,
+hash-pinned transitive closure from `backend/requirements.lock` so every build is
+reproducible and every package is hash-verified (`pip install --require-hashes`,
+supply-chain finding SC-1). The lock is compiled with [`uv`](https://docs.astral.sh/uv/)
+— a build/dev-time tool only; it is **not** added to the runtime image, and the
+image still installs with plain `pip`. After changing any dependency in
+`pyproject.toml`, regenerate the lock with the **pinned** uv version (CI runs the
+identical command and fails if the committed lock drifts):
+
+```bash
+cd backend
+pip install uv==0.8.17     # pin kept in sync with .github/workflows/ci.yml
+uv pip compile pyproject.toml --generate-hashes --python-version 3.13 \
+  --output-file requirements.lock
+```
+
+`uv` reads the existing `requirements.lock` as a preference set, so a routine
+regeneration only changes what a `pyproject.toml` edit actually requires — an
+unrelated new transitive release on PyPI does not rewrite the lock.
+
 ### Frontend (React + Vite)
 
 ```bash
@@ -243,9 +264,12 @@ a later phase.
 # Backend
 cd backend && pytest
 
-# Frontend (build + static checks)
-cd frontend && npm run build && npm run lint && npm run format:check
+# Frontend (unit tests + build + static checks)
+cd frontend && npm test && npm run build && npm run lint && npm run format:check
 ```
+
+Frontend unit tests run under **Vitest** (`npm test`); place them next to the code
+they cover as `*.test.ts`/`*.test.tsx`.
 
 Security-sensitive code (crypto/secrets, auth) must have direct unit tests:
 encrypt/decrypt round-trips, key derivation, write-only masking, and proof that
@@ -315,9 +339,17 @@ builds for both architectures. Everything is published to a **single registry, G
   (`docker pull ghcr.io/tyler-rich/scrye:dev`) for testing. Use a `:<version>` tag (or `:latest`)
   for production.
 
-Both publish workflows declare their own `permissions: { contents: read, packages: write }`, so
-**Settings → Actions → General → Workflow permissions** can stay on the restrictive read-only
-default (an explicit per-workflow block takes precedence and is not capped by the repo default);
+**Provenance + SBOM.** Both publish paths attach a BuildKit SLSA provenance attestation and an
+SPDX SBOM to the pushed image manifest (`provenance: mode=max` + `sbom: true`), and add a
+**GitHub-signed** build-provenance attestation via `actions/attest-build-provenance`. Consumers can
+verify a pulled image was built by this repo's workflow from a given commit with
+`gh attestation verify oci://ghcr.io/tyler-rich/scrye:<tag> --owner tyler-rich`. The CI build-only
+check (`push: false`) leaves both off.
+
+Both publish workflows declare their own job-level `permissions`: `contents: read` + `packages:
+write` (GHCR push) plus `id-token: write` + `attestations: write` (only for the signed provenance
+attestation). So **Settings → Actions → General → Workflow permissions** can stay on the restrictive
+read-only default (an explicit block takes precedence and is not capped by the repo default);
 `ci.yml` declares only `contents: read` and never publishes. The repo is **public**, so the GHCR
 package is public — no per-package visibility change is needed. Because both publish paths are
 triggered outside `pull_request` (a tag push, and a schedule), a fork's pull request never has a

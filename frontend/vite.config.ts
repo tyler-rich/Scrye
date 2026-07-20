@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -17,5 +18,11 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+  },
+  test: {
+    // Unit tests here (e.g. safeHttpUrl) exercise pure helpers that only need
+    // the standard `URL` API, so the default Node environment is sufficient.
+    environment: 'node',
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 });

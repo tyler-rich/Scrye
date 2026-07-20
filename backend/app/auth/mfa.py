@@ -1,4 +1,4 @@
-"""TOTP multi-factor authentication helpers (docs/PLAN.md §5).
+"""TOTP multi-factor authentication helpers (docs/ARCHIVE.md §5).
 
 Optional per-account TOTP MFA built on ``pyotp``. The shared secret is generated
 server-side, shown to the user **once** during enrollment (as a manual key plus
@@ -10,6 +10,7 @@ the brief "password OK, awaiting code" state between the two login steps.
 from __future__ import annotations
 
 import secrets
+import threading
 import time
 from dataclasses import dataclass
 
@@ -21,6 +22,9 @@ from app.core.secret_store import AAD_MFA_SECRET, decrypt_secret, encrypt_secret
 _TOTP_VALID_WINDOW = 1
 #: Lifetime of a pending-MFA challenge token (seconds).
 _CHALLENGE_TTL_SECONDS = 300
+#: Max concurrent pending challenges per user; issuing beyond this drops the
+#: oldest so one account can't accumulate live challenges up to the TTL (SEC-10).
+_MAX_PENDING_PER_USER = 5
 
 
 def generate_secret() -> str:
@@ -41,14 +45,14 @@ def verify_code(secret: str, code: str) -> bool:
     return pyotp.TOTP(secret).verify(cleaned, valid_window=_TOTP_VALID_WINDOW)
 
 
-def encrypt_mfa_secret(secret: str) -> str:
-    """Encrypt a TOTP secret for storage (bound to the MFA AAD)."""
-    return encrypt_secret(secret, aad=AAD_MFA_SECRET)
+def encrypt_mfa_secret(secret: str, *, user_id: object) -> str:
+    """Encrypt a TOTP secret for storage (bound to the MFA AAD and the user row)."""
+    return encrypt_secret(secret, aad=AAD_MFA_SECRET, row_id=user_id)
 
 
-def decrypt_mfa_secret(token: str) -> str:
-    """Decrypt a stored TOTP secret (bound to the MFA AAD)."""
-    return decrypt_secret(token, aad=AAD_MFA_SECRET)
+def decrypt_mfa_secret(token: str, *, user_id: object) -> str:
+    """Decrypt a stored TOTP secret (bound to the MFA AAD and the user row, SEC-7)."""
+    return decrypt_secret(token, aad=AAD_MFA_SECRET, row_id=user_id)
 
 
 #: Challenge purposes. ``verify`` completes an existing enrolled login; ``enroll``
@@ -72,31 +76,57 @@ class PendingMfaStore:
     Single-container deployment (locked §0.2) makes an in-memory store the right
     fit: challenges are short-lived and losing them on restart just means the
     user re-enters their password. Tokens are opaque 256-bit random values.
+
+    The sync ``login``/``verify_mfa`` endpoints run on different threadpool
+    threads, so every access is guarded by a lock — exactly like the sibling
+    rate limiter. Without it, one thread's ``_prune`` iterating ``_pending``
+    while another inserts raises ``RuntimeError: dictionary changed size during
+    iteration`` and 500s an otherwise-valid login (CON-8).
     """
 
     def __init__(self) -> None:
         """Initialize an empty challenge store."""
         self._pending: dict[str, _PendingChallenge] = {}
+        self._lock = threading.Lock()
 
     def issue(self, user_id: int, purpose: str = PURPOSE_VERIFY) -> str:
         """Create a challenge for ``user_id`` and return its opaque token."""
-        self._prune()
         token = secrets.token_urlsafe(32)
-        self._pending[token] = _PendingChallenge(
-            user_id=user_id, purpose=purpose, expires_at=time.monotonic() + _CHALLENGE_TTL_SECONDS
-        )
+        with self._lock:
+            self._prune()
+            self._evict_over_cap(user_id)
+            self._pending[token] = _PendingChallenge(
+                user_id=user_id,
+                purpose=purpose,
+                expires_at=time.monotonic() + _CHALLENGE_TTL_SECONDS,
+            )
         return token
 
     def consume(self, token: str) -> tuple[int, str] | None:
         """Return ``(user_id, purpose)`` for a valid challenge and delete it, else ``None``."""
-        self._prune()
-        challenge = self._pending.pop(token, None)
+        with self._lock:
+            self._prune()
+            challenge = self._pending.pop(token, None)
         if challenge is None or challenge.expires_at <= time.monotonic():
             return None
         return challenge.user_id, challenge.purpose
 
     def _prune(self) -> None:
-        """Drop expired challenges."""
+        """Drop expired challenges. Caller must hold ``self._lock``."""
         now = time.monotonic()
         for token in [t for t, c in self._pending.items() if c.expires_at <= now]:
+            self._pending.pop(token, None)
+
+    def _evict_over_cap(self, user_id: int) -> None:
+        """Bound a single user's live challenges, dropping the oldest first.
+
+        Caller must hold ``self._lock``. Keeps room for the one about to be
+        issued, so the per-user total never exceeds ``_MAX_PENDING_PER_USER``.
+        """
+        tokens = [t for t, c in self._pending.items() if c.user_id == user_id]
+        excess = len(tokens) - (_MAX_PENDING_PER_USER - 1)
+        if excess <= 0:
+            return
+        tokens.sort(key=lambda t: self._pending[t].expires_at)  # oldest first
+        for token in tokens[:excess]:
             self._pending.pop(token, None)

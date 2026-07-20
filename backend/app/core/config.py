@@ -132,6 +132,18 @@ class Settings(BaseSettings):
         description="Optional read-only docker-socket-proxy URL ('scan running images').",
     )
 
+    # --- Outbound egress ---------------------------------------------------
+    allow_internal_egress: bool = Field(
+        default=False,
+        description=(
+            "Allow server-side fetchers (notification webhooks/SMTP, the registry "
+            "probe) to reach RFC-1918/private/internal addresses. Off by default to "
+            "block SSRF to internal services; enable only if you use an internal "
+            "SMTP relay or private registry. Loopback and cloud-metadata addresses "
+            "are always refused regardless of this setting."
+        ),
+    )
+
     # --- Scanning ----------------------------------------------------------
     trivy_binary: str = Field(
         default="trivy",
@@ -147,7 +159,12 @@ class Settings(BaseSettings):
     )
     max_concurrent_scans: int = Field(
         default=2,
-        description="Maximum number of scans the in-process worker runs concurrently.",
+        ge=1,
+        le=32,
+        description=(
+            "Maximum number of scans the in-process worker runs concurrently "
+            "(1-32; the DB pool is sized from this value)."
+        ),
     )
     scan_timeout_seconds: int = Field(
         default=1800,

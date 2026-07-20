@@ -543,6 +543,321 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-13 — Post-release — CON-4 (H5): scanner JSON parse/normalize hopped off the event loop
+**What changed:** Each scanner's `_execute` now runs its parse+normalize step in a worker thread via
+`anyio.to_thread.run_sync` instead of calling it inline on the event loop:
+`backend/app/scanners/trivy.py` (`findings = await anyio.to_thread.run_sync(parse_output, result.stdout)`)
+and `backend/app/scanners/grype.py` (same, returning `(findings, version)`). Because both `parse_output`
+functions call the shared `load_json_output` (`scanners/base.py`) internally, hopping `parse_output`
+moves the `json.loads` *and* the per-finding normalization loop off the loop in one place — no separate
+change at `base.py:362` was needed, and the parsing logic itself is untouched. A regression test
+(`backend/tests/test_scanners.py`) proves it: a deliberately blocking stand-in parse runs while a
+heartbeat coroutine keeps ticking on the loop (asserted responsive), plus thread-identity assertions
+for both engines that the parse executes off the loop thread.
+**Why:** CON-4 (concurrency review, filed as HIGH / verification-pass H5) — scanner stdout is capped at
+`SCRYE_SCANNER_MAX_OUTPUT_BYTES` (512 MiB) and a large report (the archive's own run produced 7,072
+findings) is seconds of pure CPU to parse; on the loop that froze every request, including the
+`/healthz` poll the container healthcheck restarts on. This finding was missed in the CON-5–CON-20
+remediation batch and had **no prior §14 entry** (it fell in the gap between the "Top 5 #2" and
+"CON-5–CON-20" change-sets), so this entry also closes that record gap. The fix deliberately reuses the
+**same** `anyio.to_thread.run_sync` primitive CON-5 used for blocking DB work — a mechanical thread hop,
+no new concurrency primitive, no schema/security-model/job-model change (§0.2 single-container in-process
+async worker unchanged).
+**Plan section affected:** `docs/reviews/concurrency-review.md` CON-4; no change to §0/§4/§7. Also folds
+in L24/SC-11 (add `persist-credentials: false` to `.github/workflows/ci.yml` checkouts) as a separate
+commit — CLAUDE.md hard security rules / CI hygiene.
+
+### 2026-07-13 — Docs/Process — Squash-merge authorship follows the GitHub profile display name (D4 doc-side)
+**What changed:** `CLAUDE.md` § Git & PR conventions (the author-identity rule) now records that a
+GitHub **squash-merge** authors the squashed commit with the merging account's *profile display name*,
+which the repo-local `git config user.name "tyler-rich"` cannot override. The rule therefore requires
+the GitHub profile display name to also read `tyler-rich` for the identity convention to hold
+end-to-end.
+**Why:** The CLAUDE.md compliance audit (`docs/reviews/claude-md-compliance.md`, GP4/D4) found 8
+squash-merge promotion commits authored as "Tyler Richardson" (the account's display name) rather than
+`tyler-rich` — same account, same mandated no-reply email, only the *name* diverging. This is not
+something a session can fix via `git config`: squash authorship is assigned server-side at merge time
+from the profile display name, so the operating contract must state the profile-alignment requirement
+explicitly. This is the documentation counterpart to drift finding D4 (the actual display-name fix is a
+GitHub profile setting made outside the repo, handled by the maintainer).
+**Plan section affected:** CLAUDE.md § Git & PR conventions (author identity). Process/docs only; no
+build-phase, schema, security-model, or job-model change.
+
+### 2026-07-13 — Docs/Process — dev→main promotion PRs use a plain "Promote dev to main: …" title
+**What changed:** `CLAUDE.md` § Coding standards (the "Commits: Conventional Commits" rule) now records
+an explicit exception: `dev` → `main` **promotion** PRs use a plain `Promote dev to main: …` title
+rather than a Conventional-Commit prefix, matching `CONTRIBUTING.md` § Releasing.
+**Why:** Promotions are deliberate, maintainer-initiated release steps (not routine feature work); the
+squash-merge subject names the release action rather than a code change, so a `feat:`/`fix:` prefix
+would misdescribe it. The CLAUDE.md compliance audit (`docs/reviews/claude-md-compliance.md`, GP6) noted
+the promotion titles were not Conventional-Commit-shaped; recording the convention as a stated
+exception — rather than "fixing" compliant release titles toward a prefix — matches the release process
+already documented in `CONTRIBUTING.md` § Releasing.
+**Plan section affected:** CLAUDE.md § Coding standards (Commits). Process/docs only; no build-phase,
+schema, security-model, or job-model change.
+
+### 2026-07-13 — Post-release — Security + supply-chain review batch (H11, M2–M5, M22–M26, L1–L4, L23)
+**What changed:** Worked the security-review (`docs/reviews/security-review.md`, SEC-*) and
+supply-chain-review (`docs/reviews/supply-chain-review.md`, SC-*) findings summarized in
+`docs/reviews/00-summary.md`, one commit per finding:
+- **H11 / SC-1.** Added a hash-pinned backend lockfile (`backend/requirements.lock`, compiled with
+  `uv pip compile --generate-hashes` — uv is build/dev-time only, pyproject stays PEP 621). The
+  image installs runtime deps with `pip install --require-hashes -r requirements.lock` then the app
+  with `pip install --no-deps .`; CI regenerates the lock with the pinned uv and fails on drift.
+- **M2 / SEC-3.** Master-key entropy floor: the key file must be valid base64 decoding to ≥32 bytes;
+  the raw-passphrase fallback is rejected unless the temporary `SCRYE_ALLOW_WEAK_MASTER_KEY` opt-out
+  is set (logs a warning). **Input validation only** — the KDF and on-disk token format are
+  unchanged, so all existing ciphertext still decrypts (regression-tested). Per the maintainer
+  decision to use option 1 (entropy floor, no crypto-format change).
+- **M5 / SEC-6.** New `core/egress.py` SSRF guard screens the notification/registry/docker-proxy
+  fetchers: loopback + link-local/metadata always refused; RFC-1918/private refused unless the new
+  `SCRYE_ALLOW_INTERNAL_EGRESS` setting (default off) is enabled; the docker proxy allows private
+  (internal by design) but still refuses loopback/metadata. **New Settings field**
+  `allow_internal_egress` → regenerated `.env.example`.
+- **M3 / SEC-4.** Broadened log redaction: the unquoted secret-value branch is now tempered-greedy
+  (consumes to EOL or the next `key=` pair, anchored to a non-space first char) so a spaced/comma-
+  bearing secret is redacted whole. **Behavior change:** trailing free text after an unquoted
+  single-token secret is now over-redacted (accepted trade-off; two tests updated).
+- **M22 / SC-6, M23 / SC-7, L23 / SC-9.** Refreshed the stale `node:22-bookworm-slim` digest; bumped
+  `tecnativa/docker-socket-proxy` 0.3.0 → v0.4.2 (image pull/boot could not be exercised in the
+  egress-restricted environment — re-verify on a Docker-Hub-reachable host; wollomatic migration
+  tracked in issue #63); digest-pinned the `# syntax=docker/dockerfile:1.7` frontend.
+- **M24 / SC-4.** Publish workflows attach BuildKit SLSA provenance (`mode=max`) + SPDX SBOM and a
+  GitHub-signed `attest-build-provenance` (job-level `id-token`/`attestations` write); CI build-only
+  check leaves them off.
+- **M25 / SC-5.** New `rescan.yml` weekly re-scan of the published `:latest`/`:dev` images (same
+  Trivy/Grype gate), opening/commenting a tracking issue on a finding instead of gating a merge.
+- **M26 / SC-8.** Dockerfile now cosign-verifies each scanner's `checksums.txt` (keyless, identity
+  pinned to the upstream release workflow) before `sha256sum -c`; cosign pinned by digest via
+  `COPY --from` the Sigstore image. **The exact upstream signature asset names / certificate
+  identities could not be exercised here (release CDN + api.github.com blocked); the CI image build
+  validates them.**
+- **L1 / SEC-7.** Field-encryption AAD now optionally binds to the row id (`<table>.<column>:<id>`).
+  Backward-compatible and **migration-free**: decrypt tries row-bound then falls back to the column
+  tag, so existing ciphertext still decrypts and each secret upgrades on next write (MFA/OIDC bind
+  immediately; API-resource creates bind on first update). The backup re-wrap preserves each value's
+  existing binding across a cycle.
+- **L2 / SEC-8, L3 / SEC-9.** Both are documented accepted limitations the review flagged as
+  no-behavioral-change (OIDC delegates MFA to the IdP; enroll-on-first-login is inherent). Added
+  audit visibility instead: OIDC logins under a mandatory policy record `mfa_delegated_to_idp`, and
+  the policy-forced first-enrollment records `forced_by_policy`. README security model documents both
+  windows. **No auth behavior changed.**
+- **L4 / SEC-10.** The rate limiter now evicts fully-expired idle keys once the map grows past a
+  threshold (amortized), and `PendingMfaStore` caps concurrent challenges per user.
+**Why:** Remediate the confirmed security/supply-chain findings. Stop-and-ask items were resolved
+with the maintainer up front: H11 lockfile tool (uv, build-time only), M2 crypto approach (entropy
+floor, no format change), and M23 socket-proxy (bump tecnativa now, wollomatic as a tracked follow-up).
+**Plan section affected:** §6 (secrets-at-rest hardening — additive, no format change), §6 locked
+decision context (new `SCRYE_ALLOW_INTERNAL_EGRESS` / `SCRYE_ALLOW_WEAK_MASTER_KEY` operational
+knobs), locked decision §6 publish pipeline (provenance/SBOM attestation + scheduled re-scan). No
+schema or job-model change.
+
+### 2026-07-13 — Post-release — Frontend-review wave 2 (M19–M21, L16–L22)
+**What changed:** Worked the remaining confirmed frontend-review findings from
+`docs/reviews/frontend-review.md` (summarized in `docs/reviews/00-summary.md`), one commit each.
+No schema, security-model, or contract change — all fixes are client-side lifecycle/UX/a11y:
+- **M19 / P1-2.** Settings forms (Retention, General, Backups schedule) no longer render editable
+  with Save enabled before their initial GET resolves — they gate the inputs/Save on a `loaded`
+  flag and only seed fetched values into a pristine form (`!form.isDirty()`), so a slow GET can't
+  be overwritten with defaults and a late response can't clobber in-progress edits. Backups splits
+  the schedule-form hydration out of the shared `load()` so list mutations stop re-hydrating it.
+  The New scan FEAT-7 prefill applies only to a pristine form.
+- **M20 / P1-3.** The scan-detail status poller uses exponential backoff (2.5s→30s) and halts after
+  a failure ceiling (or on a 404), surfacing a paused/Retry state instead of hammering a failing
+  endpoint behind a stale "running" badge. Backoff math is a unit-tested `lib/polling` helper.
+- **M21 / P1-4, L18 / P2-3.** History and findings fetches use a unit-tested latest-wins guard
+  (`lib/latest`) so out-of-order responses can't render results for a filter no longer selected.
+  Findings also gain loading/loaded flags (Loader on first load, LoadingOverlay during filter
+  changes) to remove the empty-state flash and stale rows.
+- **L16 / P2-1, L17 / P2-2.** The status poll no longer wipes an in-progress tag edit (adopts the
+  server tags only while the draft still matches the last synced value, via `lib/arrays`), and all
+  per-scan state resets in an effect keyed on `:scanId` so navigating between scans can't mix state.
+- **L19 / P2-4.** In-flight guards on mutation triggers (API-token create/revoke, user create,
+  schedule create/run/delete, MFA enroll/confirm/disable, session revoke, change password) — most
+  importantly stopping a double-click from minting an invisible second API token.
+- **L20 / P2-5, L21 / P2-6, L22 / P2-7.** History table made keyboard-accessible (UnstyledButton
+  headers + `aria-sort`, row links via `Anchor component={Link}`); accessible names added to the
+  scan-detail filters/tags, New scan segmented controls, and MFA PinInput; a Burger+Drawer mobile
+  nav fallback added below the `sm` breakpoint.
+P1-1 (unsafe `primary_url` href) was already fixed in wave 1 (the `safeHttpUrl` helper) and is
+reused, not re-touched.
+**Why:** Remediate the confirmed frontend-review findings. Client-only changes; no plan decision
+touched.
+**Plan section affected:** none (bug/UX/a11y fixes; no schema, security-model, or job-model change).
+
+### 2026-07-13 — Post-release — API-review batch (APIR-1…APIR-10)
+**What changed:** Worked the API/data-model review findings from
+`docs/reviews/api-review.md` (summarized in `docs/reviews/00-summary.md`), one commit each:
+- **APIR-1 (H7).** `IgnoreRuleIn.expires_at` now normalizes aware datetimes to naive UTC via a
+  new shared `core.timeutil.to_naive_utc` (which `scan_filters` also reuses), so a Trivy ignore
+  rule's offset is no longer silently dropped.
+- **APIR-2 (H8).** A `RequestValidationError` handler in `main.py` flattens schema-validation 422s
+  into the string `detail` envelope hand-raised 422s already use, so the SPA renders the reason.
+- **APIR-5 (M17).** Response models serialize timestamps with an explicit `Z` via a shared
+  `UtcDatetime` field type (`api/schema_types.py`); storage stays naive. **Contract note:** the
+  wire format for every timestamp changed from bare ISO-8601 to `…Z` (additive for correct
+  consumers; `parseUtc` already accepted it).
+- **APIR-3 (M15).** `DiffFindingOut` gains `location` (part of the diff identity for non-vuln
+  classes) and the SPA's Compare gate now also checks `target_type`.
+- **APIR-4 (M16).** Filtered-history export flags truncation (JSON metadata, Markdown/CSV note,
+  `X-Scrye-Truncated`/`X-Scrye-Total` headers) when the 5 000-row cap fires.
+- **APIR-6 (M18).** Update paths for secret-bearing resources re-establish create-path invariants:
+  a mandatory notification secret can't be cleared, and registry update strips `name`/
+  `registry_host` and refuses to blank a username_password username.
+- **APIR-7 (L12).** Already resolved by the CON-17 fix in #60 (run-now stamps all three `last_*`
+  fields); added the `last_status` assertion the review called out. No code change.
+- **APIR-8 (L13).** Renamed the audit pagination envelope key `entries` → `items` to match the
+  dominant `{total, items}` shape. **Scope decision (maintainer-directed):** deliberately *not*
+  the broad rewrite — the unpaginated bare-array admin lists and the frozen `GET /api/scans` are
+  left as-is. **Contract note:** `/api/audit` response key changed (admin-only, no SPA consumer).
+- **APIR-9 (L14).** Split `ScanSummaryOut` (drops `options`/`error`, adds `has_error`) for list/
+  history/dashboard rows from the full `ScanOut` (detail only). **Contract note:** those list
+  payloads no longer carry `options`/`error`.
+- **APIR-10 (L15).** Extracted the duplicated scanner↔target matrix to
+  `app/scanners/support.py` (`SCANNER_TARGET_SUPPORT` / `scanner_supports`), consumed by both the
+  scans and scan-schedules routers.
+**Why:** Remediate the confirmed API-layer findings. APIR-5/8/9 change response shapes; per the
+review's own guidance they were scoped narrowly (or, for APIR-8, held to the single-key rename per
+maintainer direction) rather than taken as a broad contract-version bump.
+**Plan section affected:** none (bug fixes / additive contract clarifications; no schema, security-
+model, or job-model change).
+
+### 2026-07-13 — Post-release — CON-2/CON-14 remediation: process-group kills for scanner subprocesses
+**What changed:** `run_command` (`backend/app/scanners/base.py`) now spawns scanner/git subprocesses
+with `start_new_session=True`, making the child its own process-group leader, and kills the whole
+group (`os.killpg(proc.pid, signal.SIGKILL)` via a new `_kill_process_group` helper) on all three
+abort paths — output-cap overflow, timeout, and shutdown cancellation — instead of `proc.kill()`,
+which only signalled the direct child. The helper (and the pre-existing `wait()` guards) suppress
+`ProcessLookupError` so a process group that has already exited can't replace the abort's own error
+(CON-14; the timeout path previously lacked this suppression entirely).
+**Why:** `git clone` spawns `git-remote-https`, and trivy/grype can spawn their own helpers; on
+timeout, output-cap overflow, or worker-shutdown cancellation the direct child died but these
+grandchildren kept running with `SCRYE_GIT_PASSWORD`/`GIT_ASKPASS` still in their environment
+(`docs/reviews/concurrency-review.md` CON-2, Top 5 #4) — a leaked credential-bearing process racing
+`generic_repo_checkout`'s best-effort cache cleanup. Process-group kill is the review's recommended
+fix and covers every current and future scanner child through the single `run_command` seam.
+**Plan section affected:** none (bug fix; no schema, security-model, or job-model change).
+
+### 2026-07-13 — Post-release — CON-1/CON-11/CON-3/SEC-2 remediation; worker seam gains optional hooks
+**What changed:** Three coupled fixes from the 2026-07-12 review batch (`docs/reviews/00-summary.md`
+Top 5 #2), landed as one change-set because they compound into a single failure theme:
+- **CON-1 + CON-11.** The worker's DB commits (the queued→running claim, `_persist_success`,
+  `_fail`, `_store_failure_output`) now run through a bounded retry-with-backoff helper for SQLite
+  lock-contention `OperationalError`s, and a successful scan's artifact files are unlinked only
+  after the *final* commit attempt fails (previously the first failure deleted them). A stale-scan
+  watchdog runs at the top of every maintenance tick: it re-submits `queued` scans older than a
+  grace period with no live task (lost submits — shutdown races, restore pauses) and fails
+  task-less `running` scans via an atomic conditional UPDATE, so both "stuck until restart"
+  families self-heal within a tick. The claim/fail commits also moved off the event loop into
+  threads (the highest-value subset of CON-5).
+- **CON-3.** `restore_bundle` now takes the write lock up front (`BEGIN IMMEDIATE`) and re-checks
+  the "no queued/running scans" guard *inside* the write transaction, raising a new
+  `RestoreConflictError` (→ 409) — the endpoint's pre-check is check-then-act across the upload
+  await and stays only as a fast-fail courtesy. The restore endpoint also pauses the worker for
+  the duration (submissions still land; their tasks hold at a gate until resume).
+- **SEC-2.** Restore-supplied scrypt parameters are clamped (`n<=2**20`, `r<=16`, `p<=4`, plus a
+  memory-budget check) and `maxmem` is a fixed 512 MiB constant instead of being derived from the
+  bundle's own untrusted `n`/`r`; malformed (non-numeric) KDF fields now fail as `BackupError`
+  instead of a 500.
+The `ScanWorker` interface (§0.2's "thin seam") gains three **optional, default-no-op** hooks —
+`reconcile_stale()`, `pause()`, `resume()` — overridden only by the in-process worker; the core
+seam (`submit`/`recover`/`shutdown`) is unchanged, so a future distributed worker still only has
+to implement those three.
+**Why:** The review showed a large findings flush, a restore, or a retention pass holding the
+write lock past the 5 s `busy_timeout` permanently loses a concurrent scan's results and strands
+it `running`; the restore guard raced scan creation across the upload await; and a crafted bundle
+could OOM-kill the container before passphrase validation. The watchdog was the review's own
+recommended mechanism ("retires CON-1 and CON-11 together"), as were the in-transaction re-check,
+the worker pause, and the scrypt clamps. No DB schema change and no change to the locked job
+model (§0.2) — the worker stays a single-container in-process async worker.
+**Plan section affected:** §0.2 (worker seam — extended, not reshaped), §8 (restore semantics),
+§12 (post-release hardening; no phase scope changed).
+
+### 2026-07-13 — Post-release — CON-5–CON-20 remediation: async-path, shutdown, and pool hygiene
+**What changed:** The remaining medium/low concurrency-review findings
+(`docs/reviews/concurrency-review.md`), each landed as its own commit with a regression test:
+- **CON-5** (event-loop offload). The maintenance tick's scanner-DB policy read
+  (`workers/db_update.py`), the worker's per-scan Trivy/Grype policy loads, and the scan-queue
+  insert/audit/commit (`api/scans.py`) now hop off the loop via a worker thread, matching the
+  pattern already used for result persistence and restore.
+- **CON-6** (shutdown budget). Added `stop_grace_period: 30s` to `docker/docker-compose.yml`,
+  shrank the worker drain grace `10s → 5s`, and bounded each scheduler's shutdown with
+  `asyncio.wait` (not `wait_for`, which would block on a cancel-swallowing threaded pass) so a
+  wedged task is abandoned after a timeout instead of running past SIGKILL.
+- **CON-7** (unshielded lifespan). The lifespan teardown is wrapped in `asyncio.shield` and each
+  component's shutdown runs under its own `try/except`, so a second cancellation or one failure
+  can't skip `worker.shutdown()` and abandon live scanner subprocesses.
+- **CON-8** (`PendingMfaStore`). `issue`/`consume`/`_prune` now hold a `threading.Lock`, mirroring
+  the rate limiter, so concurrent threadpool logins can't raise "dictionary changed size".
+- **CON-9** (backup snapshot). `build_bundle` reads every table inside one explicit `BEGIN` (a
+  single WAL read snapshot) so a scan committing mid-dump can't tear the bundle; `run_due_backup`
+  additionally defers (and logs, leaving `last_run_at` unset to retry) while any scan is
+  queued/running, mirroring the manual-restore guard.
+- **CON-10** (connection pinning). *User chose "Both" when presented the architectural option.* The
+  worker now resolves all DB inputs up front into detached values (`_RunInputs`), rolls back to
+  return its pooled connection to the pool, runs the minutes-long subprocess holding none, and
+  re-acquires only for persistence. As defense-in-depth the pool is sized from
+  `max_concurrent_scans` (`db/session.py`) and the setting is **newly capped at 1–32**
+  (`core/config.py`; `.env.example` regenerated).
+- **CON-12** (DB-update marker). `maybe_update_scanner_dbs` advances its interval marker only when
+  at least one engine actually updated, so a transient failure retries next tick.
+- **CON-13** (serialized tick). The scanner-DB refresh runs as its own detached maintenance task
+  (guarded to one at a time), so a slow update no longer delays the next tick's schedules/retention.
+- **CON-15** (semaphore-held notify). Notifications dispatch after the concurrency-semaphore block
+  exits, so a slow/dead channel can't hold a scan slot.
+- **CON-16** (task hygiene). The per-scan task's done callback retrieves and logs any escaped
+  exception; the session-factory call is guarded; and `submit` caps live tasks (scaled from
+  `max_concurrent`, floor 64) so a flood is deferred to the watchdog rather than piling up.
+- **CON-17** (run-now race). "Run now" stamps `last_run_at`, so the cron tick doesn't fire the same
+  schedule again the same minute.
+- **CON-18** (dashboard gather). The dashboard `asyncio.gather` uses `return_exceptions=True` and
+  handles each branch, so a DB error no longer abandons the in-flight scanner-DB probe subprocesses.
+- **CON-19** (stale identity-map notify). `_notify` re-reads the scan with `populate_existing=True`,
+  so a scan deleted the instant it finished isn't announced with a 404 link.
+- **CON-20** (loop-blocking rmtree). `generic_repo_checkout` removes the (potentially multi-GB)
+  checkout via a shielded thread hop instead of inline on the loop.
+**Why:** All are direct remediations of the cited review findings. **CON-11** was verified against
+current code and found **already retired** by Session 2's stale-scan watchdog (re-submits stranded
+`queued` scans), so it was skipped, not re-fixed. **CON-10** was the one finding whose primary fix
+is architectural; per the review-branch task it was raised with the user before implementing, who
+chose the combined connection-release + pool-sizing/cap approach. No DB schema change; the locked
+job model (§0.2, single-container in-process async worker) is unchanged — `max_concurrent_scans`
+gaining an upper bound is a new operational guard, not a model change.
+**Plan section affected:** §0.2 (worker internals — connection lifecycle refined, model unchanged),
+§8 (backup snapshot consistency), §12 (post-release hardening; no phase scope changed).
+
+### 2026-07-13 — Security — account-takeover chain fix: XSS sink containment + baseline security headers
+**What changed:** Two coupled changes closing the audit's account-takeover chain (frontend FE-9 +
+the missing response-header baseline):
+- **Frontend URL sink hardened.** Added `frontend/src/lib/url.ts` `safeHttpUrl()`, which admits only
+  well-formed `http:`/`https:` URLs (rejecting `javascript:`/`data:`/`vbscript:`/relative/malformed).
+  `ScanDetailPage.tsx` now renders a finding's scanner-derived `primary_url` as an `<Anchor>` only
+  when it passes `safeHttpUrl`, otherwise as inert text, and adds `rel="noopener noreferrer"`. This
+  is the only place scanner-derived data was rendered as a link (all other `href`s are app-internal
+  API endpoints).
+- **Baseline security-header middleware.** Added `backend/app/core/security_headers.py`
+  (`SecurityHeadersMiddleware`), wired as the outermost middleware in `create_app`. Every response
+  now carries `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, and a Content-Security-Policy tuned for the
+  built Mantine SPA (`script-src 'self'` — no inline scripts; `style-src 'self' 'unsafe-inline'` —
+  Mantine injects theme CSS at runtime; `connect-src 'self'`; `object-src 'none'`;
+  `frame-ancestors 'none'`; `base-uri`/`form-action 'self'`; `img-src 'self' data:`). The CSP was
+  verified against the real built SPA under a headless browser (login shell renders with styles, zero
+  `securitypolicyviolation` events). The interactive API docs (`/docs`, `/redoc`) are exempted from
+  the CSP only — they need inline scripts + CDN assets a SPA CSP would break — but still receive the
+  other three headers. The CSRF cookie's `httponly=False` double-submit design is unchanged, per the
+  report.
+- **Frontend test runner.** Added `vitest` (pinned `3.2.7`) as the frontend unit-test runner with a
+  `test` script, a Node-environment `test` block in `vite.config.ts`, and a new CI step
+  (`npm test`). `src/lib/url.test.ts` covers `safeHttpUrl`; `backend/tests/test_security_headers.py`
+  asserts the headers (and the docs-CSP exemption). This is the first frontend test suite — the CI
+  `frontend` job previously only linted + built.
+**Why:** The audit flagged an unvalidated scanner-derived URL rendered as a link plus the absence of
+any security-header baseline as a chain that could aid account takeover. Containing the sink and
+shipping standard defence-in-depth headers closes it without touching the documented CSRF model.
+**Plan section affected:** § Hard security rules; § Auth & Authorization (§5) — additive hardening,
+no security-model or schema change. § Required deliverables (CI gains a frontend test step).
+
 ### 2026-07-07 — Process — back-merge step after promotion; Dependabot retargeted to `dev`
 **What changed:** Two coupled changes to the `dev`/`main` branching model (adopted 2026-07-04) that
 stop `dev` from silently drifting "behind" `main` after every release:
@@ -1987,3 +2302,50 @@ the immutable `0.1.0` tag) so the check is on the record and the next person see
 upstream-fix-version mapping to re-test against.
 **Plan section affected:** §9.1 (bundled scanner pins), CLAUDE.md § Dependency hygiene, README §
 Integrations / ROADMAP § Known limitations (bundled-binary CVE tracking).
+
+### 2026-07-13 — Infra — runtime-stage curl/libcurl explicitly version-pinned for CVE-2026-5773
+**What changed:** The CI dogfood self-scan flagged `curl` / `libcurl3-gnutls` / `libcurl4`
+`7.88.1-10+deb12u14` (HIGH, CVE-2026-5773, fixed in `7.88.1-10+deb12u15`) in the runtime image.
+Rather than the usual "apt packages are unpinned, tracking the digest-pinned base image" pattern
+(§9.1, the Phase 3 git-package note), `docker/Dockerfile`'s runtime-stage `apt-get install` now
+pins these three packages to the exact fixed version `7.88.1-10+deb12u15`, since that version is
+already present in the base image's frozen apt snapshot — no base-image digest bump needed.
+**Why:** The fix is available at the package level without moving the base image, so a targeted
+version pin is the smaller, more surgical change; it also serves as a deliberate exception to the
+"apt packages track the base snapshot" convention, recorded here so a future session doesn't read
+these three explicit pins as stray/accidental and "clean them up" back to unpinned. When the base
+image digest is next bumped for an unrelated reason, these three pins should be reviewed — if the
+new base snapshot already carries `7.88.1-10+deb12u15` or later as the default, the explicit pins
+can be dropped.
+**Plan section affected:** §9.1 (Dockerfile / apt packages).
+
+### 2026-07-13 — Infra/Process — CPython interpreter CVEs on 3.13 accepted as tracked risk; 3.14 deferred
+**What changed:** The CI dogfood Grype self-scan flags four CPython interpreter-binary CVEs on the
+runtime base image (`python:3.13-slim-bookworm`, interpreter 3.13.14 — current latest 3.13.x). Two
+have fixes merged to the 3.13 maintenance branch but not yet in any released point version —
+CVE-2026-15308 (HIGH, `html.parser` quadratic-complexity CPU DoS) and CVE-2026-12003 (MEDIUM,
+`getpath.py` in-tree search-path fallback); two were explicitly declined for backport to the 3.13
+line by upstream and are fixed only in 3.15+ — CVE-2025-15366 and CVE-2025-15367 (both MEDIUM,
+`imaplib`/`poplib` command injection). Under the gate (`grype --only-fixed --fail-on high`) only
+CVE-2026-15308 (HIGH) actually trips the threshold; the other three are reported-but-non-gating
+Mediums. Decision: **stay on Python 3.13 for now** and accept all four as tracked risk — suppressed
+in `ci/grype.yaml` with per-group review dates (Group A / 2026-15308 + 2026-12003 sooner, tied to
+CPython point-release cadence; Group B / 2025-15366 + 2025-15367 later, tied to the 3.14 upgrade
+horizon), each referencing tracking issue #52. The now-stale `ci/grype.yaml` note claiming 3.13's
+current patch carries the interpreter fixes is corrected in the same change. The move to Python 3.14
+was evaluated and **deferred to a separate, deliberately-scoped project** (handoff doc:
+`docs/upgrades/python-3.14.md`), not undertaken as a reaction to this scan.
+**Why:** All four are genuinely unfixable-by-us on 3.13 today — two await an unreleased 3.13.x point
+release, two are permanently 3.15+-only — which is exactly the "only genuinely unfixable upstream/
+OS-level items may remain, tracked" carve-out in CLAUDE.md § Dependency hygiene. Moving to 3.14 is
+not a clean win: it is a hard dependency bump (pydantic ≥2.12 for a cp314 `pydantic-core` wheel,
+uvicorn ≥0.38.0, an explicit `greenlet` pin for SQLAlchemy async) that still leaves
+CVE-2026-15308/-12003 unresolved on 3.14, so it warrants its own scoped compatibility pass rather
+than a rushed CVE-driven bump. **No CLAUDE.md amendment is required:** §2 already locks the runtime
+to "Python 3.13" with no CVE caveat, so staying on 3.13 changes no standing rule (checked this
+session). Resolution triggers, tracked in #52: 15366/15367 close when the 3.14 upgrade lands;
+15308/12003 close on the next 3.13.x point release, pending Grype-DB recognition of the backport
+(its `FIXED IN` currently reports 3.15.x only).
+**Plan section affected:** §0 (#7, runtime lock — reaffirmed, not changed), §2 (tech stack —
+unchanged), §9.1 (base image / dogfood self-scan), §12 (Phase 6 self-scan), CLAUDE.md
+§ Dependency hygiene.

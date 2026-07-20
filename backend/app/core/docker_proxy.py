@@ -1,4 +1,4 @@
-"""Read-only Docker socket-proxy client for image enumeration (docs/PLAN.md §3).
+"""Read-only Docker socket-proxy client for image enumeration (docs/ARCHIVE.md §3).
 
 Scrye never mounts ``/var/run/docker.sock`` (locked decision §0.3, CIS
 5.21/5.22). Instead it talks HTTP to a **read-only** ``docker-socket-proxy``
@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import httpx
+
+from app.core.egress import EgressError, validate_egress_url_async
 
 #: Wall-clock timeout for a single proxy request (seconds). Enumeration is cheap;
 #: a slow/hung proxy should fail fast rather than block the request thread.
@@ -79,6 +81,14 @@ async def list_images(proxy_url: str) -> list[DockerImage]:
             malformed response.
     """
     base = proxy_url.rstrip("/")
+    # The proxy legitimately lives on the internal network, so private addresses
+    # are allowed here — but a misconfigured/hostile proxy_url pointed at loopback
+    # or the cloud-metadata endpoint is still refused (allow_internal keeps only
+    # RFC-1918 targets in scope).
+    try:
+        await validate_egress_url_async(base, allow_internal=True)
+    except EgressError as exc:
+        raise DockerProxyError(str(exc)) from exc
     try:
         async with httpx.AsyncClient(timeout=_PROXY_TIMEOUT_SECONDS) as http:
             response = await http.get(f"{base}/images/json")

@@ -52,7 +52,7 @@ interface RuleForm {
   enabled: boolean;
 }
 
-/** Trivy VEX documents and ignore rules (docs/PLAN.md §4.1/§4.5). */
+/** Trivy VEX documents and ignore rules (docs/ARCHIVE.md §4.1/§4.5). */
 export function TrivyPolicyPanel() {
   const [vex, setVex] = useState<VexDocument[]>([]);
   const [rules, setRules] = useState<IgnoreRule[]>([]);

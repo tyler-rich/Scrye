@@ -1,7 +1,7 @@
 """Filesystem storage for raw scan artifacts.
 
 Raw scanner output (and later SBOMs) is persisted verbatim as the source of
-truth (docs/PLAN.md §4.3). Bytes live on disk under the configured artifacts
+truth (docs/ARCHIVE.md §4.3). Bytes live on disk under the configured artifacts
 directory — one subdirectory per scan — while the database keeps metadata plus a
 SHA-256 checksum. Keeping large blobs out of SQLite keeps the database small and
 backups cheap.

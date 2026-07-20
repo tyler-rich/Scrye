@@ -6,12 +6,12 @@ finding summaries. No scan payload here holds secret material.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.api.scan_schemas import ScanOut
+from app.api.scan_schemas import ScanSummaryOut
+from app.api.schema_types import UtcDatetime
 
 #: Maximum number of tags a single scan may carry.
 MAX_TAGS_PER_SCAN = 20
@@ -36,10 +36,15 @@ def _normalize_tags(raw: list[str]) -> list[str]:
 
 
 class ScanHistoryPage(BaseModel):
-    """A page of history results plus the total number of matches."""
+    """A page of history results plus the total number of matches.
+
+    Rows are :class:`ScanSummaryOut` — the history table never renders a scan's
+    ``options`` or full ``error`` text, so those ride only on the detail view
+    (APIR-9).
+    """
 
     total: int
-    items: list[ScanOut]
+    items: list[ScanSummaryOut]
 
 
 class FilterOptionsOut(BaseModel):
@@ -73,6 +78,10 @@ class DiffFindingOut(BaseModel):
     installed_version: str | None
     fixed_version: str | None
     title: str | None
+    # Part of the diff identity for every non-vulnerability class (one rule
+    # commonly fires in many files); without it, distinct per-file occurrences
+    # serialize as byte-identical rows the consumer can't tell apart (APIR-3).
+    location: str | None
 
 
 class ScanDiffOut(BaseModel):
@@ -114,8 +123,8 @@ class FilterPresetOut(BaseModel):
     id: int
     name: str
     filters: dict[str, Any]
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 __all__ = [

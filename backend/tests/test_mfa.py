@@ -132,6 +132,11 @@ class TestMfaPolicyEnforcement:
         )
         assert second.status_code == 200
         assert client.get("/api/auth/me").json()["mfa_enabled"] is True
+        # SEC-9: the policy-forced first-enrollment is audited distinctly, so an
+        # admin can spot an unexpected enrollment during the password-only window.
+        entries = client.get("/api/audit").json()["items"]
+        enrolled = [e for e in entries if e["action"] == "auth.mfa_enabled"]
+        assert enrolled and enrolled[0]["details"] == {"forced_by_policy": True}
 
     def test_reenroll_requires_current_password(self, client: TestClient) -> None:
         csrf = setup_admin(client)
@@ -188,3 +193,55 @@ class TestMfaDisable:
             "/api/auth/mfa/disable", json={"password": ADMIN_PW}, headers={CSRF: csrf}
         )
         assert resp.status_code == 400
+
+
+class TestPendingMfaStoreConcurrency:
+    def test_concurrent_issue_and_consume_never_raise(self) -> None:
+        """Hammer issue/consume/prune from many threads (mirroring the sync
+        login/verify endpoints running on different threadpool threads). An
+        unlocked ``_prune`` would raise ``RuntimeError: dictionary changed size
+        during iteration``; the lock must keep every operation clean (CON-8)."""
+        import threading
+
+        from app.auth.mfa import _CHALLENGE_TTL_SECONDS, PendingMfaStore
+
+        store = PendingMfaStore()
+        # A mix of live and already-expired challenges so ``_prune`` has rows to
+        # remove on every call, maximizing the chance of a concurrent mutation.
+        for i in range(200):
+            token = store.issue(i)
+            if i % 2 == 0:
+                store._pending[token].expires_at = 0.0  # force-expire half of them
+
+        errors: list[BaseException] = []
+        barrier = threading.Barrier(8)
+
+        def worker(worker_id: int) -> None:
+            barrier.wait()
+            try:
+                for j in range(300):
+                    tok = store.issue(worker_id * 1000 + j)
+                    store.consume(tok)
+            except BaseException as exc:  # noqa: BLE001 - the assertion is "no raise"
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(w,)) for w in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert not errors, f"concurrent access raised: {errors[0]!r}"
+        assert _CHALLENGE_TTL_SECONDS > 0
+
+    def test_pending_challenges_capped_per_user(self) -> None:
+        # SEC-10: one account must not accumulate live challenges up to the TTL —
+        # issuing beyond the cap drops the oldest, and other users are unaffected.
+        from app.auth.mfa import _MAX_PENDING_PER_USER, PendingMfaStore
+
+        store = PendingMfaStore()
+        for _ in range(_MAX_PENDING_PER_USER + 4):
+            store.issue(user_id=1)
+        assert sum(1 for c in store._pending.values() if c.user_id == 1) == _MAX_PENDING_PER_USER
+        store.issue(user_id=2)
+        assert sum(1 for c in store._pending.values() if c.user_id == 2) == 1

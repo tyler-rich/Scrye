@@ -1,4 +1,4 @@
-"""Tests for the backup passphrase KDF (docs/PLAN.md §8).
+"""Tests for the backup passphrase KDF (docs/ARCHIVE.md §8).
 
 These lock in the scrypt work factor and confirm the derived key drives a
 working AES-256-GCM round-trip, so a regression that weakens the parameters (or
@@ -80,6 +80,26 @@ class TestParameterizedDerivation:
         for bad in ({"n": 3}, {"n": 0}, {"r": 0}, {"p": 0}):
             with pytest.raises(PassphraseKdfError):
                 derive_key(PASSPHRASE, salt, **bad)
+
+    def test_parameter_bombs_rejected_before_derivation(self) -> None:
+        """SEC-2: restore-supplied params are untrusted; absurd cost factors must
+        be rejected up front rather than handed to scrypt with a matching
+        ``maxmem`` (which is what used to make the guard self-defeating)."""
+        salt = new_salt()
+        for bomb in (
+            {"n": 2**30},  # ~128 GiB
+            {"n": 2**21},  # just past the ceiling
+            {"r": 17},
+            {"p": 5},
+            {"n": 2**20, "r": 16},  # within per-parameter caps, over the memory budget
+        ):
+            with pytest.raises(PassphraseKdfError):
+                derive_key(PASSPHRASE, salt, **bomb)
+
+    def test_default_parameters_stay_within_the_clamps(self) -> None:
+        # Guards the guard: if the module defaults are ever raised past the
+        # ceilings, every legitimate backup would stop restoring.
+        assert len(derive_key(PASSPHRASE, new_salt(), n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P)) == 32
 
     def test_cipher_round_trip_under_low_params(self) -> None:
         salt = new_salt()

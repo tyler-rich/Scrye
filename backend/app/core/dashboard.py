@@ -1,4 +1,4 @@
-"""Dashboard aggregation queries (docs/PLAN.md §4.6, Phase 6).
+"""Dashboard aggregation queries (docs/ARCHIVE.md §4.6, Phase 6).
 
 Pure, synchronous helpers that compute the dashboard widgets from the ``scans``
 table: totals, status/scanner breakdowns, a scans-over-time series, the current

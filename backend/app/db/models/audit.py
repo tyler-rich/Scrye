@@ -1,4 +1,4 @@
-"""Audit log model for security-relevant actions (docs/PLAN.md §5)."""
+"""Audit log model for security-relevant actions (docs/ARCHIVE.md §5)."""
 
 from __future__ import annotations
 

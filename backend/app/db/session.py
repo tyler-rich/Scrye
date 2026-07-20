@@ -21,6 +21,13 @@ from app.core.config import Settings, get_settings
 #: "database is locked".
 _SQLITE_BUSY_TIMEOUT_MS = 5000
 
+#: Connection-pool headroom above the concurrent-scan ceiling, reserved for the
+#: request threadpool and the two schedulers. Scans no longer pin a connection
+#: across their subprocess (CON-10), but the pool is still sized from
+#: ``max_concurrent_scans`` as defense-in-depth so a burst of scan persistence
+#: plus live requests can't exhaust it and 500 with "QueuePool limit reached".
+_POOL_HEADROOM = 10
+
 
 def _configure_sqlite(dbapi_connection: Any, _record: Any) -> None:
     """Apply per-connection SQLite pragmas for safe concurrent access.
@@ -51,10 +58,18 @@ def create_db_engine(settings: Settings | None = None) -> Engine:
     # check_same_thread=False so the engine can be shared across the worker and
     # request threads. Concurrent writes are made safe by the WAL + busy_timeout
     # pragmas applied on each new connection (see _configure_sqlite).
+    #
+    # Size the pool from max_concurrent_scans so persistence for every running
+    # scan, plus concurrent request handlers and the schedulers, always has a
+    # connection available (CON-10). The setting is capped (config.py), so this
+    # stays bounded.
+    pool_size = settings.max_concurrent_scans + _POOL_HEADROOM
     new_engine = create_engine(
         settings.database_url,
         echo=False,
         future=True,
+        pool_size=pool_size,
+        max_overflow=pool_size,
         connect_args={"check_same_thread": False},
     )
     event.listen(new_engine, "connect", _configure_sqlite)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 
 import pytest
@@ -160,6 +161,32 @@ class TestDashboardEndpoint:
         # Scanner DB freshness is present (binaries absent in tests → unavailable).
         names = {info["name"] for info in body["scanner_db"]}
         assert names == {"trivy", "grype"}
+
+    def test_db_error_does_not_abandon_the_probe(self, client: TestClient, monkeypatch) -> None:
+        """CON-18: when the DB aggregation fails, the concurrent scanner-DB probe
+        must still be awaited to completion (not left running detached) before
+        the endpoint reports the error."""
+        import app.api.dashboard as dashboard_mod
+
+        setup_admin(client)
+        probe_completed = {"done": False}
+
+        def _boom(_db):
+            raise RuntimeError("db aggregation failed")
+
+        async def _probe():
+            await asyncio.sleep(0.05)
+            probe_completed["done"] = True
+            return []
+
+        monkeypatch.setattr(dashboard_mod, "_load_dashboard_data", _boom)
+        monkeypatch.setattr(dashboard_mod, "scanner_db_status", _probe)
+
+        # The DB failure propagates (TestClient re-raises server exceptions), but
+        # only after the probe branch was awaited to completion.
+        with pytest.raises(RuntimeError, match="db aggregation failed"):
+            client.get("/api/dashboard")
+        assert probe_completed["done"], "the probe was abandoned instead of awaited"
 
 
 class TestScannerDbStatusCache:

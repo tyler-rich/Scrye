@@ -1,4 +1,4 @@
-"""Notification channel management (docs/PLAN.md §4.5).
+"""Notification channel management (docs/ARCHIVE.md §4.5).
 
 Admin-only CRUD for notification destinations. The per-channel secret is
 write-only and field-encrypted; reads return a mask plus a timestamp. A ``test``
@@ -8,7 +8,6 @@ stored credential without waiting for a real event.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -16,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.core.audit import record_audit
 from app.core.masking import MaskedSecret, masked_secret
@@ -97,8 +97,8 @@ class NotificationChannelOut(BaseModel):
     enabled: bool
     secret: MaskedSecret
     created_by_username: str | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class NotificationChannelCreateIn(BaseModel):
@@ -208,7 +208,9 @@ def create_channel(
         created_by_username=auth.user.username,
     )
     if secret_value:
-        channel.secret_ciphertext = encrypt_secret(secret_value, aad=AAD_NOTIFICATION_SECRET)
+        channel.secret_ciphertext = encrypt_secret(
+            secret_value, aad=AAD_NOTIFICATION_SECRET, row_id=channel.id
+        )
         channel.secret_updated_at = utcnow()
     db.add(channel)
     db.flush()
@@ -254,7 +256,9 @@ def update_channel(
             new_config, url_secret = _extract_url_secret(payload.config)
             channel.config = new_config
             if url_secret:
-                channel.secret_ciphertext = encrypt_secret(url_secret, aad=AAD_NOTIFICATION_SECRET)
+                channel.secret_ciphertext = encrypt_secret(
+                    url_secret, aad=AAD_NOTIFICATION_SECRET, row_id=channel.id
+                )
                 channel.secret_updated_at = utcnow()
                 changes["secret"] = "updated"
         else:
@@ -269,11 +273,20 @@ def update_channel(
     if payload.secret is not None:
         secret_value = payload.secret.get_secret_value()
         if secret_value:
-            channel.secret_ciphertext = encrypt_secret(secret_value, aad=AAD_NOTIFICATION_SECRET)
+            channel.secret_ciphertext = encrypt_secret(
+                secret_value, aad=AAD_NOTIFICATION_SECRET, row_id=channel.id
+            )
             channel.secret_updated_at = utcnow()
-        else:
+        elif channel.type in SECRET_OPTIONAL_TYPES:
             channel.secret_ciphertext = None
             channel.secret_updated_at = None
+        else:
+            # Create forbids a channel of this type with no secret; the update
+            # path must not be able to reach that state either (APIR-6).
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"A secret is required for '{channel.type.value}' channels.",
+            )
         changes["secret"] = "updated"  # metadata only; never the value
 
     if changes:

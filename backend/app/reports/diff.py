@@ -1,4 +1,4 @@
-"""Finding-level diff between two scans of the same target (docs/PLAN.md §4.4).
+"""Finding-level diff between two scans of the same target (docs/ARCHIVE.md §4.4).
 
 Comparing two scans answers "what changed over time": which findings are **new**
 (present in the newer scan only), which were **fixed** (present in the older scan

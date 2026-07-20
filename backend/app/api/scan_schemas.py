@@ -7,11 +7,11 @@ credentials for private images arrive in Phase 3 and are handled separately
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.api.schema_types import UtcDatetime
 from app.db.models import (
     ArtifactKind,
     FindingClass,
@@ -20,6 +20,7 @@ from app.db.models import (
     Severity,
     TargetType,
 )
+from app.scanners.credentials import is_remote_repo_url
 
 #: Trivy scanner tokens a caller may select (default: all).
 TrivyScannerName = Literal["vuln", "misconfig", "secret", "license"]
@@ -32,7 +33,7 @@ SbomFormat = Literal["cyclonedx-json", "spdx-json", "syft-json"]
 class ScanCreateIn(BaseModel):
     """Request payload to launch an image, repository, or filesystem scan.
 
-    Target support (docs/PLAN.md §4): ``image`` (Trivy or Grype), ``repository``
+    Target support (docs/ARCHIVE.md §4): ``image`` (Trivy or Grype), ``repository``
     (Trivy), and ``filesystem`` (Grype). ``sbom`` targets are launched via the
     dedicated upload endpoint, not this JSON body. Trivy honors scanner
     selection, severity filtering, and ``ignore_unfixed``; Grype (vulnerabilities
@@ -99,6 +100,24 @@ class ScanCreateIn(BaseModel):
             raise ValueError("A git ref must not begin with '-'.")
         return stripped
 
+    @model_validator(mode="after")
+    def _require_remote_repository_url(self) -> ScanCreateIn:
+        """Reject a repository target that is a local path rather than a clone URL.
+
+        Trivy's ``repo`` subcommand accepts a local filesystem path, so a bare
+        target like ``/data`` or ``/run/secrets`` would walk the container
+        filesystem and expose its contents as downloadable scan output —
+        bypassing the ``SCRYE_FILESYSTEM_SCAN_ROOTS`` allowlist that exists to
+        keep the SQLite DB and master-key file unreadable. A repository scan may
+        therefore only target a remote clone URL (http/https/ssh/git).
+        """
+        if self.target_type is TargetType.REPOSITORY and not is_remote_repo_url(self.target):
+            raise ValueError(
+                "A repository target must be a remote clone URL "
+                "(http, https, ssh, or git); a local path is not allowed."
+            )
+        return self
+
     def to_options(self) -> dict[str, object]:
         """Build the stored ``options`` dict for the scanner and target type."""
         options: dict[str, object] = {}
@@ -126,8 +145,15 @@ class ScanCreateIn(BaseModel):
         return options
 
 
-class ScanOut(BaseModel):
-    """Read view of a scan (summary and detail share this shape)."""
+class ScanSummaryOut(BaseModel):
+    """Trimmed scan view for list/history/dashboard rows (APIR-9).
+
+    Drops ``options`` (unrendered by every list view, and it leaks internal
+    ``registry_id``/``git_credential_id`` to viewers) and the unbounded scanner
+    ``error`` text, keeping a lightweight ``has_error`` flag. The full
+    :class:`ScanOut` — with ``options`` and ``error`` — is returned only by the
+    single-scan detail endpoint, which is where the SPA reads them.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -136,17 +162,27 @@ class ScanOut(BaseModel):
     target_type: TargetType
     target: str
     status: ScanStatus
-    options: dict
     severity_counts: dict[str, int]
     highest_severity: Severity | None
     findings_count: int
     scanner_version: str | None
-    error: str | None
+    has_error: bool
     created_by_username: str | None
     tags: list[str] = []
-    created_at: datetime
-    started_at: datetime | None
-    finished_at: datetime | None
+    created_at: UtcDatetime
+    started_at: UtcDatetime | None
+    finished_at: UtcDatetime | None
+
+
+class ScanOut(ScanSummaryOut):
+    """Full read view of a single scan (detail endpoint).
+
+    Extends the summary with the fields only the detail page needs: the scan
+    ``options`` and the full scanner ``error`` text.
+    """
+
+    options: dict
+    error: str | None
 
 
 class FindingOut(BaseModel):
@@ -185,4 +221,4 @@ class ArtifactOut(BaseModel):
     content_type: str
     size_bytes: int
     sha256: str
-    created_at: datetime
+    created_at: UtcDatetime

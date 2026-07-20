@@ -97,7 +97,7 @@ function ScannerDbCard({ data }: { data: DashboardData['scanner_db'] }) {
   );
 }
 
-/** Aggregate dashboard (docs/PLAN.md §4.6). */
+/** Aggregate dashboard (docs/ARCHIVE.md §4.6). */
 export function Dashboard() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
 

@@ -3,7 +3,7 @@
 Model modules are imported at the bottom (via ``app.db.models``) so
 ``Base.metadata`` stays complete for Alembic autogeneration. Domain models for
 scanning (scans, findings, registries, ...) arrive in later phases per
-``docs/PLAN.md`` §7.
+``docs/ARCHIVE.md`` §7.
 """
 
 from __future__ import annotations

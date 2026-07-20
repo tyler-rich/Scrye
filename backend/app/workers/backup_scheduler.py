@@ -1,4 +1,4 @@
-"""In-process scheduled-backup worker (docs/PLAN.md §8).
+"""In-process scheduled-backup worker (docs/ARCHIVE.md §8).
 
 Mirrors the scan worker's shape: a single asyncio task on a timer that, when a
 scheduled backup is due, runs it in a thread (so the CPU-bound scrypt derivation
@@ -19,6 +19,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.backup.scheduled import run_due_backup
 
 logger = logging.getLogger(__name__)
+
+#: How long shutdown waits for the cancelled check task to unwind. The task may
+#: be inside a non-cancellable threaded backup (scrypt + DB dump) whose cancel
+#: must wait out the thread; bound the wait so shutdown stays within the
+#: container stop budget instead of blocking on it (CON-6).
+_SHUTDOWN_TASK_TIMEOUT_SECONDS = 5
 
 
 class BackupScheduler:
@@ -47,14 +53,23 @@ class BackupScheduler:
             self._task = asyncio.create_task(self._run_loop())
 
     async def shutdown(self) -> None:
-        """Stop the loop and wait for the task to finish."""
+        """Stop the loop and wait (bounded) for the task to finish.
+
+        Uses :func:`asyncio.wait` rather than :func:`asyncio.wait_for`: the check
+        can be suspended at a non-cancellable threaded backup whose delivered
+        cancellation won't land until the thread returns, and ``wait_for`` would
+        block awaiting that cancellation. ``wait`` returns after the timeout and
+        the still-running task is abandoned (the process is stopping anyway).
+        """
         self._stopping.set()
         if self._task is not None:
             self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+            _, pending = await asyncio.wait({self._task}, timeout=_SHUTDOWN_TASK_TIMEOUT_SECONDS)
+            if pending:
+                logger.warning(
+                    "Backup-scheduler task did not stop within %ds; abandoning it.",
+                    _SHUTDOWN_TASK_TIMEOUT_SECONDS,
+                )
             self._task = None
 
     def _check_once(self) -> None:

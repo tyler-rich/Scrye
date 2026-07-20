@@ -1,4 +1,4 @@
-"""Generic key/value application settings store (docs/PLAN.md §4.5, §7).
+"""Generic key/value application settings store (docs/ARCHIVE.md §4.5, §7).
 
 The ``settings`` table backs the non-secret configuration that an admin edits at
 runtime through the Settings UI: general options, the authentication policy

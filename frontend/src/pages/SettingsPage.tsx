@@ -32,7 +32,7 @@ import { TrivyPolicyPanel } from '../components/settings/TrivyPolicyPanel';
 import { UsersPanel } from '../components/settings/UsersPanel';
 import { useAuth } from '../auth/AuthContext';
 
-/** Full settings area (docs/PLAN.md §4.5). Admin tabs are gated by role. */
+/** Full settings area (docs/ARCHIVE.md §4.5). Admin tabs are gated by role. */
 export function SettingsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';

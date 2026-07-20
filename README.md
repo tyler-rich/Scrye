@@ -471,6 +471,7 @@ have to touch it:
 | `SCRYE_TRIVY_SERVER_URL` | _(unset)_ | **Conditional** | Only when the [`trivy-server` sidecar](#optional-sidecars) is enabled (e.g. `http://trivy-server:4954`). |
 | `SCRYE_DOCKER_PROXY_URL` | _(unset)_ | **Conditional** | Only for ["scan running images"](#optional-sidecars) via the read-only docker-socket-proxy (e.g. `http://docker-socket-proxy:2375`). |
 | `SCRYE_FILESYSTEM_SCAN_ROOTS` | _(empty)_ | **Conditional** | Comma-separated absolute paths under which Grype `dir:` scans are allowed. Empty **disables** filesystem scanning; set it (and mount the paths) to enable. |
+| `SCRYE_ALLOW_INTERNAL_EGRESS` | `false` | Optional | Allow server-side fetchers (notification webhook/SMTP/Matrix, the registry probe) to reach **private/internal** addresses. Off by default to block SSRF; enable only if you use an internal SMTP relay or private registry. Loopback and cloud-metadata addresses are **always** refused. |
 | `SCRYE_APP_NAME` | `Scrye` | Optional | Application name shown in the UI and logs. |
 | `SCRYE_ENVIRONMENT` | `production` | Optional | `development` or `production`. |
 | `SCRYE_LOG_LEVEL` | `INFO` | Optional | Root log level. |
@@ -499,6 +500,14 @@ an image layer. It is read at runtime from the Docker secret file pointed to by
 once with `openssl rand -base64 48` and provide it as a Docker secret. Stored
 credentials are encrypted with a key derived from it (HKDF-SHA256 → AES-256-GCM).
 In production the app **refuses to start** without a valid key file.
+
+**High-entropy key required.** The key file must be **valid base64 that decodes to
+at least 32 bytes** — exactly what `openssl rand -base64 48` produces. A raw
+passphrase (anything that isn't valid base64) is **rejected** on startup, because a
+low-entropy key could be brute-forced offline against a stolen database at HKDF
+speed. If you are upgrading a deployment that used a passphrase key, set
+`SCRYE_ALLOW_WEAK_MASTER_KEY=1` to boot **just long enough to rotate** to a proper
+key — it logs a warning on every start and is not meant to be left enabled.
 
 **Key rotation.** The key file may hold multiple versions, one per line, as
 `v<N>:<base64>` entries (a plain single-line key is version 1). New secrets are
@@ -747,6 +756,14 @@ only in memory at scan time.
   bearer/basic tokens, and URL userinfo across messages and tracebacks (and is
   attached to uvicorn's loggers). Scanner subprocesses don't inherit Scrye's
   `SCRYE_*` config.
+- **Baseline security headers.** Every response carries `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
+  and a **Content-Security-Policy** tuned for the SPA (`script-src 'self'` with no
+  inline scripts, `connect-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'`).
+  Externally-derived data — e.g. a finding's scanner-supplied reference URL — is
+  rendered as a link only when it is a valid `http(s)` URL, and never with a
+  `javascript:`/`data:` scheme, so a crafted advisory can't turn a finding row into
+  a script-execution sink.
 - **Scan-time only.** Secrets are decrypted in memory into transient credential
   files on **tmpfs** (Docker `config.json`, `GIT_ASKPASS` helper), used for the
   scanner subprocess, then shredded.
@@ -769,6 +786,14 @@ only in memory at scan time.
   is mounted (read-only). Anyone who can reach the proxy can _enumerate_ images
   and containers, so enable that profile deliberately and keep it on the internal
   network.
+- **Outbound egress / SSRF.** Admin-configured fetch targets — notification
+  transports (webhook/Discord/Matrix/SMTP), the registry connectivity probe, and
+  the Docker socket proxy — are resolved and screened before Scrye connects.
+  Loopback and link-local/**cloud-metadata** (`169.254.169.254`) addresses are
+  **always** refused; RFC-1918/private addresses are refused **by default** and
+  permitted only when `SCRYE_ALLOW_INTERNAL_EGRESS=true` (for deployments that use
+  an internal SMTP relay or private registry). This is a best-effort,
+  defense-in-depth control on an already admin-gated, CSRF-protected surface.
 - **Trusted reverse-proxy hops (`SCRYE_FORWARDED_ALLOW_IPS` — required per
   deployment).** Scrye honors `X-Forwarded-For` (uvicorn `--proxy-headers`) so the
   auth rate limiter and audit log see the **real** client IP. The logic is
@@ -790,9 +815,20 @@ only in memory at scan time.
   OIDC logins delegate the second factor to the identity provider — Scrye has no
   local TOTP challenge in the OIDC handshake, and provisioned OIDC accounts carry
   no usable local password. If you require MFA for OIDC users, enforce it at the
-  IdP. When group→role mapping is configured it re-applies on each login, but an
+  IdP. When a mandatory policy would otherwise apply, the OIDC login is recorded
+  in the audit log with `mfa_delegated_to_idp` so you can confirm the IdP is
+  carrying that second factor. When group→role mapping is configured it re-applies on each login, but an
   **absent** groups claim preserves the user's current role rather than demoting
   them, and an OIDC sync can never remove the last admin.
+- **Forced-enrollment window (accepted limitation).** When a mandatory-MFA policy
+  applies to an account that has never enrolled, enroll-on-first-login means
+  whoever presents a valid **password** completes the first-factor setup — so
+  during the window before the legitimate user enrolls, a password-only attacker
+  could bind **their own** authenticator (the exact threat mandatory MFA targets).
+  This is inherent to self-service enrollment; the durable mitigation is
+  out-of-band/admin-provisioned enrollment. Until then, each policy-forced
+  first-enrollment is recorded in the audit log with `forced_by_policy`, so an
+  unexpected enrollment is detectable — enroll promptly after enabling the policy.
 
 **Reporting a vulnerability:** please do it privately — see
 [SECURITY.md](./SECURITY.md).
@@ -886,6 +922,13 @@ report): they're unmodified upstream Go binaries Scrye can't rebuild, so CVEs in
 their embedded Go modules track upstream's release cadence — keeping the pinned
 scanner versions current is how those are addressed. CI never publishes; GHCR
 publishing lives in separate release and nightly workflows.
+
+The dogfood gate only runs when code changes, so a **weekly scheduled re-scan**
+(`.github/workflows/rescan.yml`) pulls the already-published `:latest` and `:dev`
+images and re-runs the same Trivy/Grype gate against them. A newly disclosed,
+fixable HIGH/CRITICAL CVE in a shipped image opens (or comments on) a tracking
+issue rather than gating a merge — so a quiet period can't hide a fresh CVE in the
+image you're running.
 
 ---
 

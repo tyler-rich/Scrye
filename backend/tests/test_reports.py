@@ -1,4 +1,4 @@
-"""Unit tests for the report exporters and scan diff (docs/PLAN.md §4.3, §4.4).
+"""Unit tests for the report exporters and scan diff (docs/ARCHIVE.md §4.3, §4.4).
 
 These exercise the pure serialization/diff logic against ORM objects built in a
 throwaway session — no HTTP, no worker.

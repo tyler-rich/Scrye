@@ -1,6 +1,7 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 # ─────────────────────────────────────────────────────────────────────────────
-# Scrye — multi-stage, CIS-aligned image (built locally; no registry publishing).
+# Scrye — multi-stage, CIS-aligned image (builds locally; published to GHCR by the
+# release/nightly workflows — locked decision §6).
 #
 # Hardening (see CLAUDE.md § Hard security rules):
 #   - Base images pinned by digest (multi-arch manifest lists).
@@ -13,7 +14,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # --- Stage 1: build the React/Vite SPA ---------------------------------------
-FROM node:22-bookworm-slim@sha256:813a7480f28fdadac1f7f5c824bcdad435b5bc1322a5968bbbdef8d058f9dff4 AS frontend-builder
+FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS frontend-builder
 WORKDIR /build/frontend
 
 # Install deps from the lockfile first for better layer caching. The BuildKit
@@ -40,19 +41,35 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl tar \
     && rm -rf /var/lib/apt/lists/*
 
+# cosign, pinned by digest from the official ko-built Sigstore image (SC-8). Used
+# below to verify the upstream projects' cosign signature over each checksums.txt
+# before the sha256sum check — upgrading the guarantee from "matches what GitHub
+# serves" (a same-origin checksum an attacker who replaced the tarball could
+# regenerate) to "signed by the upstream project's own GitHub Actions release
+# pipeline" (keyless Fulcio identity + Rekor transparency-log inclusion).
+COPY --from=ghcr.io/sigstore/cosign/cosign:v2.6.1@sha256:68839b7f13dac5a6744a5d8818e984dd39183374e37855c19e14d623d9bc9037 \
+    /ko-app/cosign /usr/local/bin/cosign
+
 WORKDIR /scanners
-# Each binary: download the asset + the publisher's signed checksums file,
-# verify with `sha256sum -c`, then extract. A checksum mismatch fails the build.
+# Each binary: download the asset + the publisher's signed checksums file, verify
+# the publisher's cosign signature over the checksums file (keyless, identity
+# pinned to the upstream repo's release workflow + the GitHub Actions OIDC
+# issuer), then verify the tarball with `sha256sum -c`, then extract. A signature
+# OR checksum mismatch fails the build. The two publishers sign differently, so
+# fetch_verify_extract takes a style: Anchore (grype/syft) ships a detached
+# certificate (.pem) + signature (.sig), while Aqua (trivy) ships a Sigstore
+# protobuf bundle (checksums.txt.sigstore.json) verified with `--bundle
+# --new-bundle-format`.
 # The three downloads are independent, so they run concurrently (each in its own
 # background subshell) instead of sequentially — this halves the wall-clock of a
 # cold scanner stage, which matters most on the QEMU-emulated arm64 leg where
 # each fetch+verify+extract is slow. Concurrency changes nothing about the
-# integrity guarantee: every binary is still checksum-verified against the
-# publisher's file before extraction, and a failure in any subshell (download
-# error OR checksum mismatch) exits it non-zero, which `wait` propagates under
-# `set -e` to fail the whole build. Do NOT collapse this back to a plain
-# `curl | tar` — the download-then-verify-then-extract order is the supply-chain
-# control (CLAUDE.md § Hard security rules); see docs/PLAN.md § Build performance.
+# integrity guarantee: every binary is still cosign- AND checksum-verified before
+# extraction, and a failure in any subshell (download error, bad signature, OR
+# checksum mismatch) exits it non-zero, which `wait` propagates under `set -e` to
+# fail the whole build. Do NOT collapse this back to a plain `curl | tar` — the
+# download-then-verify-then-extract order is the supply-chain control (CLAUDE.md
+# § Hard security rules); see docs/ARCHIVE.md § Build performance.
 RUN set -eux; \
     case "${TARGETARCH}" in \
       amd64) TRIVY_ARCH="Linux-64bit"; ANCHORE_ARCH="linux_amd64" ;; \
@@ -62,9 +79,27 @@ RUN set -eux; \
     \
     fetch_verify_extract() { \
       set -eux; \
-      bin="$1"; base_url="$2"; tgz="$3"; checksums="$4"; \
+      bin="$1"; base_url="$2"; tgz="$3"; checksums="$4"; identity="$5"; sig_style="$6"; \
       curl -fsSL -O "${base_url}/${tgz}"; \
       curl -fsSL -O "${base_url}/${checksums}"; \
+      if [ "${sig_style}" = "bundle" ]; then \
+        curl -fsSL -O "${base_url}/${checksums}.sigstore.json"; \
+        cosign verify-blob \
+          --bundle "${checksums}.sigstore.json" \
+          --new-bundle-format \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          --certificate-identity-regexp "${identity}" \
+          "${checksums}"; \
+      else \
+        curl -fsSL -O "${base_url}/${checksums}.sig"; \
+        curl -fsSL -O "${base_url}/${checksums}.pem"; \
+        cosign verify-blob \
+          --certificate "${checksums}.pem" \
+          --signature "${checksums}.sig" \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          --certificate-identity-regexp "${identity}" \
+          "${checksums}"; \
+      fi; \
       grep " ${tgz}\$" "${checksums}" | sha256sum -c -; \
       tar -xzf "${tgz}" "${bin}"; \
     }; \
@@ -72,19 +107,25 @@ RUN set -eux; \
     fetch_verify_extract trivy \
       "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}" \
       "trivy_${TRIVY_VERSION}_${TRIVY_ARCH}.tar.gz" \
-      "trivy_${TRIVY_VERSION}_checksums.txt" & \
+      "trivy_${TRIVY_VERSION}_checksums.txt" \
+      "^https://github\.com/aquasecurity/trivy/\.github/workflows/.+@refs/tags/v[0-9.]+$" \
+      bundle & \
     trivy_pid=$!; \
     \
     fetch_verify_extract grype \
       "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}" \
       "grype_${GRYPE_VERSION}_${ANCHORE_ARCH}.tar.gz" \
-      "grype_${GRYPE_VERSION}_checksums.txt" & \
+      "grype_${GRYPE_VERSION}_checksums.txt" \
+      "^https://github\.com/anchore/grype/\.github/workflows/.+@refs/(heads|tags)/.+$" \
+      certsig & \
     grype_pid=$!; \
     \
     fetch_verify_extract syft \
       "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}" \
       "syft_${SYFT_VERSION}_${ANCHORE_ARCH}.tar.gz" \
-      "syft_${SYFT_VERSION}_checksums.txt" & \
+      "syft_${SYFT_VERSION}_checksums.txt" \
+      "^https://github\.com/anchore/syft/\.github/workflows/.+@refs/(heads|tags)/.+$" \
+      certsig & \
     syft_pid=$!; \
     \
     wait "${trivy_pid}"; \
@@ -102,15 +143,28 @@ WORKDIR /build/backend
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 
-# Install the application and its pinned runtime dependencies into the venv.
+# Install the pinned, hash-verified runtime dependencies BEFORE copying app
+# code, so a code-only change doesn't invalidate this (slow) dependency layer.
+# requirements.lock is the fully-resolved transitive closure of pyproject.toml,
+# generated with `uv pip compile --generate-hashes` (see CONTRIBUTING.md
+# § Backend dependency lock). `--require-hashes` makes pip refuse to install any
+# artifact whose hash isn't pinned in the lock, so every transitive package is
+# verified at build time and two builds of the same commit resolve identically
+# — closing the unpinned-transitive supply-chain gap (SC-1).
 # The BuildKit cache mount persists pip's wheel download cache across builds so
 # an unchanged dependency isn't re-fetched from PyPI when this layer rebuilds
 # (PIP_NO_CACHE_DIR is intentionally NOT set — the cache now lives in the mount,
 # not the image layer, and this is a discarded builder stage, so nothing bloats
 # the final image).
-COPY backend/pyproject.toml ./
+COPY backend/pyproject.toml backend/requirements.lock ./
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    pip install --require-hashes -r requirements.lock
+
+# Install the application package itself. Its runtime dependencies are already
+# present (installed and hash-verified from the lock above), so --no-deps keeps
+# the resolver from reaching back out to PyPI for an unpinned copy.
 COPY backend/app ./app
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked pip install .
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked pip install --no-deps .
 
 
 # --- Final stage: minimal runtime image --------------------------------------
@@ -119,10 +173,16 @@ FROM python:3.13-slim-bookworm@sha256:fcbd8dfc2605ba7c2eca646846c5e892b2931e41f6
 # ca-certificates: scanner DB downloads + TLS. curl: container HEALTHCHECK.
 # git: authenticated clone of generic-host private repos into tmpfs, so the
 # credential is delivered via GIT_ASKPASS instead of an argv-visible clone URL
-# (docs/PLAN.md §14, Phase 3 Security Review #2). Versions track the
+# (docs/ARCHIVE.md §14, Phase 3 Security Review #2). Versions track the
 # digest-pinned base image, consistent with the other apt packages here.
+# curl/libcurl3-gnutls/libcurl4 are explicitly pinned to 7.88.1-10+deb12u15,
+# the Debian bookworm-security fix for CVE-2026-5773, rather than tracking the
+# base image's snapshot (see docs/ARCHIVE.md § Deviations).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git \
+    && apt-get install -y --no-install-recommends ca-certificates git \
+        curl=7.88.1-10+deb12u15 \
+        libcurl3-gnutls=7.88.1-10+deb12u15 \
+        libcurl4=7.88.1-10+deb12u15 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 scrye \
     && useradd --uid 1000 --gid 1000 --no-create-home --home-dir /app --shell /usr/sbin/nologin scrye \

@@ -5,7 +5,7 @@ Docker config document shape (auths vs credHelpers), that the transient config
 file is written then **shredded** (removed) on context exit, git auth resolution
 per provider, and — for generic-host clones — that the credential is delivered
 off-argv via a tmpfs GIT_ASKPASS helper and the whole workspace is shredded on
-exit (docs/PLAN.md §14, Phase 3 Security Review #2).
+exit (docs/ARCHIVE.md §14, Phase 3 Security Review #2).
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from app.scanners.credentials import (
     generic_repo_checkout,
     git_env_token,
     is_http_url,
+    is_remote_repo_url,
 )
 
 
@@ -129,6 +130,23 @@ def test_is_http_url() -> None:
     assert not is_http_url("git@host:repo.git")
 
 
+def test_is_remote_repo_url_accepts_remote_schemes() -> None:
+    assert is_remote_repo_url("https://git.example.com/repo.git")
+    assert is_remote_repo_url("http://git.example.com/repo.git")
+    assert is_remote_repo_url("ssh://git@host/repo.git")
+    assert is_remote_repo_url("git://host/repo.git")
+
+
+def test_is_remote_repo_url_rejects_local_paths() -> None:
+    # SEC-1: bare paths (what Trivy `repo` would walk on the local filesystem)
+    # and the file:// scheme must not count as remote repositories.
+    assert not is_remote_repo_url("/data")
+    assert not is_remote_repo_url("/run/secrets")
+    assert not is_remote_repo_url("/")
+    assert not is_remote_repo_url("./repo")
+    assert not is_remote_repo_url("file:///etc/passwd")
+
+
 GENERIC_TOKEN = "sup3r-secret-git-token"
 
 
@@ -217,6 +235,35 @@ async def test_generic_clone_shreds_workspace_on_scan_exception(monkeypatch) -> 
             raise RuntimeError("scan boom")
     assert workspace is not None
     assert not Path(workspace).exists()
+
+
+@pytest.mark.asyncio
+async def test_generic_clone_removes_checkout_off_the_event_loop(monkeypatch) -> None:
+    """CON-20: the (potentially multi-GB) checkout removal is hopped to a thread
+    so it doesn't stall the event loop; the small tmpfs cred dir stays inline."""
+    import shutil
+    import threading
+
+    _stub_clone(monkeypatch)
+    loop_thread = threading.get_ident()
+    seen: dict[str, int] = {}
+    real_rmtree = shutil.rmtree
+
+    def _spy_rmtree(path, *args, **kwargs):
+        seen[str(path)] = threading.get_ident()
+        return real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "rmtree", _spy_rmtree)
+    auth = GitAuth(provider=GitProvider.GENERIC, token="tok", username="u")
+
+    async with generic_repo_checkout("https://h/r.git", auth, {}, timeout=30):
+        pass
+
+    checkout_removals = {p: t for p, t in seen.items() if "scrye-gitclone-" in p}
+    assert checkout_removals, "the checkout dir was never removed"
+    assert all(
+        thread != loop_thread for thread in checkout_removals.values()
+    ), "the checkout removal ran on the event-loop thread"
 
 
 @pytest.mark.asyncio

@@ -14,6 +14,7 @@ import contextlib
 import json
 import os
 import shutil
+import signal
 from abc import ABC
 from dataclasses import dataclass, field
 from typing import Any
@@ -102,6 +103,20 @@ class _OutputTooLargeError(Exception):
         self.partial = partial
 
 
+def _kill_process_group(proc: asyncio.subprocess.Process) -> None:
+    """SIGKILL the whole process group ``proc`` leads, not just ``proc`` itself.
+
+    ``run_command`` starts children with ``start_new_session=True``, making
+    ``proc.pid`` its own process-group leader, so ``killpg`` also reaches
+    grandchildren such as ``git-remote-https`` or scanner helper processes that
+    a bare ``proc.kill()`` would leave running (potentially with credentials
+    still in their environment). Suppresses ``ProcessLookupError`` for the race
+    where the group has already exited.
+    """
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(proc.pid, signal.SIGKILL)
+
+
 async def _read_capped(proc: asyncio.subprocess.Process, max_stdout: int) -> tuple[bytes, bytes]:
     """Read stdout (bounded by ``max_stdout``) and stderr concurrently.
 
@@ -175,6 +190,7 @@ async def run_command(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
+            start_new_session=True,
         )
     except FileNotFoundError as exc:
         raise ScannerError(f"Scanner executable not found: {argv[0]!r}.") from exc
@@ -188,7 +204,7 @@ async def run_command(
         # The child kept producing output past the byte budget; kill it and fail
         # the scan rather than buffering unbounded JSON into memory (SCN-1). The
         # bytes captured so far ride along so the truncated output is diagnosable.
-        proc.kill()
+        _kill_process_group(proc)
         with contextlib.suppress(ProcessLookupError):
             await proc.wait()
         raise ScannerOutputError(
@@ -196,12 +212,13 @@ async def run_command(
             raw_output=exc.partial,
         ) from exc
     except TimeoutError as exc:
-        proc.kill()
-        await proc.wait()
+        _kill_process_group(proc)
+        with contextlib.suppress(ProcessLookupError):
+            await proc.wait()
         raise ScannerError(f"Scan timed out after {timeout}s.") from exc
     except asyncio.CancelledError:
         # Worker shutdown cancelled us: don't leave the child process orphaned.
-        proc.kill()
+        _kill_process_group(proc)
         with contextlib.suppress(ProcessLookupError):
             await proc.wait()
         raise
@@ -454,7 +471,7 @@ def build_env(*overlays: dict[str, str] | None) -> dict[str, str] | None:
 class BaseScanner(ABC):
     """Base for a scanner engine, dispatched by target type.
 
-    Each engine implements the target kinds it supports (docs/PLAN.md §4);
+    Each engine implements the target kinds it supports (docs/ARCHIVE.md §4);
     unsupported combinations raise a clear :class:`ScannerError` rather than
     silently doing nothing. ``env`` is an optional environment **overlay**
     (e.g. transient registry/git credentials) applied on top of the process

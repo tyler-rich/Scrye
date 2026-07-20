@@ -5,7 +5,7 @@ values attached to known secret-ish field names (``password=...``,
 ``"token": "..."``, ``Authorization: Bearer ...``) so plaintext secrets can
 never leak through log output, even from third-party libraries or accidental
 debug statements. This implements the "logging filter redacts known secret
-fields" requirement of ``docs/PLAN.md`` §6.
+fields" requirement of ``docs/ARCHIVE.md`` §6.
 """
 
 from __future__ import annotations
@@ -50,20 +50,28 @@ REDACTED = "[REDACTED]"
 # `registry_password`, `git_token`, `oidc_client_secret` redact just like the
 # bare word: `[\w.-]*` before the secret suffix absorbs the prefix, and the
 # suffix must sit at the end of the key (immediately before the separator).
-# The value is matched in three forms so a *quoted* value containing spaces (e.g.
-# an SMTP password or backup passphrase rendered in a dict/JSON repr) is redacted
-# whole, not silently skipped: a double-quoted run, a single-quoted run, or an
-# unquoted run up to the next whitespace/separator. Scheme keywords (Bearer/Basic)
-# are excluded from the unquoted form so header-style credentials are handled
-# (whole-token) by the bearer pattern below instead.
+# The value is matched in three forms: a double-quoted run, a single-quoted run,
+# or an unquoted run. The unquoted run is *tempered-greedy* — it consumes to the
+# end of the line UNLESS it first reaches the start of another `key=`/`key:` pair
+# (`(?!\s+[\w.-]+\s*[:=])`). This closes SEC-4: an unquoted secret that contains
+# spaces or commas (an SMTP password, a backup passphrase, a multi-word token)
+# is now redacted whole instead of only up to its first space/comma, while a
+# following structured field like `region=us` is still preserved. `.` never
+# crosses a newline, so a secret is bounded to its own log line. Over-redacting a
+# trailing free-text phrase is the accepted trade-off — never leaking secret
+# bytes is the filter's whole job. The value must start with a non-space (`\S`)
+# so the engine can't give back the key's trailing space and start the value on
+# it (which would slip past the Bearer/Basic guard). Scheme keywords
+# (Bearer/Basic) are excluded from the unquoted form so header-style credentials
+# are handled (whole-token) by the bearer pattern below instead.
 _KV_PATTERN = re.compile(
     r"(?i)([\"']?\b[\w.-]*(?:" + "|".join(_SECRET_FIELD_NAMES) + r")\b[\"']?\s*[:=]\s*)"
-    r"(?:\"([^\"]*)\"|'([^']*)'|((?!(?:bearer|basic)\b)[^\s\"',;&]+))"
+    r"(?:\"([^\"]*)\"|'([^']*)'|((?!(?:bearer|basic)\b)\S(?:(?!\s+[\w.-]+\s*[:=]).)*))"
 )
 # Authorization header style bearer/basic tokens.
 _BEARER_PATTERN = re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+")
 # URL userinfo credentials: https://user:token@host -> https://[REDACTED]@host.
-# Covers transient credential-embedded git clone URLs (docs/PLAN.md §4.1) so a
+# Covers transient credential-embedded git clone URLs (docs/ARCHIVE.md §4.1) so a
 # token can never surface through a logged URL or a stored scanner error. Greedy
 # up to the last '@' before the path so a literal '@' inside the userinfo can't
 # leave a trailing fragment exposed.

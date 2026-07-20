@@ -1,15 +1,19 @@
-# Dependabot — keep the GitHub Actions supply chain current and reviewable.
+# Dependabot — keep the full dependency supply chain current and reviewable:
+# GitHub Actions, the Python backend, the npm frontend, and Docker base images.
 #
 # Part of audit finding INF-1: the publishing workflows push to GHCR with the
 # built-in GITHUB_TOKEN (packages:write), so their actions should reference
 # pinned, tracked versions. Dependabot opens grouped PRs to bump the actions (in
 # workflows and the composite build action), so a pinned SHA can be reviewed and
 # rolled forward deliberately rather than silently resolving a mutable tag at run
-# time. (Full commit-SHA pinning of each `uses:` is tracked on docs/ROADMAP.md.)
+# time.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
-    # Covers .github/workflows/* and the composite action under .github/actions/.
+    # Covers .github/workflows/*. Dependabot's github-actions ecosystem only
+    # scans workflow files under the given directory, not composite actions
+    # nested elsewhere in the repo — the composite build action needs its own
+    # entry below (see docs/reviews/claude-md-compliance.md D3).
     directory: "/"
     # Open bumps against `dev`, not the default branch (`main`). Per the
     # branching model, `main` is protected and receives only deliberate `dev`->
@@ -23,5 +27,73 @@ updates:
       prefix: "ci"
     groups:
       github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    # The reusable composite action's `uses:` refs live outside .github/workflows/
+    # and need their own directory entry to be scanned (docs/reviews/
+    # claude-md-compliance.md D3 — the single "/" entry above does not reach
+    # this file).
+    directory: "/.github/actions/build-image"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "backend"
+    groups:
+      backend-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "frontend"
+    groups:
+      frontend-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    # Covers the multi-stage docker/Dockerfile base images (node, debian,
+    # python).
+    directory: "/docker"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "docker"
+    groups:
+      docker-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker-compose"
+    # Covers sidecar images pinned in docker-compose.yml (e.g. the
+    # docker-socket-proxy sidecar).
+    directory: "/docker"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "docker"
+    groups:
+      docker-images:
         patterns:
           - "*"

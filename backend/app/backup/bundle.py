@@ -1,4 +1,4 @@
-"""Portable, passphrase-protected backup & restore (docs/PLAN.md §8).
+"""Portable, passphrase-protected backup & restore (docs/ARCHIVE.md §8).
 
 A backup is a **logical dump** of the database (one JSON record per row, per
 table) rather than a raw SQLite file, which keeps it independent of the on-disk
@@ -39,7 +39,7 @@ from app.core.passphrase import (
     new_salt,
     passphrase_cipher,
 )
-from app.core.secret_store import SECRET_COLUMNS
+from app.core.secret_store import SECRET_COLUMNS, row_aad
 from app.core.timeutil import utcnow
 from app.db.base import Base
 
@@ -77,8 +77,47 @@ _SECRET_MAP: dict[tuple[str, str], str] = {
 }
 
 
+def _row_pk(table: object, record: object) -> object | None:
+    """Return a row's single-column primary-key value, or ``None`` if not simple.
+
+    Used to reconstruct the row-bound AAD (SEC-7) when re-wrapping secrets. A
+    ``None`` result (composite/absent PK) falls back to the column-only tag.
+    """
+    pk_cols = list(table.primary_key.columns)  # type: ignore[attr-defined]
+    if len(pk_cols) != 1:
+        return None
+    return record.get(pk_cols[0].name)  # type: ignore[attr-defined]
+
+
+def _decrypt_field(cipher: object, value: str, aad: str, pk: object | None) -> tuple[str, str]:
+    """Decrypt a re-wrappable secret, returning ``(plaintext, aad_that_worked)``.
+
+    Tries the row-bound AAD (SEC-7) then the legacy column-only tag, mirroring
+    :func:`app.core.secret_store.decrypt_secret`'s fallback. The returned AAD is
+    used to re-wrap so a value's binding is **preserved** across a backup/restore
+    cycle (a column-only secret stays column-only; a row-bound one stays bound)
+    rather than being silently upgraded.
+    """
+    bound = row_aad(aad, pk)
+    try:
+        return cipher.decrypt(value, aad=bound), bound  # type: ignore[attr-defined]
+    except SecretDecryptError:
+        return cipher.decrypt(value, aad=aad), aad  # type: ignore[attr-defined]
+
+
 class BackupError(RuntimeError):
     """Raised when a backup cannot be built or a restore cannot be applied."""
+
+
+class RestoreConflictError(BackupError):
+    """Raised when a restore is refused because scans are queued or running.
+
+    Distinct from :class:`BackupError` so the API can answer 409 (conflict,
+    retry later) rather than 400 (bad bundle). Raised from *inside* the restore
+    write transaction — the endpoint's own pre-check happens before the upload
+    is read, and a scan queued across that await must still abort the wipe
+    (CON-3).
+    """
 
 
 @dataclass(frozen=True)
@@ -148,30 +187,45 @@ def build_bundle(db: Session, passphrase: str) -> bytes:
 
     _warn_if_large(db)
 
+    # Read every table inside one explicit transaction so the whole dump is a
+    # single consistent snapshot. pysqlite's legacy isolation defers BEGIN to
+    # the first DML, leaving each SELECT its own implicit read transaction — a
+    # scan committing between two table reads would then land in the later table
+    # (findings) but not the earlier one (scans), producing a torn bundle
+    # (CON-9). An explicit BEGIN takes the WAL read snapshot at the first SELECT
+    # and holds it across every table; WAL keeps a long reader cheap and
+    # non-blocking for concurrent writers. The transaction is read-only, so it is
+    # released with a rollback once the dump is assembled.
+    db.rollback()  # discard any autobegun transaction so the raw BEGIN is clean
+    db.execute(text("BEGIN"))
     tables: dict[str, dict] = {}
-    for table in _backup_tables():
-        rows: list[dict] = []
-        # Stream rows from the driver instead of buffering the whole result set
-        # in the DBAPI cursor before we start processing (API-3).
-        for record in db.execute(select(table)).yield_per(_RESTORE_CHUNK_ROWS).mappings():
-            row: dict = {}
-            for column in table.columns:
-                value = record[column.name]
-                aad = _SECRET_MAP.get((table.name, column.name))
-                if aad is not None and value:
-                    try:
-                        plaintext = master.decrypt(value, aad=aad)
-                    except SecretDecryptError as exc:
-                        raise BackupError(
-                            f"Cannot re-wrap secret {table.name}.{column.name}: "
-                            "it could not be decrypted under the current master key."
-                        ) from exc
-                    value = pass_cipher.encrypt(plaintext, aad=aad)
-                elif isinstance(value, datetime):
-                    value = value.isoformat()
-                row[column.name] = value
-            rows.append(row)
-        tables[table.name] = {"rows": rows}
+    try:
+        for table in _backup_tables():
+            rows: list[dict] = []
+            # Stream rows from the driver instead of buffering the whole result
+            # set in the DBAPI cursor before we start processing (API-3).
+            for record in db.execute(select(table)).yield_per(_RESTORE_CHUNK_ROWS).mappings():
+                row: dict = {}
+                for column in table.columns:
+                    value = record[column.name]
+                    aad = _SECRET_MAP.get((table.name, column.name))
+                    if aad is not None and value:
+                        pk = _row_pk(table, record)
+                        try:
+                            plaintext, used_aad = _decrypt_field(master, value, aad, pk)
+                        except SecretDecryptError as exc:
+                            raise BackupError(
+                                f"Cannot re-wrap secret {table.name}.{column.name}: "
+                                "it could not be decrypted under the current master key."
+                            ) from exc
+                        value = pass_cipher.encrypt(plaintext, aad=used_aad)
+                    elif isinstance(value, datetime):
+                        value = value.isoformat()
+                    row[column.name] = value
+                rows.append(row)
+            tables[table.name] = {"rows": rows}
+    finally:
+        db.rollback()  # end the read-only snapshot transaction
 
     inner = json.dumps({"tables": tables}, separators=(",", ":"))
     payload = pass_cipher.encrypt(inner, aad=AAD_BUNDLE)
@@ -258,15 +312,17 @@ def restore_bundle(db: Session, data: bytes, passphrase: str) -> RestoreSummary:
     # Honor the KDF parameters the bundle recorded rather than the current module
     # constants (item (g)): a bundle made under an older scrypt work factor must
     # still derive the same key and restore. Missing fields (older bundles) fall
-    # back to the current defaults.
+    # back to the current defaults. The values are untrusted input: they are
+    # parsed defensively here and bounds-checked in derive_key (SEC-2) before
+    # any memory is committed to the derivation.
     try:
-        pass_cipher = passphrase_cipher(
-            passphrase,
-            salt,
-            n=int(kdf.get("n", SCRYPT_N)),
-            r=int(kdf.get("r", SCRYPT_R)),
-            p=int(kdf.get("p", SCRYPT_P)),
-        )
+        kdf_n = int(kdf.get("n", SCRYPT_N))
+        kdf_r = int(kdf.get("r", SCRYPT_R))
+        kdf_p = int(kdf.get("p", SCRYPT_P))
+    except (TypeError, ValueError) as exc:
+        raise BackupError("Backup bundle key-derivation parameters are malformed.") from exc
+    try:
+        pass_cipher = passphrase_cipher(passphrase, salt, n=kdf_n, r=kdf_r, p=kdf_p)
     except PassphraseKdfError as exc:
         raise BackupError(str(exc)) from exc
 
@@ -282,6 +338,28 @@ def restore_bundle(db: Session, data: bytes, passphrase: str) -> RestoreSummary:
 
     master = get_secret_cipher()
     managed = _backup_tables()
+
+    # Acquire the database write lock up front (pysqlite's legacy isolation
+    # would otherwise defer BEGIN to the first DELETE) and re-check the
+    # active-scan guard *inside* the write transaction. The endpoint checks the
+    # same condition before reading the upload, but that is check-then-act
+    # across a long await — a scan queued (or claimed) in that window must
+    # abort the restore here, before anything is wiped (CON-3). Once BEGIN
+    # IMMEDIATE succeeds no other writer can queue or claim a scan until this
+    # transaction ends, so the check cannot go stale.
+    db.execute(text("BEGIN IMMEDIATE"))
+    scans = Base.metadata.tables["scans"]
+    active = (
+        db.execute(
+            select(func.count()).select_from(scans).where(scans.c.status.in_(("queued", "running")))
+        ).scalar()
+        or 0
+    )
+    if active:
+        raise RestoreConflictError(
+            "A scan was queued or started while the restore was being uploaded; "
+            "wait for it to finish before restoring."
+        )
 
     # Clear every table except the host-owned catalogue/version marker, in
     # reverse FK order. Transient state (sessions, oidc_login_flows) and raw
@@ -305,14 +383,15 @@ def restore_bundle(db: Session, data: bytes, passphrase: str) -> RestoreSummary:
                 value = row[column.name]
                 aad = _SECRET_MAP.get((table.name, column.name))
                 if aad is not None and value:
+                    pk = _row_pk(table, row)
                     try:
-                        plaintext = pass_cipher.decrypt(value, aad=aad)
+                        plaintext, used_aad = _decrypt_field(pass_cipher, value, aad, pk)
                     except SecretDecryptError as exc:
                         raise BackupError(
                             f"Cannot restore secret {table.name}.{column.name}: "
                             "the bundle is corrupt or the passphrase is wrong."
                         ) from exc
-                    value = master.encrypt(plaintext, aad=aad)
+                    value = master.encrypt(plaintext, aad=used_aad)
                 elif isinstance(column.type, DateTime) and isinstance(value, str):
                     value = datetime.fromisoformat(value)
                 values[column.name] = value

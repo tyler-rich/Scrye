@@ -1,6 +1,6 @@
 """Authentication endpoints: bootstrap, login/logout, sessions, password.
 
-Security posture (docs/PLAN.md §5):
+Security posture (docs/ARCHIVE.md §5):
 
 - Login/setup are rate-limited per client IP (in-process sliding window).
 - Session cookies are ``HttpOnly`` + ``SameSite=Lax`` (+ ``Secure`` per config);
@@ -163,10 +163,10 @@ def login(
         # Reuse any pending secret so repeated logins show the same key; the
         # login only completes once a code is verified (see verify_mfa).
         if user.mfa_secret_ciphertext:
-            secret = mfa.decrypt_mfa_secret(user.mfa_secret_ciphertext)
+            secret = mfa.decrypt_mfa_secret(user.mfa_secret_ciphertext, user_id=user.id)
         else:
             secret = mfa.generate_secret()
-            user.mfa_secret_ciphertext = mfa.encrypt_mfa_secret(secret)
+            user.mfa_secret_ciphertext = mfa.encrypt_mfa_secret(secret, user_id=user.id)
             user.mfa_enabled = False
         challenge = request.app.state.pending_mfa.issue(user.id, mfa.PURPOSE_ENROLL)
         record_audit(db, action="auth.mfa_enrollment_required", actor=user, ip=ip)
@@ -210,14 +210,24 @@ def verify_mfa(
     if purpose == mfa.PURPOSE_VERIFY and not user.mfa_enabled:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="MFA challenge is invalid.")
 
-    if not mfa.verify_code(mfa.decrypt_mfa_secret(user.mfa_secret_ciphertext), payload.code):
+    if not mfa.verify_code(
+        mfa.decrypt_mfa_secret(user.mfa_secret_ciphertext, user_id=user.id), payload.code
+    ):
         record_audit(db, action="auth.mfa_failed", actor=user, ip=ip)
         db.commit()
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication code.")
 
     if purpose == mfa.PURPOSE_ENROLL and not user.mfa_enabled:
         user.mfa_enabled = True
-        record_audit(db, action="auth.mfa_enabled", actor=user, ip=ip)
+        # This path is reached only from the policy-forced first-enrollment on a
+        # password login (PURPOSE_ENROLL is issued nowhere else). Enroll-on-first-
+        # login inherently lets whoever holds the password bind the first factor
+        # during the window before the legitimate user enrolls (SEC-9), so flag the
+        # event as forced-by-policy: an admin can then audit that a mandatory-MFA
+        # account's first factor was bound as expected and act on an unexpected one.
+        record_audit(
+            db, action="auth.mfa_enabled", actor=user, ip=ip, details={"forced_by_policy": True}
+        )
         db.commit()
 
     return _complete_login(db, user, request, response, action="auth.login")
@@ -353,7 +363,7 @@ def enroll_mfa(
                 detail="Re-enrolling MFA requires your current password.",
             )
     secret = mfa.generate_secret()
-    auth.user.mfa_secret_ciphertext = mfa.encrypt_mfa_secret(secret)
+    auth.user.mfa_secret_ciphertext = mfa.encrypt_mfa_secret(secret, user_id=auth.user.id)
     auth.user.mfa_enabled = False
     db.commit()
     instance = SettingsService(db).general().instance_name
@@ -373,7 +383,9 @@ def activate_mfa(
     """Confirm enrollment by proving a code, activating MFA for the account."""
     if not auth.user.mfa_secret_ciphertext:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Start enrollment first.")
-    if not mfa.verify_code(mfa.decrypt_mfa_secret(auth.user.mfa_secret_ciphertext), payload.code):
+    if not mfa.verify_code(
+        mfa.decrypt_mfa_secret(auth.user.mfa_secret_ciphertext, user_id=auth.user.id), payload.code
+    ):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid authentication code.")
     auth.user.mfa_enabled = True
     record_audit(db, action="auth.mfa_enabled", actor=auth.user, ip=client_ip(request))

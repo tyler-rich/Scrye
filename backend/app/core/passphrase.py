@@ -1,4 +1,4 @@
-"""Passphrase-derived encryption for portable backups (docs/PLAN.md §8).
+"""Passphrase-derived encryption for portable backups (docs/ARCHIVE.md §8).
 
 A backup bundle must survive a move to a fresh host that has a *different*
 application master key, so its secrets cannot stay wrapped under that master key.
@@ -28,6 +28,22 @@ SCRYPT_R = 8
 SCRYPT_P = 1
 _DERIVED_KEY_BYTES = 32
 _SALT_BYTES = 16
+
+#: Upper bounds on restore-supplied scrypt parameters. A bundle's KDF envelope
+#: is attacker-controlled input read *before* the passphrase is verified, so an
+#: unbounded ``n``/``r``/``p`` lets a crafted upload demand terabytes of memory
+#: (or unbounded CPU) and OOM-kill the container pre-auth (SEC-2). Legitimate
+#: bundles only ever record the module defaults above, so these ceilings — well
+#: above any default this app has ever shipped — break nothing.
+_MAX_SCRYPT_N = 2**20
+_MAX_SCRYPT_R = 16
+_MAX_SCRYPT_P = 4
+
+#: Fixed scrypt memory budget passed as ``maxmem``. Deliberately a constant —
+#: deriving it from the bundle's own ``n``/``r`` (as ``128*n*r*2`` used to)
+#: widens the guard to whatever the attacker asks for, defeating its purpose.
+#: The defaults need ``128*N*r`` = 128 MiB, comfortably within budget.
+_SCRYPT_MAXMEM_BYTES = 512 * 1024 * 1024
 
 #: AAD binding the outer bundle ciphertext, distinct from any field AAD.
 AAD_BUNDLE = "backup.bundle"
@@ -72,6 +88,17 @@ def derive_key(
         raise PassphraseKdfError("Backup passphrase must not be empty.")
     if n < 2 or (n & (n - 1)) != 0 or r < 1 or p < 1:
         raise PassphraseKdfError("Invalid scrypt parameters in backup bundle.")
+    if n > _MAX_SCRYPT_N or r > _MAX_SCRYPT_R or p > _MAX_SCRYPT_P:
+        raise PassphraseKdfError(
+            "scrypt parameters in backup bundle exceed the supported maximum "
+            f"(n<={_MAX_SCRYPT_N}, r<={_MAX_SCRYPT_R}, p<={_MAX_SCRYPT_P})."
+        )
+    # scrypt needs a little over 128*n*r bytes; keep the historical 2x headroom
+    # but reject before allocating anything if it would blow the fixed budget.
+    if 128 * n * r * 2 > _SCRYPT_MAXMEM_BYTES:
+        raise PassphraseKdfError(
+            "scrypt parameters in backup bundle exceed the supported memory budget."
+        )
     return hashlib.scrypt(
         passphrase.encode("utf-8"),
         salt=salt,
@@ -79,7 +106,7 @@ def derive_key(
         r=r,
         p=p,
         dklen=_DERIVED_KEY_BYTES,
-        maxmem=128 * n * r * 2,
+        maxmem=_SCRYPT_MAXMEM_BYTES,
     )
 
 

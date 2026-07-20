@@ -1,6 +1,6 @@
 """Syft SBOM generation: orchestrate ``syft <source> -o <format>``.
 
-Syft is bundled (docs/PLAN.md §4.2): one cataloging pass produces an SBOM that is
+Syft is bundled (docs/ARCHIVE.md §4.2): one cataloging pass produces an SBOM that is
 stored as a downloadable artifact and can be fed to Grype (``grype sbom:...``).
 Only the raw SBOM bytes and its format are returned; parsing into findings is
 Grype's job, not Syft's.

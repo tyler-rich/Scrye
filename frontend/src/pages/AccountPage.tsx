@@ -33,19 +33,24 @@ import { formatWhen } from '../lib/dates';
 
 function PasswordSection() {
   const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [saving, setSaving] = useState(false);
   const form = useForm({
     initialValues: { current_password: '', new_password: '' },
     validate: { new_password: (v) => (v.length >= 12 ? null : 'At least 12 characters') },
   });
 
   const submit = form.onSubmit(async (values) => {
+    if (saving) return;
     setStatus(null);
+    setSaving(true);
     try {
       await changePassword(values.current_password, values.new_password);
       form.reset();
       setStatus({ ok: true, msg: 'Password changed. Other sessions were signed out.' });
     } catch (err) {
       setStatus({ ok: false, msg: err instanceof ApiError ? err.message : 'Failed to change.' });
+    } finally {
+      setSaving(false);
     }
   });
 
@@ -73,7 +78,9 @@ function PasswordSection() {
           {...form.getInputProps('new_password')}
         />
         <Group>
-          <Button type="submit">Change password</Button>
+          <Button type="submit" loading={saving}>
+            Change password
+          </Button>
         </Group>
       </Stack>
     </form>
@@ -89,9 +96,17 @@ function MfaSection() {
   // the current password; surface a field to re-auth if the server asks for it.
   const [reauthRequired, setReauthRequired] = useState(false);
   const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  // In-flight guards so a double-click can't fire an MFA mutation twice — a
+  // second activateMfa in particular is rejected and its error overwrites the
+  // success status, making the user think enrollment failed (L19 / P2-4).
+  const [enrolling, setEnrolling] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [disabling, setDisabling] = useState(false);
 
   const startEnroll = async (currentPassword?: string) => {
+    if (enrolling) return;
     setStatus(null);
+    setEnrolling(true);
     try {
       setEnrollment(await enrollMfa(currentPassword));
       setReauthRequired(false);
@@ -104,11 +119,15 @@ function MfaSection() {
         return;
       }
       setStatus({ ok: false, msg: err instanceof ApiError ? err.message : 'Failed.' });
+    } finally {
+      setEnrolling(false);
     }
   };
 
   const confirm = async () => {
+    if (confirming) return;
     setStatus(null);
+    setConfirming(true);
     try {
       await activateMfa(code);
       setEnrollment(null);
@@ -117,11 +136,15 @@ function MfaSection() {
       setStatus({ ok: true, msg: 'MFA enabled.' });
     } catch (err) {
       setStatus({ ok: false, msg: err instanceof ApiError ? err.message : 'Invalid code.' });
+    } finally {
+      setConfirming(false);
     }
   };
 
   const disable = async () => {
+    if (disabling) return;
     setStatus(null);
+    setDisabling(true);
     try {
       await disableMfa(password);
       setPassword('');
@@ -129,6 +152,8 @@ function MfaSection() {
       setStatus({ ok: true, msg: 'MFA disabled.' });
     } catch (err) {
       setStatus({ ok: false, msg: err instanceof ApiError ? err.message : 'Failed.' });
+    } finally {
+      setDisabling(false);
     }
   };
 
@@ -161,7 +186,13 @@ function MfaSection() {
             onChange={(e) => setPassword(e.currentTarget.value)}
           />
           <Group>
-            <Button color="red" variant="light" onClick={disable} disabled={!password}>
+            <Button
+              color="red"
+              variant="light"
+              onClick={disable}
+              disabled={!password}
+              loading={disabling}
+            >
               Disable MFA
             </Button>
           </Group>
@@ -178,12 +209,19 @@ function MfaSection() {
             <Text size="xs" c="dimmed" style={{ wordBreak: 'break-all' }}>
               {enrollment.otpauth_uri}
             </Text>
-            <PinInput length={6} type="number" value={code} onChange={setCode} oneTimeCode />
+            <PinInput
+              length={6}
+              type="number"
+              aria-label="Authentication code"
+              value={code}
+              onChange={setCode}
+              oneTimeCode
+            />
             <Group>
-              <Button onClick={confirm} disabled={code.length < 6}>
+              <Button onClick={confirm} disabled={code.length < 6} loading={confirming}>
                 Confirm & enable
               </Button>
-              <Button variant="subtle" onClick={() => setEnrollment(null)}>
+              <Button variant="subtle" onClick={() => setEnrollment(null)} disabled={confirming}>
                 Cancel
               </Button>
             </Group>
@@ -206,6 +244,7 @@ function MfaSection() {
             <Button
               onClick={() => startEnroll(reauthRequired ? password : undefined)}
               disabled={reauthRequired && !password}
+              loading={enrolling}
             >
               Enable MFA
             </Button>
@@ -219,6 +258,7 @@ function MfaSection() {
 function SessionsSection() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -233,11 +273,15 @@ function SessionsSection() {
   }, [load]);
 
   const onRevoke = async (id: number) => {
+    if (revoking !== null) return;
+    setRevoking(id);
     try {
       await revokeSession(id);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to revoke.');
+    } finally {
+      setRevoking(null);
     }
   };
 
@@ -273,7 +317,14 @@ function SessionsSection() {
                   {s.current ? (
                     <Badge variant="light">this session</Badge>
                   ) : (
-                    <Button size="xs" variant="subtle" color="red" onClick={() => onRevoke(s.id)}>
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      color="red"
+                      loading={revoking === s.id}
+                      disabled={revoking !== null}
+                      onClick={() => onRevoke(s.id)}
+                    >
                       Revoke
                     </Button>
                   )}

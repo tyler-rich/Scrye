@@ -3,7 +3,7 @@ import { IconMoon, IconSun } from '@tabler/icons-react';
 
 /**
  * Light/dark toggle. Uses Mantine's color-scheme manager so the choice
- * persists and respects the system 'auto' default (PLAN.md § Teal theme).
+ * persists and respects the system 'auto' default (docs/ARCHIVE.md § Teal theme).
  */
 export function ColorSchemeToggle() {
   const { setColorScheme } = useMantineColorScheme();

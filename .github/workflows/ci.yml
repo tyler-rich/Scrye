@@ -32,10 +32,15 @@ jobs:
         working-directory: backend
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # No step here pushes or authenticates to the remote (CI is
+          # contents: read), so drop the persisted token rather than leave it
+          # in .git/config for later steps (SC-11).
+          persist-credentials: false
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.13"
           cache: pip
@@ -53,6 +58,22 @@ jobs:
       - name: Check .env.example is in sync with Settings
         run: python -m scripts.gen_env_example --check
 
+      # requirements.lock is the hash-pinned transitive closure the image installs
+      # from (docker/Dockerfile, SC-1). Regenerate it with the pinned uv and fail
+      # if it drifts from pyproject.toml — uv reads the existing lock as a
+      # preference set, so an unrelated new transitive release does NOT rewrite it;
+      # only a real pyproject dependency change does. Keep the uv pin and the
+      # compile flags identical to CONTRIBUTING.md § Backend dependency lock.
+      - name: Check requirements.lock is in sync with pyproject.toml
+        run: |
+          pip install uv==0.8.17
+          uv pip compile pyproject.toml --generate-hashes --python-version 3.13 \
+            --output-file requirements.lock --quiet
+          if ! git diff --exit-code requirements.lock; then
+            echo "::error::requirements.lock is out of sync with pyproject.toml. Regenerate it with: uv pip compile pyproject.toml --generate-hashes --python-version 3.13 --output-file requirements.lock" >&2
+            exit 1
+          fi
+
       - name: Tests — pytest
         run: pytest -q
 
@@ -64,10 +85,15 @@ jobs:
         working-directory: frontend
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # No step here pushes or authenticates to the remote (CI is
+          # contents: read), so drop the persisted token rather than leave it
+          # in .git/config for later steps (SC-11).
+          persist-credentials: false
 
       - name: Set up Node 22
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "22"
           cache: npm
@@ -82,8 +108,10 @@ jobs:
       - name: Format — Prettier
         run: npm run format:check
 
-      # Type-checks (tsc) and bundles; also the frontend test entrypoint as the
-      # suite grows (`npm test` can be added here in a later phase).
+      - name: Tests — Vitest
+        run: npm test
+
+      # Type-checks (tsc) and bundles the SPA.
       - name: Build
         run: npm run build
 
@@ -101,13 +129,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # No step here pushes or authenticates to the remote (CI is
+          # contents: read), so drop the persisted token rather than leave it
+          # in .git/config for later steps (SC-11).
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Build image (amd64) and load
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: docker/Dockerfile
@@ -207,7 +240,12 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.base.ref == 'main'
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # No step here pushes or authenticates to the remote (CI is
+          # contents: read), so drop the persisted token rather than leave it
+          # in .git/config for later steps (SC-11).
+          persist-credentials: false
 
       - name: Build image (amd64 + arm64, no push)
         uses: ./.github/actions/build-image

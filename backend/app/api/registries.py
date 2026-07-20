@@ -1,10 +1,10 @@
-"""Registry credential management (docs/PLAN.md §4.5).
+"""Registry credential management (docs/ARCHIVE.md §4.5).
 
 Container-registry credentials are **write-only** and field-encrypted: the
 password/token is accepted on write, stored as ciphertext, and never returned
 (reads get a mask). Admins manage registries and see their full metadata;
 operators get only an id/name options list (``GET /registries/options``) to
-select a credential when launching a scan (docs/PLAN.md §14). A ``test`` action
+select a credential when launching a scan (docs/ARCHIVE.md §14). A ``test`` action
 probes the registry to validate connectivity and the stored credential.
 """
 
@@ -28,7 +28,7 @@ from app.core.masking import masked_secret
 from app.core.registry_check import check_registry
 from app.core.secret_store import AAD_REGISTRY_SECRET, decrypt_secret, encrypt_secret
 from app.core.timeutil import utcnow
-from app.db.models import SECRET_BEARING_AUTH_TYPES, Registry, Role
+from app.db.models import SECRET_BEARING_AUTH_TYPES, Registry, RegistryAuthType, Role
 from app.db.session import get_db
 
 router = APIRouter(prefix="/registries", tags=["registries"])
@@ -70,7 +70,7 @@ def list_registries(
 
     Non-secret metadata (host, username) is still credential material, so the
     full view is admin-only. Operators launching a scan use ``GET
-    /registries/options`` for id/name selection instead (docs/PLAN.md §14).
+    /registries/options`` for id/name selection instead (docs/ARCHIVE.md §14).
     """
     rows = db.scalars(select(Registry).order_by(Registry.name)).all()
     return [_to_out(r) for r in rows]
@@ -114,7 +114,7 @@ def create_registry(
     )
     if payload.secret is not None:
         registry.secret_ciphertext = encrypt_secret(
-            payload.secret.get_secret_value(), aad=AAD_REGISTRY_SECRET
+            payload.secret.get_secret_value(), aad=AAD_REGISTRY_SECRET, row_id=registry.id
         )
         registry.secret_updated_at = utcnow()
     db.add(registry)
@@ -156,6 +156,14 @@ def update_registry(
         registry.registry_host = payload.registry_host
         changes["registry_host"] = payload.registry_host
     if payload.username is not None:
+        blanking = not payload.username.strip()
+        if registry.auth_type is RegistryAuthType.USERNAME_PASSWORD and blanking:
+            # Create requires a username for this auth type; don't let update
+            # blank it back out (APIR-6).
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Username/password auth requires a username.",
+            )
         registry.username = payload.username
         changes["username"] = "updated"
     if payload.enabled is not None:
@@ -170,7 +178,9 @@ def update_registry(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Auth type '{registry.auth_type.value}' does not take a secret.",
             )
-        registry.secret_ciphertext = encrypt_secret(secret_value, aad=AAD_REGISTRY_SECRET)
+        registry.secret_ciphertext = encrypt_secret(
+            secret_value, aad=AAD_REGISTRY_SECRET, row_id=registry.id
+        )
         registry.secret_updated_at = utcnow()
         changes["secret"] = "updated"  # metadata only; never the value
 
@@ -243,7 +253,9 @@ async def test_registry(
     if not registry.secret_ciphertext:
         return RegistryTestOut(ok=False, detail="No stored credential to test.")
     try:
-        secret = decrypt_secret(registry.secret_ciphertext, aad=AAD_REGISTRY_SECRET)
+        secret = decrypt_secret(
+            registry.secret_ciphertext, aad=AAD_REGISTRY_SECRET, row_id=registry.id
+        )
     except SecretDecryptError:
         return RegistryTestOut(ok=False, detail="Stored credential could not be decrypted.")
 

@@ -5,10 +5,9 @@ Read models never expose password hashes or any secret material.
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.schema_types import UtcDatetime
 from app.db.models import Role
 
 #: Validation bounds for local credentials.
@@ -27,8 +26,8 @@ class UserOut(BaseModel):
     role: Role
     is_active: bool
     mfa_enabled: bool
-    created_at: datetime
-    last_login_at: datetime | None
+    created_at: UtcDatetime
+    last_login_at: UtcDatetime | None
 
 
 class CredentialsIn(BaseModel):
@@ -127,9 +126,9 @@ class SessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    created_at: datetime
-    last_seen_at: datetime
-    expires_at: datetime
+    created_at: UtcDatetime
+    last_seen_at: UtcDatetime
+    expires_at: UtcDatetime
     ip: str | None
     user_agent: str | None
     current: bool = False

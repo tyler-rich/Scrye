@@ -1,4 +1,4 @@
-"""Typed runtime settings backed by the ``settings`` table (docs/PLAN.md §4.5).
+"""Typed runtime settings backed by the ``settings`` table (docs/ARCHIVE.md §4.5).
 
 Admins edit a handful of grouped, **non-secret** settings at runtime: general
 instance options, the authentication policy (local-login toggle, MFA policy),

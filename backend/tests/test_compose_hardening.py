@@ -41,6 +41,17 @@ def test_cache_volume_is_mounted_for_scanner_databases() -> None:
     assert "scrye_cache:/cache" in text, "the /cache volume must be mounted for scanner caches"
 
 
+def test_scrye_service_has_explicit_stop_grace_period() -> None:
+    # Docker's default SIGTERM->SIGKILL budget is 10s, which the in-process
+    # worker/scheduler shutdown can exceed on a busy instance — the process would
+    # be SIGKILLed mid-commit (CON-6). An explicit, larger grace must be pinned.
+    text = COMPOSE.read_text(encoding="utf-8")
+    assert "stop_grace_period:" in text, (
+        "the scrye service must set an explicit stop_grace_period so a graceful "
+        "shutdown is not SIGKILLed at Docker's 10s default (CON-6)"
+    )
+
+
 ENTRYPOINT = Path(__file__).resolve().parents[2] / "docker" / "entrypoint.sh"
 
 

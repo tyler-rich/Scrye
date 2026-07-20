@@ -154,6 +154,53 @@ def test_registry_update_replaces_secret(client: TestClient) -> None:
     assert patched.json()["secret"]["updated_at"] != first_updated
 
 
+def test_registry_update_cannot_blank_username_password_username(client: TestClient) -> None:
+    """Create requires a username for username_password; update can't blank it (APIR-6)."""
+    csrf = _setup_admin(client)
+    created = client.post(
+        "/api/registries",
+        headers={CSRF: csrf},
+        json={
+            "name": "priv",
+            "registry_host": "registry.test",
+            "auth_type": "username_password",
+            "username": "robot",
+            "secret": "pw",
+        },
+    ).json()
+    resp = client.patch(
+        f"/api/registries/{created['id']}",
+        headers={CSRF: csrf},
+        json={"username": "   "},
+    )
+    assert resp.status_code == 422
+    assert "username" in resp.json()["detail"].lower()
+
+
+def test_registry_update_strips_name(client: TestClient) -> None:
+    """Update strips name like create, so ' ghcr ' can't shadow 'ghcr' (APIR-6)."""
+    csrf = _setup_admin(client)
+    created = client.post(
+        "/api/registries",
+        headers={CSRF: csrf},
+        json={"name": "ghcr", "registry_host": "ghcr.io", "auth_type": "token", "secret": "t"},
+    ).json()
+    patched = client.patch(
+        f"/api/registries/{created['id']}",
+        headers={CSRF: csrf},
+        json={"name": "  ghcr-prod  "},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["name"] == "ghcr-prod"
+    # A whitespace-only name is rejected, not stored blank.
+    blank = client.patch(
+        f"/api/registries/{created['id']}",
+        headers={CSRF: csrf},
+        json={"name": "   "},
+    )
+    assert blank.status_code == 422
+
+
 def test_registry_test_endpoint(client: TestClient, monkeypatch) -> None:
     from app.api import registries
     from app.core.registry_check import RegistryCheck

@@ -57,12 +57,16 @@ interface FormValues {
   enabled: boolean;
 }
 
-/** Scheduled/recurring scans on a cron cadence (docs/PLAN.md §4.6). */
+/** Scheduled/recurring scans on a cron cadence (docs/ARCHIVE.md §4.6). */
 export function ScheduledScansPanel() {
   const { user } = useAuth();
   const canOperate = !!user && user.role !== 'viewer';
   const [items, setItems] = useState<ScanSchedule[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  // Which row action is in flight, so it can't double-fire (a double-clicked
+  // "Run now" queues duplicate scans) (L19 / P2-4).
+  const [rowBusy, setRowBusy] = useState<{ id: number; action: 'run' | 'delete' } | null>(null);
   const [opened, { open, close }] = useDisclosure(false);
 
   const load = useCallback(async () => {
@@ -104,7 +108,9 @@ export function ScheduledScansPanel() {
   }, [targetType, scanner]);
 
   const submit = form.onSubmit(async (values) => {
+    if (creating) return;
     setError(null);
+    setCreating(true);
     try {
       await createSchedule({
         name: values.name.trim(),
@@ -120,26 +126,36 @@ export function ScheduledScansPanel() {
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to create schedule.');
+    } finally {
+      setCreating(false);
     }
   });
 
   const onDelete = async (id: number) => {
+    if (rowBusy !== null) return;
     setError(null);
+    setRowBusy({ id, action: 'delete' });
     try {
       await deleteSchedule(id);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to delete schedule.');
+    } finally {
+      setRowBusy(null);
     }
   };
 
   const onRun = async (id: number) => {
+    if (rowBusy !== null) return;
     setError(null);
+    setRowBusy({ id, action: 'run' });
     try {
       await runScheduleNow(id);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to run schedule.');
+    } finally {
+      setRowBusy(null);
     }
   };
 
@@ -201,13 +217,21 @@ export function ScheduledScansPanel() {
                 <Table.Td>
                   {canOperate && (
                     <Group gap="xs" justify="flex-end">
-                      <ActionIcon variant="subtle" aria-label="Run now" onClick={() => onRun(s.id)}>
+                      <ActionIcon
+                        variant="subtle"
+                        aria-label="Run now"
+                        loading={rowBusy?.id === s.id && rowBusy.action === 'run'}
+                        disabled={rowBusy !== null}
+                        onClick={() => onRun(s.id)}
+                      >
                         <IconPlayerPlay size={16} />
                       </ActionIcon>
                       <ActionIcon
                         variant="subtle"
                         color="red"
                         aria-label="Delete schedule"
+                        loading={rowBusy?.id === s.id && rowBusy.action === 'delete'}
+                        disabled={rowBusy !== null}
                         onClick={() => onDelete(s.id)}
                       >
                         <IconTrash size={16} />
@@ -271,10 +295,12 @@ export function ScheduledScansPanel() {
             )}
             <Switch label="Enabled" {...form.getInputProps('enabled', { type: 'checkbox' })} />
             <Group justify="flex-end">
-              <Button variant="default" onClick={close}>
+              <Button variant="default" onClick={close} disabled={creating}>
                 Cancel
               </Button>
-              <Button type="submit">Create</Button>
+              <Button type="submit" loading={creating}>
+                Create
+              </Button>
             </Group>
           </Stack>
         </form>

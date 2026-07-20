@@ -1,4 +1,4 @@
-"""Event-driven notification dispatch for finished scans (docs/PLAN.md §4.6).
+"""Event-driven notification dispatch for finished scans (docs/ARCHIVE.md §4.6).
 
 Phase 5 built the notification channels and their transports; Phase 6 wires the
 actual events. When a scan finishes, the worker calls :func:`dispatch_scan_event`,

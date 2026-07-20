@@ -12,6 +12,13 @@ import threading
 import time
 from collections import deque
 
+#: Once the key map grows past this many entries, sweep fully-expired keys so a
+#: stream of distinct client IPs can't grow the backing dict without bound
+#: (SEC-10). Each key holds a tiny deque, so the ceiling is generous.
+_EVICT_THRESHOLD = 4096
+#: Amortize the O(n) sweep: only consider sweeping every this-many events.
+_SWEEP_EVERY = 512
+
 
 class SlidingWindowRateLimiter:
     """Thread-safe sliding-window counter keyed by an arbitrary string."""
@@ -27,6 +34,7 @@ class SlidingWindowRateLimiter:
         self.window_seconds = window_seconds
         self._events: dict[str, deque[float]] = {}
         self._lock = threading.Lock()
+        self._ops_since_sweep = 0
 
     def allow(self, key: str) -> tuple[bool, float]:
         """Record an attempt for ``key`` and decide whether it is allowed.
@@ -45,10 +53,35 @@ class SlidingWindowRateLimiter:
             while window and now - window[0] > self.window_seconds:
                 window.popleft()
             if len(window) >= self.max_events:
-                retry_after = self.window_seconds - (now - window[0])
-                return False, max(retry_after, 0.0)
-            window.append(now)
-            return True, 0.0
+                result = (False, max(self.window_seconds - (now - window[0]), 0.0))
+            else:
+                window.append(now)
+                result = (True, 0.0)
+            # Sweep after the current key's window is finalized so the in-flight
+            # key (which has just been touched) is never mistaken for idle.
+            self._maybe_evict(now)
+            return result
+
+    def _maybe_evict(self, now: float) -> None:
+        """Periodically drop keys whose window has fully expired.
+
+        The per-key deque is pruned only when that key is next accessed, so an
+        idle key lingers forever; without eviction a churn of distinct IPs grows
+        the map without bound. Runs at most once per ``_SWEEP_EVERY`` events and
+        only when the map is large, so it stays O(1) amortized. Caller holds the
+        lock. Note the current key is preserved — it was just accessed.
+        """
+        self._ops_since_sweep += 1
+        if self._ops_since_sweep < _SWEEP_EVERY or len(self._events) <= _EVICT_THRESHOLD:
+            return
+        self._ops_since_sweep = 0
+        expired = [
+            key
+            for key, events in self._events.items()
+            if not events or now - events[-1] > self.window_seconds
+        ]
+        for key in expired:
+            del self._events[key]
 
     def reset(self) -> None:
         """Forget all recorded events (used by tests)."""

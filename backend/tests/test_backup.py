@@ -14,7 +14,13 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.backup.bundle import BackupError, build_bundle, read_manifest, restore_bundle
+from app.backup.bundle import (
+    BackupError,
+    RestoreConflictError,
+    build_bundle,
+    read_manifest,
+    restore_bundle,
+)
 from app.backup.scheduled import prune_scheduled, run_due_backup
 from app.backup.store import BackupStore
 from app.core import crypto
@@ -182,6 +188,64 @@ class TestBundleRoundTrip:
         with pytest.raises(BackupError):
             restore_bundle(db, tampered, PASSPHRASE)
 
+    def test_restore_conflicts_inside_transaction_when_scan_active(self, db: Session) -> None:
+        """CON-3: the active-scan guard is re-checked *inside* the restore's
+        write transaction, so a scan queued after the endpoint's pre-check (i.e.
+        across the upload await) still aborts the restore — and nothing is wiped."""
+        _seed(db)
+        data = build_bundle(db, PASSPHRASE)
+        db.add(
+            Scan(
+                scanner=Scanner.TRIVY,
+                target_type=TargetType.IMAGE,
+                target="raced:latest",
+                status=ScanStatus.QUEUED,
+            )
+        )
+        db.commit()
+
+        with pytest.raises(RestoreConflictError):
+            restore_bundle(db, data, PASSPHRASE)
+        db.rollback()
+
+        # Restore atomicity: the conflict fired before the wipe, so the live
+        # data — including the racing scan — is fully intact.
+        assert db.scalar(select(User).where(User.username == "admin")) is not None
+        assert db.scalar(select(Registry).where(Registry.name == "ghcr")) is not None
+        raced = db.scalar(select(Scan).where(Scan.target == "raced:latest"))
+        assert raced is not None and raced.status is ScanStatus.QUEUED
+
+    def test_restore_rejects_scrypt_parameter_bomb(self, db: Session) -> None:
+        """SEC-2: a crafted bundle demanding an absurd scrypt work factor must be
+        rejected up front — before any key derivation memory is allocated — since
+        the KDF envelope is attacker-controlled and read pre-passphrase."""
+        import json
+
+        _seed(db)
+        data = build_bundle(db, PASSPHRASE)
+        for bomb in (
+            {"n": 2**30},  # ~128 GiB per RFC 7914 — the OOM-kill payload
+            {"r": 2**16},
+            {"p": 2**20},
+            {"n": 2**20, "r": 16},  # inside the per-parameter caps, over the memory budget
+        ):
+            envelope = json.loads(data)
+            envelope["kdf"].update(bomb)
+            tampered = json.dumps(envelope).encode("utf-8")
+            with pytest.raises(BackupError, match="scrypt"):
+                restore_bundle(db, tampered, PASSPHRASE)
+
+    def test_restore_rejects_malformed_kdf_params(self, db: Session) -> None:
+        import json
+
+        _seed(db)
+        data = build_bundle(db, PASSPHRASE)
+        envelope = json.loads(data)
+        envelope["kdf"]["n"] = "not-a-number"
+        tampered = json.dumps(envelope).encode("utf-8")
+        with pytest.raises(BackupError, match="malformed"):
+            restore_bundle(db, tampered, PASSPHRASE)
+
     def test_restore_batches_many_rows(self, db: Session) -> None:
         """API-3: the batched (executemany) restore round-trips a chunk-spanning
         number of rows without loss."""
@@ -259,3 +323,101 @@ class TestScheduledBackup:
         db.commit()  # prune_scheduled defers the commit to its caller
         assert pruned == 3
         assert len(db.scalars(select(Backup)).all()) == 2
+
+
+class TestBackupSnapshotConsistency:
+    """CON-9: the dump reads a single consistent snapshot and scheduled backups
+    defer while a scan is active."""
+
+    def test_build_bundle_excludes_a_write_committed_mid_dump(
+        self, db: Session, monkeypatch
+    ) -> None:
+        """A scan committed by another connection *between* two table reads must
+        not leak into the bundle: the dump holds one WAL read snapshot across
+        every table, so a torn (scans-vs-findings) capture is impossible."""
+        from sqlalchemy import event
+
+        from app.backup import bundle as bundle_mod
+        from app.db.base import Base
+        from app.db.session import SessionLocal, engine
+
+        _seed(db)  # gives the users table a row read before scans
+
+        users_tbl = Base.metadata.tables["users"]
+        scans_tbl = Base.metadata.tables["scans"]
+        # Force a deterministic order: users read first (establishing the
+        # snapshot), scans read second (must not see the injected row).
+        monkeypatch.setattr(bundle_mod, "_backup_tables", lambda: [users_tbl, scans_tbl])
+
+        state = {"injected": False}
+
+        def _inject_after_first_select(conn, cursor, statement, params, context, many):
+            # Fire right after the dump reads the first table (users) — the read
+            # that establishes the snapshot — and before it reads scans.
+            if state["injected"] or "from users" not in statement.lower():
+                return
+            state["injected"] = True
+            # A separate pooled connection commits a new (terminal) scan while
+            # the dump's snapshot transaction is open on `db`'s connection.
+            other = SessionLocal()
+            try:
+                other.add(
+                    Scan(
+                        scanner=Scanner.GRYPE,
+                        target_type=TargetType.IMAGE,
+                        target="injected:mid-dump",
+                        status=ScanStatus.SUCCEEDED,
+                        options={},
+                        severity_counts={},
+                    )
+                )
+                other.commit()
+            finally:
+                other.close()
+
+        event.listen(engine, "after_cursor_execute", _inject_after_first_select)
+        try:
+            data = build_bundle(db, PASSPHRASE)
+        finally:
+            event.remove(engine, "after_cursor_execute", _inject_after_first_select)
+
+        assert state["injected"], "the concurrent write was never triggered"
+        # Restore the bundle and confirm the injected scan is absent — the dump
+        # captured the pre-injection snapshot, not a torn one.
+        restore_bundle(db, data, PASSPHRASE)
+        targets = {s.target for s in db.scalars(select(Scan)).all()}
+        assert "injected:mid-dump" not in targets
+
+    def test_scheduled_backup_defers_while_a_scan_is_active(self, db: Session, tmp_path) -> None:
+        _seed(db)
+        db.add(
+            BackupSchedule(
+                id=BACKUP_SCHEDULE_ID,
+                enabled=True,
+                interval_hours=24,
+                retention_count=2,
+                passphrase_ciphertext=encrypt_secret(PASSPHRASE, aad="backup.passphrase"),
+                secret_updated_at=utcnow(),
+            )
+        )
+        db.add(
+            Scan(
+                scanner=Scanner.GRYPE,
+                target_type=TargetType.IMAGE,
+                target="running:now",
+                status=ScanStatus.RUNNING,
+                options={},
+                severity_counts={},
+            )
+        )
+        db.commit()
+
+        result = run_due_backup(db, store=BackupStore(tmp_path))
+
+        assert result == "skipped"
+        assert db.scalars(select(Backup)).all() == []
+        schedule = db.get(BackupSchedule, BACKUP_SCHEDULE_ID)
+        # last_run_at stays unset so the backup retries next tick once the scan
+        # finishes, rather than silently skipping the whole interval.
+        assert schedule.last_run_at is None
+        assert "scan active" in (schedule.last_status or "")

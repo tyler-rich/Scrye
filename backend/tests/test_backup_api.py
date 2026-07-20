@@ -114,6 +114,101 @@ class TestRestoreEndpoint:
         )
         assert resp.status_code == 409, resp.text
 
+    def test_restore_conflicts_when_scan_queued_during_upload(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        """CON-3: the endpoint's pre-check runs before the upload await, so a
+        scan queued *during* the upload must still be caught — by the re-check
+        inside the restore transaction — and answered 409 with nothing wiped."""
+        from app.api import backups as backups_module
+        from app.db.models import Scan, Scanner, ScanStatus, TargetType
+        from app.db.session import SessionLocal
+
+        csrf = setup_admin(client)
+        backup_id = client.post(
+            "/api/backups", json={"passphrase": PASSPHRASE}, headers={CSRF: csrf}
+        ).json()["id"]
+        content = client.get(f"/api/backups/{backup_id}/download").content
+
+        real_read = backups_module.read_upload_capped
+
+        async def read_and_race(file, max_bytes, *, what):
+            data = await real_read(file, max_bytes, what=what)
+            # Simulate the race: a scan lands after the pre-check passed.
+            session = SessionLocal()
+            try:
+                session.add(
+                    Scan(
+                        scanner=Scanner.GRYPE,
+                        target_type=TargetType.IMAGE,
+                        target="raced:latest",
+                        status=ScanStatus.QUEUED,
+                    )
+                )
+                session.commit()
+            finally:
+                session.close()
+            return data
+
+        monkeypatch.setattr(backups_module, "read_upload_capped", read_and_race)
+        resp = client.post(
+            "/api/backups/restore",
+            files={"file": ("backup.scryebak", content, "application/octet-stream")},
+            data={"passphrase": PASSPHRASE, "confirm": "true"},
+            headers={CSRF: csrf},
+        )
+        assert resp.status_code == 409, resp.text
+
+        # Nothing was wiped: the racing scan is intact and still queued.
+        session = SessionLocal()
+        try:
+            from sqlalchemy import select
+
+            raced = session.scalar(select(Scan).where(Scan.target == "raced:latest"))
+            assert raced is not None and raced.status is ScanStatus.QUEUED
+        finally:
+            session.close()
+        # The worker was resumed even though the restore aborted.
+        assert client.app.state.scan_worker._resume_gate.is_set()
+
+    def test_restore_resumes_worker_after_success(self, client: TestClient) -> None:
+        csrf = setup_admin(client)
+        backup_id = client.post(
+            "/api/backups", json={"passphrase": PASSPHRASE}, headers={CSRF: csrf}
+        ).json()["id"]
+        content = client.get(f"/api/backups/{backup_id}/download").content
+        resp = client.post(
+            "/api/backups/restore",
+            files={"file": ("backup.scryebak", content, "application/octet-stream")},
+            data={"passphrase": PASSPHRASE, "confirm": "true"},
+            headers={CSRF: csrf},
+        )
+        assert resp.status_code == 200, resp.text
+        assert client.app.state.scan_worker._resume_gate.is_set()
+
+    def test_restore_rejects_scrypt_parameter_bomb(self, client: TestClient) -> None:
+        """SEC-2: a crafted bundle demanding an absurd scrypt work factor is a
+        400, rejected before any derivation memory is committed."""
+        import json
+
+        csrf = setup_admin(client)
+        backup_id = client.post(
+            "/api/backups", json={"passphrase": PASSPHRASE}, headers={CSRF: csrf}
+        ).json()["id"]
+        content = client.get(f"/api/backups/{backup_id}/download").content
+        envelope = json.loads(content)
+        envelope["kdf"]["n"] = 2**30  # ~128 GiB of scrypt memory if honored
+        tampered = json.dumps(envelope).encode("utf-8")
+
+        resp = client.post(
+            "/api/backups/restore",
+            files={"file": ("backup.scryebak", tampered, "application/octet-stream")},
+            data={"passphrase": PASSPHRASE, "confirm": "true"},
+            headers={CSRF: csrf},
+        )
+        assert resp.status_code == 400, resp.text
+        assert "scrypt" in resp.json()["detail"]
+
     def test_restore_requires_confirmation(self, client: TestClient) -> None:
         csrf = setup_admin(client)
         data = client.post("/api/backups", json={"passphrase": PASSPHRASE}, headers={CSRF: csrf})

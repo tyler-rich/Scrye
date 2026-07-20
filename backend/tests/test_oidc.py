@@ -120,6 +120,53 @@ class TestOidcLoginFlow:
         assert client.get("/api/auth/me").json()["username"] == "alice"
         assert client.get("/api/auth/me").json()["role"] == "viewer"
 
+    def _oidc_login_on_fresh_client(self, client: TestClient, monkeypatch, claims: dict) -> None:
+        """Drive a full OIDC login on a separate client (keeps ``client`` admin)."""
+        self._patch_provider(monkeypatch, claims)
+        oidc_client = TestClient(client.app)
+        state = self._start_login(oidc_client)
+        cb = oidc_client.get(
+            "/api/auth/oidc/callback",
+            params={"state": state, "code": "authcode"},
+            follow_redirects=False,
+        )
+        assert cb.status_code == 302, cb.text
+
+    def _oidc_login_audit_details(self, client: TestClient) -> dict | None:
+        entries = client.get("/api/audit").json()["items"]
+        logins = [e for e in entries if e["action"] == "auth.oidc_login"]
+        assert logins, "no auth.oidc_login audit entry"
+        return logins[0]["details"]
+
+    def test_oidc_login_audits_mfa_delegation_under_mandatory_policy(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        # SEC-8: mandatory MFA can't be enforced locally on the OIDC path (no local
+        # second factor), so when the policy WOULD require it the OIDC login records
+        # that the factor was delegated to the IdP — visibility for operators.
+        csrf = setup_admin(client)
+        resp = client.put(
+            "/api/settings/authentication",
+            json={"local_login_enabled": True, "mfa_policy": "required_all"},
+            headers={CSRF: csrf},
+        )
+        assert resp.status_code == 200, resp.text
+        _enable_oidc(client, csrf)
+        self._oidc_login_on_fresh_client(
+            client, monkeypatch, {"sub": "u1", "iss": ISSUER, "preferred_username": "vic"}
+        )
+        assert self._oidc_login_audit_details(client) == {"mfa_delegated_to_idp": True}
+
+    def test_oidc_login_omits_mfa_delegation_when_policy_optional(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        csrf = setup_admin(client)  # default policy is optional
+        _enable_oidc(client, csrf)
+        self._oidc_login_on_fresh_client(
+            client, monkeypatch, {"sub": "u2", "iss": ISSUER, "preferred_username": "opt"}
+        )
+        assert self._oidc_login_audit_details(client) is None
+
     def test_admin_group_maps_to_admin_role(self, client: TestClient, monkeypatch) -> None:
         csrf = setup_admin(client)
         _enable_oidc(client, csrf, groups_claim="groups", admin_group="scrye-admins")

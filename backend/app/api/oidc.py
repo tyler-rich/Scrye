@@ -1,4 +1,4 @@
-"""OIDC configuration and the authorization-code login flow (docs/PLAN.md §5).
+"""OIDC configuration and the authorization-code login flow (docs/ARCHIVE.md §5).
 
 Two routers live here:
 
@@ -31,6 +31,7 @@ from app.auth import oidc, service
 from app.auth.cookies import set_session_cookies
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.auth.passwords import hash_password
+from app.core.app_settings import MfaPolicy, SettingsService
 from app.core.audit import record_audit
 from app.core.config import get_settings
 from app.core.crypto import SecretDecryptError
@@ -173,7 +174,9 @@ def update_oidc_config(
     if "client_secret" in data:
         secret = payload.client_secret.get_secret_value() if payload.client_secret else ""
         if secret:
-            config.client_secret_ciphertext = encrypt_secret(secret, aad=AAD_OIDC_CLIENT_SECRET)
+            config.client_secret_ciphertext = encrypt_secret(
+                secret, aad=AAD_OIDC_CLIENT_SECRET, row_id=config.id
+            )
             config.secret_updated_at = utcnow()
         else:
             config.client_secret_ciphertext = None
@@ -393,7 +396,7 @@ async def oidc_callback(
     if config.client_secret_ciphertext:
         try:
             client_secret = decrypt_secret(
-                config.client_secret_ciphertext, aad=AAD_OIDC_CLIENT_SECRET
+                config.client_secret_ciphertext, aad=AAD_OIDC_CLIENT_SECRET, row_id=config.id
             )
         except SecretDecryptError:
             return _fail("config")
@@ -496,13 +499,28 @@ async def oidc_callback(
     # before issuing the ID token. Scrye has no local TOTP challenge in the OIDC
     # handshake, and provisioned OIDC accounts carry no usable local password,
     # so there is no second factor to enforce at this layer. Operators who
-    # require MFA for OIDC users must enforce it at the IdP. See docs/PLAN.md
+    # require MFA for OIDC users must enforce it at the IdP. See docs/ARCHIVE.md
     # § Deviations (2026-07-04 post-P6 hotfix) and the README security model.
     token, session = service.create_session(
         db, user, ip=client_ip(request), user_agent=request.headers.get("user-agent")
     )
     user.last_login_at = session.created_at
-    record_audit(db, action="auth.oidc_login", actor=user, ip=client_ip(request))
+    # Observability for the accepted limitation above (SEC-8): if a mandatory-MFA
+    # policy would require a second factor for this role on local login, record on
+    # the OIDC login that the second factor was delegated to the IdP — so an
+    # operator running mandatory MFA can audit which logins bypassed the local
+    # policy and confirm the IdP enforces MFA. Auth behavior is unchanged.
+    policy = SettingsService(db).auth().mfa_policy
+    mfa_delegated = policy is MfaPolicy.REQUIRED_ALL or (
+        policy is MfaPolicy.REQUIRED_ADMIN and user.role is Role.ADMIN
+    )
+    record_audit(
+        db,
+        action="auth.oidc_login",
+        actor=user,
+        ip=client_ip(request),
+        details={"mfa_delegated_to_idp": True} if mfa_delegated else None,
+    )
     db.commit()
 
     response: Response = RedirectResponse("/", status_code=status.HTTP_302_FOUND)

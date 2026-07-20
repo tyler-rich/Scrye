@@ -1,11 +1,11 @@
-"""Prometheus ``/metrics`` endpoint (docs/PLAN.md §12, Phase 6).
+"""Prometheus ``/metrics`` endpoint (docs/ARCHIVE.md §12, Phase 6).
 
 Exposes Scrye's metrics in Prometheus text-exposition format. Because the
 metrics reveal scan volumes and the open vulnerability posture, the endpoint is
 **authenticated** (``viewer`` role) rather than public — a Prometheus scrape
 configures a personal API token as a bearer credential (``authorization`` in the
 scrape config), which satisfies the same dependency without a cookie/CSRF flow.
-This keeps the security-first posture (docs/PLAN.md §1) intact for a
+This keeps the security-first posture (docs/ARCHIVE.md §1) intact for a
 loopback-bound instance behind Caddy.
 """
 

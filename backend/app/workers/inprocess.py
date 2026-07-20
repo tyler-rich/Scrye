@@ -17,10 +17,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
+from collections.abc import Callable
 from contextlib import nullcontext
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 import anyio.to_thread
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.artifacts import artifact_path, store_artifact
@@ -51,6 +56,8 @@ from app.scanners import (
 )
 from app.scanners.credentials import (
     REPO_REF_KEYS,
+    GitAuth,
+    RegistryAuth,
     docker_config_env,
     generic_repo_checkout,
     git_env_token,
@@ -80,7 +87,55 @@ _RAW_ARTIFACT: dict[Scanner, tuple[str, ArtifactKind]] = {
 #: scan runs for minutes, so a graceful stop can't wait it out (the container
 #: stop grace is seconds); scans still running past this are cancelled and
 #: reconciled to ``failed`` by :meth:`InProcessScanWorker.recover` on restart.
-_SHUTDOWN_GRACE_SECONDS = 10
+#: Kept well under the Compose ``stop_grace_period`` (30 s) so the drain plus the
+#: subsequent cancel/gather — whose cancellation can wait out a non-cancellable
+#: threaded findings flush — still fits the container stop budget (CON-6).
+_SHUTDOWN_GRACE_SECONDS = 5
+
+#: Bounded retry policy for worker DB commits that hit SQLite lock contention.
+#: A long writer (a large findings flush, a restore, a retention pass) can hold
+#: the write lock past the 5 s ``busy_timeout``, turning another committer's
+#: ``COMMIT`` into an ``OperationalError``. Losing that commit loses results
+#: (CON-1), so the worker retries a few times with exponential backoff — each
+#: attempt already waits out ``busy_timeout``, so five attempts ride out ~28 s
+#: of sustained contention before giving up.
+_LOCK_RETRY_ATTEMPTS = 5
+_LOCK_RETRY_INITIAL_DELAY_SECONDS = 0.2
+_LOCK_RETRY_BACKOFF_FACTOR = 2.0
+
+#: Age past which a queued/running scan with no live worker task is considered
+#: stranded and is reconciled by :meth:`InProcessScanWorker.reconcile_stale`.
+#: Generous enough that a scan legitimately in flight between "row committed"
+#: and "task registered" is never touched.
+_STALE_SCAN_GRACE_SECONDS = 60
+
+#: Cap on concurrently-live executor tasks, as a multiple of the concurrency
+#: limit but never below a floor, so ordinary submission bursts always pass and
+#: only a pathological flood is deferred to the watchdog (CON-16).
+_SUBMIT_CAP_FACTOR = 8
+_SUBMIT_CAP_FLOOR = 64
+
+
+@dataclass(frozen=True)
+class _RunInputs:
+    """Everything a scan's subprocess needs, resolved from the DB up front.
+
+    Captured as detached values (dataclasses / strings / plain dicts) so the
+    worker can return its pooled connection to the pool before the minutes-long
+    scanner subprocess runs — the run phase never touches the ORM session or the
+    (now-expired) scan row, so it holds no pool capacity (CON-10).
+    """
+
+    scanner: BaseScanner
+    target_type: TargetType
+    target: str
+    options: dict
+    trivy_policy: object | None
+    grype_ignore: str | None
+    registry_auth: RegistryAuth | None
+    git_auth: GitAuth | None
+    filesystem_path: str | None
+    sbom_path: str | None
 
 
 def _highest_severity(counts: dict[Severity, int]) -> Severity | None:
@@ -89,6 +144,49 @@ def _highest_severity(counts: dict[Severity, int]) -> Severity | None:
     if not present:
         return None
     return max(present, key=lambda level: SEVERITY_RANK[level])
+
+
+def _is_lock_error(exc: OperationalError) -> bool:
+    """Return True when ``exc`` is SQLite lock contention (safe to retry)."""
+    message = str(exc.orig if exc.orig is not None else exc).lower()
+    return "database is locked" in message or "database table is locked" in message
+
+
+def _commit_with_retry(session: Session, stage: Callable[[], None], *, what: str) -> None:
+    """Stage changes and commit, retrying bounded times on SQLite lock errors.
+
+    ``stage`` must (re)apply the pending changes to ``session`` from scratch —
+    after a failed attempt the session is rolled back, which expunges pending
+    inserts and reverts attribute changes, so each retry re-stages before the
+    next commit. Runs synchronously (``time.sleep`` backoff), so callers must
+    invoke it from a worker thread, never on the event loop.
+
+    Raises:
+        OperationalError: When the final attempt still hits lock contention.
+        Exception: Any non-lock error, immediately (no retry).
+    """
+    delay = _LOCK_RETRY_INITIAL_DELAY_SECONDS
+    for attempt in range(1, _LOCK_RETRY_ATTEMPTS + 1):
+        try:
+            stage()
+            session.commit()
+            return
+        except OperationalError as exc:
+            session.rollback()
+            if not _is_lock_error(exc) or attempt == _LOCK_RETRY_ATTEMPTS:
+                raise
+            logger.warning(
+                "Database locked while committing %s (attempt %d/%d); retrying in %.1fs.",
+                what,
+                attempt,
+                _LOCK_RETRY_ATTEMPTS,
+                delay,
+            )
+            time.sleep(delay)
+            delay *= _LOCK_RETRY_BACKOFF_FACTOR
+        except Exception:
+            session.rollback()
+            raise
 
 
 class InProcessScanWorker(ScanWorker):
@@ -102,18 +200,74 @@ class InProcessScanWorker(ScanWorker):
             max_concurrent: Maximum scans to run at once (>= 1).
         """
         self._session_factory = session_factory
-        self._semaphore = asyncio.Semaphore(max(1, max_concurrent))
-        self._tasks: set[asyncio.Task[None]] = set()
+        self._max_concurrent = max(1, max_concurrent)
+        self._semaphore = asyncio.Semaphore(self._max_concurrent)
+        self._tasks: dict[int, asyncio.Task[None]] = {}
+        # Runaway guard: the semaphore bounds *running* scans, not *created*
+        # tasks, so a burst of submits (a hammering client, a large schedule
+        # backlog) could pile up unbounded pending tasks. Cap the live task count
+        # generously — normal bursts pass, pathological floods are left QUEUED for
+        # the watchdog to re-submit as tasks drain (CON-16). The DB is the durable
+        # queue, so deferring is lossless.
+        self._submit_cap = max(_SUBMIT_CAP_FLOOR, self._max_concurrent * _SUBMIT_CAP_FACTOR)
         self._accepting = True
+        # Set = executing normally; cleared = paused (tasks hold before their
+        # claim). A restore pauses the worker so nothing new starts while the
+        # database is wiped and rebuilt (CON-3).
+        self._resume_gate = asyncio.Event()
+        self._resume_gate.set()
+
+    def has_task(self, scan_id: int) -> bool:
+        """Return True while a live executor task exists for ``scan_id``."""
+        return scan_id in self._tasks
+
+    def pause(self) -> None:
+        """Hold new scan executions; submissions still queue behind the gate."""
+        self._resume_gate.clear()
+
+    def resume(self) -> None:
+        """Release executions held by :meth:`pause`."""
+        self._resume_gate.set()
 
     async def submit(self, scan_id: int) -> None:
-        """Schedule a queued scan for execution."""
+        """Schedule a queued scan for execution (idempotent per scan)."""
         if not self._accepting:
             logger.warning("Worker is shutting down; not scheduling scan %d.", scan_id)
             return
+        if scan_id in self._tasks:
+            # Already scheduled (e.g. the watchdog re-submitting a queued scan
+            # whose task is alive but waiting on the semaphore) — a second task
+            # would only burn a slot to lose the atomic claim.
+            return
+        if len(self._tasks) >= self._submit_cap:
+            # Flood guard: leave the scan QUEUED (the DB is the durable queue) so
+            # the maintenance watchdog re-submits it once live tasks drain,
+            # instead of piling up unbounded pending tasks (CON-16).
+            logger.warning(
+                "Worker task cap (%d) reached; leaving scan %d queued for the watchdog.",
+                self._submit_cap,
+                scan_id,
+            )
+            return
         task = asyncio.create_task(self._execute(scan_id))
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        self._tasks[scan_id] = task
+        task.add_done_callback(lambda t, sid=scan_id: self._on_task_done(t, sid))
+
+    def _on_task_done(self, task: asyncio.Task[None], scan_id: int) -> None:
+        """Deregister a finished task and surface any exception it swallowed.
+
+        ``_execute`` guards its own body, but an error escaping it (e.g. the
+        session factory failing in a shutdown race) would otherwise die silently
+        as a GC-time "Task exception was never retrieved". Retrieve and log it so
+        the failure is visible; the scan stays QUEUED and the watchdog re-submits
+        it (CON-16).
+        """
+        self._tasks.pop(scan_id, None)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error("Scan %d executor task crashed: %r", scan_id, exc, exc_info=exc)
 
     async def recover(self) -> None:
         """Reconcile scans interrupted by a previous process.
@@ -141,6 +295,75 @@ class InProcessScanWorker(ScanWorker):
         for scan_id in requeue_ids:
             await self.submit(scan_id)
 
+    async def reconcile_stale(self) -> None:
+        """Self-heal scans stranded with no live executor task (CON-1/CON-11).
+
+        The in-process equivalent of :meth:`recover`, run from the maintenance
+        tick: a ``queued`` scan whose submit was lost (shutdown race, task died
+        before claiming) is re-submitted — harmless if raced, thanks to the
+        atomic claim — and a ``running`` scan whose task is gone (its commit
+        chain failed under lock contention) is marked failed instead of sitting
+        un-cancellable until the next container restart.
+        """
+        cutoff = utcnow() - timedelta(seconds=_STALE_SCAN_GRACE_SECONDS)
+        stale = await anyio.to_thread.run_sync(self._find_stale, cutoff)
+        for scan_id, scan_status in stale:
+            if self.has_task(scan_id):
+                continue
+            if scan_status is ScanStatus.QUEUED:
+                if self._accepting:
+                    logger.warning("Re-submitting stranded queued scan %d.", scan_id)
+                    await self.submit(scan_id)
+            else:
+                logger.warning("Failing stale running scan %d (no live task).", scan_id)
+                await anyio.to_thread.run_sync(self._fail_stale_running, scan_id)
+
+    def _find_stale(self, cutoff: datetime) -> list[tuple[int, ScanStatus]]:
+        """Return (id, status) of queued/running scans older than ``cutoff``."""
+        session = self._session_factory()
+        try:
+            rows = session.execute(
+                select(Scan.id, Scan.status).where(
+                    or_(
+                        (Scan.status == ScanStatus.QUEUED) & (Scan.created_at < cutoff),
+                        (Scan.status == ScanStatus.RUNNING)
+                        & ((Scan.started_at.is_(None)) | (Scan.started_at < cutoff)),
+                    )
+                )
+            ).all()
+            return [(row[0], row[1]) for row in rows]
+        finally:
+            session.close()
+
+    def _fail_stale_running(self, scan_id: int) -> None:
+        """Fail a task-less running scan, only if it is still running.
+
+        The conditional UPDATE mirrors the claim: if the scan finished (or was
+        otherwise settled) between the stale query and this write, the guard
+        makes this a no-op instead of clobbering a terminal state.
+        """
+        session = self._session_factory()
+        try:
+
+            def _stage() -> None:
+                session.execute(
+                    update(Scan)
+                    .where(Scan.id == scan_id, Scan.status == ScanStatus.RUNNING)
+                    .values(
+                        status=ScanStatus.FAILED,
+                        error="Scan was interrupted (no live worker task); "
+                        "reconciled by the maintenance watchdog.",
+                        finished_at=utcnow(),
+                    )
+                )
+
+            _commit_with_retry(session, _stage, what=f"watchdog failure of scan {scan_id}")
+        except Exception:  # noqa: BLE001 - the watchdog must never kill the tick
+            logger.exception("Watchdog could not reconcile stale scan %d.", scan_id)
+            session.rollback()
+        finally:
+            session.close()
+
     async def shutdown(self) -> None:
         """Stop accepting work; drain briefly, then cancel what's still running.
 
@@ -151,7 +374,7 @@ class InProcessScanWorker(ScanWorker):
         the next start.
         """
         self._accepting = False
-        tasks = list(self._tasks)
+        tasks = list(self._tasks.values())
         if not tasks:
             return
         _, pending = await asyncio.wait(tasks, timeout=_SHUTDOWN_GRACE_SECONDS)
@@ -163,52 +386,100 @@ class InProcessScanWorker(ScanWorker):
 
     async def _execute(self, scan_id: int) -> None:
         """Run a single scan end-to-end, holding a concurrency slot."""
-        async with self._semaphore:
+        try:
             session = self._session_factory()
+        except Exception:  # noqa: BLE001 - a factory failure must not kill the task silently
+            logger.exception(
+                "Could not open a session for scan %d; leaving it queued for the watchdog.",
+                scan_id,
+            )
+            return
+        try:
+            notify = False
             try:
-                scan = session.get(Scan, scan_id)
-                if scan is None:
-                    logger.warning("Scan %d vanished before execution.", scan_id)
-                    return
-                if scan.status != ScanStatus.QUEUED:
-                    # Canceled while queued, or already handled — skip.
-                    return
-                await self._run(session, scan)
+                async with self._semaphore:
+                    # Hold here while the worker is paused (a restore is rewriting
+                    # the database); the scan row stays queued and runs after
+                    # resume.
+                    await self._resume_gate.wait()
+                    scan = session.get(Scan, scan_id)
+                    if scan is None:
+                        logger.warning("Scan %d vanished before execution.", scan_id)
+                        return
+                    if scan.status != ScanStatus.QUEUED:
+                        # Canceled while queued, or already handled — skip.
+                        return
+                    notify = await self._run(session, scan)
             except Exception:  # noqa: BLE001 - last-resort guard; detail logged below
                 logger.exception("Unexpected failure while executing scan %d.", scan_id)
                 session.rollback()
-                self._fail(session, scan_id, "Unexpected internal error during scan execution.")
+                await anyio.to_thread.run_sync(
+                    self._fail, session, scan_id, "Unexpected internal error during scan execution."
+                )
+                notify = True
+            # Dispatch notifications only after the semaphore slot is released, so
+            # a slow or dead notification channel can't hold scan capacity while
+            # queued scans wait (CON-15).
+            if notify:
                 await self._notify(session, scan_id)
-            finally:
-                session.close()
+        finally:
+            session.close()
 
     async def _notify(self, session: Session, scan_id: int) -> None:
         """Dispatch finished-scan notifications; never raise into the worker."""
         try:
-            scan = session.get(Scan, scan_id)
+            # populate_existing re-reads the row instead of trusting the
+            # identity-map copy (``expire_on_commit=False`` keeps the just-
+            # committed scan cached): a scan deleted in the instant after it
+            # reached a terminal state is then seen as gone and correctly not
+            # announced with a link that 404s (CON-19).
+            scan = session.get(Scan, scan_id, populate_existing=True)
             if scan is not None:
                 await dispatch_scan_event(session, scan)
         except Exception:  # noqa: BLE001 - notification failures never fail a scan
             logger.exception("Notification dispatch failed for scan %d.", scan_id)
 
-    async def _run(self, session: Session, scan: Scan) -> None:
-        """Mark the scan running, invoke the scanner, and persist results."""
-        # Atomically claim the scan: transition queued -> running only if it is
-        # still queued. This closes the race with a concurrent cancel (which
-        # flips queued -> canceled the same way) — SQLite serializes the two
-        # writes, so exactly one wins and a cancel is never silently lost.
-        started_at = utcnow()
-        claimed = session.execute(
-            update(Scan)
-            .where(Scan.id == scan.id, Scan.status == ScanStatus.QUEUED)
-            .values(status=ScanStatus.RUNNING, started_at=started_at)
-        )
-        session.commit()
-        if claimed.rowcount == 0:
-            session.refresh(scan)
-            logger.info("Scan %d was %s before start; skipping.", scan.id, scan.status.value)
-            return
+    def _claim(self, session: Session, scan: Scan) -> bool:
+        """Atomically claim ``scan`` (queued -> running); True when claimed.
+
+        The conditional UPDATE closes the race with a concurrent cancel (which
+        flips queued -> canceled the same way) — SQLite serializes the two
+        writes, so exactly one wins and a cancel is never silently lost. The
+        commit is lock-retried; runs in a thread (sleeps + synchronous DB I/O).
+        """
+        claimed_rows = 0
+
+        def _stage() -> None:
+            nonlocal claimed_rows
+            result = session.execute(
+                update(Scan)
+                .where(Scan.id == scan.id, Scan.status == ScanStatus.QUEUED)
+                .values(status=ScanStatus.RUNNING, started_at=utcnow())
+            )
+            claimed_rows = result.rowcount
+
+        _commit_with_retry(session, _stage, what=f"claim of scan {scan.id}")
+        if claimed_rows == 0:
+            # Refresh only to log why; the row may even be gone (e.g. wiped by
+            # a concurrent restore), which is equally a reason to skip.
+            with contextlib.suppress(Exception):
+                session.refresh(scan)
+                logger.info("Scan %d was %s before start; skipping.", scan.id, scan.status.value)
+            return False
         session.refresh(scan)
+        return True
+
+    async def _run(self, session: Session, scan: Scan) -> bool:
+        """Mark the scan running, invoke the scanner, and persist results.
+
+        Returns True when the scan reached a terminal state (succeeded or
+        failed) whose completion should be notified, or False when the claim was
+        lost (cancelled/already handled) so there is nothing to announce. The
+        caller dispatches the notification *after* releasing the semaphore slot
+        (CON-15).
+        """
+        if not await anyio.to_thread.run_sync(self._claim, session, scan):
+            return False
         logger.info(
             "Scan %d started: %s %s %s",
             scan.id,
@@ -229,10 +500,9 @@ class InProcessScanWorker(ScanWorker):
             # ScannerError/TargetError messages are operator-safe, but repo scans
             # can surface a scanner stderr that echoes a credential-embedded URL;
             # redact() strips URL userinfo before the message is stored/logged.
-            self._fail(session, scan.id, str(exc))
+            await anyio.to_thread.run_sync(self._fail, session, scan.id, str(exc))
             logger.info("Scan %d failed: %s", scan.id, redact(str(exc)))
-            await self._notify(session, scan.id)
-            return
+            return True
 
         # Persisting 10k+ findings + a large raw-JSON write is heavy synchronous
         # DB/disk work; run it in a thread so the event loop (and /healthz, and
@@ -244,59 +514,121 @@ class InProcessScanWorker(ScanWorker):
             scan.findings_count,
             scan.highest_severity.value if scan.highest_severity else "none",
         )
-        await self._notify(session, scan.id)
+        return True
 
     async def _dispatch(
         self, session: Session, scan: Scan
     ) -> tuple[ScanExecution, SbomResult | None]:
-        """Run the scan for its target type, applying any Trivy policy.
+        """Resolve every DB input, release the pooled connection, then scan.
 
-        For Trivy scans the managed VEX documents and ignore rules are resolved
-        and materialized into tmpfs for the duration of the run (passed through
-        Trivy's ``TRIVY_IGNOREFILE`` / ``TRIVY_VEX`` env vars). Grype scans apply
-        the global Grype ignore config the same way, materialized into tmpfs and
-        handed to the runner as a ``-c`` config path (FEAT-6).
+        All DB reads the run needs — the Trivy/Grype policy and the registry/git
+        credentials or resolved paths, including their secret decrypts — are done
+        up front in a thread and captured as detached values (also satisfying
+        CON-5). The session's read transaction is then rolled back so its pooled
+        connection is returned to the pool for the whole (minutes-long) scanner
+        subprocess instead of being pinned across it (CON-10); the next session
+        use — result persistence — re-acquires a connection.
         """
-        if scan.scanner is Scanner.TRIVY:
-            policy = load_trivy_policy(session)
-            with materialize_trivy_policy(policy) as policy_env:
-                return await self._dispatch_target(session, scan, policy_env)
-        if scan.scanner is Scanner.GRYPE:
-            with materialize_grype_config(load_grype_ignore(session)) as grype_env:
-                return await self._dispatch_target(session, scan, grype_env)
-        return await self._dispatch_target(session, scan, {})
+        inputs = await anyio.to_thread.run_sync(self._resolve_run_inputs, session, scan)
+        await anyio.to_thread.run_sync(self._release_connection, session)
+        return await self._run_scanner(inputs)
 
-    async def _dispatch_target(
-        self, session: Session, scan: Scan, base_env: dict[str, str]
-    ) -> tuple[ScanExecution, SbomResult | None]:
-        """Run the scan appropriate to its target type, resolving credentials.
+    def _resolve_run_inputs(self, session: Session, scan: Scan) -> _RunInputs:
+        """Read everything the scan subprocess needs from the DB (runs in a thread).
 
-        Returns the parsed execution plus an optional Syft SBOM (when the scan
-        requested one). Registry/git secrets are decrypted here and materialized
-        into tmpfs only for the duration of the subprocess. ``base_env`` is a
-        non-secret environment overlay (e.g. the Trivy policy) merged under any
-        credential overlay.
+        Registry/git secrets are decrypted here into detached dataclasses so the
+        run phase can proceed with the connection released. Raises
+        :class:`TargetError` (a :class:`ScannerError`) for a missing/disabled/
+        undecryptable credential or an unsupported target, routing to the same
+        failure handling as before.
         """
         scanner = get_scanner(scan.scanner)
-        options = scan.options or {}
+        options = dict(scan.options or {})
         target_type = scan.target_type
+        trivy_policy = load_trivy_policy(session) if scan.scanner is Scanner.TRIVY else None
+        grype_ignore = load_grype_ignore(session) if scan.scanner is Scanner.GRYPE else None
 
+        registry_auth: RegistryAuth | None = None
+        git_auth: GitAuth | None = None
+        filesystem_path: str | None = None
+        sbom_path: str | None = None
         if target_type is TargetType.IMAGE:
-            return await self._scan_image(session, scanner, scan, options, base_env)
-        if target_type is TargetType.REPOSITORY:
-            return await self._scan_repo(session, scanner, scan, options, base_env), None
-        if target_type is TargetType.FILESYSTEM:
-            path = resolve_filesystem_path(scan.target)
+            registry_auth = resolve_registry_auth(session, options)
+        elif target_type is TargetType.REPOSITORY:
+            git_auth = resolve_git_auth(session, options)
+        elif target_type is TargetType.FILESYSTEM:
+            filesystem_path = resolve_filesystem_path(scan.target)
+        elif target_type is TargetType.SBOM:
+            sbom_path = resolve_sbom_path(session, scan)
+        else:
+            raise TargetError(f"Unsupported target type {target_type.value!r}.")
+
+        return _RunInputs(
+            scanner=scanner,
+            target_type=target_type,
+            target=scan.target,
+            options=options,
+            trivy_policy=trivy_policy,
+            grype_ignore=grype_ignore,
+            registry_auth=registry_auth,
+            git_auth=git_auth,
+            filesystem_path=filesystem_path,
+            sbom_path=sbom_path,
+        )
+
+    def _release_connection(self, session: Session) -> None:
+        """Return the session's pooled connection to the pool (runs in a thread).
+
+        A rollback ends the read-only transaction opened by the claim/resolve
+        reads without touching the already-committed claim, so the connection is
+        not pinned across the scanner subprocess (CON-10). Every input the run
+        needs is already captured in :class:`_RunInputs`, so the expiry of the
+        scan row's attributes here is harmless — the run phase never reads it.
+        """
+        session.rollback()
+
+    async def _run_scanner(self, inputs: _RunInputs) -> tuple[ScanExecution, SbomResult | None]:
+        """Materialize the resolved policy into tmpfs and run the scan subprocess.
+
+        Holds no pooled DB connection: every input is already resolved (CON-10).
+        For Trivy the managed VEX/ignore rules, and for Grype the global ignore
+        config, are materialized into tmpfs for the run's duration and passed via
+        the scanners' native env vars / ``-c`` config path (FEAT-6).
+        """
+        if inputs.trivy_policy is not None:
+            with materialize_trivy_policy(inputs.trivy_policy) as policy_env:
+                return await self._run_target(inputs, policy_env)
+        if inputs.grype_ignore is not None:
+            with materialize_grype_config(inputs.grype_ignore) as grype_env:
+                return await self._run_target(inputs, grype_env)
+        return await self._run_target(inputs, {})
+
+    async def _run_target(
+        self, inputs: _RunInputs, base_env: dict[str, str]
+    ) -> tuple[ScanExecution, SbomResult | None]:
+        """Run the scan for its target type using only detached inputs.
+
+        ``base_env`` is the non-secret policy overlay merged under any credential
+        overlay. No session is touched here (CON-10).
+        """
+        scanner = inputs.scanner
+        options = inputs.options
+
+        if inputs.target_type is TargetType.IMAGE:
+            return await self._scan_image(inputs, base_env)
+        if inputs.target_type is TargetType.REPOSITORY:
+            return await self._scan_repo(inputs, base_env), None
+        if inputs.target_type is TargetType.FILESYSTEM:
+            path = inputs.filesystem_path
             sbom = await self._maybe_sbom(f"dir:{path}", options, base_env or None)
             execution = await scanner.scan_filesystem(path, options, env=base_env or None)
             return execution, sbom
-        if target_type is TargetType.SBOM:
-            path = resolve_sbom_path(session, scan)
-            return await scanner.scan_sbom(path, options, env=base_env or None), None
-        raise TargetError(f"Unsupported target type {target_type.value!r}.")
+        if inputs.target_type is TargetType.SBOM:
+            return await scanner.scan_sbom(inputs.sbom_path, options, env=base_env or None), None
+        raise TargetError(f"Unsupported target type {inputs.target_type.value!r}.")
 
     async def _scan_image(
-        self, session: Session, scanner: BaseScanner, scan: Scan, options: dict, base_env: dict
+        self, inputs: _RunInputs, base_env: dict
     ) -> tuple[ScanExecution, SbomResult | None]:
         """Scan an image, materializing registry credentials into tmpfs if set.
 
@@ -305,17 +637,15 @@ class InProcessScanWorker(ScanWorker):
         is shredded on exit, even on cancellation or error. The credential
         overlay is layered over ``base_env`` (e.g. the Trivy policy).
         """
-        auth = resolve_registry_auth(session, options)
+        auth = inputs.registry_auth
         context = docker_config_env(auth) if auth is not None else nullcontext({})
         with context as overlay:
             env = {**base_env, **(overlay or {})} or None
-            sbom = await self._maybe_sbom(scan.target, options, env)
-            execution = await scanner.scan_image(scan.target, options, env=env)
+            sbom = await self._maybe_sbom(inputs.target, inputs.options, env)
+            execution = await inputs.scanner.scan_image(inputs.target, inputs.options, env=env)
         return execution, sbom
 
-    async def _scan_repo(
-        self, session: Session, scanner: BaseScanner, scan: Scan, options: dict, base_env: dict
-    ) -> ScanExecution:
+    async def _scan_repo(self, inputs: _RunInputs, base_env: dict) -> ScanExecution:
         """Scan a git repository, authenticating a private clone if configured.
 
         Public repos and hosted providers (GitHub/GitLab) let Trivy clone the
@@ -325,22 +655,25 @@ class InProcessScanWorker(ScanWorker):
         argv, then Trivy scans the local checkout. ``base_env`` (the Trivy policy)
         is merged under any credential overlay.
         """
-        auth = resolve_git_auth(session, options)
+        auth = inputs.git_auth
+        scanner = inputs.scanner
+        options = inputs.options
+        target = inputs.target
         if auth is None:
-            return await scanner.scan_repo(scan.target, options, env=base_env or None)
+            return await scanner.scan_repo(target, options, env=base_env or None)
         if auth.provider is not GitProvider.GENERIC:
             overlay = git_env_token(auth)
             env = {**base_env, **(overlay or {})} or None
-            return await scanner.scan_repo(scan.target, options, env=env)
-        if not is_http_url(scan.target):
+            return await scanner.scan_repo(target, options, env=env)
+        if not is_http_url(target):
             # A non-HTTP generic target (e.g. ssh://) carries no URL credential to
             # inject; let Trivy clone it with its own mechanisms.
-            return await scanner.scan_repo(scan.target, options, env=base_env or None)
+            return await scanner.scan_repo(target, options, env=base_env or None)
 
         timeout = get_settings().scan_timeout_seconds
         # The ref is already materialized by our clone; don't re-pass it to Trivy.
         local_options = {k: v for k, v in options.items() if k not in REPO_REF_KEYS}
-        async with generic_repo_checkout(scan.target, auth, options, timeout=timeout) as checkout:
+        async with generic_repo_checkout(target, auth, options, timeout=timeout) as checkout:
             return await scanner.scan_repo(checkout, local_options, env=base_env or None)
 
     async def _maybe_sbom(
@@ -354,69 +687,80 @@ class InProcessScanWorker(ScanWorker):
     def _persist_success(
         self, session: Session, scan: Scan, execution: ScanExecution, sbom: SbomResult | None
     ) -> None:
-        """Store artifacts (raw output + optional SBOM) and findings; succeed."""
+        """Store artifacts (raw output + optional SBOM) and findings; succeed.
+
+        The artifact files are written to disk once; the DB rows are staged and
+        committed under the lock-retry helper, re-staged from scratch on each
+        attempt (a rollback expunges the pending inserts). The files are only
+        unlinked after the *final* attempt fails — deleting a successful scan's
+        results because one commit hit transient contention is exactly the
+        data-loss path CON-1 describes.
+        """
         filename, kind = _RAW_ARTIFACT[scan.scanner]
         written: list[str] = []
         stored = store_artifact(scan.id, filename, execution.raw_output)
         written.append(stored.relative_path)
-        session.add(
-            Artifact(
-                scan_id=scan.id,
-                kind=kind,
-                filename=filename,
-                content_type="application/json",
-                relative_path=stored.relative_path,
-                size_bytes=stored.size_bytes,
-                sha256=stored.sha256,
-            )
-        )
-
+        stored_sbom = None
         if sbom is not None:
             stored_sbom = store_artifact(scan.id, sbom.filename, sbom.raw_output)
             written.append(stored_sbom.relative_path)
+
+        def _stage() -> None:
             session.add(
                 Artifact(
                     scan_id=scan.id,
-                    kind=ArtifactKind.SBOM,
-                    filename=sbom.filename,
+                    kind=kind,
+                    filename=filename,
                     content_type="application/json",
-                    relative_path=stored_sbom.relative_path,
-                    size_bytes=stored_sbom.size_bytes,
-                    sha256=stored_sbom.sha256,
+                    relative_path=stored.relative_path,
+                    size_bytes=stored.size_bytes,
+                    sha256=stored.sha256,
                 )
             )
-
-        for nf in execution.findings:
-            session.add(
-                Finding(
-                    scan_id=scan.id,
-                    finding_class=FindingClass(nf.finding_class),
-                    severity=nf.severity,
-                    vuln_id=nf.vuln_id,
-                    pkg_name=nf.pkg_name,
-                    installed_version=nf.installed_version,
-                    fixed_version=nf.fixed_version,
-                    title=nf.title,
-                    description=nf.description,
-                    location=nf.location,
-                    primary_url=nf.primary_url,
+            if sbom is not None and stored_sbom is not None:
+                session.add(
+                    Artifact(
+                        scan_id=scan.id,
+                        kind=ArtifactKind.SBOM,
+                        filename=sbom.filename,
+                        content_type="application/json",
+                        relative_path=stored_sbom.relative_path,
+                        size_bytes=stored_sbom.size_bytes,
+                        sha256=stored_sbom.sha256,
+                    )
                 )
-            )
+            for nf in execution.findings:
+                session.add(
+                    Finding(
+                        scan_id=scan.id,
+                        finding_class=FindingClass(nf.finding_class),
+                        severity=nf.severity,
+                        vuln_id=nf.vuln_id,
+                        pkg_name=nf.pkg_name,
+                        installed_version=nf.installed_version,
+                        fixed_version=nf.fixed_version,
+                        title=nf.title,
+                        description=nf.description,
+                        location=nf.location,
+                        primary_url=nf.primary_url,
+                    )
+                )
+            scan.severity_counts = {
+                level.value: count for level, count in execution.severity_counts.items()
+            }
+            scan.findings_count = len(execution.findings)
+            scan.highest_severity = _highest_severity(execution.severity_counts)
+            scan.scanner_version = execution.scanner_version
+            scan.status = ScanStatus.SUCCEEDED
+            scan.finished_at = utcnow()
 
-        scan.severity_counts = {
-            level.value: count for level, count in execution.severity_counts.items()
-        }
-        scan.findings_count = len(execution.findings)
-        scan.highest_severity = _highest_severity(execution.severity_counts)
-        scan.scanner_version = execution.scanner_version
-        scan.status = ScanStatus.SUCCEEDED
-        scan.finished_at = utcnow()
         try:
-            session.commit()
+            _commit_with_retry(session, _stage, what=f"results of scan {scan.id}")
         except Exception:
             # The artifact bytes were already written to disk; if the rows that
-            # would own them fail to commit, remove the files so they don't
-            # accumulate as orphans. Re-raise so _execute marks the scan failed.
+            # would own them ultimately fail to commit, remove the files so they
+            # don't accumulate as orphans. Re-raise so _execute marks the scan
+            # failed.
             for relative_path in written:
                 with contextlib.suppress(OSError, ValueError):
                     artifact_path(relative_path).unlink(missing_ok=True)
@@ -436,7 +780,8 @@ class InProcessScanWorker(ScanWorker):
         except OSError:
             logger.exception("Could not write raw output for failed scan %d.", scan.id)
             return
-        try:
+
+        def _stage() -> None:
             session.add(
                 Artifact(
                     scan_id=scan.id,
@@ -448,7 +793,9 @@ class InProcessScanWorker(ScanWorker):
                     sha256=stored.sha256,
                 )
             )
-            session.commit()
+
+        try:
+            _commit_with_retry(session, _stage, what=f"raw-output artifact of scan {scan.id}")
         except Exception:  # noqa: BLE001 - never mask the scan's own failure
             logger.exception("Could not record raw-output artifact for scan %d.", scan.id)
             session.rollback()
@@ -456,15 +803,23 @@ class InProcessScanWorker(ScanWorker):
                 artifact_path(stored.relative_path).unlink(missing_ok=True)
 
     def _fail(self, session: Session, scan_id: int, message: str) -> None:
-        """Mark a scan failed with a safe, secret-redacted error message."""
-        try:
+        """Mark a scan failed with a safe, secret-redacted error message.
+
+        The commit is lock-retried so transient contention (the very condition
+        that usually routes a scan here — CON-1) doesn't strand the row
+        ``running`` forever. Sleeps between retries: call from a thread.
+        """
+
+        def _stage() -> None:
             scan = session.get(Scan, scan_id)
             if scan is None:
                 return
             scan.status = ScanStatus.FAILED
             scan.error = redact(message)
             scan.finished_at = utcnow()
-            session.commit()
+
+        try:
+            _commit_with_retry(session, _stage, what=f"failure of scan {scan_id}")
         except Exception:  # noqa: BLE001 - never mask the original failure
             logger.exception("Could not record failure for scan %d.", scan_id)
             session.rollback()

@@ -1,4 +1,4 @@
-"""Personal API token model (docs/PLAN.md §4.5, §5).
+"""Personal API token model (docs/ARCHIVE.md §4.5, §5).
 
 An :class:`ApiToken` is a bearer credential a user can present in the
 ``Authorization: Bearer <token>`` header instead of a session cookie. Only the

@@ -49,11 +49,12 @@ function DiffTable({
                   <Table.Th>Installed</Table.Th>
                   <Table.Th>Fixed</Table.Th>
                   <Table.Th>Title</Table.Th>
+                  <Table.Th>Location</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
                 {findings.map((f, i) => (
-                  <Table.Tr key={`${f.vuln_id ?? f.title ?? 'f'}-${i}`}>
+                  <Table.Tr key={`${f.vuln_id ?? f.title ?? 'f'}-${f.location ?? ''}-${i}`}>
                     <Table.Td>
                       <SeverityBadge severity={f.severity} />
                     </Table.Td>
@@ -76,6 +77,11 @@ function DiffTable({
                         {f.title ?? '—'}
                       </Text>
                     </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" lineClamp={2} maw={280}>
+                        {f.location ?? '—'}
+                      </Text>
+                    </Table.Td>
                   </Table.Tr>
                 ))}
               </Table.Tbody>
@@ -87,7 +93,7 @@ function DiffTable({
   );
 }
 
-/** Compare two scans of the same target: new vs. fixed findings (docs/PLAN.md §4.4). */
+/** Compare two scans of the same target: new vs. fixed findings (docs/ARCHIVE.md §4.4). */
 export function ScanDiffPage() {
   const { baseId, compareId } = useParams();
   const navigate = useNavigate();

@@ -8,14 +8,16 @@ instead, and this app exposes only the API.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -44,6 +46,7 @@ from app.core.config import Settings, get_settings
 from app.core.crypto import MasterKeyError, get_secret_cipher
 from app.core.logging import configure_logging
 from app.core.ratelimit import SlidingWindowRateLimiter
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import SessionLocal
 from app.workers import InProcessScanWorker, MaintenanceScheduler
 from app.workers.backup_scheduler import BackupScheduler
@@ -96,10 +99,57 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        await maintenance.shutdown()
-        await backup_scheduler.shutdown()
-        await worker.shutdown()
+        # Shield the whole teardown: if the lifespan task is cancelled again mid
+        # shutdown (uvicorn's forced-exit path / a second SIGINT), an unshielded
+        # await would abort the sequence and skip worker.shutdown() — leaving
+        # live scanner subprocesses running until SIGKILL. Each step also runs
+        # under its own try/except so one failure can't skip the rest (CON-7).
+        await asyncio.shield(_shutdown_all(maintenance, backup_scheduler, worker))
         logger.info("Scan worker, backup, and maintenance schedulers stopped.")
+
+
+async def _shutdown_all(
+    maintenance: MaintenanceScheduler,
+    backup_scheduler: BackupScheduler,
+    worker: InProcessScanWorker,
+) -> None:
+    """Shut down every background component, isolating each step's failures.
+
+    The worker is stopped last and, critically, always — even if a scheduler
+    shutdown raises — so its scanner subprocesses are cancelled and killed
+    rather than abandoned (CON-7).
+    """
+    for name, component in (
+        ("maintenance scheduler", maintenance),
+        ("backup scheduler", backup_scheduler),
+        ("scan worker", worker),
+    ):
+        try:
+            await component.shutdown()
+        except Exception:  # noqa: BLE001 - one component's failure must not skip the rest
+            logger.exception("Error shutting down the %s; continuing.", name)
+
+
+def _flatten_validation_error(exc: RequestValidationError) -> str:
+    """Render a ``RequestValidationError`` as a single human-readable string.
+
+    FastAPI's default body puts a *list* of error objects in ``detail`` while
+    hand-raised ``HTTPException(422, detail="...")`` puts a *string* there; the
+    SPA (and the OpenAPI-typed client) only render the string shape, so
+    schema-validation failures otherwise surfaced as a blank "Request failed
+    (422)" (APIR-2). Flatten the first error into the string envelope every other
+    422 already uses, prefixed with the offending field when one is identifiable.
+    """
+    errors = exc.errors()
+    if not errors:
+        return "Validation error."
+    first = errors[0]
+    # loc is like ("body", "cron") or ("query", "tags", 0); drop the leading
+    # request-part marker to name the field the client actually submitted.
+    loc = [str(part) for part in first.get("loc", ()) if part not in ("body", "query", "path")]
+    msg = str(first.get("msg", "Invalid value."))
+    field = ".".join(loc)
+    return f"{field}: {msg}" if field else msg
 
 
 def _mount_spa(app: FastAPI, dist_dir: Path) -> None:
@@ -156,6 +206,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.pending_mfa = PendingMfaStore()
 
+    @app.exception_handler(RequestValidationError)
+    async def _on_validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        """Emit a string ``detail`` for schema-validation 422s (APIR-2)."""
+        return JSONResponse(
+            {"detail": _flatten_validation_error(exc)},
+            status_code=422,
+        )
+
     if settings.cors_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -164,6 +222,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    # Baseline security headers (CSP/X-Frame-Options/nosniff/Referrer-Policy) on
+    # every response. Added last so it is the outermost middleware and wraps the
+    # CORS layer, applying to every response the app emits — including errors,
+    # CORS preflight replies, and the served SPA.
+    app.add_middleware(SecurityHeadersMiddleware)
 
     app.include_router(health_router)
     app.include_router(metrics_router)

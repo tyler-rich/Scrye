@@ -1,4 +1,4 @@
-"""CSV / Markdown / JSON exporters for scans and history (docs/PLAN.md §4.3).
+"""CSV / Markdown / JSON exporters for scans and history (docs/ARCHIVE.md §4.3).
 
 Two report scopes are supported:
 
@@ -303,19 +303,28 @@ _HISTORY_CSV_COLUMNS = [
 ]
 
 
-def _history_json(scans: list[Scan], filters: dict[str, Any] | None) -> bytes:
+def _history_json(scans: list[Scan], filters: dict[str, Any] | None, total: int | None) -> bytes:
     """Serialize a filtered scan set to indented JSON bytes."""
-    payload = {
+    payload: dict[str, Any] = {
         "filters": filters or {},
         "count": len(scans),
         "scans": [_scan_metadata(s) for s in scans],
     }
+    if total is not None:
+        # Signal when the cap fired so a consumer doesn't read a partial export
+        # as the complete filtered set (APIR-4).
+        payload["total"] = total
+        payload["truncated"] = total > len(scans)
     return json.dumps(payload, indent=2).encode("utf-8")
 
 
-def _history_csv(scans: list[Scan]) -> bytes:
+def _history_csv(scans: list[Scan], total: int | None) -> bytes:
     """Serialize a filtered scan set to CSV bytes (one row per scan)."""
     buffer = io.StringIO()
+    if total is not None and total > len(scans):
+        # A leading '#' comment marks the cap without disturbing the columns; it
+        # is only emitted when truncation actually happened (APIR-4).
+        buffer.write(f"# Truncated: showing the newest {len(scans)} of {total} matching scans\n")
     writer = csv.writer(buffer)
     writer.writerow(_HISTORY_CSV_COLUMNS)
     for scan in scans:
@@ -340,7 +349,9 @@ def _history_csv(scans: list[Scan]) -> bytes:
     return buffer.getvalue().encode("utf-8")
 
 
-def _history_markdown(scans: list[Scan], filters: dict[str, Any] | None) -> bytes:
+def _history_markdown(
+    scans: list[Scan], filters: dict[str, Any] | None, total: int | None
+) -> bytes:
     """Serialize a filtered scan set to a Markdown summary table."""
     lines: list[str] = ["# Scrye scan history", ""]
     active = {k: v for k, v in (filters or {}).items() if v not in (None, "", [])}
@@ -351,6 +362,10 @@ def _history_markdown(scans: list[Scan], filters: dict[str, Any] | None) -> byte
         lines.append(
             "**Filters:** " + ", ".join(f"{k}={_md_escape(str(v))}" for k, v in active.items())
         )
+        lines.append("")
+    if total is not None and total > len(scans):
+        # Make the cap visible in the rendered document (APIR-4).
+        lines.append(f"**Truncated:** showing the newest {len(scans)} of {total} matching scans.")
         lines.append("")
     lines.append(f"**Matching scans:** {len(scans)}")
     lines.append("")
@@ -374,16 +389,25 @@ def _history_markdown(scans: list[Scan], filters: dict[str, Any] | None) -> byte
 
 
 def export_history(
-    scans: list[Scan], fmt: ExportFormat, *, filters: dict[str, Any] | None = None
+    scans: list[Scan],
+    fmt: ExportFormat,
+    *,
+    filters: dict[str, Any] | None = None,
+    total: int | None = None,
 ) -> ExportResult:
-    """Render a filtered set of scans in the requested format."""
+    """Render a filtered set of scans in the requested format.
+
+    ``total`` is the count of scans matching the filters before the export cap;
+    when it exceeds the number of rendered rows the export carries a truncation
+    signal so a consumer doesn't read a partial download as complete (APIR-4).
+    """
     media_type, extension = EXPORT_FORMATS[fmt]
     if fmt is ExportFormat.JSON:
-        content = _history_json(scans, filters)
+        content = _history_json(scans, filters, total)
     elif fmt is ExportFormat.CSV:
-        content = _history_csv(scans)
+        content = _history_csv(scans, total)
     else:
-        content = _history_markdown(scans, filters)
+        content = _history_markdown(scans, filters, total)
     return ExportResult(
         content=content,
         media_type=media_type,
