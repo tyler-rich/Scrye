@@ -543,6 +543,30 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-13 — Post-release — CON-4 (H5): scanner JSON parse/normalize hopped off the event loop
+**What changed:** Each scanner's `_execute` now runs its parse+normalize step in a worker thread via
+`anyio.to_thread.run_sync` instead of calling it inline on the event loop:
+`backend/app/scanners/trivy.py` (`findings = await anyio.to_thread.run_sync(parse_output, result.stdout)`)
+and `backend/app/scanners/grype.py` (same, returning `(findings, version)`). Because both `parse_output`
+functions call the shared `load_json_output` (`scanners/base.py`) internally, hopping `parse_output`
+moves the `json.loads` *and* the per-finding normalization loop off the loop in one place — no separate
+change at `base.py:362` was needed, and the parsing logic itself is untouched. A regression test
+(`backend/tests/test_scanners.py`) proves it: a deliberately blocking stand-in parse runs while a
+heartbeat coroutine keeps ticking on the loop (asserted responsive), plus thread-identity assertions
+for both engines that the parse executes off the loop thread.
+**Why:** CON-4 (concurrency review, filed as HIGH / verification-pass H5) — scanner stdout is capped at
+`SCRYE_SCANNER_MAX_OUTPUT_BYTES` (512 MiB) and a large report (the archive's own run produced 7,072
+findings) is seconds of pure CPU to parse; on the loop that froze every request, including the
+`/healthz` poll the container healthcheck restarts on. This finding was missed in the CON-5–CON-20
+remediation batch and had **no prior §14 entry** (it fell in the gap between the "Top 5 #2" and
+"CON-5–CON-20" change-sets), so this entry also closes that record gap. The fix deliberately reuses the
+**same** `anyio.to_thread.run_sync` primitive CON-5 used for blocking DB work — a mechanical thread hop,
+no new concurrency primitive, no schema/security-model/job-model change (§0.2 single-container in-process
+async worker unchanged).
+**Plan section affected:** `docs/reviews/concurrency-review.md` CON-4; no change to §0/§4/§7. Also folds
+in L24/SC-11 (add `persist-credentials: false` to `.github/workflows/ci.yml` checkouts) as a separate
+commit — CLAUDE.md hard security rules / CI hygiene.
+
 ### 2026-07-13 — Docs/Process — Squash-merge authorship follows the GitHub profile display name (D4 doc-side)
 **What changed:** `CLAUDE.md` § Git & PR conventions (the author-identity rule) now records that a
 GitHub **squash-merge** authors the squashed commit with the merging account's *profile display name*,
