@@ -543,6 +543,27 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-20 — Post-release — P3-3: surface credential/filter option-fetch failures instead of silently swallowing them
+**What changed:** `NewScanPage.tsx` and `ScansPage.tsx` each had an empty `catch` around the option
+fetch (registry/git-credential pickers on New Scan; initiator/tag filter lists + presets on Scan
+history). A failed fetch left the pickers/lists silently empty, which is indistinguishable from
+"genuinely none configured" — so an operator could launch a **private-image or -repository scan
+anonymously**, believing no credential was saved, when in fact the credential list just failed to load
+(the scan then fails minutes later with an opaque registry/clone auth error). The empty catches now set
+an `optionsError` state and reset the lists; the UI distinguishes the two cases: New Scan shows a yellow
+warning `Alert` (with a Retry action) above the registry/git-credential picker telling the operator that
+saved credentials couldn't be loaded and launching now would scan anonymously; Scan history shows a
+non-blocking inline warning (with Retry) that the initiator/tag lists may be incomplete. A successful
+(re)load clears the warning.
+**Why:** P3-3 (frontend review, LOW with a security edge) — the silent-empty-catch made a failed load
+look like "no credentials configured", the misleading path that could get a private target scanned
+anonymously. No test added: the Vitest suite runs in the Node environment and covers only pure
+`src/lib/` helpers — there is no jsdom/React-Testing-Library harness to render a page component, and
+adding one is out of scope for a minimal LOW fix (consistent with the existing untested page-effect
+posture noted in `docs/reviews/STATUS.md` § 1).
+**Plan section affected:** none — UI error-surfacing only; no schema, security-model, or job-model
+change. `docs/reviews/frontend-review.md` P3-3.
+
 ### 2026-07-20 — Docs/Process — CLAUDE.md: strip auto-appended PR-body attribution footers after opening
 **What changed:** Added a rule to `CLAUDE.md` § Git & PR conventions requiring that, immediately after
 opening (or editing) any PR, the **live** PR body be re-fetched via the GitHub API/CLI and any

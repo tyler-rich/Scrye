@@ -92,6 +92,7 @@ export function ScansPage() {
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [compare, setCompare] = useState<ScanSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [optionsError, setOptionsError] = useState(false);
 
   const effectiveFilters = useMemo(
     () => withDates(filters, dateFrom, dateTo),
@@ -130,12 +131,16 @@ export function ScansPage() {
   }, [load]);
 
   const refreshOptions = useCallback(async () => {
+    // Surface a load failure instead of swallowing it: an empty initiator/tag
+    // list otherwise looks like "nothing to filter on" when the fetch actually
+    // failed (P3-3).
     try {
       const [opts, savedPresets] = await Promise.all([getFilterOptions(), listPresets()]);
       setOptions(opts);
       setPresets(savedPresets);
+      setOptionsError(false);
     } catch {
-      // Non-fatal: filter option lists just stay empty.
+      setOptionsError(true);
     }
   }, []);
 
@@ -262,6 +267,21 @@ export function ScansPage() {
 
       <Card withBorder radius="md" padding="md">
         <Stack gap="sm">
+          {optionsError && (
+            <Group gap="xs">
+              <Text c="yellow" size="sm">
+                Couldn&apos;t load filter options — the initiator and tag lists may be incomplete.
+              </Text>
+              <Anchor
+                component="button"
+                type="button"
+                size="sm"
+                onClick={() => void refreshOptions()}
+              >
+                Retry
+              </Anchor>
+            </Group>
+          )}
           <Group grow align="flex-end">
             <TextInput
               label="Target search"
