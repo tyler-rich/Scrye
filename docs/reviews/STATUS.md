@@ -40,7 +40,6 @@ re-verified STILL OPEN against current code.
 
 | ID | Finding | File:line (current) | Source |
 |----|---------|---------------------|--------|
-| SC-14 | Runtime image ships `backend/tests/` and `backend/scripts/` — needless attack surface/bloat on a security tool's own image | `docker/Dockerfile:201` (`COPY … backend/ /app/backend/`); no `backend/.dockerignore` and root `.dockerignore` doesn't exclude them | supply-chain (INFO; omitted from summary) |
 | SC-12 | Build backend floats: `[build-system] requires = ["setuptools>=75"]` — unpinned/unhashed, breaks build reproducibility the lockfile otherwise restored | `backend/pyproject.toml:38` (absent from `requirements.lock`) | supply-chain (omitted from summary) |
 | P3-4 | Auth refresh can resurrect a logged-out session (narrow race) — `refresh()` unconditionally replaces auth state with no sequencing vs. `scrye:auth-invalidated` | `frontend/src/auth/AuthContext.tsx:44-57` | frontend P3-4 (omitted) |
 
@@ -159,6 +158,7 @@ resolved (#67). One-line index below; full detail lives in the per-report files 
 | L21 / P2-6 | Accessible names on filters/segmented controls/PinInput | #62 |
 | L22 / P2-7 | Burger/Drawer mobile nav below `sm` | #62 |
 | P3-3 | Credential/filter option-fetch failures surfaced (warning + retry) instead of silently emptying the pickers — closes the "looks like none configured → scan private target anonymously" path (`NewScanPage.tsx`, `ScansPage.tsx`) | #77 |
+| SC-14 | `backend/tests/` + `backend/scripts/` excluded from the runtime image via root `.dockerignore` (regression-guarded) — dev-only trees no longer ship on the published scanner image | #77 |
 | L23 / SC-9 | `docker/dockerfile:1.7` syntax digest-pinned | #64 |
 | L24 / SC-11 | `persist-credentials: false` on all `ci.yml` checkouts | #67 |
 | L25 / D3 / SC-10 | Composite-action vs. `ci.yml` action versions converged to identical SHAs; Dependabot covers the composite dir | #57 |
