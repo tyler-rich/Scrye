@@ -22,4 +22,13 @@ export default tseslint.config(
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  {
+    // Test files and shared test utilities are not part of the app's
+    // Fast-Refresh graph, so the "only export components" rule doesn't apply —
+    // test-utils legitimately mix a render wrapper with re-exported helpers.
+    files: ['**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 );

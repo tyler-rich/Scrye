@@ -20,9 +20,31 @@ export default defineConfig({
     sourcemap: true,
   },
   test: {
-    // Unit tests here (e.g. safeHttpUrl) exercise pure helpers that only need
-    // the standard `URL` API, so the default Node environment is sufficient.
-    environment: 'node',
-    include: ['src/**/*.test.{ts,tsx}'],
+    // Two test environments live side by side, split by file extension so each
+    // suite runs under the lightest harness that fits:
+    //   *.test.ts  → pure-helper tests (e.g. src/lib/), run under Node.
+    //   *.test.tsx → component/page render tests, run under jsdom with React
+    //                Testing Library (see src/test/).
+    // The extension split keeps the existing lib/ helper tests untouched — they
+    // never pay for the DOM harness — while giving page tests a real DOM.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'node',
+          environment: 'node',
+          include: ['src/**/*.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'jsdom',
+          environment: 'jsdom',
+          include: ['src/**/*.test.tsx'],
+          setupFiles: ['./src/test/setup.ts'],
+        },
+      },
+    ],
   },
 });

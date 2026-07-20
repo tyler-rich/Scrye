@@ -2505,3 +2505,29 @@ session). Resolution triggers, tracked in #52: 15366/15367 close when the 3.14 u
 **Plan section affected:** §0 (#7, runtime lock — reaffirmed, not changed), §2 (tech stack —
 unchanged), §9.1 (base image / dogfood self-scan), §12 (Phase 6 self-scan), CLAUDE.md
 § Dependency hygiene.
+
+### 2026-07-20 — Post-v1 — Frontend jsdom + React Testing Library test harness
+**What changed:** Added the DOM test infrastructure the frontend suite was missing so
+component- and page-level render tests are possible (previously Vitest ran only in the `node`
+environment, which limited coverage to the pure `src/lib/` helpers). New dev dependencies
+(all exact-pinned): `jsdom@26.1.0`, `@testing-library/react@16.3.0`, `@testing-library/dom@10.4.1`,
+`@testing-library/user-event@14.6.1`, `@testing-library/jest-dom@6.9.1`. Vitest now runs **two
+projects** split by file extension (`frontend/vite.config.ts`): `*.test.ts` under `node` (the
+existing `src/lib/` helper tests, untouched) and `*.test.tsx` under `jsdom` with a `src/test/setup.ts`
+(jest-dom matchers, per-test unmount, and `matchMedia`/`ResizeObserver`/`scrollIntoView` polyfills
+Mantine needs). A shared `src/test/render.tsx` wraps components in `MantineProvider` + a router and
+re-exports the Testing Library surface. One smoke test (`src/pages/NewScanPage.test.tsx`) proves the
+harness end-to-end — render, query, and a Retry click — against the already-shipped **P3-3**
+credential-load-failure warning. `eslint.config.js` gained a small override turning off
+`react-refresh/only-export-components` for test files/utilities (they're outside the Fast-Refresh
+graph). CONTRIBUTING.md § Testing documents the `.test.ts`→node / `.test.tsx`→jsdom convention and
+the `renderWithProviders` pattern.
+**Why:** Four already-shipped fixes (P3-3, and M19/M20/M21's page-effect wiring) had only helper-level
+or no tests because there was no DOM harness to render components under — see `docs/reviews/STATUS.md`
+§ "Test debt on already-shipped fixes." This lands the infrastructure and proves it works; it does
+**not** backfill the M19/M20/M21/P3-3 page-level tests (that's follow-up work now unblocked). Aligns
+with CLAUDE.md § Testing ("the frontend uses Vitest … expanding over time"). Test-tooling only — no
+runtime dependency, schema, security-model, or job-model change.
+**Plan section affected:** CLAUDE.md § Testing (frontend Vitest coverage expanding), § Coding
+standards (TypeScript); `docs/reviews/STATUS.md` § "Remaining work" test-debt section. No change to
+§0/§2/§4/§7.

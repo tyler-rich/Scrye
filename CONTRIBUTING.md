@@ -268,8 +268,39 @@ cd backend && pytest
 cd frontend && npm test && npm run build && npm run lint && npm run format:check
 ```
 
-Frontend unit tests run under **Vitest** (`npm test`); place them next to the code
-they cover as `*.test.ts`/`*.test.tsx`.
+Frontend tests run under **Vitest** (`npm test`); place them next to the code
+they cover. The suite runs in two environments, chosen automatically by file
+extension (see `frontend/vite.config.ts`):
+
+- **`*.test.ts` → Node.** Pure-helper tests with no DOM (e.g. everything in
+  `src/lib/`). This is the default, lightweight harness.
+- **`*.test.tsx` → jsdom + React Testing Library.** Component and page render
+  tests. jsdom provides a DOM, and `src/test/setup.ts` registers the jest-dom
+  matchers, unmounts each tree after the test, and polyfills the browser APIs
+  Mantine expects (`matchMedia`, `ResizeObserver`, `scrollIntoView`).
+
+For a component/page test, render through the shared helper in
+`src/test/render.tsx` rather than bare Testing Library — it wraps the subtree in
+the providers every page assumes (`MantineProvider` + a router) and re-exports
+`screen`, `userEvent`, `waitFor`, etc. so a test imports everything from one
+place. Stub API modules and `useAuth` with `vi.mock` to drive the state you want:
+
+```tsx
+import { renderWithProviders, screen, userEvent } from '../test/render';
+import { MyPage } from './MyPage';
+
+vi.mock('../api/something', () => ({ loadThing: vi.fn() }));
+
+it('renders and reacts to a click', async () => {
+  const user = userEvent.setup();
+  renderWithProviders(<MyPage />);
+  expect(await screen.findByText(/expected/i)).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: /go/i }));
+});
+```
+
+`src/pages/NewScanPage.test.tsx` is the reference example (it covers the P3-3
+credential-load-failure warning and its retry).
 
 Security-sensitive code (crypto/secrets, auth) must have direct unit tests:
 encrypt/decrypt round-trips, key derivation, write-only masking, and proof that
