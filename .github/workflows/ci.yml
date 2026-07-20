@@ -159,6 +159,30 @@ jobs:
             type=gha,scope=dev-multiarch
           cache-to: type=gha,mode=max,scope=amd64-ci
 
+      # SC-14: the runtime image must not ship the backend test suite or dev
+      # scripts (root .dockerignore excludes them from the build context), and
+      # must still carry the trees the runtime actually needs (app package +
+      # Alembic migrations). Assert both against the real built image so a future
+      # change that reintroduces those dev-only trees fails the gate.
+      - name: Verify runtime image excludes dev-only trees (SC-14)
+        run: |
+          docker run --rm --entrypoint sh scrye:ci -c '
+            set -e
+            for p in /app/backend/tests /app/backend/scripts; do
+              if [ -e "$p" ]; then
+                echo "::error::$p is present in the runtime image (SC-14 regression)" >&2
+                exit 1
+              fi
+            done
+            for p in /app/backend/app /app/backend/alembic /app/backend/alembic.ini; do
+              if [ ! -e "$p" ]; then
+                echo "::error::$p is missing from the runtime image" >&2
+                exit 1
+              fi
+            done
+            echo "SC-14 OK: backend/tests and backend/scripts absent; runtime trees present"
+          '
+
       - name: Export image to a tar for offline scanning
         run: docker save scrye:ci -o /tmp/scrye-image.tar
 

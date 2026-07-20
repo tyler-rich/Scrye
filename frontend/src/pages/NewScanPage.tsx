@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
+  Anchor,
   Button,
   Checkbox,
   FileInput,
@@ -94,15 +95,23 @@ export function NewScanPage() {
   const [gitCredentials, setGitCredentials] = useState<CredentialOption[]>([]);
   const [sbomFile, setSbomFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [optionsError, setOptionsError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const loadTargets = useCallback(async () => {
+    // Surface a load failure instead of swallowing it: a silently-empty picker
+    // reads as "no credentials configured", so an operator could launch a
+    // private-image/-repo scan anonymously when saved credentials actually
+    // exist but the fetch failed (P3-3).
     try {
       const [regs, creds] = await Promise.all([listRegistryOptions(), listGitCredentialOptions()]);
       setRegistries(regs);
       setGitCredentials(creds);
+      setOptionsError(false);
     } catch {
-      // Non-fatal: credential pickers stay empty if the lists can't load.
+      setRegistries([]);
+      setGitCredentials([]);
+      setOptionsError(true);
     }
   }, []);
 
@@ -283,6 +292,17 @@ export function NewScanPage() {
                 disabled={!canLaunch}
                 {...form.getInputProps('target')}
               />
+            )}
+
+            {optionsError && (targetType === 'image' || targetType === 'repository') && (
+              <Alert color="yellow" icon={<IconAlertCircle size={16} />} variant="light">
+                Couldn&apos;t load saved credentials. Any configured registry or git credentials
+                won&apos;t appear below, so launching now would scan the target anonymously — retry
+                before starting a scan of a private target.{' '}
+                <Anchor component="button" type="button" onClick={() => void loadTargets()}>
+                  Retry
+                </Anchor>
+              </Alert>
             )}
 
             {targetType === 'image' && (

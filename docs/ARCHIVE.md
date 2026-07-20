@@ -543,6 +543,52 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-20 — Post-release — SC-14: keep the backend test suite and dev scripts out of the runtime image
+**What changed:** The final image stage copies the backend tree wholesale
+(`COPY --chown=1000:1000 backend/ /app/backend/`), which shipped `backend/tests/` (the full pytest
+suite) and `backend/scripts/` (the env-example generator) into the published image — needless bloat and
+attack surface on a security tool's own image. Added `backend/tests/` and `backend/scripts/` to the root
+`.dockerignore` so those dev-only trees are excluded from the build context; the final `COPY backend/`
+now brings in only `alembic/`, `alembic.ini`, `app/`, `pyproject.toml`, and `requirements.lock`, which
+is everything the runtime (Alembic migrations + `uvicorn app.main:app`) actually needs.
+**Why:** SC-14 (supply-chain review, LOW/INFO). Verified no runtime code imports `tests`/`scripts`
+(`app` and the Alembic `env.py` import only from `app`), so the exclusion is import-safe. The fix lives
+in the **root** `.dockerignore` rather than a `backend/.dockerignore` because Docker only honors the
+context-root ignore file for a normal build (a per-subdirectory `.dockerignore` is a silent no-op), and
+in `.dockerignore` rather than a rewritten multi-line COPY to avoid restructuring the final stage's layer
+ordering (CLAUDE.md § Build performance). This does not affect CI, which runs pytest on the host checkout,
+not inside the image. Two guards were added: a static one in `test_dockerfile_supply_chain.py` (asserts
+the `.dockerignore` carries both patterns), and — because the dogfood scan proves the image is *clean*
+but not that these dirs are *absent* — a **content assertion in the CI dogfood job** (`ci.yml`, the
+"Image — build + dogfood self-scan" job) that runs against the real built image and fails if
+`/app/backend/tests` or `/app/backend/scripts` is present, or if the runtime `app`/`alembic` trees are
+missing. No local `docker` daemon was available in the fix session, so image-content absence is confirmed
+live by that CI step (and was pre-confirmed by a faithful `.dockerignore` pattern-match simulation).
+**Plan section affected:** none — image-content hygiene only; no schema, security-model, or job-model
+change. `docs/reviews/supply-chain-review.md` SC-14; CLAUDE.md § Hard security rules (CIS baseline —
+slim runtime image).
+
+### 2026-07-20 — Post-release — P3-3: surface credential/filter option-fetch failures instead of silently swallowing them
+**What changed:** `NewScanPage.tsx` and `ScansPage.tsx` each had an empty `catch` around the option
+fetch (registry/git-credential pickers on New Scan; initiator/tag filter lists + presets on Scan
+history). A failed fetch left the pickers/lists silently empty, which is indistinguishable from
+"genuinely none configured" — so an operator could launch a **private-image or -repository scan
+anonymously**, believing no credential was saved, when in fact the credential list just failed to load
+(the scan then fails minutes later with an opaque registry/clone auth error). The empty catches now set
+an `optionsError` state and reset the lists; the UI distinguishes the two cases: New Scan shows a yellow
+warning `Alert` (with a Retry action) above the registry/git-credential picker telling the operator that
+saved credentials couldn't be loaded and launching now would scan anonymously; Scan history shows a
+non-blocking inline warning (with Retry) that the initiator/tag lists may be incomplete. A successful
+(re)load clears the warning.
+**Why:** P3-3 (frontend review, LOW with a security edge) — the silent-empty-catch made a failed load
+look like "no credentials configured", the misleading path that could get a private target scanned
+anonymously. No test added: the Vitest suite runs in the Node environment and covers only pure
+`src/lib/` helpers — there is no jsdom/React-Testing-Library harness to render a page component, and
+adding one is out of scope for a minimal LOW fix (consistent with the existing untested page-effect
+posture noted in `docs/reviews/STATUS.md` § 1).
+**Plan section affected:** none — UI error-surfacing only; no schema, security-model, or job-model
+change. `docs/reviews/frontend-review.md` P3-3.
+
 ### 2026-07-20 — Docs/Process — CLAUDE.md: strip auto-appended PR-body attribution footers after opening
 **What changed:** Added a rule to `CLAUDE.md` § Git & PR conventions requiring that, immediately after
 opening (or editing) any PR, the **live** PR body be re-fetched via the GitHub API/CLI and any

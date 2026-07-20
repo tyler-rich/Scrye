@@ -8,6 +8,7 @@ Dockerfile edit can't silently drop them:
   would resolve unpinned transitives fresh from PyPI at build time.
 - the scanner binaries' checksum files are cosign-signature-verified before the
   sha256sum check (SC-8).
+- the runtime image does not ship the backend test suite or dev scripts (SC-14).
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = _REPO_ROOT / "docker" / "Dockerfile"
+DOCKERIGNORE = _REPO_ROOT / ".dockerignore"
 REQUIREMENTS_LOCK = _REPO_ROOT / "backend" / "requirements.lock"
 
 
@@ -67,6 +69,27 @@ def test_scanner_checksums_are_cosign_verified() -> None:
     assert "token.actions.githubusercontent.com" in text
     # cosign itself is pinned by digest, not fetched loose at build time.
     assert "ghcr.io/sigstore/cosign/cosign" in text and "@sha256:" in text
+
+
+def test_backend_dev_only_trees_excluded_from_runtime_image() -> None:
+    # SC-14: the final stage copies backend/ wholesale into the runtime image,
+    # so the backend test suite and dev-only scripts (env-example generator)
+    # must be kept out of the build context to avoid shipping needless bloat and
+    # attack surface on the published scanner image. Docker only honors the root
+    # .dockerignore for the build context (a backend/.dockerignore would be a
+    # silent no-op), so the exclusion lives there.
+    ignore_text = DOCKERIGNORE.read_text(encoding="utf-8")
+    assert "backend/tests/" in ignore_text, (
+        "the backend test suite must be excluded from the build context so it "
+        "never ships in the runtime image (SC-14)"
+    )
+    assert "backend/scripts/" in ignore_text, (
+        "the backend dev scripts must be excluded from the build context so they "
+        "never ship in the runtime image (SC-14)"
+    )
+    # The runtime image still needs the schema/app trees the final COPY brings in.
+    dockerfile_text = _dockerfile_text()
+    assert "COPY --chown=1000:1000 backend/ /app/backend/" in dockerfile_text
 
 
 def test_backend_bare_pip_install_dot_is_scoped_to_no_deps() -> None:
