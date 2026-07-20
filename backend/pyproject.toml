@@ -34,8 +34,22 @@ dev = [
     "black==26.3.1",
 ]
 
+# PEP 735 dependency group for the PEP 517 build backend. This exists so the
+# build-system requirement (`setuptools`, below) flows through the same
+# `uv pip compile --generate-hashes` process as the runtime deps and lands in
+# `requirements.lock` hash-pinned — closing SC-12, the one build-time dependency
+# the lockfile otherwise left floating/unhashed. The lock is regenerated with
+# `--group build` (see CONTRIBUTING.md § Backend dependency lock and CI's drift
+# gate), and the image builds the app package with `pip install --no-deps
+# --no-build-isolation .` so it uses this hash-verified setuptools instead of
+# fetching an unpinned copy in an isolated build environment.
+[dependency-groups]
+build = ["setuptools==83.0.0"]
+
 [build-system]
-requires = ["setuptools>=75"]
+# Pinned to an exact version (not `>=`) and hash-pinned in requirements.lock via
+# the `build` dependency group above — keep the two setuptools pins in lockstep.
+requires = ["setuptools==83.0.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -62,6 +76,17 @@ ignore = ["D203", "D213", "D413", "B008"]
 # Tests and migrations don't need full docstring coverage.
 "tests/*" = ["D"]
 "alembic/*" = ["D"]
+
+[tool.ruff.lint.isort]
+# Pin first-party classification so import ordering is deterministic across ruff
+# versions (D5b). The repo ships a local `alembic/` migrations package whose name
+# collides with the third-party `alembic` distribution; ruff's first-party
+# auto-detection resolved that collision one way under 0.8.6 but flips it on newer
+# ruff (e.g. 0.15.x reclassifies `alembic.config` as third-party), which would
+# re-sort import blocks and break CI on a ruff bump — `test_migrations.py` being
+# the file that tripped it. Declaring the two local packages first-party makes the
+# whole tree's existing, correct import ordering pass identically on every ruff.
+known-first-party = ["alembic", "app"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

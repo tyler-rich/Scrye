@@ -543,6 +543,55 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-20 — Post-release — SC-12: pin and hash-lock the setuptools build backend
+**What changed:** `backend/pyproject.toml`'s `[build-system].requires` was `setuptools>=75` — unpinned
+and, as a PEP 517 build dependency, absent from the otherwise fully hash-pinned `requirements.lock`
+(the one gap the lockfile left floating). Pinned it to exact `setuptools==83.0.0` and added a PEP 735
+`[dependency-groups] build = ["setuptools==83.0.0"]` so the build backend flows through the same
+`uv pip compile --generate-hashes` process as the runtime deps. The lock is now regenerated with
+`--group build` (updated in `CONTRIBUTING.md` § Backend dependency lock and the CI drift gate in
+`.github/workflows/ci.yml`), so `setuptools==83.0.0` now appears hash-pinned in `requirements.lock`.
+The image's app-package build changed from `pip install --no-deps .` to
+`pip install --no-deps --no-build-isolation .` (`docker/Dockerfile`), so the PEP 517 build reuses the
+hash-verified setuptools already installed from the lock instead of pip fetching an unpinned, unhashed
+setuptools into an isolated build environment. Regression guards added/updated in
+`tests/test_dockerfile_supply_chain.py` (asserts the `--no-build-isolation` install form and that the
+lock carries a hash-pinned `setuptools==`).
+**Why:** SC-12 (supply-chain review, LOW; omitted from `00-summary.md` — see `docs/reviews/STATUS.md`).
+Closes the last floating/unhashed build-time dependency, so a build of a given commit resolves setuptools
+identically and verifiably. A consequence is that setuptools (small, now hash-pinned) is present in the
+final `/opt/venv` — an accepted trade for a fully hash-verified build with no isolated-build PyPI fetch;
+`--group build` was chosen over a project-wide dependency because the fixed `uv pip compile pyproject.toml`
+CI command emits only declared groups, keeping the lock reproducible and drift-gated. Verified end-to-end:
+`pip install --require-hashes -r requirements.lock` installs setuptools==83.0.0 hash-verified, then
+`pip install --no-deps --no-build-isolation .` builds the app against it (no standalone `wheel` needed);
+the CI compile command is idempotent (no lock drift).
+**Plan section affected:** none — build reproducibility / supply-chain hardening only. Locked decision §6
+(no floating deps / hash-pinned build), Coding standards § Dependency hygiene (hash-pinned lockfile).
+`docs/reviews/supply-chain-review.md` SC-12.
+
+### 2026-07-20 — Post-release — D5b: pin ruff isort first-party classification so import ordering is version-stable
+**What changed:** `backend/tests/test_migrations.py`'s import block passed ruff's `I001` (import sorting)
+check only because ruff is pinned at `0.8.6`; a newer ruff (e.g. `0.15.x`) reclassifies `alembic.config`
+from first-party to third-party and would re-sort the block, failing CI on a future ruff bump. Root cause:
+the repo ships a local `alembic/` migrations package whose name collides with the third-party `alembic`
+distribution, and ruff's first-party auto-detection resolves that collision differently across versions.
+Because the two ruff versions disagree on the **section** `alembic.config` belongs to (not merely the
+ordering within a section), no pure reordering of the file satisfies both — so the deterministic fix is a
+config pin: `[tool.ruff.lint.isort] known-first-party = ["alembic", "app"]` in `backend/pyproject.toml`.
+That makes ruff classify the two local packages first-party on every version, so the whole tree's existing
+(and already-correct) import ordering — `test_migrations.py` included — sorts identically under `0.8.6`
+and current ruff, with **no** import reordering needed anywhere in the backend.
+**Why:** D5b (claude-md-compliance review, TRIVIAL/latent; omitted from `00-summary.md`). Pinning the
+classification the codebase already assumes is the minimal, faithful fix — the alternative
+(`known-third-party = ["alembic"]`) is more semantically literal but reshuffles import blocks across ~8
+files including the migration scripts, which is neither minimal nor in scope. The ruff pin itself is
+intentionally **not** bumped in this change — that remains separate, deliberate work per the existing
+§14 / `#59` note (bumping ruff needs its own review of new lint findings). Confirmed clean under both
+ruff `0.8.6` (pinned/CI) and `0.15.22` across the whole backend.
+**Plan section affected:** none — lint determinism only; no schema, security-model, or job-model change.
+`docs/reviews/claude-md-compliance-review.md` D5.
+
 ### 2026-07-20 — Post-release — SC-14: keep the backend test suite and dev scripts out of the runtime image
 **What changed:** The final image stage copies the backend tree wholesale
 (`COPY --chown=1000:1000 backend/ /app/backend/`), which shipped `backend/tests/` (the full pytest

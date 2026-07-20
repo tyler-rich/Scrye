@@ -9,6 +9,8 @@ Dockerfile edit can't silently drop them:
 - the scanner binaries' checksum files are cosign-signature-verified before the
   sha256sum check (SC-8).
 - the runtime image does not ship the backend test suite or dev scripts (SC-14).
+- the app package is built with ``--no-build-isolation`` against the hash-pinned
+  setuptools from the lock, so no build-time dependency floats (SC-12).
 """
 
 from __future__ import annotations
@@ -92,12 +94,34 @@ def test_backend_dev_only_trees_excluded_from_runtime_image() -> None:
     assert "COPY --chown=1000:1000 backend/ /app/backend/" in dockerfile_text
 
 
-def test_backend_bare_pip_install_dot_is_scoped_to_no_deps() -> None:
+def test_backend_app_install_is_no_deps_and_no_build_isolation() -> None:
     # The application package itself is installed with --no-deps so the resolver
     # can't reach back out to PyPI for an unpinned copy of a runtime dependency
-    # after the hash-verified lock install.
+    # after the hash-verified lock install, and with --no-build-isolation so the
+    # PEP 517 build reuses the hash-verified setuptools already installed from the
+    # lock instead of fetching an unpinned, unhashed copy into an isolated build
+    # environment (SC-12).
     text = _dockerfile_text()
-    assert "pip install --no-deps ." in text, (
-        "the app package install must be `pip install --no-deps .` so runtime "
-        "deps come only from the hash-verified lock"
+    assert "pip install --no-deps --no-build-isolation ." in text, (
+        "the app package install must be `pip install --no-deps --no-build-isolation .` so "
+        "runtime deps come only from the hash-verified lock and the build backend is the "
+        "hash-verified setuptools from the lock, not an unpinned isolated-build fetch (SC-12)"
     )
+
+
+def test_build_backend_setuptools_is_hash_pinned_in_lock() -> None:
+    # SC-12: the PEP 517 build backend must be hash-pinned in the lock (flowed in
+    # via the `build` dependency group), so `--no-build-isolation` above has a
+    # verified setuptools to build against and no build-time dependency floats.
+    lock_text = REQUIREMENTS_LOCK.read_text(encoding="utf-8")
+    assert "setuptools==" in lock_text, (
+        "requirements.lock must pin the setuptools build backend exactly (SC-12); "
+        "regenerate it with `uv pip compile ... --group build`"
+    )
+    # The pinned setuptools entry must carry per-artifact hashes like every other
+    # locked package (the entry sits between its `setuptools==` line and the next
+    # dependency, so at least one --hash follows it).
+    setuptools_block = lock_text.split("setuptools==", 1)[1]
+    assert (
+        "--hash=sha256:" in setuptools_block.split("\n    # via", 1)[0]
+    ), "the locked setuptools must be hash-pinned (SC-12)"

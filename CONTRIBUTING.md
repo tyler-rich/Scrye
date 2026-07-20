@@ -95,13 +95,22 @@ identical command and fails if the committed lock drifts):
 ```bash
 cd backend
 pip install uv==0.8.17     # pin kept in sync with .github/workflows/ci.yml
-uv pip compile pyproject.toml --generate-hashes --python-version 3.13 \
+uv pip compile pyproject.toml --group build --generate-hashes --python-version 3.13 \
   --output-file requirements.lock
 ```
 
 `uv` reads the existing `requirements.lock` as a preference set, so a routine
 regeneration only changes what a `pyproject.toml` edit actually requires — an
 unrelated new transitive release on PyPI does not rewrite the lock.
+
+The `--group build` flag includes the PEP 735 `build` dependency group
+(`[dependency-groups]` in `pyproject.toml`), which pins the PEP 517 build
+backend (`setuptools`) so it is hash-pinned in the lock alongside the runtime
+deps rather than fetched unpinned during an isolated build (SC-12). Keep the
+`setuptools` pin identical in `[dependency-groups].build` and
+`[build-system].requires`; the image installs the lock and then builds the app
+with `pip install --no-deps --no-build-isolation .`, reusing that hash-verified
+`setuptools`.
 
 ### Frontend (React + Vite)
 

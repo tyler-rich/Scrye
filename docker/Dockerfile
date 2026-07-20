@@ -162,9 +162,15 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
 
 # Install the application package itself. Its runtime dependencies are already
 # present (installed and hash-verified from the lock above), so --no-deps keeps
-# the resolver from reaching back out to PyPI for an unpinned copy.
+# the resolver from reaching back out to PyPI for an unpinned copy. The build
+# backend (setuptools==83.0.0) is likewise in the lock and already installed
+# hash-verified, so --no-build-isolation reuses that pinned copy instead of pip
+# fetching an unpinned, unhashed setuptools into an isolated build env — closing
+# the last floating build-time dependency (SC-12). Keep the setuptools pin in
+# pyproject's [build-system]/[dependency-groups] and the lock in lockstep.
 COPY backend/app ./app
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked pip install --no-deps .
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    pip install --no-deps --no-build-isolation .
 
 
 # --- Final stage: minimal runtime image --------------------------------------
