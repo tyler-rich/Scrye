@@ -543,6 +543,33 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-20 — Post-release — SC-12: pin and hash-lock the setuptools build backend
+**What changed:** `backend/pyproject.toml`'s `[build-system].requires` was `setuptools>=75` — unpinned
+and, as a PEP 517 build dependency, absent from the otherwise fully hash-pinned `requirements.lock`
+(the one gap the lockfile left floating). Pinned it to exact `setuptools==83.0.0` and added a PEP 735
+`[dependency-groups] build = ["setuptools==83.0.0"]` so the build backend flows through the same
+`uv pip compile --generate-hashes` process as the runtime deps. The lock is now regenerated with
+`--group build` (updated in `CONTRIBUTING.md` § Backend dependency lock and the CI drift gate in
+`.github/workflows/ci.yml`), so `setuptools==83.0.0` now appears hash-pinned in `requirements.lock`.
+The image's app-package build changed from `pip install --no-deps .` to
+`pip install --no-deps --no-build-isolation .` (`docker/Dockerfile`), so the PEP 517 build reuses the
+hash-verified setuptools already installed from the lock instead of pip fetching an unpinned, unhashed
+setuptools into an isolated build environment. Regression guards added/updated in
+`tests/test_dockerfile_supply_chain.py` (asserts the `--no-build-isolation` install form and that the
+lock carries a hash-pinned `setuptools==`).
+**Why:** SC-12 (supply-chain review, LOW; omitted from `00-summary.md` — see `docs/reviews/STATUS.md`).
+Closes the last floating/unhashed build-time dependency, so a build of a given commit resolves setuptools
+identically and verifiably. A consequence is that setuptools (small, now hash-pinned) is present in the
+final `/opt/venv` — an accepted trade for a fully hash-verified build with no isolated-build PyPI fetch;
+`--group build` was chosen over a project-wide dependency because the fixed `uv pip compile pyproject.toml`
+CI command emits only declared groups, keeping the lock reproducible and drift-gated. Verified end-to-end:
+`pip install --require-hashes -r requirements.lock` installs setuptools==83.0.0 hash-verified, then
+`pip install --no-deps --no-build-isolation .` builds the app against it (no standalone `wheel` needed);
+the CI compile command is idempotent (no lock drift).
+**Plan section affected:** none — build reproducibility / supply-chain hardening only. Locked decision §6
+(no floating deps / hash-pinned build), Coding standards § Dependency hygiene (hash-pinned lockfile).
+`docs/reviews/supply-chain-review.md` SC-12.
+
 ### 2026-07-20 — Post-release — SC-14: keep the backend test suite and dev scripts out of the runtime image
 **What changed:** The final image stage copies the backend tree wholesale
 (`COPY --chown=1000:1000 backend/ /app/backend/`), which shipped `backend/tests/` (the full pytest

@@ -34,8 +34,22 @@ dev = [
     "black==26.3.1",
 ]
 
+# PEP 735 dependency group for the PEP 517 build backend. This exists so the
+# build-system requirement (`setuptools`, below) flows through the same
+# `uv pip compile --generate-hashes` process as the runtime deps and lands in
+# `requirements.lock` hash-pinned — closing SC-12, the one build-time dependency
+# the lockfile otherwise left floating/unhashed. The lock is regenerated with
+# `--group build` (see CONTRIBUTING.md § Backend dependency lock and CI's drift
+# gate), and the image builds the app package with `pip install --no-deps
+# --no-build-isolation .` so it uses this hash-verified setuptools instead of
+# fetching an unpinned copy in an isolated build environment.
+[dependency-groups]
+build = ["setuptools==83.0.0"]
+
 [build-system]
-requires = ["setuptools>=75"]
+# Pinned to an exact version (not `>=`) and hash-pinned in requirements.lock via
+# the `build` dependency group above — keep the two setuptools pins in lockstep.
+requires = ["setuptools==83.0.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

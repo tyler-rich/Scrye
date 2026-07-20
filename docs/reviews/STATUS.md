@@ -24,8 +24,9 @@ default-branch Dependabot alerts `fix-verification.md` flagged as category-(a).
   only covered the five mid-batch *decisions*, not every merged fix.
 
 Bottom line: **all HIGH and MEDIUM findings are resolved.** Everything still open is
-LOW/INFO — the frontend "Priority 3" polish batch (never summarized), two supply-chain
-hygiene items, one latent lint straggler, and test debt on already-shipped fixes.
+LOW/INFO — the frontend "Priority 3" polish batch (never summarized), one latent lint
+straggler (D5b), and test debt on already-shipped fixes. SC-12 (supply-chain
+build-backend pin) is resolved in #80.
 
 ---
 
@@ -40,7 +41,6 @@ re-verified STILL OPEN against current code.
 
 | ID | Finding | File:line (current) | Source |
 |----|---------|---------------------|--------|
-| SC-12 | Build backend floats: `[build-system] requires = ["setuptools>=75"]` — unpinned/unhashed, breaks build reproducibility the lockfile otherwise restored | `backend/pyproject.toml:38` (absent from `requirements.lock`) | supply-chain (omitted from summary) |
 | P3-4 | Auth refresh can resurrect a logged-out session (narrow race) — `refresh()` unconditionally replaces auth state with no sequencing vs. `scrye:auth-invalidated` | `frontend/src/auth/AuthContext.tsx:44-57` | frontend P3-4 (omitted) |
 
 ### LOW (UX / accessibility / maintainability)
@@ -159,6 +159,7 @@ resolved (#67). One-line index below; full detail lives in the per-report files 
 | L22 / P2-7 | Burger/Drawer mobile nav below `sm` | #62 |
 | P3-3 | Credential/filter option-fetch failures surfaced (warning + retry) instead of silently emptying the pickers — closes the "looks like none configured → scan private target anonymously" path (`NewScanPage.tsx`, `ScansPage.tsx`) | #77 |
 | SC-14 | `backend/tests/` + `backend/scripts/` excluded from the runtime image via root `.dockerignore` (regression-guarded) — dev-only trees no longer ship on the published scanner image | #77 |
+| SC-12 | Build backend pinned `setuptools==83.0.0` and hash-locked in `requirements.lock` via a PEP 735 `build` group (`uv pip compile --group build`); image builds the app with `--no-deps --no-build-isolation` so it reuses the hash-verified setuptools instead of an unpinned isolated-build fetch — last floating build-time dep closed | #80 |
 | L23 / SC-9 | `docker/dockerfile:1.7` syntax digest-pinned | #64 |
 | L24 / SC-11 | `persist-credentials: false` on all `ci.yml` checkouts | #67 |
 | L25 / D3 / SC-10 | Composite-action vs. `ci.yml` action versions converged to identical SHAs; Dependabot covers the composite dir | #57 |
