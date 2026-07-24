@@ -543,6 +543,47 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-24 — Post-release — Test-debt back-fill for M19, M20, and M21 (tests only)
+**What changed:** Nothing in the application — this entry records **new tests only**, back-filling
+the three fixes `docs/reviews/STATUS.md` § "Test debt on already-shipped fixes" listed as
+"resolved in code, proof absent". The fixes landed in #62, before the jsdom/RTL harness existed
+(#78), so M19 had no coverage at all and M20/M21 were covered only at the pure-helper level
+(`lib/polling.test.ts`, `lib/latest.test.ts`) with the page-effect wiring that consumes those
+helpers untested. Six new jsdom files, one commit per finding:
+- **M19 / P1-2** (settings-form clobber guard) — `RetentionPanel.test.tsx`, `GeneralPanel.test.tsx`,
+  `BackupsPanel.test.tsx`, `NewScanPage.prefill.test.tsx`. The three panels assert the form is
+  neither editable nor savable before the initial GET resolves (a Save attempt writes nothing) and
+  that the fetched values, not the built-in defaults, are what a later Save sends.
+- **M20 / P1-3** (poller backoff) — `ScanDetailPage.poller.test.tsx` drives the poll effect under
+  fake timers: consecutive errors stretch the retry delay, the poller stops at `MAX_POLL_FAILURES`
+  and renders the "Auto-refresh paused" alert, and a 404 halts on the first failure.
+- **M21 / P1-4** (latest-wins) — `ScansPage.latestwins.test.tsx` and
+  `ScanDetailPage.latestwins.test.tsx` hold an earlier request open across a filter change so the
+  newer one resolves first, then assert the superseded response is discarded.
+
+**Scope note — where the "dirty form is not clobbered" half of M19 is asserted.** In
+`RetentionPanel`/`GeneralPanel` the inputs are themselves gated on `loaded`, so there is no
+user-reachable path to dirty the form before the GET resolves; the disabled gate subsumes the
+`isDirty()` check and a page-level "dirty" test there could only assert something unreachable.
+That half is therefore asserted where it *is* reachable: `NewScanPage` (fields deliberately
+ungated, so a late `getScannerSettings` prefill can land on an edited form) and `BackupsPanel`
+(the `load()` re-fetch triggered by an unrelated list mutation, which must not rehydrate an
+in-progress schedule edit). This is called out in a comment in `RetentionPanel.test.tsx` rather
+than papered over with a hollow assertion.
+
+**Why:** Every discriminating assertion was verified to **fail** against the pre-fix behavior by
+temporarily reverting the guard locally and re-running — the same standard applied to the P3-4
+race tests — so none of these can pass vacuously. Confirmed failure signatures: M19 — the Save
+button is enabled and the defaults PUT before the GET lands (and, with `load()` rehydrating, the
+edited interval reverts); M20 — 25 requests where the fixed version makes 6, and no paused alert;
+M21 — the stale rows replace the current filter's rows. Two companion assertions (a pristine form
+seeds from fetched values; a latest response still renders) pass both before and after by design —
+they guard the fix's *non*-regression, and the pre-fix-failing assertions sit alongside them in
+the same files.
+
+**Plan section affected:** §12 Phase 6 / CLAUDE.md § Coding standards → Testing; closes the
+"Test debt on already-shipped fixes" block in `docs/reviews/STATUS.md` §1.
+
 ### 2026-07-24 — Post-release — P3-4: sequence auth refresh against session invalidation
 **What changed:** `frontend/src/auth/AuthContext.tsx` — `refresh()` wrote the `fetchAuthStatus`
 result into auth state unconditionally, with no sequencing against the `scrye:auth-invalidated`

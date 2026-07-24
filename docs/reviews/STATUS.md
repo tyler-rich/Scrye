@@ -24,9 +24,9 @@ default-branch Dependabot alerts `fix-verification.md` flagged as category-(a).
   only covered the five mid-batch *decisions*, not every merged fix.
 
 Bottom line: **all HIGH and MEDIUM findings are resolved.** Everything still open is
-LOW/INFO — the frontend "Priority 3" polish batch (never summarized) and test debt on
-already-shipped fixes. The two backlog stragglers SC-12 (supply-chain build-backend pin)
-and D5b (latent lint) are resolved in #80.
+LOW/INFO — what remains of the frontend "Priority 3" polish batch (never summarized). The two
+backlog stragglers SC-12 (supply-chain build-backend pin) and D5b (latent lint) are resolved in
+#80, and the test debt on the already-shipped M19/M20/M21 fixes was back-filled on 2026-07-24.
 
 ---
 
@@ -55,12 +55,19 @@ _None open — D5b (the last latent lint straggler) resolved in #80._
 
 ### Test debt on already-shipped fixes (fixes are real; proof is absent)
 
-- **M19 / P1-2** (settings-form clobber guard) — RESOLVED in code, but **no panel-level test**;
-  the Vitest suite covers only `src/lib/` helpers. (`RetentionPanel/GeneralPanel/BackupsPanel/
-  NewScanPage`.)
-- **M20 / P1-3, M21 / P1-4** — the backoff/latest-wins **helpers** are unit-tested
-  (`lib/polling.test.ts`, `lib/latest.test.ts`), but the **page effect wiring** that consumes
-  them is not.
+_None open — M19, M20, and M21 are now covered at page level (batch 2026-07-24; see
+`docs/ARCHIVE.md` § Deviations, "Test-debt back-fill for M19, M20, and M21"):_
+
+- **M19 / P1-2** — `RetentionPanel.test.tsx`, `GeneralPanel.test.tsx`, `BackupsPanel.test.tsx`,
+  `NewScanPage.prefill.test.tsx`. The dirty-form half is asserted on `NewScanPage` and
+  `BackupsPanel`, the two surfaces where it is user-reachable; on the two gated panels the
+  disabled-until-`loaded` gate subsumes it (noted in-file).
+- **M20 / P1-3** — `ScanDetailPage.poller.test.tsx` (fake-timer test of the poll effect: backoff,
+  halt at `MAX_POLL_FAILURES`, immediate halt on 404).
+- **M21 / P1-4** — `ScansPage.latestwins.test.tsx` and `ScanDetailPage.latestwins.test.tsx`.
+
+Every discriminating assertion was verified to fail against the pre-fix behavior before being
+committed.
 
 ---
 
@@ -121,7 +128,7 @@ resolved (#67). One-line index below; full detail lives in the per-report files 
 | M16 / APIR-4 | History export flags truncation (headers + JSON/CSV/MD note) | #61 |
 | M17 / APIR-5 | Response timestamps serialize with explicit `Z` (`UtcDatetime`) | #61 |
 | M18 / APIR-6 | Update paths re-establish create-path secret invariants | #61 |
-| M19 / P1-2 | Settings forms gate on `loaded` + seed only pristine forms *(untested — see §1)* | #62 |
+| M19 / P1-2 | Settings forms gate on `loaded` + seed only pristine forms *(page-level tests back-filled 2026-07-24)* | #62 |
 | M20 / P1-3 | Poller exponential backoff + halt on ceiling/404 | #62 |
 | M21 / P1-4 | History/findings fetches use latest-wins guard | #62 |
 | M22 / SC-6 | Stale `node:22-bookworm-slim` digest refreshed | #64 |
