@@ -543,6 +543,45 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-24 — Post-release — Frontend Priority-3 polish batch (P3-1, P3-2, P3-5, P3-6, P3-7, P3-8)
+**What changed:** Worked the frontend-review "Priority 3" backlog (`docs/reviews/frontend-review.md`
+§Priority 3; tracked in `docs/reviews/STATUS.md`), one commit per finding:
+- **P3-1 (`ScansPage.tsx`)** — history filters/date-range/sort/page were `useState`-only, so
+  Back/bookmark/share reset the view. The active view is now read from the URL on mount and mirrored
+  back into `useSearchParams` (`replace`, defaults omitted), making History deep-linkable. jsdom test.
+- **P3-2 (`ScansPage.tsx`)** — the compare selection held full row snapshots that outlived a
+  filter/page change or a delete, showing a phantom "1/2 selected" and diffing a since-deleted scan
+  (404). Added an effect that reconciles the selection against the current rows whenever they change,
+  dropping any selected id no longer present. jsdom tests (filter-out and deleted-scan).
+- **P3-5 (`ScanDetailPage.tsx`)** — the ≤500-row findings table re-rendered on every tag keystroke
+  and 2.5 s poll because it was co-located with `tagDraft`. Extracted a `memo`ized `FindingsTable`
+  child keyed only on findings state. jsdom render-count test (SeverityBadge-spy).
+- **P3-6 (new `components/StatusLoader.tsx`; loader sites; `Dashboard.tsx`)** — bare `Loader`s
+  announced nothing to screen readers. Added a `StatusLoader` wrapping the spinner in a
+  `role="status"` `aria-live="polite"` region with visually hidden text, used at the standalone
+  loader sites (App shell, history, scan detail, diff, docker environments); gave the dashboard chart
+  bars `role="img"` so their existing `aria-label` is honored. jsdom test.
+- **P3-7 (`Dashboard.tsx`)** — severity colors re-stated as `"red"`/`"orange"` literals now reuse
+  `SEVERITY_COLOR`; the scans-over-time chart switched from the pinned dark-mode `teal-6` to
+  `var(--mantine-primary-color-filled)` so it tracks `primaryShade` per scheme. Pure token swap.
+- **P3-8 (`api/client.ts`)** — the two blind `(await response.json()) as T` casts (the FE-2
+  hand-written-client boundary) were consolidated into one documented `parseResponse<T>` helper
+  (shared error/401/204 handling too). jsdom test for the client. **The two broader strictness
+  flags in this finding were deferred by decision** (see Why).
+**Why:** These are the LOW/UX/a11y/maintainability items the original `/code-review` frontend report
+raised but `00-summary.md` never scheduled. Tests follow the post-v1 Vitest harness (`.test.tsx` +
+jsdom via `renderWithProviders` for anything rendering, `.test.ts` + node for pure logic). On **P3-8**,
+only the cited `as T` casts were fixed in this batch; enabling `noUncheckedIndexedAccess` (measured:
+**14 new TS errors across 6 files**, some genuine `Scanner | undefined` mismatches, not just
+non-null-assertion fixes) and switching ESLint to `recommendedTypeChecked`/type-aware rules
+(measured: **39 problems** — 25 `no-misused-promises`, 4 `no-floating-promises`, 1
+`no-unnecessary-type-assertion`, plus others) is a ~53-problem cleanup across ~10 files, so it is
+tracked as its own dedicated pass rather than folded into this polish batch (the review itself framed
+these as residual gaps, not violations). P3-3 was resolved earlier in #77; P3-4 remains open.
+**Plan section affected:** none — frontend UX/a11y/maintainability polish only; no schema,
+security-model, or job-model change. `docs/reviews/frontend-review.md` §Priority 3;
+`docs/reviews/STATUS.md`.
+
 ### 2026-07-20 — Post-release — SC-12: pin and hash-lock the setuptools build backend
 **What changed:** `backend/pyproject.toml`'s `[build-system].requires` was `setuptools>=75` — unpinned
 and, as a PEP 517 build dependency, absent from the otherwise fully hash-pinned `requirements.lock`

@@ -32,10 +32,12 @@ and D5b (latent lint) are resolved in #80.
 
 ## 1. Remaining work (STILL OPEN — current backlog, severity-ranked)
 
-All open items are **LOW / INFO**. There are **no open HIGH or MEDIUM findings.** The bulk of
-this list is the frontend-review **Priority 3** batch (`frontend-review.md` §Priority 3), which
-was never carried into `00-summary.md` and therefore never scheduled — every P3 item was
-re-verified STILL OPEN against current code.
+All open items are **LOW / INFO**. There are **no open HIGH or MEDIUM findings.** This list came
+from the frontend-review **Priority 3** batch (`frontend-review.md` §Priority 3), which was never
+carried into `00-summary.md` and therefore never scheduled. **Most of it is now resolved** (P3-1,
+P3-2, P3-3, P3-5, P3-6, P3-7, and P3-8's `as T` casts — see §3); what remains open is **P3-4**
+(auth-refresh race) and **P3-8's two TS-strictness flags**, deferred by decision to a dedicated
+pass (measured scope below).
 
 ### LOW (has a correctness/security/reproducibility edge)
 
@@ -47,12 +49,7 @@ re-verified STILL OPEN against current code.
 
 | ID | Finding | File:line (current) | Source |
 |----|---------|---------------------|--------|
-| P3-1 | History filters/sort/page live in `useState` only — Back/bookmark/share loses the view; not mirrored to `useSearchParams` (none in tree) | `frontend/src/pages/ScansPage.tsx:81-86` | frontend P3-1 (omitted) |
-| P3-2 | Compare selection stores full row snapshots that survive filter/page changes → "1/2 selected" for an unreachable row; deleted-scan diff 404s | `frontend/src/pages/ScansPage.tsx:93,206-224` | frontend P3-2 (omitted) |
-| P3-5 | 500-row findings table re-renders on every tag keystroke / 2.5 s poll (co-located with `tagDraft`); no memoized child | `frontend/src/pages/ScanDetailPage.tsx` (state `:101`, table `:549-595`) | frontend P3-5 (omitted) |
-| P3-6 | Loaders have no `role="status"`/`aria-live` (announce as nothing); dashboard chart bars put `aria-label` on a plain `div` with no `role` | `frontend/src/pages/Dashboard.tsx:50-63`; all `<Loader>` sites | frontend P3-6 (omitted) |
-| P3-7 | Theme-token drift: severity colors re-stated as `"red"`/`"orange"` literals; chart pins `--mantine-color-teal-6`; redundant `color="teal"` | `frontend/src/pages/Dashboard.tsx:141-142,196,201,60` | frontend P3-7 (omitted) |
-| P3-8 | TS strictness residuals: blind `as T` casts (`api/client.ts:74,107`); `noUncheckedIndexedAccess` off; ESLint not type-aware (no `no-floating-promises`); `Select`-handler casts | `frontend/tsconfig.app.json`, `frontend/eslint.config.js:10`, `frontend/src/api/client.ts` | frontend P3-8 (omitted) |
+| P3-8 (partial) | TS strictness residuals. **Resolved:** blind `as T` casts consolidated into a documented `parseResponse<T>` boundary (`api/client.ts`, #batch 2026-07-24). **Deferred to a dedicated pass:** `noUncheckedIndexedAccess` off (measured **14 new TS errors / 6 files**, incl. real `Scanner \| undefined` mismatches) and ESLint not type-aware / no `no-floating-promises` (measured **39 problems** under `recommendedTypeChecked`). Too large (~53 problems / ~10 files) to fold into the polish batch. | `frontend/tsconfig.app.json`, `frontend/eslint.config.js:10` | frontend P3-8 (omitted) |
 
 ### TRIVIAL / latent
 
@@ -155,7 +152,13 @@ resolved (#67). One-line index below; full detail lives in the per-report files 
 | L20 / P2-5 | Keyboard-accessible history table | #62 |
 | L21 / P2-6 | Accessible names on filters/segmented controls/PinInput | #62 |
 | L22 / P2-7 | Burger/Drawer mobile nav below `sm` | #62 |
+| P3-1 | History filters/date-range/sort/page mirrored to `useSearchParams` (read from URL on mount, written back with `replace`) — Back/bookmark/share now restore the filtered view (`ScansPage.tsx`) | batch 2026-07-24 |
+| P3-2 | Compare selection reconciled against the current rows on every reload — a filtered/paged/deleted scan is dropped, killing the phantom "1/2 selected" and the deleted-scan diff 404 (`ScansPage.tsx`) | batch 2026-07-24 |
 | P3-3 | Credential/filter option-fetch failures surfaced (warning + retry) instead of silently emptying the pickers — closes the "looks like none configured → scan private target anonymously" path (`NewScanPage.tsx`, `ScansPage.tsx`) | #77 |
+| P3-5 | Findings table extracted into a `memo`ized `FindingsTable` child keyed only on findings state — tag keystrokes / 2.5 s polls no longer re-render the ≤500 rows (`ScanDetailPage.tsx`) | batch 2026-07-24 |
+| P3-6 | `StatusLoader` wraps loaders in a `role="status"`/`aria-live` region with hidden text (App shell, history, detail, diff, docker-envs); dashboard chart bars given `role="img"` (`components/StatusLoader.tsx`, `Dashboard.tsx`) | batch 2026-07-24 |
+| P3-7 | Severity literals `"red"`/`"orange"` replaced with `SEVERITY_COLOR`; chart uses `var(--mantine-primary-color-filled)` instead of pinned `teal-6` (`Dashboard.tsx`) | batch 2026-07-24 |
+| P3-8 (as-T casts) | Blind `(await response.json()) as T` in `api`/`apiUpload` consolidated into one documented `parseResponse<T>` boundary (FE-2). Strictness-flag portion deferred — see §1. | batch 2026-07-24 |
 | SC-14 | `backend/tests/` + `backend/scripts/` excluded from the runtime image via root `.dockerignore` (regression-guarded) — dev-only trees no longer ship on the published scanner image | #77 |
 | SC-12 | Build backend pinned `setuptools==83.0.0` and hash-locked in `requirements.lock` via a PEP 735 `build` group (`uv pip compile --group build`); image builds the app with `--no-deps --no-build-isolation` so it reuses the hash-verified setuptools instead of an unpinned isolated-build fetch — last floating build-time dep closed | #80 |
 | D5b | `test_migrations.py` import ordering made version-stable via `[tool.ruff.lint.isort] known-first-party = ["alembic", "app"]` — pins the local-vs-third-party `alembic` classification so a future ruff bump can't re-sort the block (ruff pin itself intentionally not bumped) | #80 |

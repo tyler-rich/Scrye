@@ -18,7 +18,7 @@ import { Link } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { getDashboard, type Dashboard as DashboardData } from '../api/dashboard';
 import { ScanStatusBadge } from '../components/ScanStatusBadge';
-import { SeverityBadge } from '../components/SeverityBadge';
+import { SEVERITY_COLOR, SeverityBadge } from '../components/SeverityBadge';
 
 type LoadState =
   | { kind: 'loading' }
@@ -51,13 +51,16 @@ function ScansOverTime({ data }: { data: DashboardData['scans_over_time'] }) {
         {data.map((point) => (
           <Tooltip key={point.date} label={`${point.date}: ${point.count}`} withArrow>
             <div
+              role="img"
               style={{
                 flex: 1,
                 minWidth: 2,
                 height: `${Math.round((point.count / max) * 100)}%`,
                 minHeight: 2,
                 borderRadius: 2,
-                background: 'var(--mantine-color-teal-6)',
+                // Track the primary shade per color scheme rather than pinning
+                // the dark-mode teal-6 in both modes (P3-7).
+                background: 'var(--mantine-primary-color-filled)',
                 opacity: point.count === 0 ? 0.15 : 1,
               }}
               aria-label={`${point.date}: ${point.count} scans`}
@@ -138,8 +141,12 @@ export function Dashboard() {
         <Stack gap="md">
           <SimpleGrid cols={{ base: 2, sm: 4 }}>
             <StatCard label="Total scans" value={state.data.total_scans} />
-            <StatCard label="Open critical" value={state.data.open_critical} color="red" />
-            <StatCard label="Open high" value={state.data.open_high} color="orange" />
+            <StatCard
+              label="Open critical"
+              value={state.data.open_critical}
+              color={SEVERITY_COLOR.critical}
+            />
+            <StatCard label="Open high" value={state.data.open_high} color={SEVERITY_COLOR.high} />
             <StatCard label="Active schedules" value={state.data.schedules_enabled} />
           </SimpleGrid>
 
@@ -193,12 +200,12 @@ export function Dashboard() {
                         </Text>
                       </Table.Td>
                       <Table.Td>
-                        <Text c="red" fw={600}>
+                        <Text c={SEVERITY_COLOR.critical} fw={600}>
                           {t.critical}
                         </Text>
                       </Table.Td>
                       <Table.Td>
-                        <Text c="orange" fw={600}>
+                        <Text c={SEVERITY_COLOR.high} fw={600}>
                           {t.high}
                         </Text>
                       </Table.Td>
