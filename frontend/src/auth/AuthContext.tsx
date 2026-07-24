@@ -69,6 +69,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // latest-wins guard the history/findings fetches use).
   const refreshGuard = useRef(createLatestGuard());
 
+  // Mirror invariant (#83): a successfully completed authentication — login, MFA
+  // verification, or first-admin setup — is never undone by a `refresh()` that
+  // was already in flight when it completed. Such a status request was answered
+  // *before* the credential existed, so it carries `user: null`; landing after
+  // the sign-in it would drop the shell straight back to the login screen.
+  // Burning a guard token supersedes any in-flight refresh, so its response
+  // returns without writing — the same latest-wins mechanism `refresh()` uses
+  // against itself, just started by an authentication instead of a fetch.
+  const applyAuthenticated = useCallback((user: UserInfo | null) => {
+    refreshGuard.current.begin();
+    setState((prev) => ({ ...prev, loading: false, needsSetup: false, user }));
+  }, []);
+
   const refresh = useCallback(async () => {
     const token = refreshGuard.current.begin();
     const generation = sessionGeneration.current;
@@ -114,20 +127,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login: async (username, password) => {
         const result = await apiLogin(username, password);
         if (result.user) {
-          setState((prev) => ({ ...prev, loading: false, needsSetup: false, user: result.user }));
+          applyAuthenticated(result.user);
         }
         return result;
       },
       verifyMfa: async (mfaToken, code) => {
         const result = await apiVerifyMfa(mfaToken, code);
         if (result.user) {
-          setState((prev) => ({ ...prev, loading: false, needsSetup: false, user: result.user }));
+          applyAuthenticated(result.user);
         }
         return result;
       },
       setup: async (username, password) => {
         const result = await setupFirstAdmin(username, password);
-        setState((prev) => ({ ...prev, loading: false, needsSetup: false, user: result.user }));
+        applyAuthenticated(result.user);
       },
       logout: async () => {
         // Bump before the request: any refresh already in flight belongs to the
@@ -137,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setState((prev) => ({ ...prev, loading: false, needsSetup: false, user: null }));
       },
     }),
-    [state, refresh, invalidateSession],
+    [state, refresh, invalidateSession, applyAuthenticated],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
