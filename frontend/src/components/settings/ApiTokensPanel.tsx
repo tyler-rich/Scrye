@@ -57,7 +57,7 @@ export function ApiTokensPanel() {
   const form = useForm({
     initialValues: {
       name: '',
-      role: (user?.role ?? 'viewer') as Role,
+      role: user?.role ?? 'viewer',
       expires_in_days: '' as number | '',
     },
     validate: { name: (v) => (v.trim() ? null : 'Required') },
@@ -179,7 +179,7 @@ export function ApiTokensPanel() {
                         leftSection={<IconTrash size={14} />}
                         loading={revoking === t.id}
                         disabled={revoking !== null}
-                        onClick={() => onRevoke(t.id)}
+                        onClick={() => void onRevoke(t.id)}
                       >
                         Revoke
                       </Button>

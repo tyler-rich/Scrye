@@ -310,7 +310,7 @@ export function ScansPage() {
       (x, y) => parseUtc(x.created_at).getTime() - parseUtc(y.created_at).getTime(),
     );
     if (!a || !b) return;
-    navigate(`/scans/diff/${a.id}/${b.id}`);
+    void navigate(`/scans/diff/${a.id}/${b.id}`);
   };
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
@@ -344,7 +344,7 @@ export function ScansPage() {
               ))}
             </Menu.Dropdown>
           </Menu>
-          <Button leftSection={<IconPlus size={16} />} onClick={() => navigate('/scans/new')}>
+          <Button leftSection={<IconPlus size={16} />} onClick={() => void navigate('/scans/new')}>
             New scan
           </Button>
         </Group>

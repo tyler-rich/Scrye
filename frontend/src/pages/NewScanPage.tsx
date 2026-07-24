@@ -191,7 +191,7 @@ export function NewScanPage() {
           return;
         }
         const scan = await createSbomScan(sbomFile, 'grype');
-        navigate(`/scans/${scan.id}`);
+        void navigate(`/scans/${scan.id}`);
         return;
       }
 
@@ -220,7 +220,7 @@ export function NewScanPage() {
       }
 
       const scan = await createScan(payload);
-      navigate(`/scans/${scan.id}`);
+      void navigate(`/scans/${scan.id}`);
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : 'Failed to launch scan.');
     } finally {

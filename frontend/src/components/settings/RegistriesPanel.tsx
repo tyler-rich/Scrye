@@ -180,7 +180,7 @@ export function RegistriesPanel() {
                         <ActionIcon
                           variant="subtle"
                           aria-label="Test registry"
-                          onClick={() => onTest(r.id)}
+                          onClick={() => void onTest(r.id)}
                         >
                           <IconPlugConnected size={16} />
                         </ActionIcon>
@@ -188,7 +188,7 @@ export function RegistriesPanel() {
                           variant="subtle"
                           color="red"
                           aria-label="Delete registry"
-                          onClick={() => onDelete(r.id)}
+                          onClick={() => void onDelete(r.id)}
                         >
                           <IconTrash size={16} />
                         </ActionIcon>

@@ -225,7 +225,7 @@ export function ScheduledScansPanel() {
                         aria-label="Run now"
                         loading={rowBusy?.id === s.id && rowBusy.action === 'run'}
                         disabled={rowBusy !== null}
-                        onClick={() => onRun(s.id)}
+                        onClick={() => void onRun(s.id)}
                       >
                         <IconPlayerPlay size={16} />
                       </ActionIcon>
@@ -235,7 +235,7 @@ export function ScheduledScansPanel() {
                         aria-label="Delete schedule"
                         loading={rowBusy?.id === s.id && rowBusy.action === 'delete'}
                         disabled={rowBusy !== null}
-                        onClick={() => onDelete(s.id)}
+                        onClick={() => void onDelete(s.id)}
                       >
                         <IconTrash size={16} />
                       </ActionIcon>

@@ -152,7 +152,7 @@ export function DockerEnvironmentsPanel() {
                   {canManage ? (
                     <Switch
                       checked={e.risk_acknowledged}
-                      onChange={() => onToggleRisk(e)}
+                      onChange={() => void onToggleRisk(e)}
                       aria-label="Acknowledge residual risk"
                     />
                   ) : (
@@ -167,7 +167,7 @@ export function DockerEnvironmentsPanel() {
                       variant="subtle"
                       aria-label="Enumerate images"
                       disabled={!e.enabled || !e.risk_acknowledged}
-                      onClick={() => onEnumerate(e.id)}
+                      onClick={() => void onEnumerate(e.id)}
                     >
                       <IconList size={16} />
                     </ActionIcon>
@@ -176,7 +176,7 @@ export function DockerEnvironmentsPanel() {
                         variant="subtle"
                         color="red"
                         aria-label="Delete environment"
-                        onClick={() => onDelete(e.id)}
+                        onClick={() => void onDelete(e.id)}
                       >
                         <IconTrash size={16} />
                       </ActionIcon>

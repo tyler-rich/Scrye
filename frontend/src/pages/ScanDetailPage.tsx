@@ -379,7 +379,7 @@ export function ScanDetailPage() {
     setDeleting(true);
     try {
       await deleteScan(id);
-      navigate('/scans');
+      void navigate('/scans');
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : 'Failed to delete scan.');
       setDeleting(false);
@@ -402,7 +402,7 @@ export function ScanDetailPage() {
           variant="subtle"
           size="compact-sm"
           leftSection={<IconArrowLeft size={14} />}
-          onClick={() => navigate('/scans')}
+          onClick={() => void navigate('/scans')}
           mb="xs"
         >
           Back to scans

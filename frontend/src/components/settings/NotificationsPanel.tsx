@@ -224,7 +224,7 @@ export function NotificationsPanel() {
                       <ActionIcon
                         variant="subtle"
                         aria-label="Test channel"
-                        onClick={() => onTest(c.id)}
+                        onClick={() => void onTest(c.id)}
                       >
                         <IconPlugConnected size={16} />
                       </ActionIcon>
@@ -232,7 +232,7 @@ export function NotificationsPanel() {
                         variant="subtle"
                         color="red"
                         aria-label="Delete channel"
-                        onClick={() => onDelete(c.id)}
+                        onClick={() => void onDelete(c.id)}
                       >
                         <IconTrash size={16} />
                       </ActionIcon>
