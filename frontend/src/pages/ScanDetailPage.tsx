@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -78,6 +78,118 @@ function SeveritySummary({ counts }: { counts: Record<string, number> }) {
     </Group>
   );
 }
+
+interface FindingsTableProps {
+  findings: Finding[];
+  findingsTotal: number;
+  findingsLoading: boolean;
+  findingsLoaded: boolean;
+}
+
+/**
+ * The findings table (up to {@link FINDINGS_LIMIT} rows). Extracted into a
+ * `memo`ized child that depends only on the findings state so it does not
+ * re-render on every tag-editor keystroke or 2.5 s status poll of the parent —
+ * those touch `tagDraft`/`scan`, not these props (P3-5).
+ */
+export const FindingsTable = memo(function FindingsTable({
+  findings,
+  findingsTotal,
+  findingsLoading,
+  findingsLoaded,
+}: FindingsTableProps) {
+  if (findings.length === 0 && !findingsLoaded && findingsLoading) {
+    return (
+      <Center py="md">
+        <Loader size="sm" color="teal" />
+      </Center>
+    );
+  }
+  if (findings.length === 0) {
+    return (
+      <Text c="dimmed" size="sm">
+        No findings match the current filters.
+      </Text>
+    );
+  }
+  return (
+    <Box pos="relative">
+      {/* Dim the current rows while a filter change is in flight rather than
+          showing the previous filter's rows as if current (L18 / P2-3). */}
+      <LoadingOverlay
+        visible={findingsLoading}
+        zIndex={1}
+        overlayProps={{ blur: 0.5 }}
+        loaderProps={{ size: 'sm', color: 'teal' }}
+      />
+      <Table.ScrollContainer minWidth={820}>
+        <Table striped highlightOnHover>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Severity</Table.Th>
+              <Table.Th>ID</Table.Th>
+              <Table.Th>Class</Table.Th>
+              <Table.Th>Package</Table.Th>
+              <Table.Th>Installed</Table.Th>
+              <Table.Th>Fixed</Table.Th>
+              <Table.Th>Title</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {findings.map((f) => {
+              // primary_url is scanner-derived (attacker-influenceable);
+              // only render it as a link when it's a safe http(s) URL.
+              const findingUrl = safeHttpUrl(f.primary_url);
+              return (
+                <Table.Tr key={f.id}>
+                  <Table.Td>
+                    <SeverityBadge severity={f.severity} />
+                  </Table.Td>
+                  <Table.Td>
+                    {findingUrl && f.vuln_id ? (
+                      <Anchor href={findingUrl} target="_blank" rel="noopener noreferrer" size="sm">
+                        {f.vuln_id}
+                      </Anchor>
+                    ) : (
+                      <Text size="sm">{f.vuln_id ?? '—'}</Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c="dimmed">
+                      {f.finding_class}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm">{f.pkg_name ?? '—'}</Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm">{f.installed_version ?? '—'}</Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c={f.fixed_version ? 'teal' : 'dimmed'}>
+                      {f.fixed_version ?? '—'}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" lineClamp={2} maw={320}>
+                      {f.title ?? '—'}
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+      {findingsTotal > findings.length && (
+        <Text size="xs" c="dimmed">
+          Showing the first {findings.length} of {findingsTotal} matching findings. Download the raw
+          artifact for the complete set.
+        </Text>
+      )}
+    </Box>
+  );
+});
 
 /** Detail view for a single scan: status, summary, artifacts, findings. */
 export function ScanDetailPage() {
@@ -513,97 +625,12 @@ export function ScanDetailPage() {
               </Group>
             </Group>
 
-            {findings.length === 0 && !findingsLoaded && findingsLoading ? (
-              <Center py="md">
-                <Loader size="sm" color="teal" />
-              </Center>
-            ) : findings.length === 0 ? (
-              <Text c="dimmed" size="sm">
-                No findings match the current filters.
-              </Text>
-            ) : (
-              <Box pos="relative">
-                {/* Dim the current rows while a filter change is in flight
-                    rather than showing the previous filter's rows as if
-                    current (L18 / P2-3). */}
-                <LoadingOverlay
-                  visible={findingsLoading}
-                  zIndex={1}
-                  overlayProps={{ blur: 0.5 }}
-                  loaderProps={{ size: 'sm', color: 'teal' }}
-                />
-                <Table.ScrollContainer minWidth={820}>
-                  <Table striped highlightOnHover>
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th>Severity</Table.Th>
-                        <Table.Th>ID</Table.Th>
-                        <Table.Th>Class</Table.Th>
-                        <Table.Th>Package</Table.Th>
-                        <Table.Th>Installed</Table.Th>
-                        <Table.Th>Fixed</Table.Th>
-                        <Table.Th>Title</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {findings.map((f) => {
-                        // primary_url is scanner-derived (attacker-influenceable);
-                        // only render it as a link when it's a safe http(s) URL.
-                        const findingUrl = safeHttpUrl(f.primary_url);
-                        return (
-                          <Table.Tr key={f.id}>
-                            <Table.Td>
-                              <SeverityBadge severity={f.severity} />
-                            </Table.Td>
-                            <Table.Td>
-                              {findingUrl && f.vuln_id ? (
-                                <Anchor
-                                  href={findingUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  size="sm"
-                                >
-                                  {f.vuln_id}
-                                </Anchor>
-                              ) : (
-                                <Text size="sm">{f.vuln_id ?? '—'}</Text>
-                              )}
-                            </Table.Td>
-                            <Table.Td>
-                              <Text size="sm" c="dimmed">
-                                {f.finding_class}
-                              </Text>
-                            </Table.Td>
-                            <Table.Td>
-                              <Text size="sm">{f.pkg_name ?? '—'}</Text>
-                            </Table.Td>
-                            <Table.Td>
-                              <Text size="sm">{f.installed_version ?? '—'}</Text>
-                            </Table.Td>
-                            <Table.Td>
-                              <Text size="sm" c={f.fixed_version ? 'teal' : 'dimmed'}>
-                                {f.fixed_version ?? '—'}
-                              </Text>
-                            </Table.Td>
-                            <Table.Td>
-                              <Text size="sm" lineClamp={2} maw={320}>
-                                {f.title ?? '—'}
-                              </Text>
-                            </Table.Td>
-                          </Table.Tr>
-                        );
-                      })}
-                    </Table.Tbody>
-                  </Table>
-                </Table.ScrollContainer>
-                {findingsTotal > findings.length && (
-                  <Text size="xs" c="dimmed">
-                    Showing the first {findings.length} of {findingsTotal} matching findings.
-                    Download the raw artifact for the complete set.
-                  </Text>
-                )}
-              </Box>
-            )}
+            <FindingsTable
+              findings={findings}
+              findingsTotal={findingsTotal}
+              findingsLoading={findingsLoading}
+              findingsLoaded={findingsLoaded}
+            />
           </Stack>
         </Card>
       )}
