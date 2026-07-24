@@ -7,7 +7,6 @@ import {
   Code,
   Group,
   List,
-  Loader,
   Modal,
   Stack,
   Switch,
@@ -30,6 +29,7 @@ import {
   updateDockerEnvironment,
 } from '../../api/targets';
 import { useAuth } from '../../auth/AuthContext';
+import { StatusLoader } from '../StatusLoader';
 
 /** Manage read-only Docker socket-proxy environments and enumerate their images. */
 export function DockerEnvironmentsPanel() {
@@ -228,7 +228,7 @@ export function DockerEnvironmentsPanel() {
           </Alert>
         ) : images === null ? (
           <Group justify="center" py="lg">
-            <Loader color="teal" />
+            <StatusLoader color="teal" label="Loading images" />
           </Group>
         ) : images.length === 0 ? (
           <Text c="dimmed">No tagged images visible to this environment.</Text>

@@ -9,7 +9,6 @@ import {
   Center,
   Checkbox,
   Group,
-  Loader,
   Menu,
   MultiSelect,
   Pagination,
@@ -54,6 +53,7 @@ import { formatWhen, parseUtc } from '../lib/dates';
 import { createLatestGuard } from '../lib/latest';
 import { ScanStatusBadge } from '../components/ScanStatusBadge';
 import { SeverityBadge } from '../components/SeverityBadge';
+import { StatusLoader } from '../components/StatusLoader';
 
 const PAGE_SIZE = 25;
 const SCANNERS = ['trivy', 'grype'];
@@ -528,7 +528,7 @@ export function ScansPage() {
 
       {data === null ? (
         <Center mih={160}>
-          <Loader color="teal" />
+          <StatusLoader color="teal" />
         </Center>
       ) : data.items.length === 0 ? (
         <Text c="dimmed">No scans match the current filters.</Text>

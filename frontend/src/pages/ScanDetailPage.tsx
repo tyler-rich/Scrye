@@ -9,7 +9,6 @@ import {
   Card,
   Center,
   Group,
-  Loader,
   LoadingOverlay,
   Menu,
   Modal,
@@ -49,6 +48,7 @@ import {
 } from '../api/scans';
 import { ScanStatusBadge } from '../components/ScanStatusBadge';
 import { SEVERITY_COLOR, SeverityBadge } from '../components/SeverityBadge';
+import { StatusLoader } from '../components/StatusLoader';
 import { useAuth } from '../auth/AuthContext';
 
 const FINDINGS_LIMIT = 500;
@@ -101,7 +101,7 @@ export const FindingsTable = memo(function FindingsTable({
   if (findings.length === 0 && !findingsLoaded && findingsLoading) {
     return (
       <Center py="md">
-        <Loader size="sm" color="teal" />
+        <StatusLoader size="sm" color="teal" label="Loading findings" />
       </Center>
     );
   }
@@ -389,7 +389,9 @@ export function ScanDetailPage() {
 
   if (!scan) {
     return (
-      <Center mih={200}>{error ? <Text c="red">{error}</Text> : <Loader color="teal" />}</Center>
+      <Center mih={200}>
+        {error ? <Text c="red">{error}</Text> : <StatusLoader color="teal" label="Loading scan" />}
+      </Center>
     );
   }
 

@@ -51,6 +51,7 @@ function ScansOverTime({ data }: { data: DashboardData['scans_over_time'] }) {
         {data.map((point) => (
           <Tooltip key={point.date} label={`${point.date}: ${point.count}`} withArrow>
             <div
+              role="img"
               style={{
                 flex: 1,
                 minWidth: 2,
