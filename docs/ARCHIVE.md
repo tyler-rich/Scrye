@@ -543,6 +543,58 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-24 — Post-release — P3-8 closed: `noUncheckedIndexedAccess` + type-aware ESLint
+**What changed:** The two TS-strictness flags P3-8 deferred to a dedicated pass are now on, in two
+independently reviewable/revertible commits. **Re-measured against current `dev` first** (the #81
+counts predate the M19/M20/M21 back-fills in #84 and the issue-83 work in #87): the actual scope is
+**smaller** than the ~53 problems scoped then — 14 TS errors across 5 files, and **30** ESLint
+problems across 15 files rather than 39, because #81's `parseResponse<T>` boundary already retired
+the `no-unsafe-*` family. All 20 Vitest files lint clean under the typed rules, so the expected
+test-file promise noise never materialized.
+
+**1. `noUncheckedIndexedAccess`** (`frontend/tsconfig.app.json`) — 14 errors, fixed with **no**
+non-null assertions:
+- `NewScanPage.tsx`, `ScheduledScansPanel.tsx` — the two real `Scanner | undefined` mismatches the
+  scoping flagged. `SCANNERS_FOR` retyped `Record<TargetType, Scanner[]>` →
+  `Record<TargetType, readonly [Scanner, ...Scanner[]]>`. The "keep the scanner valid for the chosen
+  target type" effect resets to `allowed[0]`, which was `Scanner | undefined` against a setter
+  taking `Scanner`; the non-empty tuple encodes the actual invariant (every target type has at least
+  one permitted scanner) so the read is `Scanner` by construction rather than by assertion.
+- `RegistriesPanel.tsx`, `NotificationsPanel.tsx` — the per-row `tests[id]` lookup was performed
+  three times per row (existence check, `.ok`, `.detail`). Hoisted to one `const test` inside the
+  row callback, which satisfies the flag and drops two redundant lookups per row.
+- `ScansPage.tsx` — `canCompare` indexed `compare[0]`/`compare[1]` behind a `length === 2` check TS
+  does not narrow on; destructured to `compareA`/`compareB` with direct `undefined` checks.
+  `runCompare` gained an `if (!a || !b) return` guard on the sorted pair — unreachable in practice
+  (the button is gated on `canCompare`), so no behavior change.
+
+**2. Type-aware ESLint** (`frontend/eslint.config.js`) — `tseslint.configs.recommended` →
+`recommendedTypeChecked` with `projectService: true` + `tsconfigRootDir`. 30 problems, all fixed at
+the call site with **zero `eslint-disable` comments added**:
+- **`no-misused-promises` (25)** — an `async` handler in an `onClick`/`onChange` slot expecting a
+  `void` return. Each of the 21 handler bodies was read to decide bug-vs-style: **every one wraps
+  its entire body in `try/catch`** (with `finally` where it clears in-flight state), so none can
+  produce an unhandled rejection — these are genuinely shape mismatches, not latent bugs. Marked
+  with the `void` operator, the idiom already used for `void load()` here. The other 4 are
+  `onClick={() => navigate(...)}`: react-router 7's `navigate()` returns `void | Promise<void>`.
+  Three sites passed the async function directly (`onClick={disable}`, `{confirm}`, `{submitMfa}`)
+  and are now arrow-wrapped; all three take no parameters, so dropping the click event is inert.
+- **`no-floating-promises` (4)** — all four are bare `navigate(...)` statements (`NewScanPage` ×2,
+  `ScanDetailPage`, `ScansPage`), the same react-router 7 return type. Prefixed with `void`.
+- **`no-unnecessary-type-assertion` (1)** — `ApiTokensPanel.tsx:60` asserted
+  `(user?.role ?? 'viewer') as Role` on an expression already typed `Role`. Dropped.
+
+**No runtime behavior changed.** The `void` operator only discards a value that was already being
+discarded; the tuple retype and the hoisted lookup are type/structure-only; every handler's error
+path is untouched. Full suite (54 tests / 18 files), `tsc -b`, `eslint .`, Prettier, and
+`npm run build` all green.
+**Why:** Closes the last open item in `docs/reviews/STATUS.md` — P3-8's strictness-flag half, split
+out of #81 precisely so it could be reviewed on its own. Both flags are permanent gates from here:
+new indexed reads and new unawaited promises now fail CI rather than accumulating.
+**Plan section affected:** none — frontend build/lint configuration and type-level handling only; no
+schema, API, security-model, or job-model change. Extends the Coding standards § TypeScript rule
+(ESLint + Prettier clean) with the two stricter gates.
+
 ### 2026-07-24 — Post-release — #83: a completed authentication is never undone by an in-flight refresh
 **What changed:** `frontend/src/auth/AuthContext.tsx` — the mirror of the P3-4 race fixed in #82,
 running the other way. `login()`, `verifyMfa()`, and `setup()` wrote the authenticated user into
