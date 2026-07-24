@@ -295,16 +295,21 @@ export function ScansPage() {
     });
   };
 
+  // `toggleCompare` caps the selection at two, so the pair of defined checks
+  // below is exactly the "two scans selected" condition the button gated on.
+  const [compareA, compareB] = compare;
   const canCompare =
-    compare.length === 2 &&
-    compare[0].scanner === compare[1].scanner &&
-    compare[0].target_type === compare[1].target_type &&
-    compare[0].target === compare[1].target;
+    compareA !== undefined &&
+    compareB !== undefined &&
+    compareA.scanner === compareB.scanner &&
+    compareA.target_type === compareB.target_type &&
+    compareA.target === compareB.target;
 
   const runCompare = () => {
     const [a, b] = [...compare].sort(
       (x, y) => parseUtc(x.created_at).getTime() - parseUtc(y.created_at).getTime(),
     );
+    if (!a || !b) return;
     navigate(`/scans/diff/${a.id}/${b.id}`);
   };
 

@@ -185,59 +185,62 @@ export function NotificationsPanel() {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {items.map((c) => (
-              <Table.Tr key={c.id}>
-                <Table.Td>{c.name}</Table.Td>
-                <Table.Td>{c.type}</Table.Td>
-                <Table.Td>
-                  {c.events.length > 0 ? (
-                    <Group gap={4}>
-                      {c.events.map((e) => (
-                        <Badge key={e} variant="outline" size="sm">
-                          {EVENT_LABELS[e]}
-                        </Badge>
-                      ))}
+            {items.map((c) => {
+              const test = tests[c.id];
+              return (
+                <Table.Tr key={c.id}>
+                  <Table.Td>{c.name}</Table.Td>
+                  <Table.Td>{c.type}</Table.Td>
+                  <Table.Td>
+                    {c.events.length > 0 ? (
+                      <Group gap={4}>
+                        {c.events.map((e) => (
+                          <Badge key={e} variant="outline" size="sm">
+                            {EVENT_LABELS[e]}
+                          </Badge>
+                        ))}
+                      </Group>
+                    ) : (
+                      <Text size="sm" c="dimmed">
+                        —
+                      </Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {test ? (
+                      <Badge color={test.ok ? 'teal' : 'red'} variant="light">
+                        {test.detail}
+                      </Badge>
+                    ) : c.enabled ? (
+                      <Badge variant="light">enabled</Badge>
+                    ) : (
+                      <Badge color="gray" variant="light">
+                        disabled
+                      </Badge>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    <Group gap="xs" justify="flex-end">
+                      <ActionIcon
+                        variant="subtle"
+                        aria-label="Test channel"
+                        onClick={() => onTest(c.id)}
+                      >
+                        <IconPlugConnected size={16} />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        aria-label="Delete channel"
+                        onClick={() => onDelete(c.id)}
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
                     </Group>
-                  ) : (
-                    <Text size="sm" c="dimmed">
-                      —
-                    </Text>
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  {tests[c.id] ? (
-                    <Badge color={tests[c.id].ok ? 'teal' : 'red'} variant="light">
-                      {tests[c.id].detail}
-                    </Badge>
-                  ) : c.enabled ? (
-                    <Badge variant="light">enabled</Badge>
-                  ) : (
-                    <Badge color="gray" variant="light">
-                      disabled
-                    </Badge>
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  <Group gap="xs" justify="flex-end">
-                    <ActionIcon
-                      variant="subtle"
-                      aria-label="Test channel"
-                      onClick={() => onTest(c.id)}
-                    >
-                      <IconPlugConnected size={16} />
-                    </ActionIcon>
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      aria-label="Delete channel"
-                      onClick={() => onDelete(c.id)}
-                    >
-                      <IconTrash size={16} />
-                    </ActionIcon>
-                  </Group>
-                </Table.Td>
-              </Table.Tr>
-            ))}
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
             {items.length === 0 && (
               <Table.Tr>
                 <Table.Td colSpan={5}>
