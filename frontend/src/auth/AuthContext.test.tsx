@@ -15,10 +15,22 @@ vi.mock('../api/auth', () => ({
   verifyMfa: vi.fn(),
 }));
 
-import { fetchAuthStatus, logout as apiLogout, type AuthStatus, type UserInfo } from '../api/auth';
+import {
+  fetchAuthStatus,
+  login as apiLogin,
+  logout as apiLogout,
+  setupFirstAdmin,
+  verifyMfa as apiVerifyMfa,
+  type AuthStatus,
+  type LoginResponse,
+  type UserInfo,
+} from '../api/auth';
 
 const mockedFetchAuthStatus = vi.mocked(fetchAuthStatus);
 const mockedLogout = vi.mocked(apiLogout);
+const mockedLogin = vi.mocked(apiLogin);
+const mockedVerifyMfa = vi.mocked(apiVerifyMfa);
+const mockedSetup = vi.mocked(setupFirstAdmin);
 
 const USER: UserInfo = {
   id: 1,
@@ -35,6 +47,21 @@ const AUTHENTICATED_STATUS: AuthStatus = {
   authenticated: true,
   user: USER,
   oidc: { enabled: false, display_name: 'OIDC' },
+};
+
+/** What the backend answers for a request made before the credential existed. */
+const ANONYMOUS_STATUS: AuthStatus = {
+  needs_setup: false,
+  authenticated: false,
+  user: null,
+  oidc: { enabled: false, display_name: 'OIDC' },
+};
+
+const LOGIN_RESULT: LoginResponse = {
+  user: USER,
+  csrf_token: 'csrf',
+  mfa_required: false,
+  mfa_token: null,
 };
 
 /** A promise whose resolution the test drives, standing in for a slow request. */
@@ -54,9 +81,9 @@ async function settle<T>(pending: { promise: Promise<T>; resolve: (value: T) => 
   });
 }
 
-/** Renders the session as text, plus the two actions the races involve. */
+/** Renders the session as text, plus the actions the races involve. */
 function SessionProbe() {
-  const { loading, user, logout, refresh } = useAuth();
+  const { loading, user, login, verifyMfa, setup, logout, refresh } = useAuth();
   return (
     <>
       <span data-testid="session">
@@ -67,6 +94,15 @@ function SessionProbe() {
       </button>
       <button type="button" onClick={() => void logout()}>
         Sign out
+      </button>
+      <button type="button" onClick={() => void login('operator', 'pw')}>
+        Sign in
+      </button>
+      <button type="button" onClick={() => void verifyMfa('mfa-token', '123456')}>
+        Verify MFA
+      </button>
+      <button type="button" onClick={() => void setup('operator', 'pw')}>
+        Create admin
       </button>
     </>
   );
@@ -142,5 +178,80 @@ describe('AuthProvider — P3-4 refresh/invalidation sequencing', () => {
     await settle(status, AUTHENTICATED_STATUS);
 
     await waitFor(() => expect(session()).toBe('signed-in:operator'));
+  });
+});
+
+describe('AuthProvider — #83 authentication vs. an in-flight refresh', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /**
+   * The mirror of the P3-4 race: a status request answered *before* the
+   * credential existed — so it carries `user: null` — resolves *after* the
+   * operator has authenticated, and must not clear the new session.
+   */
+  async function authenticateWithStaleRefreshInFlight(action: RegExp) {
+    // Settle the mount refresh first: the login screen is only reachable once
+    // `loading` is false, so the stale request is a later, overlapping one.
+    const mount = deferred<AuthStatus>();
+    mockedFetchAuthStatus.mockReturnValue(mount.promise);
+
+    renderProvider();
+    await settle(mount, ANONYMOUS_STATUS);
+    await waitFor(() => expect(session()).toBe('signed-out'));
+
+    // A status request is in flight when the operator authenticates.
+    const stale = deferred<AuthStatus>();
+    mockedFetchAuthStatus.mockReturnValue(stale.promise);
+    await userEvent.click(screen.getByRole('button', { name: /refresh/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: action }));
+    await waitFor(() => expect(session()).toBe('signed-in:operator'));
+
+    // Only now does the pre-login status arrive, carrying no user.
+    await settle(stale, ANONYMOUS_STATUS);
+
+    // Invariant: a completed authentication is never undone by a refresh that
+    // was already in flight when it completed.
+    expect(session()).toBe('signed-in:operator');
+  }
+
+  it('does not clear the session when a pre-login refresh resolves after login', async () => {
+    mockedLogin.mockResolvedValue(LOGIN_RESULT);
+    await authenticateWithStaleRefreshInFlight(/sign in/i);
+  });
+
+  it('does not clear the session when a pre-login refresh resolves after MFA verification', async () => {
+    mockedVerifyMfa.mockResolvedValue(LOGIN_RESULT);
+    await authenticateWithStaleRefreshInFlight(/verify mfa/i);
+  });
+
+  it('does not clear the session when a pre-setup refresh resolves after first-admin setup', async () => {
+    mockedSetup.mockResolvedValue(LOGIN_RESULT);
+    await authenticateWithStaleRefreshInFlight(/create admin/i);
+  });
+
+  it('still lets a refresh started after login update the session', async () => {
+    mockedLogin.mockResolvedValue(LOGIN_RESULT);
+
+    const mount = deferred<AuthStatus>();
+    mockedFetchAuthStatus.mockReturnValue(mount.promise);
+
+    renderProvider();
+    await settle(mount, ANONYMOUS_STATUS);
+    await waitFor(() => expect(session()).toBe('signed-out'));
+
+    await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
+    await waitFor(() => expect(session()).toBe('signed-in:operator'));
+
+    // Superseding in-flight refreshes must not disable later ones: this one was
+    // started after the sign-in, so its answer is authoritative.
+    const after = deferred<AuthStatus>();
+    mockedFetchAuthStatus.mockReturnValue(after.promise);
+    await userEvent.click(screen.getByRole('button', { name: /refresh/i }));
+    await settle(after, ANONYMOUS_STATUS);
+
+    expect(session()).toBe('signed-out');
   });
 });

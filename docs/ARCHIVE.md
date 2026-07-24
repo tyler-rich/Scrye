@@ -543,6 +543,37 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-24 — Post-release — #83: a completed authentication is never undone by an in-flight refresh
+**What changed:** `frontend/src/auth/AuthContext.tsx` — the mirror of the P3-4 race fixed in #82,
+running the other way. `login()`, `verifyMfa()`, and `setup()` wrote the authenticated user into
+state without sequencing against a `refresh()` that was already in flight. That status request was
+answered by the backend *before* the credential existed, so it carries `user: null`; resolving after
+the sign-in, it overwrote the fresh session and dropped the shell back to the login screen (the next
+`refresh()` or a re-login recovered it). The provider now enforces the companion invariant **a
+successfully completed authentication — login, MFA verification, or first-admin setup — is never
+undone by a `refresh()` that was already in flight when it completed**: the three success paths go
+through one `applyAuthenticated()` helper that burns a token from the existing
+`refreshGuard` (`createLatestGuard()`, `lib/latest.ts`) before writing the user, so any refresh
+already running is superseded and returns without writing. No new mechanism — this is the same
+latest-wins guard `refresh()` already uses against itself, just begun by an authentication instead
+of a fetch. Deliberately **not** changed: `sessionGeneration` and its invalidation semantics, so the
+P3-4 invariant (a logged-out session is never restored by a late refresh) is untouched; a superseded
+refresh writing nothing at all cannot strand the app on the loading spinner here, because the
+authentication path itself sets `loading: false`. Four new jsdom cases in `auth/AuthContext.test.tsx`
+— one per authentication path (each holds a refresh open, authenticates, then resolves the stale
+anonymous status and asserts the session stays signed in), plus a non-regression case proving a
+refresh *started after* the sign-in still applies. The three race cases were confirmed to fail
+against the pre-fix provider (`expected 'signed-out' to be 'signed-in:operator'`) by stashing the
+fix and re-running; both P3-4 race tests pass unchanged in the same run.
+**Why:** Issue #83. Pre-existing (predates #82, which scoped itself to the invalidation direction)
+and fail-safe in direction — the failure is being logged *out*, never *in*, so no session is
+presented that the backend hasn't authorized and there is no security edge; it is a UX/correctness
+wart that #82's machinery made closeable in a few lines. Reuses the codebase's guard idiom rather
+than introducing a third pattern, per the issue's scope note.
+**Plan section affected:** none — frontend session-state sequencing only; no schema, API,
+security-model, or job-model change. Companion to the P3-4 entry below
+(`docs/reviews/frontend-review.md` § Priority 3).
+
 ### 2026-07-24 — Post-release — Test-debt back-fill for M19, M20, and M21 (tests only)
 **What changed:** Nothing in the application — this entry records **new tests only**, back-filling
 the three fixes `docs/reviews/STATUS.md` § "Test debt on already-shipped fixes" listed as
