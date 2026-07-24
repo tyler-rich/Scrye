@@ -49,5 +49,5 @@ export function renderWithProviders(
 
 // Re-export the Testing Library surface so tests import everything from one
 // place: `import { renderWithProviders, screen, userEvent } from '../test/render';`
-export { screen, waitFor, within, fireEvent } from '@testing-library/react';
+export { act, screen, waitFor, within, fireEvent } from '@testing-library/react';
 export { default as userEvent } from '@testing-library/user-event';
