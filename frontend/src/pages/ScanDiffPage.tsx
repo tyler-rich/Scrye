@@ -117,7 +117,7 @@ export function ScanDiffPage() {
           variant="subtle"
           size="compact-sm"
           leftSection={<IconArrowLeft size={14} />}
-          onClick={() => navigate('/scans')}
+          onClick={() => void navigate('/scans')}
         >
           Back to history
         </Button>
@@ -143,7 +143,7 @@ export function ScanDiffPage() {
           variant="subtle"
           size="compact-sm"
           leftSection={<IconArrowLeft size={14} />}
-          onClick={() => navigate('/scans')}
+          onClick={() => void navigate('/scans')}
           mb="xs"
         >
           Back to history

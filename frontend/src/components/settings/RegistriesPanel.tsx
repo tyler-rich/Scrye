@@ -151,50 +151,53 @@ export function RegistriesPanel() {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {items.map((r) => (
-              <Table.Tr key={r.id}>
-                <Table.Td>{r.name}</Table.Td>
-                <Table.Td>{r.registry_host}</Table.Td>
-                <Table.Td>{r.auth_type}</Table.Td>
-                <Table.Td>
-                  {r.secret.is_set ? <Text c="dimmed">{r.secret.value}</Text> : '—'}
-                </Table.Td>
-                <Table.Td>
-                  {tests[r.id] ? (
-                    <Badge color={tests[r.id].ok ? 'teal' : 'red'} variant="light">
-                      {tests[r.id].detail}
-                    </Badge>
-                  ) : r.enabled ? (
-                    <Badge variant="light">enabled</Badge>
-                  ) : (
-                    <Badge color="gray" variant="light">
-                      disabled
-                    </Badge>
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  {canManage && (
-                    <Group gap="xs" justify="flex-end">
-                      <ActionIcon
-                        variant="subtle"
-                        aria-label="Test registry"
-                        onClick={() => onTest(r.id)}
-                      >
-                        <IconPlugConnected size={16} />
-                      </ActionIcon>
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        aria-label="Delete registry"
-                        onClick={() => onDelete(r.id)}
-                      >
-                        <IconTrash size={16} />
-                      </ActionIcon>
-                    </Group>
-                  )}
-                </Table.Td>
-              </Table.Tr>
-            ))}
+            {items.map((r) => {
+              const test = tests[r.id];
+              return (
+                <Table.Tr key={r.id}>
+                  <Table.Td>{r.name}</Table.Td>
+                  <Table.Td>{r.registry_host}</Table.Td>
+                  <Table.Td>{r.auth_type}</Table.Td>
+                  <Table.Td>
+                    {r.secret.is_set ? <Text c="dimmed">{r.secret.value}</Text> : '—'}
+                  </Table.Td>
+                  <Table.Td>
+                    {test ? (
+                      <Badge color={test.ok ? 'teal' : 'red'} variant="light">
+                        {test.detail}
+                      </Badge>
+                    ) : r.enabled ? (
+                      <Badge variant="light">enabled</Badge>
+                    ) : (
+                      <Badge color="gray" variant="light">
+                        disabled
+                      </Badge>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {canManage && (
+                      <Group gap="xs" justify="flex-end">
+                        <ActionIcon
+                          variant="subtle"
+                          aria-label="Test registry"
+                          onClick={() => void onTest(r.id)}
+                        >
+                          <IconPlugConnected size={16} />
+                        </ActionIcon>
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          aria-label="Delete registry"
+                          onClick={() => void onDelete(r.id)}
+                        >
+                          <IconTrash size={16} />
+                        </ActionIcon>
+                      </Group>
+                    )}
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
             {items.length === 0 && (
               <Table.Tr>
                 <Table.Td colSpan={6}>

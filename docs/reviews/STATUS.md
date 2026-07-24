@@ -23,21 +23,23 @@ default-branch Dependabot alerts `fix-verification.md` flagged as category-(a).
   `fix-verification.md` §G asserted "none landed without a §14 entry except CON-4"; that check
   only covered the five mid-batch *decisions*, not every merged fix.
 
-Bottom line: **all HIGH and MEDIUM findings are resolved.** Everything still open is
-LOW/INFO — what remains of the frontend "Priority 3" polish batch (never summarized). The two
-backlog stragglers SC-12 (supply-chain build-backend pin) and D5b (latent lint) are resolved in
-#80, and the test debt on the already-shipped M19/M20/M21 fixes was back-filled on 2026-07-24.
+Bottom line: **every finding across all six reports is now resolved — nothing is open at any
+severity.** The two backlog stragglers SC-12 (supply-chain build-backend pin) and D5b (latent lint)
+were resolved in #80; the test debt on the already-shipped M19/M20/M21 fixes was back-filled on
+2026-07-24; and the last open item — P3-8's two deferred TS-strictness flags, the tail of the
+frontend "Priority 3" polish batch (never summarized) — was closed by its dedicated pass on
+2026-07-24. What remains in this file is record-keeping (§2 deferred-by-decision items, §3 the
+resolved ledger, §4 the ARCHIVE §14 back-fill gaps), not work.
 
 ---
 
 ## 1. Remaining work (STILL OPEN — current backlog, severity-ranked)
 
-All open items are **LOW / INFO**. There are **no open HIGH or MEDIUM findings.** This list came
-from the frontend-review **Priority 3** batch (`frontend-review.md` §Priority 3), which was never
-carried into `00-summary.md` and therefore never scheduled. **Most of it is now resolved** (P3-1,
-P3-2, P3-3, P3-4, P3-5, P3-6, P3-7, and P3-8's `as T` casts — see §3); what remains open is
-**P3-8's two TS-strictness flags**, deferred by decision to a dedicated pass (measured scope
-below).
+**Nothing is open.** There are no open HIGH, MEDIUM, LOW, or INFO findings. This list came from the
+frontend-review **Priority 3** batch (`frontend-review.md` §Priority 3), which was never carried
+into `00-summary.md` and therefore never scheduled; it is now fully resolved (P3-1 through P3-8 —
+see §3). The last item, **P3-8's two TS-strictness flags**, was closed by the dedicated pass its
+deferral called for (2026-07-24).
 
 ### LOW (has a correctness/security/reproducibility edge)
 
@@ -45,9 +47,7 @@ _None open — P3-4 (auth-refresh race) resolved; see §3._
 
 ### LOW (UX / accessibility / maintainability)
 
-| ID | Finding | File:line (current) | Source |
-|----|---------|---------------------|--------|
-| P3-8 (partial) | TS strictness residuals. **Resolved:** blind `as T` casts consolidated into a documented `parseResponse<T>` boundary (`api/client.ts`, #batch 2026-07-24). **Deferred to a dedicated pass:** `noUncheckedIndexedAccess` off (measured **14 new TS errors / 6 files**, incl. real `Scanner \| undefined` mismatches) and ESLint not type-aware / no `no-floating-promises` (measured **39 problems** under `recommendedTypeChecked`). Too large (~53 problems / ~10 files) to fold into the polish batch. | `frontend/tsconfig.app.json`, `frontend/eslint.config.js:10` | frontend P3-8 (omitted) |
+_None open — P3-8, the last entry here, is resolved; see §3._
 
 ### TRIVIAL / latent
 
@@ -164,7 +164,8 @@ resolved (#67). One-line index below; full detail lives in the per-report files 
 | P3-5 | Findings table extracted into a `memo`ized `FindingsTable` child keyed only on findings state — tag keystrokes / 2.5 s polls no longer re-render the ≤500 rows (`ScanDetailPage.tsx`) | batch 2026-07-24 |
 | P3-6 | `StatusLoader` wraps loaders in a `role="status"`/`aria-live` region with hidden text (App shell, history, detail, diff, docker-envs); dashboard chart bars given `role="img"` (`components/StatusLoader.tsx`, `Dashboard.tsx`) | batch 2026-07-24 |
 | P3-7 | Severity literals `"red"`/`"orange"` replaced with `SEVERITY_COLOR`; chart uses `var(--mantine-primary-color-filled)` instead of pinned `teal-6` (`Dashboard.tsx`) | batch 2026-07-24 |
-| P3-8 (as-T casts) | Blind `(await response.json()) as T` in `api`/`apiUpload` consolidated into one documented `parseResponse<T>` boundary (FE-2). Strictness-flag portion deferred — see §1. | batch 2026-07-24 |
+| P3-8 (as-T casts) | Blind `(await response.json()) as T` in `api`/`apiUpload` consolidated into one documented `parseResponse<T>` boundary (FE-2). | #81 |
+| P3-8 (strictness flags) | **Resolved — P3-8 is now fully closed.** Both flags on, one commit each. `noUncheckedIndexedAccess` in `tsconfig.app.json`: 14 errors across 5 files, fixed with **no** non-null assertions — `SCANNERS_FOR` retyped to a non-empty tuple `readonly [Scanner, ...Scanner[]]` (closes the two real `Scanner \| undefined` mismatches by encoding the invariant, not asserting it), the per-row `tests[id]` lookup hoisted in `RegistriesPanel`/`NotificationsPanel`, and `ScansPage`'s compare pair destructured. Type-aware ESLint (`recommendedTypeChecked` + `projectService`) in `eslint.config.js`: **30** problems (not the 39 scoped in #81 — `parseResponse<T>` had already retired the `no-unsafe-*` family), all fixed at the call site with **zero `eslint-disable` comments**. All 21 async handlers behind the 25 `no-misused-promises` were read individually and are exhaustively `try/catch`-wrapped, so none were latent unhandled rejections; the 4 `no-floating-promises` are react-router 7 `navigate()` returning `void \| Promise<void>`. No runtime behavior change. | batch 2026-07-24 |
 | SC-14 | `backend/tests/` + `backend/scripts/` excluded from the runtime image via root `.dockerignore` (regression-guarded) — dev-only trees no longer ship on the published scanner image | #77 |
 | SC-12 | Build backend pinned `setuptools==83.0.0` and hash-locked in `requirements.lock` via a PEP 735 `build` group (`uv pip compile --group build`); image builds the app with `--no-deps --no-build-isolation` so it reuses the hash-verified setuptools instead of an unpinned isolated-build fetch — last floating build-time dep closed | #80 |
 | D5b | `test_migrations.py` import ordering made version-stable via `[tool.ruff.lint.isort] known-first-party = ["alembic", "app"]` — pins the local-vs-third-party `alembic` classification so a future ruff bump can't re-sort the block (ruff pin itself intentionally not bumped) | #80 |

@@ -61,8 +61,13 @@ const TARGET_TYPES: { value: TargetType; label: string }[] = [
   { value: 'sbom', label: 'SBOM' },
 ];
 
-/** Scanners permitted per target type (mirrors the backend matrix). */
-const SCANNERS_FOR: Record<TargetType, Scanner[]> = {
+/**
+ * Scanners permitted per target type (mirrors the backend matrix). Typed as a
+ * non-empty tuple so `SCANNERS_FOR[t][0]` is a `Scanner`, not `Scanner | undefined`:
+ * every target type has at least one scanner, and that is the invariant the
+ * "reset to the first allowed scanner" effect below depends on.
+ */
+const SCANNERS_FOR: Record<TargetType, readonly [Scanner, ...Scanner[]]> = {
   image: ['trivy', 'grype'],
   repository: ['trivy'],
   filesystem: ['grype'],
@@ -186,7 +191,7 @@ export function NewScanPage() {
           return;
         }
         const scan = await createSbomScan(sbomFile, 'grype');
-        navigate(`/scans/${scan.id}`);
+        void navigate(`/scans/${scan.id}`);
         return;
       }
 
@@ -215,7 +220,7 @@ export function NewScanPage() {
       }
 
       const scan = await createScan(payload);
-      navigate(`/scans/${scan.id}`);
+      void navigate(`/scans/${scan.id}`);
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : 'Failed to launch scan.');
     } finally {

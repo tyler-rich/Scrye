@@ -183,7 +183,7 @@ export function TrivyPolicyPanel() {
                       variant="subtle"
                       color="red"
                       aria-label="Delete VEX document"
-                      onClick={() => removeVex(v.id)}
+                      onClick={() => void removeVex(v.id)}
                     >
                       <IconTrash size={16} />
                     </ActionIcon>
@@ -246,7 +246,7 @@ export function TrivyPolicyPanel() {
                       variant="subtle"
                       color="red"
                       aria-label="Delete ignore rule"
-                      onClick={() => removeRule(r.id)}
+                      onClick={() => void removeRule(r.id)}
                     >
                       <IconTrash size={16} />
                     </ActionIcon>

@@ -135,7 +135,12 @@ export function LoginPage() {
                 onChange={setCode}
                 aria-label="Authentication code"
               />
-              <Button onClick={submitMfa} loading={submitting} disabled={code.length < 6} fullWidth>
+              <Button
+                onClick={() => void submitMfa()}
+                loading={submitting}
+                disabled={code.length < 6}
+                fullWidth
+              >
                 Verify
               </Button>
               <Button

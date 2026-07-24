@@ -239,7 +239,7 @@ export function BackupsPanel() {
                         variant="subtle"
                         color="red"
                         leftSection={<IconTrash size={14} />}
-                        onClick={() => onDelete(b.id)}
+                        onClick={() => void onDelete(b.id)}
                       >
                         Delete
                       </Button>
