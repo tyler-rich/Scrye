@@ -543,6 +543,37 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-24 — Post-release — P3-4: sequence auth refresh against session invalidation
+**What changed:** `frontend/src/auth/AuthContext.tsx` — `refresh()` wrote the `fetchAuthStatus`
+result into auth state unconditionally, with no sequencing against the `scrye:auth-invalidated`
+event (dispatched by `api/client.ts` on any 401) or against `logout()`. A status request answered
+by the backend *before* the credential was revoked but resolving *after* the invalidation would
+write its stale `user` back, flashing the authenticated shell over the login screen until the next
+401. The provider now enforces the session-lifecycle invariant **a logged-out session is never
+restored by a late-arriving refresh**: a `sessionGeneration` ref is bumped by every invalidation
+(both the 401 event handler and `logout()`, the latter *before* awaiting the request so a refresh
+already in flight is covered); `refresh()` captures the generation before fetching and, if it
+changed by the time the response lands, applies the session-independent facts (`needs_setup`,
+`oidc`, `loading: false`) but forces `user: null`. Keeping the non-identity fields is what stops an
+invalidation during the initial load from stranding the app on the loading spinner. `refresh()`
+additionally takes a token from the existing `createLatestGuard()` helper (`lib/latest.ts`, the same
+latest-wins guard the history/findings fetches use) so two overlapping refreshes can't resolve out
+of order and clobber each other — an older refresh returns without writing at all, rather than
+writing a logged-out state a newer in-flight refresh is about to contradict. New jsdom test
+`auth/AuthContext.test.tsx` covers both races (invalidation event mid-refresh; `logout()`
+mid-refresh) plus the happy path; both race tests were confirmed to fail against the pre-fix
+provider. `src/test/render.tsx` re-exports `act` so tests keep importing the whole Testing Library
+surface from one place.
+**Why:** P3-4 (frontend review, LOW with a correctness/security edge) — the last open finding in
+the Priority-3 batch, tracked in `docs/reviews/STATUS.md` § 1. Low likelihood and self-healing, but
+it is a session-lifecycle defect: the UI can present an authenticated shell for a session the
+backend has already ended. A generation counter was chosen over aborting the request because the
+invalidation must also invalidate a response that has *already* been received but not yet applied,
+which an `AbortController` does not cover; it reuses the codebase's existing guard idiom rather
+than introducing a new one.
+**Plan section affected:** none — frontend session-state sequencing only; no schema, API,
+security-model, or job-model change. `docs/reviews/frontend-review.md` P3-4.
+
 ### 2026-07-24 — Post-release — Frontend Priority-3 polish batch (P3-1, P3-2, P3-5, P3-6, P3-7, P3-8)
 **What changed:** Worked the frontend-review "Priority 3" backlog (`docs/reviews/frontend-review.md`
 §Priority 3; tracked in `docs/reviews/STATUS.md`), one commit per finding:

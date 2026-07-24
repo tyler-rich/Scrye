@@ -35,15 +35,13 @@ and D5b (latent lint) are resolved in #80.
 All open items are **LOW / INFO**. There are **no open HIGH or MEDIUM findings.** This list came
 from the frontend-review **Priority 3** batch (`frontend-review.md` §Priority 3), which was never
 carried into `00-summary.md` and therefore never scheduled. **Most of it is now resolved** (P3-1,
-P3-2, P3-3, P3-5, P3-6, P3-7, and P3-8's `as T` casts — see §3); what remains open is **P3-4**
-(auth-refresh race) and **P3-8's two TS-strictness flags**, deferred by decision to a dedicated
-pass (measured scope below).
+P3-2, P3-3, P3-4, P3-5, P3-6, P3-7, and P3-8's `as T` casts — see §3); what remains open is
+**P3-8's two TS-strictness flags**, deferred by decision to a dedicated pass (measured scope
+below).
 
 ### LOW (has a correctness/security/reproducibility edge)
 
-| ID | Finding | File:line (current) | Source |
-|----|---------|---------------------|--------|
-| P3-4 | Auth refresh can resurrect a logged-out session (narrow race) — `refresh()` unconditionally replaces auth state with no sequencing vs. `scrye:auth-invalidated` | `frontend/src/auth/AuthContext.tsx:44-57` | frontend P3-4 (omitted) |
+_None open — P3-4 (auth-refresh race) resolved; see §3._
 
 ### LOW (UX / accessibility / maintainability)
 
@@ -155,6 +153,7 @@ resolved (#67). One-line index below; full detail lives in the per-report files 
 | P3-1 | History filters/date-range/sort/page mirrored to `useSearchParams` (read from URL on mount, written back with `replace`) — Back/bookmark/share now restore the filtered view (`ScansPage.tsx`) | batch 2026-07-24 |
 | P3-2 | Compare selection reconciled against the current rows on every reload — a filtered/paged/deleted scan is dropped, killing the phantom "1/2 selected" and the deleted-scan diff 404 (`ScansPage.tsx`) | batch 2026-07-24 |
 | P3-3 | Credential/filter option-fetch failures surfaced (warning + retry) instead of silently emptying the pickers — closes the "looks like none configured → scan private target anonymously" path (`NewScanPage.tsx`, `ScansPage.tsx`) | #77 |
+| P3-4 | Auth refresh sequenced against session invalidation — a `sessionGeneration` ref bumped by the `scrye:auth-invalidated` handler and by `logout()`, checked by `refresh()` across its `await`, so a late-landing status response can no longer restore `user`; `refresh()` also takes a `createLatestGuard()` token so overlapping refreshes can't resolve out of order (`auth/AuthContext.tsx`, jsdom test) | #82 |
 | P3-5 | Findings table extracted into a `memo`ized `FindingsTable` child keyed only on findings state — tag keystrokes / 2.5 s polls no longer re-render the ≤500 rows (`ScanDetailPage.tsx`) | batch 2026-07-24 |
 | P3-6 | `StatusLoader` wraps loaders in a `role="status"`/`aria-live` region with hidden text (App shell, history, detail, diff, docker-envs); dashboard chart bars given `role="img"` (`components/StatusLoader.tsx`, `Dashboard.tsx`) | batch 2026-07-24 |
 | P3-7 | Severity literals `"red"`/`"orange"` replaced with `SEVERITY_COLOR`; chart uses `var(--mantine-primary-color-filled)` instead of pinned `teal-6` (`Dashboard.tsx`) | batch 2026-07-24 |
