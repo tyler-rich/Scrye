@@ -39,18 +39,24 @@ ignore:
   # (https://github.com/tyler-rich/Scrye/issues/52) and docs/ARCHIVE.md §14
   # (2026-07-25, the 3.13 → 3.14 runtime bump).
   #
-  # The fix merged to both the 3.13 and 3.14 maintenance branches but is not yet in
-  # any released point version, so it closes on the next 3.14.x point release.
-  # CVE-2026-15308 (HIGH) is the only one that trips --fail-on high; CVE-2026-12003
-  # is a reported-but-non-gating MEDIUM, waived here for a clean report.
+  # Group A — fix merged to both the 3.13 and 3.14 maintenance branches but not yet
+  # in any released point version, so it closes on the next 3.14.x point release.
+  # CVE-2026-15308 (HIGH) is the only one of the four that trips --fail-on high; the
+  # rest are reported-but-non-gating Mediums, waived here for a clean report.
   # REVIEW BY 2026-10-25 (covers the next 1-2 CPython point releases at their
   # ~2-month cadence, plus Grype-DB refresh lag on the backport).
   - vulnerability: CVE-2026-15308   # html.parser quadratic-complexity CPU DoS (HIGH)
   - vulnerability: CVE-2026-12003   # getpath.py in-tree search-path fallback (MEDIUM)
   #
-  # CVE-2025-15366 / CVE-2025-15367 (imaplib/poplib command injection, both MEDIUM)
-  # were waived here while Scrye ran on 3.13: upstream declined to backport them to
-  # that line, making them permanently unfixable there. Python 3.14.6 carries both
-  # fixes, so the waivers were REMOVED with the 3.14 bump rather than narrowed. If
-  # either reappears in the dogfood report, that is a real regression — investigate,
-  # do not re-add the waiver.
+  # Group B — upstream declined the backport to 3.10 THROUGH 3.14; fixed only in
+  # 3.15+. These were expected to clear when the runtime moved to 3.14 — both the
+  # 3.14 scoping doc and issue #52's resolution-trigger line claimed 3.14.6 already
+  # carried the fixes. It does not: the CI dogfood scan still reports them against
+  # interpreter 3.14.6 with `FIXED IN 3.15.0a6`, and reading 3.14.6's own stdlib
+  # confirms it — `imaplib._command()` and `poplib._putcmd()` still concatenate
+  # arguments onto the wire with no CRLF/control-character validation. So they are
+  # unfixable on 3.14 for exactly the reason they were unfixable on 3.13, and the
+  # waivers stay. REVIEW when a 3.15 upgrade is on the table; there is no earlier
+  # trigger. See docs/ARCHIVE.md §14 (2026-07-25) for the full correction.
+  - vulnerability: CVE-2025-15366   # imaplib command injection (MEDIUM)
+  - vulnerability: CVE-2025-15367   # poplib command injection (MEDIUM)

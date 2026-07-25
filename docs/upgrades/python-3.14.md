@@ -6,12 +6,20 @@
 > did not anticipate (`sqlalchemy`, `ruff`), the pydantic compatibility-pass result, and the
 > `black` target-version deviation — see `docs/ARCHIVE.md` §14, entry dated **2026-07-25**.
 >
-> **Cross-references:** tracking issue [#52](https://github.com/tyler-rich/Scrye/issues/52)
-> (the CPython interpreter CVEs this upgrade resolves — CVE-2025-15366 and CVE-2025-15367 are
-> cleared; CVE-2026-15308 and CVE-2026-12003 remain waived, as predicted below) and the
+> **⚠️ The "Why this upgrade exists" premise below is WRONG — read this first.** This document
+> asserts that "Python 3.14.6 already carries both fixes" for CVE-2025-15366 and CVE-2025-15367.
+> It does not. Upstream declined the backport to **3.10 through 3.14**, not just to 3.13, so both
+> are fixed only in 3.15+. The CI dogfood scan reports them against interpreter 3.14.6 with
+> `FIXED IN 3.15.0a6`, and 3.14.6's own `imaplib`/`poplib` confirm the fix is absent. **This
+> upgrade therefore cleared none of the four tracked CPython CVEs**; all four remain waived.
+> Everything else in the scoping — the 3.14.6 GC floor, the dependency blockers, the validation
+> plan — held up. See `docs/ARCHIVE.md` §14 (2026-07-25) for the correction.
+>
+> **Cross-references:** tracking issue [#52](https://github.com/tyler-rich/Scrye/issues/52) and the
 > `docs/ARCHIVE.md` §14 entry dated 2026-07-13 (the decision to defer 3.14 to this project).
 >
-> Everything below is the scoping as written on 2026-07-13, preserved unedited.
+> Everything below is the scoping as written on 2026-07-13, preserved unedited — including the
+> incorrect CVE premise, so the error stays visible rather than silently rewritten.
 
 ## Why this upgrade exists
 

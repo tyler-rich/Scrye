@@ -57,9 +57,10 @@ These were decided and are not open for re-litigation during the build:
 7. **Backend runtime:** **Python 3.14** (floor **3.14.6** — never 3.14.0–3.14.4, whose
    incremental GC leaked resident memory in long-running servers and was reverted in 3.14.5).
    (Originally locked to Python 3.12; revised to 3.13 in Phase 6 to resolve Grype-flagged CPython
-   interpreter CVEs whose fixes are only available in 3.13+; revised again to 3.14 post-v1 to
-   resolve CVE-2025-15366 / CVE-2025-15367, which upstream declined to backport to the 3.13 line
-   — see § Deviations for the full rationale of both bumps.)
+   interpreter CVEs whose fixes are only available in 3.13+; revised again to 3.14 post-v1. Note
+   that the second bump did **not** deliver the CVE clearance it was scoped for — CVE-2025-15366 /
+   CVE-2025-15367 are unfixable on 3.14 too — see § Deviations for the full rationale of both bumps
+   and that correction.)
 
 ---
 
@@ -611,16 +612,27 @@ parenthesized form is kept; the reasoning is inline in `pyproject.toml` so it do
 oversight. ruff's target-version gates only which lint rules apply and emits no syntax of its own, so
 it does track the real runtime floor at `py314`.
 
-**CVE outcome (issue #52).** CVE-2025-15366 and CVE-2025-15367 (imaplib/poplib command injection,
-both MEDIUM) were **permanently unfixable on 3.13** — upstream explicitly declined the backport, and
-3.15+ was the only fixed line. 3.14.6 carries both fixes, so their `ci/grype.yaml` waivers were
-**removed outright rather than narrowed**, with a note that a reappearance is a real regression, not
-grounds to re-add. CVE-2026-15308 (HIGH, `html.parser` quadratic-complexity CPU DoS) and
-CVE-2026-12003 (MEDIUM, `getpath.py` in-tree search-path fallback) are **unchanged by this move** and
-their waivers remain: the fix is merged to both the 3.13 and 3.14 maintenance branches but is not in
-any released point version, so it closes on the next 3.14.x point release exactly as it would have on
-the next 3.13.x. Their review date moves to 2026-10-25 (one to two CPython point releases at the
-~2-month cadence, plus Grype-DB refresh lag). Net: the waiver list halves, four entries to two.
+**CVE outcome (issue #52) — the scoping doc's central premise turned out to be wrong, and this
+upgrade clears none of the four CVEs.** Both `docs/upgrades/python-3.14.md` and issue #52's
+resolution-trigger line asserted that **Python 3.14.6 already carries the CVE-2025-15366 /
+CVE-2025-15367 fixes** (imaplib/poplib command injection, both MEDIUM), making "move off the 3.13
+line" the practical way to clear them — that was the stated reason this upgrade project existed. It
+is not true. The waivers were removed on that basis, and the CI dogfood scan on the upgrade PR
+immediately reported both back against interpreter **3.14.6** with `FIXED IN 3.15.0a6`. Reading
+3.14.6's own stdlib confirms the scanner rather than the doc: `imaplib._command()` and
+`poplib._putcmd()` still concatenate arguments straight onto the wire with no CRLF/control-character
+validation. Issue #52 in fact contradicted itself — its Group B paragraph correctly records that
+upstream declined the backport to "3.10–3.14", which *includes* 3.14, while its resolution-trigger
+line said the 3.14 upgrade would close them. The Group B paragraph was right. **Both waivers were
+restored**, retargeted at 3.14 with the corrected rationale and no review trigger earlier than a 3.15
+upgrade. CVE-2026-15308 (HIGH, `html.parser` quadratic-complexity CPU DoS) and CVE-2026-12003
+(MEDIUM, `getpath.py` in-tree search-path fallback) are unchanged by the move, exactly as the doc did
+correctly predict: merged to both the 3.13 and 3.14 maintenance branches, in no released point
+version, closing on the next 3.14.x just as they would have on the next 3.13.x. Their review date
+moves to 2026-10-25. Net: the waiver list is **unchanged at four entries**, and the security
+justification for this bump did not materialize — what remains is staying current on a supported
+interpreter line ahead of 3.13's EOL, plus the dependency currency the move forced. Whether that
+alone justifies the change is a call for the maintainer, not something this entry should paper over.
 
 **Validation.** The full backend suite — **579 passed, 3 skipped** — runs green on a genuine CPython
 **3.14.6** unpacked from the same `python:3.14-slim-bookworm` digest the image pins, against the

@@ -15,11 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that let resident memory grow several-fold in long-running servers, reverted in
   3.14.5. Native (non-container) development now needs Python 3.14.
 
-  This clears **CVE-2025-15366** and **CVE-2025-15367** (imaplib/poplib command
-  injection), which were permanently unfixable on 3.13 — upstream declined to
-  backport them — and their dogfood-scan waivers are removed. **CVE-2026-15308**
-  and **CVE-2026-12003** are unaffected by the move and stay waived until the next
-  CPython point release; see issue #52.
+  **No interpreter CVE is cleared by this move.** It was scoped on the premise
+  that 3.14.6 carried the **CVE-2025-15366** / **CVE-2025-15367** (imaplib/poplib
+  command injection) fixes; it does not — upstream declined the backport to 3.10
+  through 3.14, so they remain unfixable until 3.15, the same as on 3.13.
+  **CVE-2026-15308** and **CVE-2026-12003** were already known to be unaffected by
+  the move. All four stay waived in the dogfood scan; see issue #52.
 
   Dependencies bumped for 3.14: `pydantic` 2.10.4 → 2.13.4, `uvicorn[standard]`
   0.34.0 → 0.51.0, `sqlalchemy` 2.0.36 → 2.0.51, and a new explicit
