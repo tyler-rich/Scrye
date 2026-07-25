@@ -3072,3 +3072,45 @@ uniform shape.
 `docs/ROADMAP.md` § Backend structural cleanup loses its list-envelope half; the four-secret-CRUD-
 router consolidation remains open. `docs/reviews/STATUS.md` moves L13 / APIR-8 out of § 2 "Deferred
 by decision". `CONTRIBUTING.md` gains § API conventions; `CHANGELOG.md` records the contract change.
+
+### 2026-07-25 — Post-v1 — Socket-proxy follow-ups: API-version bound and `DOCKER_GID` blast radius documented (docs only)
+**What changed:** Two comment/doc-only follow-ups to the 2026-07-24 wollomatic migration (#63). No
+behavior change — `docker/docker-compose.yml`'s `-allowGET` value, the sidecar's option set, and the
+application are all byte-for-byte unchanged in effect.
+
+**1. The allowlist's two-digit API-version bound is now discoverable.** The pattern
+`(/v1\.[0-9]{1,2})?/images/json` accepts `v1.0`–`v1.99`. The Engine API is ~v1.51 today, so this is
+years of headroom, but the bound is hard rather than open: at v1.100 a client sending
+`/v1.100/images/json` would stop matching and image listing would fail with a **403** — which reads
+as a broken allowlist, not as a version-range issue, and would cost real debugging time to trace
+back to a quantifier. A comment above the flag now states the bound, the failure it produces, and
+the fix (widen to `{1,3}` *and* update the matching expectation in
+`backend/tests/test_compose_hardening.py`). The regex was **deliberately not widened** — the tight
+pattern is the security property; only its limits needed to be written down.
+
+**2. The wrong-`DOCKER_GID` failure mode is confirmed and documented.** The 2026-07-24 entry noted
+that a wrong GID "surfaces as a socket permission error at proxy start" but never said what that
+does to the *rest* of the stack — the question an operator actually has. Verified against the
+Compose file rather than assumed:
+
+- **No `depends_on` exists anywhere in `docker/docker-compose.yml`** (no service, in any profile,
+  declares one). So the `scrye` container neither waits on the proxy at startup nor is torn down
+  when it fails; there is no `condition: service_healthy` gate to block on.
+- The proxy's `healthcheck` is consumed by **nothing but itself** — no other service reads it, so an
+  unhealthy proxy cannot hold anything back.
+- `restart: unless-stopped` keeps the sidecar retrying on its own; the failure stays inside that one
+  container.
+- The service is `profiles: ["docker-env"]`, so it is opt-in to begin with.
+- App-side, `docker_proxy.list_images()` raises `DockerProxyError`, which
+  `backend/app/api/docker_environments.py` maps to a **502 Bad Gateway** on that one endpoint.
+  Scans, history, schedules, reports, and auth are untouched.
+
+Net: a permission error at proxy start means **"docker-env is unavailable"**, not "Scrye is broken."
+That is now a paragraph in the README's `DOCKER_GID` note (§ Configuration), so an operator reads it
+where they set the variable. Nothing was changed to make this true — the configuration already had
+this property; it just wasn't written down.
+**Why:** Both are latent-surprise removal on the highest-risk service in the stack. Each would
+otherwise be diagnosed from a symptom (a 403; a crash-looping sidecar) that points away from its
+actual cause.
+**Plan section affected:** none. Docs and a Compose comment only — no schema, API-contract,
+security-model, job-model, or auth change, and no change to the allowlist itself.
