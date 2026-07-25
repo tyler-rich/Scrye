@@ -1,15 +1,17 @@
 # Upgrade scoping — Python 3.13 → 3.14
 
-> **Status: planned, not started. This is a handoff/scoping document — implement nothing from it
-> in the session that created it.** It exists so a future, deliberately-scoped upgrade session has
-> the full picture without re-deriving it.
+> **Status: DONE (2026-07-25). Historical — kept as the record of how the upgrade was scoped, not
+> as live guidance.** The runtime now runs on Python 3.14.6; locked decision §2 / §0.7 was revised
+> accordingly. For what was actually implemented — including the two dependency bumps this document
+> did not anticipate (`sqlalchemy`, `ruff`), the pydantic compatibility-pass result, and the
+> `black` target-version deviation — see `docs/ARCHIVE.md` §14, entry dated **2026-07-25**.
 >
 > **Cross-references:** tracking issue [#52](https://github.com/tyler-rich/Scrye/issues/52)
-> (the CPython interpreter CVEs this upgrade eventually resolves) and `docs/ARCHIVE.md` §14 entry
-> dated 2026-07-13 (the decision to stay on 3.13 for now and defer 3.14 to this project). Moving
-> the runtime is a **revision of locked decision §2 / §0.7** — per CLAUDE.md § When to ask vs.
-> decide, it must be confirmed with the user before implementation, and the change must update
-> CLAUDE.md §2 and add a new `docs/ARCHIVE.md` §14 entry.
+> (the CPython interpreter CVEs this upgrade resolves — CVE-2025-15366 and CVE-2025-15367 are
+> cleared; CVE-2026-15308 and CVE-2026-12003 remain waived, as predicted below) and the
+> `docs/ARCHIVE.md` §14 entry dated 2026-07-13 (the decision to defer 3.14 to this project).
+>
+> Everything below is the scoping as written on 2026-07-13, preserved unedited.
 
 ## Why this upgrade exists
 

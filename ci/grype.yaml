@@ -15,7 +15,7 @@
 #
 # NOTE: the base-image CPython interpreter binary is NOT blanket-excluded — it is
 # scanned and gated like everything else. Specific interpreter CVEs that are
-# unfixable on the current 3.13.x line are waived individually below, each with a
+# unfixable on the current 3.14.x line are waived individually below, each with a
 # review date and a tracking issue, rather than by excluding the binary wholesale.
 #
 # To triage a genuinely-fixable finding that cannot be resolved immediately, add
@@ -33,22 +33,24 @@ ignore:
   - package:
       location: "**/usr/local/bin/syft"
 
-  # ── CPython interpreter-binary CVEs on Python 3.13 — accepted risk ──────────────
-  # Scrye stays on Python 3.13; the interpreter binary in python:3.13-slim-bookworm
-  # (3.13.14, current latest 3.13.x) carries these. Tracked in issue #52
+  # ── CPython interpreter-binary CVEs on Python 3.14 — accepted risk ──────────────
+  # The interpreter binary in python:3.14-slim-bookworm (3.14.6, current latest
+  # 3.14.x) carries these. Tracked in issue #52
   # (https://github.com/tyler-rich/Scrye/issues/52) and docs/ARCHIVE.md §14
-  # (2026-07-13). The 3.14 move is a separate scoped project (docs/upgrades/
-  # python-3.14.md). Of the four, only CVE-2026-15308 (HIGH) trips --fail-on high;
-  # the rest are reported-but-non-gating Mediums, waived here for a clean report.
+  # (2026-07-25, the 3.13 → 3.14 runtime bump).
   #
-  # Group A — fix merged to the 3.13 maintenance branch, awaiting the next 3.13.x
-  # point release. REVIEW BY 2026-10-13 (covers the next 1-2 CPython point releases
-  # at their ~2-month cadence, plus Grype-DB refresh lag on the backport).
+  # The fix merged to both the 3.13 and 3.14 maintenance branches but is not yet in
+  # any released point version, so it closes on the next 3.14.x point release.
+  # CVE-2026-15308 (HIGH) is the only one that trips --fail-on high; CVE-2026-12003
+  # is a reported-but-non-gating MEDIUM, waived here for a clean report.
+  # REVIEW BY 2026-10-25 (covers the next 1-2 CPython point releases at their
+  # ~2-month cadence, plus Grype-DB refresh lag on the backport).
   - vulnerability: CVE-2026-15308   # html.parser quadratic-complexity CPU DoS (HIGH)
   - vulnerability: CVE-2026-12003   # getpath.py in-tree search-path fallback (MEDIUM)
   #
-  # Group B — upstream declined the backport to 3.13; fixed only in 3.15+, so these
-  # close only when the 3.14 upgrade lands. REVIEW BY 2027-01-13 (tied to the 3.14
-  # upgrade project horizon, a larger scoped effort with no committed date).
-  - vulnerability: CVE-2025-15366   # imaplib command injection (MEDIUM)
-  - vulnerability: CVE-2025-15367   # poplib command injection (MEDIUM)
+  # CVE-2025-15366 / CVE-2025-15367 (imaplib/poplib command injection, both MEDIUM)
+  # were waived here while Scrye ran on 3.13: upstream declined to backport them to
+  # that line, making them permanently unfixable there. Python 3.14.6 carries both
+  # fixes, so the waivers were REMOVED with the 3.14 bump rather than narrowed. If
+  # either reappears in the dogfood report, that is a real regression — investigate,
+  # do not re-add the waiver.

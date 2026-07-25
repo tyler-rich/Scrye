@@ -39,10 +39,10 @@ jobs:
           # in .git/config for later steps (SC-11).
           persist-credentials: false
 
-      - name: Set up Python 3.13
+      - name: Set up Python 3.14
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
           cache-dependency-path: backend/pyproject.toml
 
@@ -69,10 +69,10 @@ jobs:
       - name: Check requirements.lock is in sync with pyproject.toml
         run: |
           pip install uv==0.8.17
-          uv pip compile pyproject.toml --group build --generate-hashes --python-version 3.13 \
+          uv pip compile pyproject.toml --group build --generate-hashes --python-version 3.14 \
             --output-file requirements.lock --quiet
           if ! git diff --exit-code requirements.lock; then
-            echo "::error::requirements.lock is out of sync with pyproject.toml. Regenerate it with: uv pip compile pyproject.toml --group build --generate-hashes --python-version 3.13 --output-file requirements.lock" >&2
+            echo "::error::requirements.lock is out of sync with pyproject.toml. Regenerate it with: uv pip compile pyproject.toml --group build --generate-hashes --python-version 3.14 --output-file requirements.lock" >&2
             exit 1
           fi
 
@@ -229,10 +229,11 @@ jobs:
             anchore/grype:v0.115.0@sha256:decd87500a90c1e4faa1706f77b0b2cbc1d2f9364e976f1898ce9037de09cc3a docker-archive:/image.tar -o table || true
 
       # Grype gate. Excludes only the bundled trivy/grype/syft binaries (see the
-      # Trivy gate note above); the base-image CPython interpreter is no longer
-      # excluded now that Scrye runs on Python 3.13, whose current patch release
-      # carries the interpreter-CVE fixes. Trivy's OS-aware scan also gates the
-      # base image. See docs/ARCHIVE.md § Deviations.
+      # Trivy gate note above); the base-image CPython interpreter is scanned and
+      # gated like everything else, with individual unfixable interpreter CVEs
+      # waived by ID in ci/grype.yaml rather than the binary being excluded
+      # wholesale. Trivy's OS-aware scan also gates the base image. See
+      # docs/ARCHIVE.md § Deviations.
       - name: Grype — gate on fixable High+ (excl. bundled scanners)
         run: |
           docker run --rm \

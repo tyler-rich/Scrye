@@ -136,7 +136,13 @@ RUN set -eux; \
 
 
 # --- Stage 3: build the Python virtualenv ------------------------------------
-FROM python:3.13-slim-bookworm@sha256:fcbd8dfc2605ba7c2eca646846c5e892b2931e41f6227985154a596f26ab8ed7 AS backend-builder
+# Python 3.14.6+ only — NEVER 3.14.0 through 3.14.4. Those releases shipped an
+# incremental GC whose work estimate could go negative, so a long-running server
+# never cleared its cyclic-garbage backlog and resident memory grew several-fold.
+# It was reverted in 3.14.5, restoring 3.13's generational GC; 3.14.6 is the first
+# fully-safe release after the revert. The digest below is 3.14.6-slim-bookworm —
+# when bumping it, re-check that the new tag is 3.14.6 or later.
+FROM python:3.14-slim-bookworm@sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30 AS backend-builder
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build/backend
 
@@ -174,7 +180,8 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
 
 
 # --- Final stage: minimal runtime image --------------------------------------
-FROM python:3.13-slim-bookworm@sha256:fcbd8dfc2605ba7c2eca646846c5e892b2931e41f6227985154a596f26ab8ed7 AS runtime
+# Same 3.14.6+ digest as the builder stage above — see the GC note there.
+FROM python:3.14-slim-bookworm@sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30 AS runtime
 
 # ca-certificates: scanner DB downloads + TLS. curl: container HEALTHCHECK.
 # git: authenticated clone of generic-host private repos into tmpfs, so the

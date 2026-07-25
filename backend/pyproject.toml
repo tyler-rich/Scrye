@@ -2,7 +2,7 @@
 name = "scrye"
 version = "0.1.0"
 description = "Self-hosted, browser-based web UI unifying the Trivy and Grype scanners."
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 license = { text = "MIT" }
 authors = [{ name = "Scrye contributors" }]
 
@@ -13,10 +13,20 @@ dependencies = [
     # Pinned explicitly (a FastAPI transitive dep) to the version that fixes
     # CVE-2025-62727 / CVE-2026-48818 / CVE-2026-54283; FastAPI 0.139 allows it.
     "starlette==1.3.1",
-    "uvicorn[standard]==0.34.0",
-    "pydantic==2.10.4",
+    # 0.38.0 is where official Python 3.14 support landed (and where the bundled
+    # uvloop/httptools extras are validated for it); 0.51.0 is the current release.
+    "uvicorn[standard]==0.51.0",
+    # >=2.12 is a hard floor on Python 3.14: the pydantic-core that 2.10.x pins
+    # (2.27.2) publishes no cp314 wheel and does not build from source there.
+    "pydantic==2.13.4",
     "pydantic-settings==2.7.1",
-    "sqlalchemy==2.0.36",
+    # >=2.0.45 is where the cp314 C-extension wheels appear. Below that, pip
+    # silently installs SQLAlchemy's pure-Python `py3-none-any` wheel on 3.14 —
+    # it works, but drops the compiled accelerators.
+    "sqlalchemy==2.0.51",
+    # SQLAlchemy's asyncio support requires greenlet, which it no longer installs
+    # implicitly on every platform. Declare it so the lock always carries it.
+    "greenlet==3.5.4",
     "alembic==1.14.0",
     "argon2-cffi==25.1.0",
     "cryptography==49.0.0",
@@ -30,7 +40,8 @@ dependencies = [
 dev = [
     "pytest==9.0.3",
     "pytest-asyncio==1.4.0",
-    "ruff==0.8.6",
+    # 0.8.6 rejects `target-version = "py314"` outright (py313 is its ceiling).
+    "ruff==0.16.0",
     "black==26.3.1",
 ]
 
@@ -58,11 +69,18 @@ include = ["app*"]
 
 [tool.black]
 line-length = 100
+# Deliberately one release behind `requires-python`. black's target-version is the
+# oldest interpreter its *output* must parse on, and at py314 it applies PEP 758 —
+# rewriting `except (A, B):` to `except A, B:`. That is valid 3.14 syntax but reads
+# like Python 2's `except (A, B), e:` idiom, so the parenthesized form is kept. See
+# docs/ARCHIVE.md § Deviations (2026-07-25, Python 3.14).
 target-version = ["py313"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+# ruff's target-version only gates which lint rules and autofixes apply; it emits
+# no syntax of its own, so it tracks the real runtime floor.
+target-version = "py314"
 
 [tool.ruff.lint]
 # pycodestyle, pyflakes, isort, pep8-naming, pyupgrade, flake8-bugbear, docstrings.
