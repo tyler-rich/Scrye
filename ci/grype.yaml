@@ -48,15 +48,23 @@ ignore:
   - vulnerability: CVE-2026-15308   # html.parser quadratic-complexity CPU DoS (HIGH)
   - vulnerability: CVE-2026-12003   # getpath.py in-tree search-path fallback (MEDIUM)
   #
-  # Group B — upstream declined the backport to 3.10 THROUGH 3.14; fixed only in
-  # 3.15+. These were expected to clear when the runtime moved to 3.14 — both the
-  # 3.14 scoping doc and issue #52's resolution-trigger line claimed 3.14.6 already
-  # carried the fixes. It does not: the CI dogfood scan still reports them against
+  # Group B — ACCEPTED RISK ON ANY INTERPRETER BELOW 3.15. Not "pending an upgrade":
+  # upstream declined the backport to 3.10 THROUGH 3.14, so these are fixed only in
+  # 3.15+ and no 3.14.x point release will ever clear them. This is a standing
+  # acceptance, not a deferral with a pending action behind it.
+  #
+  # They were expected to clear when the runtime moved to 3.14 — both the 3.14
+  # scoping doc and issue #52's resolution-trigger line claimed 3.14.6 already
+  # carried the fixes. It does not: the CI dogfood scan reports them against
   # interpreter 3.14.6 with `FIXED IN 3.15.0a6`, and reading 3.14.6's own stdlib
   # confirms it — `imaplib._command()` and `poplib._putcmd()` still concatenate
-  # arguments onto the wire with no CRLF/control-character validation. So they are
-  # unfixable on 3.14 for exactly the reason they were unfixable on 3.13, and the
-  # waivers stay. REVIEW when a 3.15 upgrade is on the table; there is no earlier
-  # trigger. See docs/ARCHIVE.md §14 (2026-07-25) for the full correction.
+  # arguments onto the wire with no CRLF/control-character validation.
+  #
+  # REVIEW ANNUALLY — next 2027-07-25. The review is a re-confirmation that the
+  # acceptance still holds (severity unchanged, no in-line fix appeared, Scrye still
+  # doesn't use imaplib/poplib), NOT a prompt to schedule a 3.15 move. A 3.15 upgrade
+  # should be justified on support-lifecycle grounds if and when it happens; per
+  # CLAUDE.md § Dependency hygiene, do not scope an interpreter bump as a reaction to
+  # these two. See docs/ARCHIVE.md §14 (2026-07-25) for the full correction.
   - vulnerability: CVE-2025-15366   # imaplib command injection (MEDIUM)
   - vulnerability: CVE-2025-15367   # poplib command injection (MEDIUM)

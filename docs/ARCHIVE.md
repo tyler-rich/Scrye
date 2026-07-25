@@ -547,6 +547,37 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-25 — Docs/Process — Interpreter CVEs must be verified at the source before a bump is justified on security grounds
+**What changed:** A new standing rule in `CLAUDE.md` § Coding standards § Dependency hygiene:
+scanner output, advisory "fixed in" fields, and this repo's own issue summaries are **evidence, not
+proof**, and none is sufficient on its own to claim that moving the runtime to version X clears
+CVE Y. Before a runtime bump is argued as a security fix, the fix must be confirmed present in the
+target interpreter by reading the relevant stdlib module in that exact version (unpacking the pinned
+base image if needed). Bumps justified on **support-lifecycle, ecosystem, or dependency-currency**
+grounds need no CVE argument at all and are unaffected. `ci/grype.yaml`'s Group B waiver was also
+re-cast in the same pass from a deferral into a **standing acceptance**: CVE-2025-15366 /
+CVE-2025-15367 are accepted risk on **any interpreter below 3.15**, with an **annual** re-confirmation
+review (next 2027-07-25) replacing the old upgrade-tied date, and an explicit note not to scope a 3.15
+move as a reaction to them.
+**Why:** Both interpreter bumps to date were decided from Grype's `FIXED IN` column without anyone
+reading CPython — one unsound method with two different failure modes:
+- **3.12 → 3.13** (2026-07-03) reached the right outcome by luck. The entry justifying it recorded
+  the triggering CVEs' fixes as landing in "3.13+/3.14+/3.15+" — the metadata itself said some were
+  *not* fixed in 3.13 — yet the post-bump scan, with the interpreter exclusion removed, came back
+  clean. Metadata wrong in the pessimistic direction is still wrong; the decision just wasn't
+  punished for it.
+- **3.13 → 3.14** (2026-07-25, the entry below) reached the wrong one. The scoping doc and issue #52's
+  resolution-trigger line both asserted 3.14.6 carried the CVE-2025-15366/-15367 fixes; it does not,
+  and the bump cleared nothing. Issue #52 even held the correct fact — "declined backport to
+  3.10–3.14" — in a different paragraph from the claim it contradicted.
+Worth recording precisely, because the tempting summary ("two bumps, neither resolved its CVEs") is
+**not** what happened and would make the rule easy to dismiss on inspection: the first bump did clear
+what triggered it. What the two share is the method, not the result — which is the actual thing worth
+banning. Source verification is also cheap, as this session showed: unpacking the pinned base image
+and reading two stdlib functions took minutes and settled a question two documents had gotten wrong.
+**Plan section affected:** CLAUDE.md § Coding standards (Dependency hygiene); `ci/grype.yaml`
+(Group B waiver rationale and review cadence); no code, schema, security-model, or job-model change.
+
 ### 2026-07-25 — Post-release — Backend runtime bumped Python 3.13 → 3.14 (locked decision revised)
 **What changed:** The locked backend runtime was revised from **Python 3.13 to Python 3.14** — the
 second interpreter bump, mirroring the 3.12 → 3.13 precedent below (2026-07-03). Executed from the
@@ -629,7 +660,9 @@ upgrade. CVE-2026-15308 (HIGH, `html.parser` quadratic-complexity CPU DoS) and C
 (MEDIUM, `getpath.py` in-tree search-path fallback) are unchanged by the move, exactly as the doc did
 correctly predict: merged to both the 3.13 and 3.14 maintenance branches, in no released point
 version, closing on the next 3.14.x just as they would have on the next 3.13.x. Their review date
-moves to 2026-10-25. Net: the waiver list is **unchanged at four entries**, and the security
+moves to 2026-10-25 — a real trigger, unlike Group B's, which is now an annual re-confirmation of a
+standing acceptance (see the process entry above). Net: the waiver list is **unchanged at four
+entries**, and the security
 justification for this bump did not materialize — what remains is staying current on a supported
 interpreter line ahead of 3.13's EOL, plus the dependency currency the move forced. Whether that
 alone justifies the change is a call for the maintainer, not something this entry should paper over.
