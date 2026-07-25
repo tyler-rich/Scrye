@@ -101,7 +101,7 @@ def test_create_scan_runs_and_persists(client: TestClient, monkeypatch) -> None:
     assert findings["total"] == 1
     assert findings["items"][0]["vuln_id"] == "CVE-2024-9999"
 
-    artifacts = client.get(f"/api/scans/{scan_id}/artifacts").json()
+    artifacts = client.get(f"/api/scans/{scan_id}/artifacts").json()["items"]
     assert len(artifacts) == 1
     assert artifacts[0]["filename"] == "trivy.json"
 
@@ -445,7 +445,7 @@ def test_sbom_upload_scan(client: TestClient, monkeypatch) -> None:
     assert scanner.calls["sbom"]["exists"] is True
 
     # The uploaded SBOM is stored as an input artifact alongside the raw output.
-    artifacts = client.get(f"/api/scans/{scan['id']}/artifacts").json()
+    artifacts = client.get(f"/api/scans/{scan['id']}/artifacts").json()["items"]
     kinds = {a["kind"] for a in artifacts}
     assert "sbom" in kinds and "raw_grype_json" in kinds
 
@@ -480,7 +480,7 @@ def test_generate_sbom_stores_sbom_artifact(client: TestClient, monkeypatch) -> 
         json={"scanner": "trivy", "target": "alpine:3.19", "generate_sbom": True},
     )
     _wait_for_status(client, resp.json()["id"], {"succeeded", "failed"})
-    artifacts = client.get(f"/api/scans/{resp.json()['id']}/artifacts").json()
+    artifacts = client.get(f"/api/scans/{resp.json()['id']}/artifacts").json()["items"]
     sbom_artifacts = [a for a in artifacts if a["kind"] == "sbom"]
     assert len(sbom_artifacts) == 1
     assert sbom_artifacts[0]["filename"] == "sbom.cyclonedx.json"
@@ -534,7 +534,7 @@ def test_delete_scan_purges_findings_artifacts_and_aggregates(
     # Precondition: the scan has findings, a stored artifact on disk, and counts
     # toward the dashboard aggregates.
     assert _count_findings(scan_id) == 1
-    artifacts = client.get(f"/api/scans/{scan_id}/artifacts").json()
+    artifacts = client.get(f"/api/scans/{scan_id}/artifacts").json()["items"]
     assert len(artifacts) == 1
     artifact_dir = config.get_settings().artifacts_dir / str(scan_id)
     assert artifact_dir.is_dir()

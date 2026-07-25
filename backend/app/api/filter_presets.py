@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.history_schemas import FilterPresetIn, FilterPresetOut
+from app.api.pagination import Page, full_page
 from app.auth.deps import AuthContext, require_auth, require_csrf
 from app.db.models import FilterPreset
 from app.db.session import get_db
@@ -28,18 +29,18 @@ def _get_owned_or_404(db: Session, preset_id: int, owner_id: int) -> FilterPrese
     return preset
 
 
-@router.get("", response_model=list[FilterPresetOut])
+@router.get("", response_model=Page[FilterPresetOut])
 def list_presets(
     auth: AuthContext = Depends(require_auth),
     db: Session = Depends(get_db),
-) -> list[FilterPresetOut]:
+) -> Page[FilterPresetOut]:
     """List the authenticated user's saved filter presets."""
     rows = db.scalars(
         select(FilterPreset)
         .where(FilterPreset.owner_id == auth.user.id)
         .order_by(FilterPreset.name)
     ).all()
-    return [FilterPresetOut.model_validate(r) for r in rows]
+    return full_page([FilterPresetOut.model_validate(r) for r in rows])
 
 
 @router.post("", response_model=FilterPresetOut, status_code=status.HTTP_201_CREATED)

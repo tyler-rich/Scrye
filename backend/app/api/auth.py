@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.pagination import Page, full_page
 from app.api.schemas import (
     AuthStatusOut,
     CredentialsIn,
@@ -278,11 +279,11 @@ def change_password(
     db.commit()
 
 
-@router.get("/sessions", response_model=list[SessionOut])
+@router.get("/sessions", response_model=Page[SessionOut])
 def list_own_sessions(
     auth: AuthContext = Depends(require_auth),
     db: Session = Depends(get_db),
-) -> list[SessionOut]:
+) -> Page[SessionOut]:
     """List the caller's live sessions (for review/revocation)."""
     rows = db.scalars(
         select(AuthSession)
@@ -297,7 +298,7 @@ def list_own_sessions(
         view = SessionOut.model_validate(row)
         view.current = row.id == current_session_id
         out.append(view)
-    return out
+    return full_page(out)
 
 
 @router.delete(

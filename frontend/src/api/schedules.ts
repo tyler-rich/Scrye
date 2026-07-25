@@ -1,6 +1,6 @@
 /** API types and calls for scheduled/recurring scans (docs/ARCHIVE.md §4.6). */
 
-import { api } from './client';
+import { api, apiList } from './client';
 import type { Scanner, TargetType, TrivyScannerName, TrivySeverity } from './scans';
 
 export interface ScanSchedule {
@@ -37,7 +37,7 @@ export interface ScanScheduleInput {
   branch?: string | null;
 }
 
-export const listSchedules = () => api<ScanSchedule[]>('/api/scan-schedules');
+export const listSchedules = () => apiList<ScanSchedule>('/api/scan-schedules');
 export const createSchedule = (body: ScanScheduleInput) =>
   api<ScanSchedule>('/api/scan-schedules', { method: 'POST', body });
 export const updateSchedule = (id: number, body: ScanScheduleInput) =>

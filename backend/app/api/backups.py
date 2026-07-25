@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app import __version__
+from app.api.pagination import Page, full_page
 from app.api.schema_types import UtcDatetime
 from app.api.uploads import read_upload_capped
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
@@ -116,14 +117,14 @@ def _backup_filename() -> str:
     return f"scrye-backup-{utcnow().strftime('%Y%m%dT%H%M%S')}{BUNDLE_SUFFIX}"
 
 
-@router.get("", response_model=list[BackupOut])
+@router.get("", response_model=Page[BackupOut])
 def list_backups(
     _: AuthContext = Depends(_admin),
     db: Session = Depends(get_db),
-) -> list[BackupOut]:
+) -> Page[BackupOut]:
     """List stored backups, newest first (admin)."""
     rows = db.scalars(select(Backup).order_by(Backup.created_at.desc())).all()
-    return [BackupOut.model_validate(r) for r in rows]
+    return full_page([BackupOut.model_validate(r) for r in rows])
 
 
 @router.post("", response_model=BackupOut, status_code=status.HTTP_201_CREATED)

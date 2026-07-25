@@ -29,8 +29,8 @@ class TestApiTokenLifecycle:
         assert body["token_prefix"] == body["token"][:14]
         # Listing never includes the plaintext.
         listing = client.get("/api/api-tokens").json()
-        assert len(listing) == 1
-        assert "token" not in listing[0]
+        assert listing["total"] == 1
+        assert "token" not in listing["items"][0]
 
     def test_bearer_token_authenticates(self, client: TestClient) -> None:
         csrf = setup_admin(client)

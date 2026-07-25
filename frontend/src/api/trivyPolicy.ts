@@ -1,6 +1,6 @@
 /** API types and calls for Trivy VEX documents and ignore rules (§4.1/§4.5). */
 
-import { api } from './client';
+import { api, apiList } from './client';
 
 export type VexFormat = 'openvex' | 'cyclonedx' | 'csaf';
 
@@ -40,13 +40,13 @@ export interface IgnoreRuleInput {
   enabled: boolean;
 }
 
-export const listVexDocuments = () => api<VexDocument[]>('/api/trivy/vex-documents');
+export const listVexDocuments = () => apiList<VexDocument>('/api/trivy/vex-documents');
 export const createVexDocument = (body: VexDocumentInput) =>
   api<VexDocument>('/api/trivy/vex-documents', { method: 'POST', body });
 export const deleteVexDocument = (id: number) =>
   api<void>(`/api/trivy/vex-documents/${id}`, { method: 'DELETE' });
 
-export const listIgnoreRules = () => api<IgnoreRule[]>('/api/trivy/ignore-rules');
+export const listIgnoreRules = () => apiList<IgnoreRule>('/api/trivy/ignore-rules');
 export const createIgnoreRule = (body: IgnoreRuleInput) =>
   api<IgnoreRule>('/api/trivy/ignore-rules', { method: 'POST', body });
 export const deleteIgnoreRule = (id: number) =>

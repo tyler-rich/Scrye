@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.pagination import Page, full_page
 from app.api.target_schemas import (
     CredentialOption,
     RegistryCreateIn,
@@ -61,11 +62,11 @@ def _get_or_404(db: Session, registry_id: int) -> Registry:
     return registry
 
 
-@router.get("", response_model=list[RegistryOut])
+@router.get("", response_model=Page[RegistryOut])
 def list_registries(
     _: AuthContext = Depends(_admin),
     db: Session = Depends(get_db),
-) -> list[RegistryOut]:
+) -> Page[RegistryOut]:
     """List configured registries with full metadata (admin only; secrets masked).
 
     Non-secret metadata (host, username) is still credential material, so the
@@ -73,7 +74,7 @@ def list_registries(
     /registries/options`` for id/name selection instead (docs/ARCHIVE.md §14).
     """
     rows = db.scalars(select(Registry).order_by(Registry.name)).all()
-    return [_to_out(r) for r in rows]
+    return full_page([_to_out(r) for r in rows])
 
 
 @router.get("/options", response_model=list[CredentialOption])

@@ -82,8 +82,9 @@ Features and developer-experience investments with a larger surface.
 - **Type-checking in CI.** Add a Python type checker (mypy or pyright) to the CI gate. This
   first needs the existing annotation gaps resolved so the gate lands green rather than red.
 - **Backend structural cleanup.** The four near-identical secret-CRUD routers (registries, git
-  credentials, notification channels, OIDC) and the list-response envelope convention could be
-  consolidated behind shared helpers to cut duplication.
+  credentials, notification channels, OIDC) could be consolidated behind shared helpers to cut
+  duplication. *(The list-response envelope half of this item is done — see `docs/ARCHIVE.md`
+  § Deviations, 2026-07-25, and `CONTRIBUTING.md` § API conventions.)*
 
 ## Longer-term / speculative
 

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.pagination import Page, full_page
 from app.api.schemas import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, NewUserIn, UserOut
 from app.auth import service
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
@@ -36,14 +37,14 @@ class UserUpdateIn(BaseModel):
     )
 
 
-@router.get("", response_model=list[UserOut])
+@router.get("", response_model=Page[UserOut])
 def list_users(
     auth: AuthContext = Depends(_admin),
     db: Session = Depends(get_db),
-) -> list[UserOut]:
+) -> Page[UserOut]:
     """List all user accounts."""
     users = db.scalars(select(User).order_by(User.username)).all()
-    return [UserOut.model_validate(u) for u in users]
+    return full_page([UserOut.model_validate(u) for u in users])
 
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)

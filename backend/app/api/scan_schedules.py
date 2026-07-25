@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.pagination import Page, full_page
 from app.api.scan_schemas import ScanCreateIn
 from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
@@ -136,14 +137,14 @@ def _apply_template(schedule: ScanSchedule, payload: ScanScheduleIn) -> None:
     )
 
 
-@router.get("", response_model=list[ScanScheduleOut])
+@router.get("", response_model=Page[ScanScheduleOut])
 def list_schedules(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
-) -> list[ScanScheduleOut]:
+) -> Page[ScanScheduleOut]:
     """List all scan schedules."""
     rows = db.scalars(select(ScanSchedule).order_by(ScanSchedule.name)).all()
-    return [ScanScheduleOut.model_validate(r) for r in rows]
+    return full_page([ScanScheduleOut.model_validate(r) for r in rows])
 
 
 @router.post("", response_model=ScanScheduleOut, status_code=status.HTTP_201_CREATED)

@@ -31,7 +31,7 @@ class TestScheduleCrud:
         body = resp.json()
         assert body["cron"] == "0 2 * * *"
         assert body["enabled"] is True
-        assert client.get("/api/scan-schedules").json()[0]["name"] == "nightly-nginx"
+        assert client.get("/api/scan-schedules").json()["items"][0]["name"] == "nightly-nginx"
 
     def test_invalid_cron_rejected(self, client: TestClient) -> None:
         csrf = setup_admin(client)

@@ -2853,3 +2853,76 @@ surface, from anywhere on the network" into "one image-listing endpoint, from on
 socket-proxy sidecar; the app still never mounts the socket) — only the implementing image and its
 allowlist mechanism changed. README § Optional sidecars, § Configuration, and § Security model
 updated. No schema, job-model, API-contract, or auth change.
+
+### 2026-07-25 — Post-v1 — List-response envelope standardized behind shared helpers (L13 / APIR-8 deferred half)
+**What changed:** The broad list-envelope standardization that #61 deliberately deferred — #61 was
+held to the single `entries`→`items` rename on `/api/audit` per maintainer direction, with the rest
+tracked in `docs/ROADMAP.md` § Backend structural cleanup. This entry closes that deferral.
+
+Thirteen endpoints that returned bare JSON arrays now return the shared `{total, items}` envelope:
+`GET /api/registries`, `/api/git-credentials`, `/api/users`, `/api/notifications`,
+`/api/scan-schedules`, `/api/api-tokens`, `/api/backups`, `/api/filter-presets`,
+`/api/docker-environments`, `/api/trivy/vex-documents`, `/api/trivy/ignore-rules`,
+`/api/auth/sessions`, and `/api/scans/{id}/artifacts`. They remain unpaginated, so `total` always
+equals `len(items)` today.
+
+**The rule, not a one-off call.** The split was made derivable so a future endpoint's shape doesn't
+need a decision: **persisted resource collections** — rows that grow with usage, where a count is a
+meaningful answer and pagination is a plausible future need — take the envelope; **fixed
+enumerations and live, non-persisted data** stay bare arrays, because `total` there answers a
+question nobody asks. Four endpoints are therefore deliberately *not* enveloped:
+`/api/registries/options` and `/api/git-credentials/options` (id/name value lists feeding a
+`<Select>`), `/api/notifications/events` (a fixed `list[str]` vocabulary), and
+`/api/docker-environments/{id}/images` (live enumeration proxied off a Docker daemon; nothing
+persisted). The rule and the four exceptions are documented in `CONTRIBUTING.md` § API conventions
+so a later review reads them as a decision rather than as drift — the same treatment the other
+deferrals got in `docs/reviews/STATUS.md` § 2.
+
+**Behind shared helpers, per the ROADMAP note.** New `backend/app/api/pagination.py` holds
+`Page[ItemT]` and `full_page(items)`; each route declares `response_model=Page[ThingOut]` and
+returns `full_page([...])` rather than hand-rolling `{"total": …, "items": …}`, so the convention is
+enforced structurally. The three pre-existing envelopes were re-based onto it — `AuditPageOut`,
+`ScanHistoryPage`, and `FindingsPage` are now `Page[T]` subclasses, which collapses the duplicated
+field declarations while **keeping their OpenAPI component names unchanged** (a bare `Page[T]` would
+have renamed them to `Page_AuditEntryOut_` etc. and churned a future generated client for no gain).
+`Page`/`full_page` use PEP 695 type-parameter syntax, which `ruff`'s UP046/UP047 require on the
+3.13 runtime.
+
+**Frontend absorbed the change at the client boundary.** `apiList<T>(path)` in
+`frontend/src/api/client.ts` unwraps the envelope, so the thirteen client functions keep their
+`Promise<Thing[]>` signatures and **no page component or existing test changed** — the SPA's
+page-level tests mock the API-client functions rather than `fetch`, so all 18 frontend test files
+passed untouched. `FindingsPage`/`ScanHistoryPage` in `api/scans.ts` became aliases of a shared
+`Page<T>` interface.
+
+**`GET /api/scans` was left frozen and only deprecated.** It is the one bare array that *is*
+paginated (`limit`/`offset`, no total) and so the one the envelope would materially fix, but its
+shape is a documented frozen contract from Phase P4. Re-shaping it as a side effect of this cleanup
+would have been exactly the kind of scope creep this cycle has avoided elsewhere; if that contract
+should be revisited, it warrants its own scoped decision and its own §14 entry. It now carries
+`deprecated=True` plus a description naming both the replacement (`GET /api/scans/history`) and the
+reason (no total ⇒ a client cannot detect exhaustion), so a reader of the generated client sees the
+why and the where-to-go rather than only a flag. `listScans` in the TS client carries the matching
+`@deprecated` JSDoc. This closes APIR-8 as its own fix direction stated it, rather than substituting
+a larger change for it.
+
+**Contract note (breaking for external consumers).** The thirteen endpoints' response shape changed;
+scripts driving them with an API token must read `.items`. Recorded in `CHANGELOG.md` under
+Unreleased with the endpoint list and an action-required note. The SPA is unaffected.
+
+**Tests:** new `backend/tests/test_list_envelope.py` parametrizes over every enveloped endpoint
+(shape, key set, `total == len(items)`), over the bare-array exceptions (asserting they *stay*
+bare), that `total` tracks rows as a collection grows, that a paginated endpoint's `total` exceeds
+its page, and that `/api/scans` is still a bare array *and* carries the deprecation marker with a
+description naming the replacement. ~34 existing assertions across 15 test modules were updated
+mechanically to read `["items"]`. Backend 582 passed; frontend 58 passed across 18 files; `ruff`,
+`black`, ESLint, Prettier, `tsc --noEmit`, and `vite build` all clean.
+**Why:** L13 / APIR-8 — three envelope conventions coexisted, which made the contract inconsistent
+for API-token consumers and would have made the planned generated client inconsistent too. The
+"unpaginated by design" reasoning that deferred this remains correct and is preserved: nothing here
+paginates that didn't before. It argues against *paginating* these lists, not against giving them a
+uniform shape.
+**Plan section affected:** none structurally (no schema, security-model, job-model, or auth change).
+`docs/ROADMAP.md` § Backend structural cleanup loses its list-envelope half; the four-secret-CRUD-
+router consolidation remains open. `docs/reviews/STATUS.md` moves L13 / APIR-8 out of § 2 "Deferred
+by decision". `CONTRIBUTING.md` gains § API conventions; `CHANGELOG.md` records the contract change.

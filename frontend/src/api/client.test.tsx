@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { api, ApiError, apiUpload, AUTH_INVALIDATED_EVENT } from './client';
+import { api, ApiError, apiList, apiUpload, AUTH_INVALIDATED_EVENT } from './client';
 
 // The client reaches for `document.cookie`, `window`, and `fetch`; jsdom (this
 // `.test.tsx` runs under the jsdom project) supplies the first two, and `fetch`
@@ -52,5 +52,41 @@ describe('api client — P3-8 response handling', () => {
     } finally {
       window.removeEventListener(AUTH_INVALIDATED_EVENT, onInvalidated);
     }
+  });
+});
+
+describe('apiList — L13/APIR-8 list envelope', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('unwraps a {total, items} envelope to the rows', async () => {
+    const items = [{ id: 1 }, { id: 2 }];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { total: 2, items })));
+    await expect(apiList<{ id: number }>('/api/things')).resolves.toEqual(items);
+  });
+
+  it('yields an empty array for an empty collection', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { total: 0, items: [] })));
+    await expect(apiList('/api/things')).resolves.toEqual([]);
+  });
+
+  it('reports a total larger than the page without altering the rows', async () => {
+    // A paginated endpoint's first page: callers of `apiList` only want the
+    // rows, so the extra total must not leak into the returned value.
+    const items = [{ id: 1 }];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { total: 97, items })));
+    await expect(apiList<{ id: number }>('/api/things?limit=1')).resolves.toEqual(items);
+  });
+
+  it('propagates ApiError from a failed list request', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(403, { detail: 'forbidden' })));
+    await expect(apiList('/api/things')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 403,
+    });
   });
 });

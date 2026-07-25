@@ -165,7 +165,7 @@ class TestSessions:
         other = TestClient(client.app)
         other.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PW})
 
-        sessions = client.get("/api/auth/sessions").json()
+        sessions = client.get("/api/auth/sessions").json()["items"]
         assert len(sessions) == 2
         current = [s for s in sessions if s["current"]]
         others = [s for s in sessions if not s["current"]]
@@ -185,7 +185,7 @@ class TestSessions:
         )
         other = TestClient(client.app)
         other.post("/api/auth/login", json={"username": "viewer1", "password": USER_PW})
-        other_id = other.get("/api/auth/sessions").json()[0]["id"]
+        other_id = other.get("/api/auth/sessions").json()["items"][0]["id"]
 
         resp = client.delete(f"/api/auth/sessions/{other_id}", headers={CSRF: csrf})
         assert resp.status_code == 404  # not yours → indistinguishable from absent
