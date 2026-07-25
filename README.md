@@ -492,6 +492,14 @@ have to touch it:
 | `SCRYE_SYFT_BINARY` | `syft` | Optional | Syft binary path/name. |
 | `SCRYE_FRONTEND_DIST_DIR` | `/app/frontend/dist` | Optional | Directory of the built SPA served by FastAPI. |
 
+One Compose-level variable is **not** a Scrye setting and so is not in the table
+above: `DOCKER_GID`. It is read only by `docker/docker-compose.yml`, only when
+the [`docker-env` profile](#docker-socket-proxy--scan-running-images) is enabled,
+and it must be the **host's** docker group id
+(`stat -c '%g' /var/run/docker.sock`) — the socket proxy runs unprivileged and
+needs that group to read the socket. It defaults to `999` (the Debian/Ubuntu
+default), which is a fallback, not a guarantee.
+
 ### The master key
 
 The application **master key** is **never** an environment variable or baked into
@@ -624,24 +632,35 @@ Enable one only if you want the specific capability it adds.
 
 ### `docker-socket-proxy` — "scan running images"
 
-- **Optional.** A **read-only** proxy (`POST=0`) in front of the Docker socket
-  that lets Scrye **enumerate** the images on a Docker host. Point Scrye at it
-  with `SCRYE_DOCKER_PROXY_URL=http://docker-socket-proxy:2375` and register the
+- **Optional.** A **read-only** proxy ([`wollomatic/socket-proxy`](https://github.com/wollomatic/socket-proxy))
+  in front of the Docker socket that lets Scrye **enumerate** the images on a
+  Docker host. Point Scrye at it with
+  `SCRYE_DOCKER_PROXY_URL=http://docker-socket-proxy:2375` and register the
   environment under Settings → Docker environments.
 - **Without it:** you simply don't get the image-enumeration convenience. You can
   still scan **any** image by typing its reference into New scan — nothing else is
   lost.
 - **When you'd want it:** you want to browse images running on a Docker host from
   Scrye's UI and scan them by picking from a list instead of typing references.
+- **What it exposes:** exactly one Docker API endpoint — `GET /images/json`, the
+  image listing, which is the only request Scrye ever makes of it. Every other
+  path (`/containers/…`, `/info`, `/events`, `/version`, `/_ping`, and every
+  non-listing `/images/…` route) is refused with **403**, and every method other
+  than `GET` with **405**, before it reaches the socket. Only the `scrye`
+  container may connect at all.
 - **Residual risk:** this is the **only** place a Docker socket is mounted (read-
-  only). Anyone who can reach the proxy can enumerate images/containers, so enable
-  it deliberately, keep it on the internal network (no host port), and see the
-  [Security model](#security-model).
+  only). Anyone who can reach the proxy can enumerate the host's image list, so
+  enable it deliberately, keep it on the internal network (no host port), and see
+  the [Security model](#security-model).
 
 To enable a sidecar from the bundled Compose file (build-from-source layout):
 
 ```bash
 docker compose -f docker/docker-compose.yml --profile trivy-server up -d
+
+# The socket proxy runs unprivileged, so it needs the host's docker group id to
+# read the socket. Without this it starts but cannot reach the daemon.
+export DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"
 docker compose -f docker/docker-compose.yml --profile docker-env up -d
 ```
 
@@ -781,11 +800,20 @@ only in memory at scan time.
   `XDG_CACHE_HOME`/`HOME`, and `TMPDIR`, so nothing falls back to the read-only
   `$HOME/.cache` or overflows the tmpfs, and the vuln DBs persist across restarts.
 - **Docker socket residual risk.** "Scan running images" uses a **read-only**
-  `docker-socket-proxy` restricted to read endpoints (`POST=0`). The Scrye app
-  **never** mounts `/var/run/docker.sock`; the proxy is the only place the socket
-  is mounted (read-only). Anyone who can reach the proxy can _enumerate_ images
-  and containers, so enable that profile deliberately and keep it on the internal
-  network.
+  `wollomatic/socket-proxy` sidecar. The Scrye app **never** mounts
+  `/var/run/docker.sock`; the proxy is the only place the socket is mounted
+  (read-only), so enable that profile deliberately and keep it on the internal
+  network. The proxy allowlists requests by **regex per HTTP method** and is
+  pinned to the single endpoint Scrye uses, `GET /images/json` — everything else
+  is rejected at the proxy (403 for any other path, 405 for any other method) and
+  never reaches the socket. A `-allowfrom` source allowlist additionally limits
+  connections to the `scrye` container, so nothing else on the Compose network
+  can reach it. The container itself is a from-scratch image (no shell, no
+  package manager) running as uid 65534 with a read-only root filesystem, no
+  writable path at all, `cap_drop: ALL`, and `no-new-privileges`. It needs the
+  host's docker GID (`DOCKER_GID`) purely to read the socket. The residual
+  exposure is therefore the host's **image list** — not container environment
+  variables, logs, or filesystems.
 - **Outbound egress / SSRF.** Admin-configured fetch targets — notification
   transports (webhook/Discord/Matrix/SMTP), the registry connectivity probe, and
   the Docker socket proxy — are resolved and screened before Scrye connects.

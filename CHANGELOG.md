@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Docker socket proxy migrated to `wollomatic/socket-proxy`.** The optional
+  `docker-env` sidecar — the only container in the stack that mounts
+  `/var/run/docker.sock` — now runs `wollomatic/socket-proxy` (a from-scratch Go
+  binary running as uid 65534, digest-pinned) instead of
+  `tecnativa/docker-socket-proxy` (HAProxy on Alpine, running as root). Its
+  request allowlist is pinned to the **single** endpoint Scrye calls,
+  `GET /images/json`; every other path is refused with 403 and every other method
+  with 405 before reaching the socket, and only the `scrye` container may connect.
+  The previous configuration allowed the whole `/images` and `/containers` GET
+  surface — including `/containers/{id}/json` (container environment variables),
+  `/containers/{id}/archive`, and `/containers/{id}/export` — to any client on the
+  Compose network. The sidecar also no longer needs a writable `/run` tmpfs.
+  ([#63](https://github.com/tyler-rich/Scrye/issues/63))
+
+  **Action required if you use the `docker-env` profile:** the proxy now runs
+  unprivileged and must be given the host's docker group id to read the socket —
+  set `DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"` before
+  `docker compose --profile docker-env up`. No Scrye configuration changes;
+  `SCRYE_DOCKER_PROXY_URL` and port 2375 are unchanged.
+
 ## [0.1.0] - 2026-07-09
 
 First release. A self-hosted, browser-based web UI that unifies the
