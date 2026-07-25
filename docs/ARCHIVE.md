@@ -2915,8 +2915,12 @@ Unreleased with the endpoint list and an action-required note. The SPA is unaffe
 bare), that `total` tracks rows as a collection grows, that a paginated endpoint's `total` exceeds
 its page, and that `/api/scans` is still a bare array *and* carries the deprecation marker with a
 description naming the replacement. ~34 existing assertions across 15 test modules were updated
-mechanically to read `["items"]`. Backend 582 passed; frontend 58 passed across 18 files; `ruff`,
-`black`, ESLint, Prettier, `tsc --noEmit`, and `vite build` all clean.
+mechanically to read `["items"]`. On the frontend, `client.test.tsx` covers `apiList` directly,
+including one **client/server seam** case that unwraps a verbatim serialized `full_page()` payload:
+the backend proves it *sends* the envelope and the page-level tests mock the client functions, so
+without it nothing would catch the two halves drifting apart — both suites would stay green while
+the app broke at runtime. Backend 582 passed; frontend 59 passed across 18 files; `ruff`, `black`,
+ESLint, Prettier, `tsc --noEmit`, and `vite build` all clean.
 **Why:** L13 / APIR-8 — three envelope conventions coexisted, which made the contract inconsistent
 for API-token consumers and would have made the planned generated client inconsistent too. The
 "unpaginated by design" reasoning that deferred this remains correct and is preserved: nothing here

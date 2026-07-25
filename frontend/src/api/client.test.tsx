@@ -82,6 +82,47 @@ describe('apiList — L13/APIR-8 list envelope', () => {
     await expect(apiList<{ id: number }>('/api/things?limit=1')).resolves.toEqual(items);
   });
 
+  it('unwraps a real serialized Page from the backend (client/server seam)', async () => {
+    // Verbatim `GET /api/users` payload as `full_page()` emits it
+    // (backend/app/api/pagination.py): exactly the keys `total` and `items`,
+    // with `total == len(items)` for an unpaginated endpoint, and `UserOut`
+    // rows carrying `Z`-suffixed timestamps.
+    //
+    // The backend proves it *sends* this shape (test_list_envelope.py) and the
+    // page-level tests mock the client functions, so without this case nothing
+    // checks that the unwrapping here matches what the server actually emits.
+    const payload = {
+      total: 2,
+      items: [
+        {
+          id: 1,
+          username: 'admin',
+          role: 'admin',
+          is_active: true,
+          mfa_enabled: false,
+          created_at: '2026-07-25T12:00:00Z',
+          last_login_at: '2026-07-25T12:30:00Z',
+        },
+        {
+          id: 2,
+          username: 'viewer',
+          role: 'viewer',
+          is_active: true,
+          mfa_enabled: false,
+          created_at: '2026-07-25T12:05:00Z',
+          last_login_at: null,
+        },
+      ],
+    };
+    // Guard the fixture against becoming an unrealistic stand-in: these are the
+    // invariants `full_page()` constructs by definition.
+    expect(Object.keys(payload).sort()).toEqual(['items', 'total']);
+    expect(payload.total).toBe(payload.items.length);
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, payload)));
+    await expect(apiList('/api/users')).resolves.toEqual(payload.items);
+  });
+
   it('propagates ApiError from a failed list request', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(403, { detail: 'forbidden' })));
     await expect(apiList('/api/things')).rejects.toMatchObject({
