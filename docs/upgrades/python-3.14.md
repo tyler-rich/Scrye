@@ -1,15 +1,25 @@
 # Upgrade scoping — Python 3.13 → 3.14
 
-> **Status: planned, not started. This is a handoff/scoping document — implement nothing from it
-> in the session that created it.** It exists so a future, deliberately-scoped upgrade session has
-> the full picture without re-deriving it.
+> **Status: DONE (2026-07-25). Historical — kept as the record of how the upgrade was scoped, not
+> as live guidance.** The runtime now runs on Python 3.14.6; locked decision §2 / §0.7 was revised
+> accordingly. For what was actually implemented — including the two dependency bumps this document
+> did not anticipate (`sqlalchemy`, `ruff`), the pydantic compatibility-pass result, and the
+> `black` target-version deviation — see `docs/ARCHIVE.md` §14, entry dated **2026-07-25**.
 >
-> **Cross-references:** tracking issue [#52](https://github.com/tyler-rich/Scrye/issues/52)
-> (the CPython interpreter CVEs this upgrade eventually resolves) and `docs/ARCHIVE.md` §14 entry
-> dated 2026-07-13 (the decision to stay on 3.13 for now and defer 3.14 to this project). Moving
-> the runtime is a **revision of locked decision §2 / §0.7** — per CLAUDE.md § When to ask vs.
-> decide, it must be confirmed with the user before implementation, and the change must update
-> CLAUDE.md §2 and add a new `docs/ARCHIVE.md` §14 entry.
+> **⚠️ The "Why this upgrade exists" premise below is WRONG — read this first.** This document
+> asserts that "Python 3.14.6 already carries both fixes" for CVE-2025-15366 and CVE-2025-15367.
+> It does not. Upstream declined the backport to **3.10 through 3.14**, not just to 3.13, so both
+> are fixed only in 3.15+. The CI dogfood scan reports them against interpreter 3.14.6 with
+> `FIXED IN 3.15.0a6`, and 3.14.6's own `imaplib`/`poplib` confirm the fix is absent. **This
+> upgrade therefore cleared none of the four tracked CPython CVEs**; all four remain waived.
+> Everything else in the scoping — the 3.14.6 GC floor, the dependency blockers, the validation
+> plan — held up. See `docs/ARCHIVE.md` §14 (2026-07-25) for the correction.
+>
+> **Cross-references:** tracking issue [#52](https://github.com/tyler-rich/Scrye/issues/52) and the
+> `docs/ARCHIVE.md` §14 entry dated 2026-07-13 (the decision to defer 3.14 to this project).
+>
+> Everything below is the scoping as written on 2026-07-13, preserved unedited — including the
+> incorrect CVE premise, so the error stays visible rather than silently rewritten.
 
 ## Why this upgrade exists
 

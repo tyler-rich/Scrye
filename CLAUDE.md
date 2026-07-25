@@ -24,9 +24,11 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 
 ## Locked decisions — do not re-open
 1. **Name:** Scrye.
-2. **Stack:** React 18 + TS + Vite + **Mantine v7** frontend; **Python 3.13 + FastAPI + Pydantic
-   v2 + SQLAlchemy 2.0 + Alembic** backend; **SQLite**. (Originally locked to Python 3.12;
-   revised to 3.13 in Phase 6 — see `docs/ARCHIVE.md` § Deviations.)
+2. **Stack:** React 18 + TS + Vite + **Mantine v7** frontend; **Python 3.14 + FastAPI + Pydantic
+   v2 + SQLAlchemy 2.0 + Alembic** backend; **SQLite**. The runtime floor is **3.14.6** —
+   never 3.14.0–3.14.4, whose incremental GC leaked resident memory in long-running servers
+   (reverted in 3.14.5). (Originally locked to Python 3.12; revised to 3.13 in Phase 6, then to
+   3.14 post-v1 — see `docs/ARCHIVE.md` § Deviations.)
 3. **Job model:** single-container **in-process async worker** (DB-backed `scans` table +
    concurrency semaphore). **No Redis/arq in v1** — but keep a thin worker interface so it could be
    swapped later.
@@ -222,6 +224,28 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   with `pip --require-hashes`). **Whenever `pyproject.toml` dependencies change, regenerate the lock
   with the pinned `uv pip compile --generate-hashes` command** — uv is build/dev-time only, never in
   the runtime image — and CI fails on lock drift. See `CONTRIBUTING.md` § Backend dependency lock.
+- **Interpreter CVEs: verify against the target version's source before a bump is justified on
+  security grounds.** Scanner output, advisory "fixed in" fields, and this repo's own issue
+  summaries are **evidence, not proof** — none of them is sufficient on its own to claim that
+  moving the runtime to version X clears CVE Y. Before a runtime bump is argued as a security fix,
+  confirm the fix is actually present in the target interpreter: read the relevant stdlib module in
+  that exact version (unpack the pinned base image if needed) and check that the patched behavior is
+  there. If it isn't, the bump does not clear that CVE, whatever the metadata says. This rule is
+  **earned, not theoretical** — both interpreter bumps so far were decided from Grype's `FIXED IN`
+  column without ever reading CPython:
+  - **3.12 → 3.13** (2026-07-03) got the right outcome by luck, not method. The same entry that
+    justified it recorded the triggering CVEs' fixes as landing in "3.13+/**3.14+/3.15+**" — i.e.
+    the metadata itself said some were *not* fixed in 3.13 — yet the post-bump scan came back clean
+    anyway. Metadata that is wrong in the pessimistic direction is still wrong.
+  - **3.13 → 3.14** (2026-07-25) got the wrong outcome. The scoping doc and issue #52's
+    resolution-trigger line both asserted 3.14.6 carried the CVE-2025-15366/-15367 fixes; 3.14.6's
+    `imaplib`/`poplib` show it does not, and the bump cleared **nothing**. Issue #52 even contained
+    the correct fact ("declined backport to 3.10–3.14") in a different paragraph.
+
+  A runtime bump is still perfectly legitimate on **support-lifecycle, ecosystem, or dependency-
+  currency** grounds — those need no CVE argument and are what actually carried the 3.14 move. Just
+  don't sell a bump as a CVE fix that hasn't been verified at the source. See `docs/ARCHIVE.md` §14
+  (2026-07-25) for both cases.
 - **Build performance:** `docker/Dockerfile` changes must preserve the multi-stage build
   boundaries and layer ordering that keep build times down and the final image slim — the
   stage split exists to keep the Node/Python build toolchains out of the runtime image, and

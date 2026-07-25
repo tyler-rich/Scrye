@@ -15,7 +15,7 @@ everyone.
 
 ### Prerequisites
 
-- **Python 3.13**
+- **Python 3.14** (3.14.6 or later)
 - **Node 20+** (the image builds with Node 22)
 - **Docker** + the **Compose v2** plugin (for the integrated run; Buildx for a
   multi-arch image build)
@@ -41,7 +41,7 @@ can run them natively side by side, or use Compose for an integrated stack.
 cd backend
 
 # Create and activate a virtualenv
-python3.13 -m venv .venv
+python3.14 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
 # Install the app plus dev tooling (pinned versions)
@@ -95,7 +95,7 @@ identical command and fails if the committed lock drifts):
 ```bash
 cd backend
 pip install uv==0.8.17     # pin kept in sync with .github/workflows/ci.yml
-uv pip compile pyproject.toml --group build --generate-hashes --python-version 3.13 \
+uv pip compile pyproject.toml --group build --generate-hashes --python-version 3.14 \
   --output-file requirements.lock
 ```
 

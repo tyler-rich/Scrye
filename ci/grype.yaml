@@ -15,7 +15,7 @@
 #
 # NOTE: the base-image CPython interpreter binary is NOT blanket-excluded — it is
 # scanned and gated like everything else. Specific interpreter CVEs that are
-# unfixable on the current 3.13.x line are waived individually below, each with a
+# unfixable on the current 3.14.x line are waived individually below, each with a
 # review date and a tracking issue, rather than by excluding the binary wholesale.
 #
 # To triage a genuinely-fixable finding that cannot be resolved immediately, add
@@ -33,22 +33,38 @@ ignore:
   - package:
       location: "**/usr/local/bin/syft"
 
-  # ── CPython interpreter-binary CVEs on Python 3.13 — accepted risk ──────────────
-  # Scrye stays on Python 3.13; the interpreter binary in python:3.13-slim-bookworm
-  # (3.13.14, current latest 3.13.x) carries these. Tracked in issue #52
+  # ── CPython interpreter-binary CVEs on Python 3.14 — accepted risk ──────────────
+  # The interpreter binary in python:3.14-slim-bookworm (3.14.6, current latest
+  # 3.14.x) carries these. Tracked in issue #52
   # (https://github.com/tyler-rich/Scrye/issues/52) and docs/ARCHIVE.md §14
-  # (2026-07-13). The 3.14 move is a separate scoped project (docs/upgrades/
-  # python-3.14.md). Of the four, only CVE-2026-15308 (HIGH) trips --fail-on high;
-  # the rest are reported-but-non-gating Mediums, waived here for a clean report.
+  # (2026-07-25, the 3.13 → 3.14 runtime bump).
   #
-  # Group A — fix merged to the 3.13 maintenance branch, awaiting the next 3.13.x
-  # point release. REVIEW BY 2026-10-13 (covers the next 1-2 CPython point releases
-  # at their ~2-month cadence, plus Grype-DB refresh lag on the backport).
+  # Group A — fix merged to both the 3.13 and 3.14 maintenance branches but not yet
+  # in any released point version, so it closes on the next 3.14.x point release.
+  # CVE-2026-15308 (HIGH) is the only one of the four that trips --fail-on high; the
+  # rest are reported-but-non-gating Mediums, waived here for a clean report.
+  # REVIEW BY 2026-10-25 (covers the next 1-2 CPython point releases at their
+  # ~2-month cadence, plus Grype-DB refresh lag on the backport).
   - vulnerability: CVE-2026-15308   # html.parser quadratic-complexity CPU DoS (HIGH)
   - vulnerability: CVE-2026-12003   # getpath.py in-tree search-path fallback (MEDIUM)
   #
-  # Group B — upstream declined the backport to 3.13; fixed only in 3.15+, so these
-  # close only when the 3.14 upgrade lands. REVIEW BY 2027-01-13 (tied to the 3.14
-  # upgrade project horizon, a larger scoped effort with no committed date).
+  # Group B — ACCEPTED RISK ON ANY INTERPRETER BELOW 3.15. Not "pending an upgrade":
+  # upstream declined the backport to 3.10 THROUGH 3.14, so these are fixed only in
+  # 3.15+ and no 3.14.x point release will ever clear them. This is a standing
+  # acceptance, not a deferral with a pending action behind it.
+  #
+  # They were expected to clear when the runtime moved to 3.14 — both the 3.14
+  # scoping doc and issue #52's resolution-trigger line claimed 3.14.6 already
+  # carried the fixes. It does not: the CI dogfood scan reports them against
+  # interpreter 3.14.6 with `FIXED IN 3.15.0a6`, and reading 3.14.6's own stdlib
+  # confirms it — `imaplib._command()` and `poplib._putcmd()` still concatenate
+  # arguments onto the wire with no CRLF/control-character validation.
+  #
+  # REVIEW ANNUALLY — next 2027-07-25. The review is a re-confirmation that the
+  # acceptance still holds (severity unchanged, no in-line fix appeared, Scrye still
+  # doesn't use imaplib/poplib), NOT a prompt to schedule a 3.15 move. A 3.15 upgrade
+  # should be justified on support-lifecycle grounds if and when it happens; per
+  # CLAUDE.md § Dependency hygiene, do not scope an interpreter bump as a reaction to
+  # these two. See docs/ARCHIVE.md §14 (2026-07-25) for the full correction.
   - vulnerability: CVE-2025-15366   # imaplib command injection (MEDIUM)
   - vulnerability: CVE-2025-15367   # poplib command injection (MEDIUM)

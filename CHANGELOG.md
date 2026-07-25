@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The backend runtime moved from Python 3.13 to Python 3.14.** The image is
+  built on `python:3.14-slim-bookworm`, digest-pinned to **3.14.6**. The floor is
+  3.14.6 and not lower: 3.14.0–3.14.4 shipped an incremental garbage collector
+  that let resident memory grow several-fold in long-running servers, reverted in
+  3.14.5. Native (non-container) development now needs Python 3.14.
+
+  **No interpreter CVE is cleared by this move.** It was scoped on the premise
+  that 3.14.6 carried the **CVE-2025-15366** / **CVE-2025-15367** (imaplib/poplib
+  command injection) fixes; it does not — upstream declined the backport to 3.10
+  through 3.14, so they remain unfixable until 3.15, the same as on 3.13.
+  **CVE-2026-15308** and **CVE-2026-12003** were already known to be unaffected by
+  the move. All four stay waived in the dogfood scan; see issue #52.
+
+  Dependencies bumped for 3.14: `pydantic` 2.10.4 → 2.13.4, `uvicorn[standard]`
+  0.34.0 → 0.51.0, `sqlalchemy` 2.0.36 → 2.0.51, and a new explicit
+  `greenlet` 3.5.4 pin for SQLAlchemy's async support. The pydantic bump is
+  behaviour-neutral for API consumers: the only OpenAPI-schema change is that
+  fields typed as a bare object now state `"additionalProperties": true`
+  explicitly, which was already implied.
+
+  **No action required for deployments** — pull the new image. Only contributors
+  running the backend natively need to recreate their virtualenv on 3.14.
+
 - **List endpoints returning persisted resources now use the shared
   `{total, items}` envelope.** Thirteen endpoints that previously returned a
   bare JSON array now return `{"total": <int>, "items": [...]}`, matching the

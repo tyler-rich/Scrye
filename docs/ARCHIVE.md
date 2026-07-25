@@ -54,9 +54,13 @@ These were decided and are not open for re-litigation during the build:
    nightly GHCR build. No other registries or tags. (Originally locked to local-build-only, then to
    a Docker Hub merged-PR `:dev` trigger; revised again to the GHCR nightly split — see
    § Deviations, 2026-07-06.)
-7. **Backend runtime:** **Python 3.13.** (Originally locked to Python 3.12; revised to 3.13 in
-   Phase 6 to resolve Grype-flagged CPython interpreter CVEs whose fixes are only available in
-   3.13+ — see § Deviations for the full rationale.)
+7. **Backend runtime:** **Python 3.14** (floor **3.14.6** — never 3.14.0–3.14.4, whose
+   incremental GC leaked resident memory in long-running servers and was reverted in 3.14.5).
+   (Originally locked to Python 3.12; revised to 3.13 in Phase 6 to resolve Grype-flagged CPython
+   interpreter CVEs whose fixes are only available in 3.13+; revised again to 3.14 post-v1. Note
+   that the second bump did **not** deliver the CVE clearance it was scoped for — CVE-2025-15366 /
+   CVE-2025-15367 are unfixable on 3.14 too — see § Deviations for the full rationale of both bumps
+   and that correction.)
 
 ---
 
@@ -90,7 +94,7 @@ scan history, export results to CSV/Markdown/JSON, and include complete project 
 |-------|--------|-------|
 | Frontend | **React 18 + TypeScript + Vite** | |
 | Component library | **Mantine v7** (+ `mantine-datatable`, `@mantine/form`, `@mantine/notifications`, `@mantine/modals`) | Native light/dark, trivial teal `primaryColor`, rich tables/forms. |
-| Backend | **Python 3.13 + FastAPI + Pydantic v2** | Consistent with the Lacunarr stack; strong async subprocess handling. (Bumped from 3.12 in Phase 6 — see § Deviations.) |
+| Backend | **Python 3.14 + FastAPI + Pydantic v2** | Consistent with the Lacunarr stack; strong async subprocess handling. (Bumped from 3.12 in Phase 6, then from 3.13 post-v1 — see § Deviations.) |
 | ORM / migrations | **SQLAlchemy 2.0 + Alembic** | Typed models; migrations gate backup/restore. |
 | Database | **SQLite** | Secrets field-encrypted at the app layer (§6). |
 | Auth | **Authlib** (OIDC) + **argon2-cffi** (local) + **pyotp** (optional TOTP MFA) | Generic OIDC → Pocket ID (RS256). |
@@ -428,7 +432,7 @@ Must include, at minimum:
 Must include:
 - **Code of conduct** pointer (or a short statement).
 - **Local development environment** — step-by-step:
-  - Prereqs (Python 3.13, Node 20+, Docker, `trivy`/`grype`/`syft` for native runs).
+  - Prereqs (Python 3.14, Node 20+, Docker, `trivy`/`grype`/`syft` for native runs).
   - Backend: create venv, install deps, configure a local `app_secret_key`, run Alembic
     migrations, start FastAPI with reload.
   - Frontend: install deps, start the Vite dev server, proxy config to the API.
@@ -542,6 +546,142 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Why:** <reason — constraint discovered, better approach found, plan ambiguity resolved, etc.>
 **Plan section affected:** <§ reference>
 ```
+
+### 2026-07-25 — Docs/Process — Interpreter CVEs must be verified at the source before a bump is justified on security grounds
+**What changed:** A new standing rule in `CLAUDE.md` § Coding standards § Dependency hygiene:
+scanner output, advisory "fixed in" fields, and this repo's own issue summaries are **evidence, not
+proof**, and none is sufficient on its own to claim that moving the runtime to version X clears
+CVE Y. Before a runtime bump is argued as a security fix, the fix must be confirmed present in the
+target interpreter by reading the relevant stdlib module in that exact version (unpacking the pinned
+base image if needed). Bumps justified on **support-lifecycle, ecosystem, or dependency-currency**
+grounds need no CVE argument at all and are unaffected. `ci/grype.yaml`'s Group B waiver was also
+re-cast in the same pass from a deferral into a **standing acceptance**: CVE-2025-15366 /
+CVE-2025-15367 are accepted risk on **any interpreter below 3.15**, with an **annual** re-confirmation
+review (next 2027-07-25) replacing the old upgrade-tied date, and an explicit note not to scope a 3.15
+move as a reaction to them.
+**Why:** Both interpreter bumps to date were decided from Grype's `FIXED IN` column without anyone
+reading CPython — one unsound method with two different failure modes:
+- **3.12 → 3.13** (2026-07-03) reached the right outcome by luck. The entry justifying it recorded
+  the triggering CVEs' fixes as landing in "3.13+/3.14+/3.15+" — the metadata itself said some were
+  *not* fixed in 3.13 — yet the post-bump scan, with the interpreter exclusion removed, came back
+  clean. Metadata wrong in the pessimistic direction is still wrong; the decision just wasn't
+  punished for it.
+- **3.13 → 3.14** (2026-07-25, the entry below) reached the wrong one. The scoping doc and issue #52's
+  resolution-trigger line both asserted 3.14.6 carried the CVE-2025-15366/-15367 fixes; it does not,
+  and the bump cleared nothing. Issue #52 even held the correct fact — "declined backport to
+  3.10–3.14" — in a different paragraph from the claim it contradicted.
+Worth recording precisely, because the tempting summary ("two bumps, neither resolved its CVEs") is
+**not** what happened and would make the rule easy to dismiss on inspection: the first bump did clear
+what triggered it. What the two share is the method, not the result — which is the actual thing worth
+banning. Source verification is also cheap, as this session showed: unpacking the pinned base image
+and reading two stdlib functions took minutes and settled a question two documents had gotten wrong.
+**Plan section affected:** CLAUDE.md § Coding standards (Dependency hygiene); `ci/grype.yaml`
+(Group B waiver rationale and review cadence); no code, schema, security-model, or job-model change.
+
+### 2026-07-25 — Post-release — Backend runtime bumped Python 3.13 → 3.14 (locked decision revised)
+**What changed:** The locked backend runtime was revised from **Python 3.13 to Python 3.14** — the
+second interpreter bump, mirroring the 3.12 → 3.13 precedent below (2026-07-03). Executed from the
+scoping/handoff doc `docs/upgrades/python-3.14.md`, which the 2026-07-13 entry created when the move
+was deferred. Concretely: the Dockerfile base image is now `python:3.14-slim-bookworm` (digest-pinned
+to `sha256:86f975ac…`, which is **3.14.6**) for both the venv-builder and runtime stages;
+`backend/pyproject.toml` `requires-python` is `>=3.14`; the CI backend job runs on Python `3.14` and
+the lock-drift gate compiles with `--python-version 3.14`; and `CONTRIBUTING.md`/`README.md` name 3.14
+as the native-dev prerequisite. The locked decision is updated in `CLAUDE.md` § Locked decisions #2
+and §0 (#7) / §2 above.
+
+**The 3.14.6 floor is load-bearing, not cosmetic.** Python 3.14.0 through 3.14.4 shipped an
+incremental garbage collector whose work-estimate calculation could go negative, so a long-running
+server never drained its cyclic-garbage backlog and resident memory grew up to ~5×. It was reverted
+in 3.14.5, restoring the same generational GC 3.13 used; 3.14.6 is the first fully-safe release after
+the revert. Scrye is exactly the long-lived-server workload that regression targets. The Dockerfile
+carries this as a comment at both `FROM` lines so a future digest bump re-checks it. The other two
+3.14 runtime changes are non-events here: free-threading (PEP 703) needs the separate `python3.14t`
+build, and the JIT (PEP 744) is disabled by default on Linux — the standard slim image has neither.
+
+**Dependency changes.** Three were flagged as hard blockers by the scoping doc and are done:
+`pydantic` 2.10.4 → **2.13.4** (2.10.4 pins pydantic-core 2.27.2, which publishes no cp314 wheel and
+does not build from source there — PyO3 caps at 3.13); `uvicorn[standard]` 0.34.0 → **0.51.0**
+(official 3.14 support landed in 0.38.0); and an explicit **`greenlet==3.5.4`** pin, since SQLAlchemy's
+async support needs it and no longer pulls it implicitly. Two more were found during the pass and are
+**deviations from the scoping doc's dependency table**:
+
+- **`sqlalchemy` 2.0.36 → 2.0.51.** 2.0.36 has no cp314 wheel, but unlike pydantic-core it does not
+  fail — it also publishes a pure-Python `py3-none-any` wheel, so pip silently installs *that* on 3.14
+  and the compiled accelerators disappear with no error anywhere. cp314 wheels first appear in
+  2.0.45. Same 2.0.x series, so no API surface moved.
+- **`ruff` 0.8.6 → 0.16.0.** 0.8.6 rejects `target-version = "py314"` outright (py313 is its ceiling),
+  so the doc's "bump target-version to py314" is impossible without it. 0.16.0 reports **zero** new
+  violations on the tree — the `known-first-party` isort pin added for D5b (2026-07-20) is what makes
+  a ruff jump this large a no-op, exactly as intended.
+
+`fastapi` 0.139.0, `starlette` 1.3.1, `cryptography` 49.0.0, `argon2-cffi` 25.1.0, `httpx` 0.28.1,
+`authlib` 1.7.2, `pyotp` 2.10.0, `alembic` 1.14.0, `pydantic-settings` 2.7.1 and `black` 26.3.1 were
+**verified**, not assumed, and are unchanged: every C/Rust-backed package in the resolved closure
+(`cffi`, `argon2-cffi-bindings`, `cryptography`, `uvloop`, `httptools`, `watchfiles`, `websockets`,
+`markupsafe`, `pyyaml`) already ships cp314 wheels at its pinned version. `requirements.lock` was
+regenerated with the pinned `uv pip compile --group build --generate-hashes --python-version 3.14`.
+
+**The pydantic bump got its own compatibility pass** (CLAUDE.md § When to ask vs. decide treats the
+I/O-validation layer as a data-model surface). Scrye's usage is plain Pydantic v2 — `BaseModel`,
+`ConfigDict(from_attributes=True)`, `Field`, `SecretStr`, `field_validator`, `model_validator`,
+`PlainSerializer` via `Annotated`, plus pydantic-settings' `BaseSettings`/`SettingsConfigDict`/
+`NoDecode` — with no `pydantic.v1` namespace use anywhere. The 2.11–2.13 change most likely to bite
+was 2.12's "do not implicitly convert after model validators to class methods": every
+`@model_validator(mode="after")` in the tree is already instance-style (`def _check(self)`), so it
+does not apply. The empirical check was a full OpenAPI-schema diff, old stack vs new: **the only
+difference across the entire 229 KB schema is nine `"additionalProperties": true` keys** that 2.12+
+now emits explicitly on bare `dict` fields. That is semantically identical to what `{"type":
+"object"}` already implied, and the frontend's API client is hand-written rather than generated from
+the schema (FE-2), so **no code change was required** — the bump is code-neutral.
+
+**`black` stays at `target-version = ["py313"]` — a deliberate deviation** from the scoping doc's
+"bump target-version to py314", which applies to ruff only. black's target-version is the oldest
+interpreter its *output* must parse on, and at py314 it applies PEP 758, rewriting `except (A, B):`
+to `except A, B:` at four sites (`passwords.py`, `crypto.py`, `logging.py`, `trivy.py`). That is
+valid 3.14 syntax, but it reads like Python 2's `except (A, B), e:` and buys nothing, so the
+parenthesized form is kept; the reasoning is inline in `pyproject.toml` so it doesn't look like an
+oversight. ruff's target-version gates only which lint rules apply and emits no syntax of its own, so
+it does track the real runtime floor at `py314`.
+
+**CVE outcome (issue #52) — the scoping doc's central premise turned out to be wrong, and this
+upgrade clears none of the four CVEs.** Both `docs/upgrades/python-3.14.md` and issue #52's
+resolution-trigger line asserted that **Python 3.14.6 already carries the CVE-2025-15366 /
+CVE-2025-15367 fixes** (imaplib/poplib command injection, both MEDIUM), making "move off the 3.13
+line" the practical way to clear them — that was the stated reason this upgrade project existed. It
+is not true. The waivers were removed on that basis, and the CI dogfood scan on the upgrade PR
+immediately reported both back against interpreter **3.14.6** with `FIXED IN 3.15.0a6`. Reading
+3.14.6's own stdlib confirms the scanner rather than the doc: `imaplib._command()` and
+`poplib._putcmd()` still concatenate arguments straight onto the wire with no CRLF/control-character
+validation. Issue #52 in fact contradicted itself — its Group B paragraph correctly records that
+upstream declined the backport to "3.10–3.14", which *includes* 3.14, while its resolution-trigger
+line said the 3.14 upgrade would close them. The Group B paragraph was right. **Both waivers were
+restored**, retargeted at 3.14 with the corrected rationale and no review trigger earlier than a 3.15
+upgrade. CVE-2026-15308 (HIGH, `html.parser` quadratic-complexity CPU DoS) and CVE-2026-12003
+(MEDIUM, `getpath.py` in-tree search-path fallback) are unchanged by the move, exactly as the doc did
+correctly predict: merged to both the 3.13 and 3.14 maintenance branches, in no released point
+version, closing on the next 3.14.x just as they would have on the next 3.13.x. Their review date
+moves to 2026-10-25 — a real trigger, unlike Group B's, which is now an annual re-confirmation of a
+standing acceptance (see the process entry above). Net: the waiver list is **unchanged at four
+entries**, and the security
+justification for this bump did not materialize — what remains is staying current on a supported
+interpreter line ahead of 3.13's EOL, plus the dependency currency the move forced. Whether that
+alone justifies the change is a call for the maintainer, not something this entry should paper over.
+
+**Validation.** The full backend suite — **579 passed, 3 skipped** — runs green on a genuine CPython
+**3.14.6** unpacked from the same `python:3.14-slim-bookworm` digest the image pins, against the
+regenerated lock. Also verified there: a clean `import app.main`, and a full Alembic
+upgrade → downgrade to base → upgrade cycle back to `0008_oidc_flow_browser_binding`. No new
+warnings: the only ones are the pre-existing Starlette `HTTP_422_UNPROCESSABLE_ENTITY` /
+`HTTP_413_REQUEST_ENTITY_TOO_LARGE` deprecations and the Starlette-TestClient httpx notice, none of
+which involve a package this change touches. `uvicorn 0.51.0` still exposes the `--proxy-headers` and
+`--forwarded-allow-ips` flags `docker/entrypoint.sh` depends on. The image build,
+`docker compose up` + `/healthz`, and the Trivy + Grype dogfood self-scan were run **by CI on the
+PR** — the authoring environment had no Docker daemon, which is also why the Grype waiver narrowing
+above is confirmed by the CI dogfood report rather than a local scan.
+**Plan section affected:** §0 (#7, new locked runtime), §2 (tech stack), §9.1 (base image),
+§12 (Phase 6 self-scan), CLAUDE.md § Locked decisions #2; supersedes the 2026-07-13
+"CPython interpreter CVEs on 3.13 accepted as tracked risk; 3.14 deferred" entry below and closes
+out `docs/upgrades/python-3.14.md`.
 
 ### 2026-07-24 — Post-release — P3-8 closed: `noUncheckedIndexedAccess` + type-aware ESLint
 **What changed:** The two TS-strictness flags P3-8 deferred to a dedicated pass are now on, in two
@@ -2719,6 +2859,8 @@ can be dropped.
 **Plan section affected:** §9.1 (Dockerfile / apt packages).
 
 ### 2026-07-13 — Infra/Process — CPython interpreter CVEs on 3.13 accepted as tracked risk; 3.14 deferred
+**(Superseded by the "Backend runtime bumped Python 3.13 → 3.14" entry above, 2026-07-25 — the
+deferral ended, 15366/15367 are cleared, and the Group B waivers were removed.)**
 **What changed:** The CI dogfood Grype self-scan flags four CPython interpreter-binary CVEs on the
 runtime base image (`python:3.13-slim-bookworm`, interpreter 3.13.14 — current latest 3.13.x). Two
 have fixes merged to the 3.13 maintenance branch but not yet in any released point version —
