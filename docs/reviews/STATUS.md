@@ -31,6 +31,15 @@ frontend "Priority 3" polish batch (never summarized) — was closed by its dedi
 2026-07-24. What remains in this file is record-keeping (§2 deferred-by-decision items, §3 the
 resolved ledger, §4 the ARCHIVE §14 back-fill gaps), not work.
 
+**Update 2026-07-24 — M23/SC-7 fully closed.** The one item §2 still carried as deferred by
+decision, the socket-proxy migration `tecnativa` → `wollomatic`, has now been done in its own PR
+(issue #63). The `docker-env` sidecar runs `wollomatic/socket-proxy:1.12.3` with its request
+allowlist pinned to the single `GET /images/json` the app actually calls — where the tecnativa
+config's `IMAGES=1`/`CONTAINERS=1`/`INFO=1` toggles had opened the whole `/images` and
+`/containers` GET surface (including `/containers/{id}/json`, `/archive`, and `/export`) to any
+client on the network. It has moved from §2 to §3; the full before/after allowlist mapping is in
+`ARCHIVE.md §14`, 2026-07-24.
+
 ---
 
 ## 1. Remaining work (STILL OPEN — current backlog, severity-ranked)
@@ -75,7 +84,6 @@ committed.
 
 | ID | Item | Decision / tracking ref |
 |----|------|-------------------------|
-| M23 / SC-7 | Socket-proxy migration `tecnativa` → `wollomatic` | tecnativa **bumped in-batch** to `v0.4.2` (`docker-compose.yml:136`); wollomatic migration split out to **issue #63** (open). `ARCHIVE.md §14`, 2026-07-13. |
 | L13 / APIR-8 / §8.1 (QUA-9) | Broad list-envelope standardization — admin list endpoints still return bare arrays (`registries.py:64`, `git_credentials.py:59`, `users.py:39`, `notifications.py:162`, `scan_schedules.py:139`, …) vs. `{total, items}` | Scope held to the single `entries`→`items` audit rename per maintainer direction (`audit.py:46,64` done). Broader consolidation tracked in **`docs/ROADMAP.md:84-86`**. |
 | SC-13 | Mantine 7.15.2 is 2 majors behind (v9 current) | **Locked decision §2** (Mantine v7). Recorded, not a drift; revisit only if an advisory lands 9.x-only. `package.json:17`. |
 | L1 / SEC-7 | Field-encryption AAD bound to column, not row | Now **row-bindable** and migration-free (`secret_store.py`, #64) — resolved in mechanism; full column→row cutover of legacy ciphertext remains a lazy upgrade-on-write by design. |
@@ -132,7 +140,7 @@ resolved (#67). One-line index below; full detail lives in the per-report files 
 | M20 / P1-3 | Poller exponential backoff + halt on ceiling/404 | #62 |
 | M21 / P1-4 | History/findings fetches use latest-wins guard | #62 |
 | M22 / SC-6 | Stale `node:22-bookworm-slim` digest refreshed | #64 |
-| M23 / SC-7 | `docker-socket-proxy` 0.3.0 → v0.4.2 *(wollomatic deferred → #63)* | #64 |
+| M23 / SC-7 | `docker-socket-proxy` 0.3.0 → v0.4.2; then migrated to `wollomatic/socket-proxy:1.12.3`, allowlist narrowed to the single `GET /images/json` the app calls (issue #63 closed) | #64, #89 |
 | M24 / SC-4 | Publish workflows attach SLSA provenance + SBOM + `attest-build-provenance` | #64 |
 | M25 / SC-5 | `rescan.yml` weekly re-scan of published `:latest`/`:dev` | #64 |
 | M26 / SC-8 | Cosign keyless `verify-blob` of scanner `checksums.txt` before `sha256sum -c` | #64 |

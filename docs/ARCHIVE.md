@@ -2774,3 +2774,82 @@ runtime dependency, schema, security-model, or job-model change.
 **Plan section affected:** CLAUDE.md § Testing (frontend Vitest coverage expanding), § Coding
 standards (TypeScript); `docs/reviews/STATUS.md` § "Remaining work" test-debt section. No change to
 §0/§2/§4/§7.
+
+### 2026-07-24 — Post-v1 — Docker socket proxy migrated `tecnativa` → `wollomatic/socket-proxy` (issue #63, M23/SC-7 deferred half)
+**What changed:** The `docker-env` sidecar in `docker/docker-compose.yml` — the only container in
+the stack that mounts `/var/run/docker.sock` — moved from
+`tecnativa/docker-socket-proxy:v0.4.2` (HAProxy on Alpine, `USER root`, coarse env-var toggles) to
+`wollomatic/socket-proxy:1.12.3@sha256:74e770f5ed3cfc9ecb6350e177d2aa55873568c85bc953079834e68607dbf71b`
+(a from-scratch Go binary, `USER 65534`, per-method regex request allowlisting). This completes the
+half of M23/SC-7 that was deliberately deferred out of the 2026-07-13 supply-chain batch.
+
+**Allowlist mapping — this is the point of the migration.** The backend makes exactly one request
+of this proxy: `GET /images/json` (`backend/app/core/docker_proxy.py`; `list_images()` is the only
+caller, and the `core/egress.py` guard in front of it is DNS-only and issues no HTTP). The previous
+configuration permitted vastly more than that:
+
+| Previously (tecnativa) | Source | Now (wollomatic) |
+|---|---|---|
+| `GET /containers…` — incl. `/containers/{id}/json` (**every container's env vars and command line**), `/logs`, `/top`, `/stats`, `/changes`, `/export` (**container filesystem tarball**), `/archive` (**arbitrary file read out of any container**) | `CONTAINERS=1` | **denied (403)** |
+| `GET /images…` — incl. `/images/{n}/json`, `/images/{n}/history`, `/images/search`, `/images/{n}/get` (**image tarball export**) | `IMAGES=1` | **denied (403)** except the listing |
+| `GET /info` | `INFO=1` | **denied (403)** |
+| `GET /events`, `GET /_ping`, `GET /version` | image defaults `EVENTS`/`PING`/`VERSION`=1 | **denied (403)** |
+| `GET /images/json` | `IMAGES=1` | **allowed** — the only thing allowed |
+| any non-`GET` method | `POST=0` denied POST; HAProxy denied the rest | **denied (405)** |
+| any source on `scrye_net` | tecnativa has no source allowlist | **only the `scrye` container** (`-allowfrom=scrye`) |
+
+The new allowlist is the single flag `-allowGET=(/v1\.[0-9]{1,2})?/images/json`. wollomatic anchors
+every pattern itself (`regexp.Compile("^"+regex+"$")`) and matches it against the URL **path** only,
+and answers 405 for any method that has no `-allow*` entry — so omitting the other five method flags
+is what makes the proxy read-only, replacing `POST=0`. The optional group accepts the `/v1.NN` API
+version prefix a Docker CLI would send for the same endpoint; it adds no endpoint. The tecnativa
+rules were **prefix** matches (`^(/v[\d\.]+)?/images`, unanchored at the end), which is why a single
+`IMAGES=1`/`CONTAINERS=1` toggle opened a whole route family.
+
+**Hardening deltas.** Dropped the `/run` tmpfs entirely — INF-5 existed only because the HAProxy
+image needed a writable pid/stats path under `read_only: true`; a static Go binary needs no writable
+path, so the sidecar now runs read-only with **no** tmpfs. Memory cap 128M → 64M. Healthcheck moved
+off the proxied API (`wget http://localhost:2375/info`) onto the image's bundled `/healthcheck`
+binary against the separate `-allowhealthcheck` listener on `127.0.0.1:55555` — which is why `/info`
+no longer has to be exposed at all just to have a liveness probe. Added `-watchdoginterval=3600`
+`-stoponwatchdog` so a socket broken by a Docker engine update is recovered by `restart:
+unless-stopped`. `cap_drop: ALL`, `no-new-privileges`, digest pin, no host port, capped logging, and
+CPU limit are unchanged.
+
+**One operational difference operators must act on.** tecnativa ran as root in-container and could
+read the socket regardless of ownership. wollomatic ships `USER 65534:65534`, and
+`/var/run/docker.sock` is `root:docker` mode 0660 — so the container's **GID must be the host's
+docker group**. The service is therefore `user: "65534:${DOCKER_GID:-999}"`, and the operator sets
+`DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"`. The `999` default is a Debian/Ubuntu
+convention, not a guarantee; a wrong GID surfaces as a socket permission error at proxy start. This
+is a deployment prerequisite only — no application behavior, API contract, schema, or client code
+changed, and `SCRYE_DOCKER_PROXY_URL` / port 2375 are unchanged.
+
+**Verification.** No Docker daemon was reachable in the environment where this was prepared, and
+Docker Hub's blob CDN (`production.cloudfront.docker.com`) is egress-blocked, so the published image
+could not be pulled or booted. Instead the request-handling path was exercised directly: upstream's
+`handlehttprequest.go` and `bindmount.go` at tag `1.12.3` were compiled **verbatim** (the module is
+stdlib-only) against a minimal `internal/config` carrying upstream's `AllowList` types and
+`compileRegexp` unmodified, put in front of a stub Docker API on a real unix socket, and configured
+with the `-allowGET` pattern **read out of `docker-compose.yml`**. Against that: the real
+`docker_proxy.list_images()` enumerated images successfully; all 11 previously-permitted sensitive
+paths returned 403; HEAD/POST/PUT/DELETE/PATCH returned 405; the `/v1.NN` form and a query string
+were accepted; and the stub socket's access log confirmed **only** the 4 allowed requests ever
+reached it while all 16 blocked ones stopped at the proxy. `docker compose --profile docker-env
+config` renders the service (regex and `DOCKER_GID` interpolation intact). **Still to do on a
+Docker-capable host:** one `docker compose --profile docker-env up` to confirm the published image
+boots under the full hardened option set and that `DOCKER_GID` is correct for that host.
+
+`backend/tests/test_compose_hardening.py` gained seven regression tests that keep the allowlist tied
+to the client: the `-allowGET` pattern is compiled the way upstream compiles it and checked against
+the path `list_images()` is *observed* to request (not a hardcoded string), checked to reject every
+previously-allowed sensitive path, and checked for method flags, source restriction, digest pin,
+unprivileged uid, and the absence of a re-introduced writable `/run`. Each was verified to fail
+against a deliberately widened Compose config before being committed.
+**Why:** Issue #63. This is the highest-value hardening target in the stack — the one container
+holding the Docker socket — and the migration turns "read access to the whole Docker API's GET
+surface, from anywhere on the network" into "one image-listing endpoint, from one container."
+**Plan section affected:** locked decision §0.4 is satisfied unchanged (still a read-only
+socket-proxy sidecar; the app still never mounts the socket) — only the implementing image and its
+allowlist mechanism changed. README § Optional sidecars, § Configuration, and § Security model
+updated. No schema, job-model, API-contract, or auth change.

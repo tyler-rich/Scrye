@@ -9,6 +9,11 @@
 #
 # Before first run, create the master-key secret (NEVER commit it):
 #   mkdir -p docker/secrets && openssl rand -base64 48 > docker/secrets/app_secret_key
+#
+# The docker-env profile additionally needs the host's docker group id, because
+# the socket proxy runs unprivileged and must be in that group to read the
+# socket:
+#   export DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"
 
 services:
   scrye:
@@ -120,25 +125,63 @@ services:
 
   # Optional: read-only Docker socket proxy for "scan running images"
   # (enable with --profile docker-env). RESIDUAL RISK: this is the only place a
-  # docker.sock mount is permitted. It is restricted to read endpoints
-  # (POST=0); the Scrye app never mounts the socket directly (locked decision #4,
-  # CIS 5.21/5.22). Anyone able to reach the proxy can enumerate images/containers.
+  # docker.sock mount is permitted; the Scrye app never mounts the socket
+  # directly (locked decision #4, CIS 5.21/5.22).
+  #
+  # Migrated tecnativa/docker-socket-proxy -> wollomatic/socket-proxy (issue #63).
+  # wollomatic is a from-scratch Go binary (no HAProxy, no shell, no libc, no
+  # package manager) that runs as uid 65534 and allowlists requests by *regex per
+  # HTTP method*, where tecnativa ran as root on haproxy:alpine and allowlisted by
+  # coarse env-var toggles that each opened a whole path prefix. See
+  # docs/ARCHIVE.md § Deviations (2026-07-24) for the full before/after allowlist
+  # mapping.
   docker-socket-proxy:
     profiles: ["docker-env"]
-    # Bumped 0.3.0 -> v0.4.2 (SC-7): 0.3.0 was ~15 months stale, and this is the
-    # only sidecar holding the Docker socket. The env-var API below (IMAGES/
-    # CONTAINERS/INFO/POST) is unchanged across the 0.3 -> 0.4 line, and the app
-    # only calls GET /images/json (gated by IMAGES=1). Upstream now prefixes tags
-    # with `v`. Re-verify the hardened boot on a Docker-Hub-reachable host (see the
-    # /run tmpfs NOTE below) — image-pull/boot could not be exercised in the
-    # egress-restricted build environment where this bump was prepared. A future
-    # migration to wollomatic/socket-proxy is tracked separately (issue #63).
-    image: tecnativa/docker-socket-proxy:v0.4.2@sha256:1f3a6f303320723d199d2316a3e82b2e2685d86c275d5e3deeaf182573b47476
-    environment:
-      - IMAGES=1
-      - CONTAINERS=1
-      - INFO=1
-      - POST=0
+    image: wollomatic/socket-proxy:1.12.3@sha256:74e770f5ed3cfc9ecb6350e177d2aa55873568c85bc953079834e68607dbf71b
+    # The upstream image is `USER 65534:65534`. Unlike the old root-in-container
+    # HAProxy image, this one must be given the *host's* docker GID to read the
+    # socket at all: /var/run/docker.sock is root:docker mode 0660. Find it with
+    #   stat -c '%g' /var/run/docker.sock
+    # on the Docker host and set DOCKER_GID to match (a `docker` group of 999 is
+    # the Debian/Ubuntu default and is used here as a fallback only). A wrong GID
+    # shows up as the proxy logging a socket permission error on start.
+    user: "65534:${DOCKER_GID:-999}"
+    command:
+      - "-loglevel=info"
+      # Bind on the container interface so the app can reach it over scrye_net;
+      # upstream defaults to 127.0.0.1 (secure-by-default, but unreachable here).
+      # There is still no host port — the proxy is only exposed on scrye_net.
+      - "-listenip=0.0.0.0"
+      # Source allowlist: only the `scrye` service may connect. wollomatic
+      # resolves the hostname through Compose's embedded DNS on every request and
+      # compares it to the client IP, so nothing else on scrye_net (and nothing on
+      # the host) can reach the socket. tecnativa had no source restriction at
+      # all. If you rename the app service, change this to match, or fall back to
+      # the network CIDR (e.g. `-allowfrom=172.16.0.0/12`); a mismatch fails
+      # closed and logs `blocked request ... forbidden IP`.
+      - "-allowfrom=scrye"
+      # THE ALLOWLIST. Scrye issues exactly one request against this proxy —
+      # `GET /images/json` (backend/app/core/docker_proxy.py) — so that is the
+      # only thing permitted. wollomatic anchors the pattern with ^...$ itself and
+      # matches it against the URL *path* only; the optional group accepts the
+      # `/v1.NN` API-version prefix a docker CLI would send for the same endpoint.
+      # No -allowHEAD/-allowPOST/-allowPUT/-allowPATCH/-allowDELETE is set, so
+      # every other method is rejected with 405 before it reaches the socket.
+      # This replaces IMAGES=1 + CONTAINERS=1 + INFO=1 (plus the image's default
+      # EVENTS/PING/VERSION), which between them exposed /containers/{id}/json
+      # (every container's env vars), /containers/{id}/archive (arbitrary file
+      # read out of any container), /containers/{id}/export, /images/{n}/get, and
+      # the whole /images and /containers prefixes. All of those are now denied.
+      - '-allowGET=(/v1\.[0-9]{1,2})?/images/json'
+      # Opens a separate health listener on 127.0.0.1:55555 for the bundled
+      # healthcheck binary. Deliberately *not* an allowlisted proxy endpoint: it
+      # is why /info no longer has to be exposed just to have a liveness probe.
+      - "-allowhealthcheck"
+      # A Docker engine update can silently break the socket connection; check it
+      # hourly and exit so `restart: unless-stopped` re-establishes it.
+      - "-watchdoginterval=3600"
+      - "-stoponwatchdog"
+      - "-shutdowngracetime=5"
     networks:
       - scrye_net
     volumes:
@@ -148,24 +191,22 @@ services:
       - "no-new-privileges:true"
     cap_drop:
       - "ALL"
-    tmpfs:
-      # tecnativa/docker-socket-proxy is HAProxy-based and needs a writable /run
-      # for its pid/stats socket; the root FS is read-only, so give it a small
-      # RAM-backed /run rather than crash-loop on the first write (audit INF-5).
-      # NOTE: verify by starting `--profile docker-env` once — if the proxy still
-      # fails to drop privileges under cap_drop:ALL, add cap_add [SETUID,SETGID].
-      - /run:size=8m,mode=0755
+    # No tmpfs. The old HAProxy image needed a writable /run for its pid/stats
+    # socket under the read-only root FS (audit INF-5); this is a single static Go
+    # binary with no writable path at all, so that carve-out is retired.
     deploy:
       # The highest-risk service (the only docker.sock mount) is capped so a
-      # runaway/wedged proxy can't exhaust host resources (CIS baseline).
+      # runaway/wedged proxy can't exhaust host resources (CIS baseline). 64M is
+      # upstream's own suggested cap — the scratch image has no runtime to feed.
       resources:
         limits:
           cpus: "0.5"
-          memory: 128M
+          memory: 64M
     healthcheck:
-      # The alpine/busybox image ships wget; /info is an allowed read endpoint
-      # (INFO=1), so a 200 confirms both the proxy and the docker socket are live.
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:2375/info"]
+      # The scratch image ships no shell/wget; upstream bundles a healthcheck
+      # binary at / that probes the -allowhealthcheck listener (which in turn
+      # verifies the docker socket is reachable).
+      test: ["CMD", "/healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
