@@ -500,6 +500,19 @@ and it must be the **host's** docker group id
 needs that group to read the socket. It defaults to `999` (the Debian/Ubuntu
 default), which is a fallback, not a guarantee.
 
+**A wrong `DOCKER_GID` fails only the sidecar, never Scrye.** The proxy cannot
+open `/var/run/docker.sock` (`root:docker`, mode 0660) without the right group,
+so it reports a socket permission error and stays down — the container never
+becomes healthy and `restart: unless-stopped` keeps retrying it. Nothing else is
+affected: no service declares `depends_on` for the proxy, so the `scrye`
+container neither waits on it at startup nor stops when it fails, and its
+healthcheck is consumed by nothing but itself. The one visible symptom inside the
+app is that enumerating images for that Docker environment returns
+**502 Bad Gateway** with the proxy's connection error; scans, history, schedules,
+and every other feature are untouched. So a permission error at proxy start means
+**"docker-env is unavailable"**, not "Scrye is broken" — fix `DOCKER_GID` and
+restart the sidecar alone.
+
 ### The master key
 
 The application **master key** is **never** an environment variable or baked into

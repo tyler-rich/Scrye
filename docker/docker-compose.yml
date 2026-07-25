@@ -172,6 +172,16 @@ services:
       # (every container's env vars), /containers/{id}/archive (arbitrary file
       # read out of any container), /containers/{id}/export, /images/{n}/get, and
       # the whole /images and /containers prefixes. All of those are now denied.
+      #
+      # NOTE — the version group bounds the Docker API version at TWO digits
+      # (`v1.0`–`v1.99`). The API is ~v1.51 today, so that is years of headroom,
+      # but it is a hard bound, not an open range: if the Engine API ever reaches
+      # v1.100, a client sending `/v1.100/images/json` stops matching and image
+      # listing fails with a 403 that reads like a misconfigured allowlist rather
+      # than a version-bound one. The fix then is to widen the quantifier here
+      # (`{1,3}`) — and update the matching expectation in
+      # backend/tests/test_compose_hardening.py. Don't widen it pre-emptively;
+      # a tighter pattern is the point.
       - '-allowGET=(/v1\.[0-9]{1,2})?/images/json'
       # Opens a separate health listener on 127.0.0.1:55555 for the bundled
       # healthcheck binary. Deliberately *not* an allowlisted proxy endpoint: it
