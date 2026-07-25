@@ -1,6 +1,6 @@
 /** API types and calls for personal API tokens. */
 
-import { api } from './client';
+import { api, apiList } from './client';
 import type { Role } from './auth';
 
 export interface ApiTokenInfo {
@@ -25,7 +25,7 @@ export interface ApiTokenCreate {
   expires_in_days?: number | null;
 }
 
-export const listApiTokens = () => api<ApiTokenInfo[]>('/api/api-tokens');
+export const listApiTokens = () => apiList<ApiTokenInfo>('/api/api-tokens');
 export const createApiToken = (body: ApiTokenCreate) =>
   api<ApiTokenCreated>('/api/api-tokens', { method: 'POST', body });
 export const revokeApiToken = (id: number) =>

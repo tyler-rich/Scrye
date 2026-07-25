@@ -1,6 +1,6 @@
 /** Saved scan-history filter presets (docs/ARCHIVE.md §4.4). Owner-scoped. */
 
-import { api } from './client';
+import { api, apiList } from './client';
 import type { HistoryFilters } from './scans';
 
 export interface FilterPreset {
@@ -12,7 +12,7 @@ export interface FilterPreset {
 }
 
 export function listPresets(): Promise<FilterPreset[]> {
-  return api<FilterPreset[]>('/api/filter-presets');
+  return apiList<FilterPreset>('/api/filter-presets');
 }
 
 export function createPreset(name: string, filters: HistoryFilters): Promise<FilterPreset> {

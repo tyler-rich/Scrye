@@ -60,7 +60,7 @@ class TestUserManagement:
         assert created["role"] == "viewer"
 
         listed = client.get("/api/users").json()
-        assert [u["username"] for u in listed] == ["admin", "vera"]
+        assert [u["username"] for u in listed["items"]] == ["admin", "vera"]
         # No credential material anywhere in the response.
         assert "password" not in str(listed).lower()
 

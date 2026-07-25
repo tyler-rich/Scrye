@@ -84,7 +84,7 @@ committed.
 
 | ID | Item | Decision / tracking ref |
 |----|------|-------------------------|
-| L13 / APIR-8 / §8.1 (QUA-9) | Broad list-envelope standardization — admin list endpoints still return bare arrays (`registries.py:64`, `git_credentials.py:59`, `users.py:39`, `notifications.py:162`, `scan_schedules.py:139`, …) vs. `{total, items}` | Scope held to the single `entries`→`items` audit rename per maintainer direction (`audit.py:46,64` done). Broader consolidation tracked in **`docs/ROADMAP.md:84-86`**. |
+| ~~L13 / APIR-8 / §8.1 (QUA-9)~~ | ~~Broad list-envelope standardization~~ | **No longer deferred — resolved 2026-07-25.** All 13 persisted-resource list endpoints now return `{total, items}` behind the shared `Page`/`full_page` helpers (`backend/app/api/pagination.py`); 4 value/enumeration lists (`/registries/options`, `/git-credentials/options`, `/notifications/events`, `/docker-environments/{id}/images`) stay bare arrays by a documented rule, not by omission — see `CONTRIBUTING.md` § API conventions. `GET /api/scans` keeps its frozen Phase-P4 shape and was only marked deprecated in favour of `/api/scans/history`. See `docs/ARCHIVE.md` § Deviations, 2026-07-25. |
 | SC-13 | Mantine 7.15.2 is 2 majors behind (v9 current) | **Locked decision §2** (Mantine v7). Recorded, not a drift; revisit only if an advisory lands 9.x-only. `package.json:17`. |
 | L1 / SEC-7 | Field-encryption AAD bound to column, not row | Now **row-bindable** and migration-free (`secret_store.py`, #64) — resolved in mechanism; full column→row cutover of legacy ciphertext remains a lazy upgrade-on-write by design. |
 | L2 / SEC-8, L3 / SEC-9 | OIDC MFA not locally enforced; forced-enrollment window | Accepted limitations; **audit visibility added** (`oidc.py:522` `mfa_delegated_to_idp`, `auth.py:229` `forced_by_policy`, #64). No behavior change by design. |
@@ -155,7 +155,7 @@ resolved (#67). One-line index below; full detail lives in the per-report files 
 | L10 / CON-19 | `_notify` re-reads scan with `populate_existing` | #60 |
 | L11 / CON-20 | Checkout `rmtree` via shielded thread hop | #60 |
 | L12 / APIR-7 | Run-now bookkeeping (resolved via CON-17; assertion added) | #60/#61 |
-| L13 / APIR-8 | Audit `entries`→`items` rename *(broad standardization deferred — see §2)* | #61 |
+| L13 / APIR-8 | Audit `entries`→`items` rename; **broad standardization now done** — 13 bare-array resource lists take the shared `{total, items}` envelope behind `app/api/pagination.py`, 4 value/enumeration lists stay bare by documented rule, `GET /api/scans` deprecated with its frozen shape intact | #61 + this PR |
 | L14 / APIR-9 | `ScanSummaryOut` split (drops `options`/`error`) | #61 |
 | L15 / APIR-10 | Scanner↔target matrix extracted to `scanners/support.py` | #61 |
 | L16 / P2-1 | Tag draft not wiped by poll | #62 |

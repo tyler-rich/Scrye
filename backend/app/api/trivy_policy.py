@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.pagination import Page, full_page
 from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.core.audit import record_audit
@@ -81,14 +82,14 @@ def _get_vex_or_404(db: Session, vex_id: int) -> VexDocument:
     return doc
 
 
-@router.get("/vex-documents", response_model=list[VexDocumentOut])
+@router.get("/vex-documents", response_model=Page[VexDocumentOut])
 def list_vex_documents(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
-) -> list[VexDocumentOut]:
+) -> Page[VexDocumentOut]:
     """List stored VEX documents."""
     rows = db.scalars(select(VexDocument).order_by(VexDocument.name)).all()
-    return [VexDocumentOut.model_validate(r) for r in rows]
+    return full_page([VexDocumentOut.model_validate(r) for r in rows])
 
 
 @router.post("/vex-documents", response_model=VexDocumentOut, status_code=status.HTTP_201_CREATED)
@@ -234,14 +235,14 @@ def _get_rule_or_404(db: Session, rule_id: int) -> TrivyIgnoreRule:
     return rule
 
 
-@router.get("/ignore-rules", response_model=list[IgnoreRuleOut])
+@router.get("/ignore-rules", response_model=Page[IgnoreRuleOut])
 def list_ignore_rules(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
-) -> list[IgnoreRuleOut]:
+) -> Page[IgnoreRuleOut]:
     """List structured Trivy ignore rules."""
     rows = db.scalars(select(TrivyIgnoreRule).order_by(TrivyIgnoreRule.vuln_id)).all()
-    return [IgnoreRuleOut.model_validate(r) for r in rows]
+    return full_page([IgnoreRuleOut.model_validate(r) for r in rows])
 
 
 @router.post("/ignore-rules", response_model=IgnoreRuleOut, status_code=status.HTTP_201_CREATED)

@@ -1,6 +1,6 @@
 /** API types and calls for notification channels. */
 
-import { api } from './client';
+import { api, apiList } from './client';
 import type { MaskedSecret } from './targets';
 
 export type NotificationType = 'webhook' | 'discord' | 'smtp' | 'matrix';
@@ -47,7 +47,7 @@ export interface NotificationTestResult {
   detail: string;
 }
 
-export const listChannels = () => api<NotificationChannel[]>('/api/notifications');
+export const listChannels = () => apiList<NotificationChannel>('/api/notifications');
 export const createChannel = (body: NotificationChannelCreate) =>
   api<NotificationChannel>('/api/notifications', { method: 'POST', body });
 export const deleteChannel = (id: number) =>

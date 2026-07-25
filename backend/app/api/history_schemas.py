@@ -10,6 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.api.pagination import Page
 from app.api.scan_schemas import ScanSummaryOut
 from app.api.schema_types import UtcDatetime
 
@@ -35,16 +36,15 @@ def _normalize_tags(raw: list[str]) -> list[str]:
     return tags
 
 
-class ScanHistoryPage(BaseModel):
+class ScanHistoryPage(Page[ScanSummaryOut]):
     """A page of history results plus the total number of matches.
 
     Rows are :class:`ScanSummaryOut` — the history table never renders a scan's
     ``options`` or full ``error`` text, so those ride only on the detail view
-    (APIR-9).
+    (APIR-9). The envelope itself is the shared
+    :class:`~app.api.pagination.Page`; the named subclass keeps the OpenAPI
+    component name stable.
     """
-
-    total: int
-    items: list[ScanSummaryOut]
 
 
 class FilterOptionsOut(BaseModel):

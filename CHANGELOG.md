@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **List endpoints returning persisted resources now use the shared
+  `{total, items}` envelope.** Thirteen endpoints that previously returned a
+  bare JSON array now return `{"total": <int>, "items": [...]}`, matching the
+  shape `/api/scans/history`, `/api/scans/{id}/findings`, and `/api/audit`
+  already used:
+
+  `GET /api/registries` · `GET /api/git-credentials` · `GET /api/users` ·
+  `GET /api/notifications` · `GET /api/scan-schedules` · `GET /api/api-tokens` ·
+  `GET /api/backups` · `GET /api/filter-presets` ·
+  `GET /api/docker-environments` · `GET /api/trivy/vex-documents` ·
+  `GET /api/trivy/ignore-rules` · `GET /api/auth/sessions` ·
+  `GET /api/scans/{id}/artifacts`
+
+  These endpoints remain unpaginated, so `total` always equals `items.length`
+  today. Enveloping them now means pagination can be added later as a purely
+  additive `limit`/`offset` parameter rather than as a second breaking change.
+
+  The convention that decides a new endpoint's shape: **persisted resource
+  collections** get the envelope; **fixed enumerations and live, non-persisted
+  data** stay bare arrays. Four endpoints are therefore deliberately unchanged —
+  `GET /api/registries/options`, `GET /api/git-credentials/options`,
+  `GET /api/notifications/events`, and
+  `GET /api/docker-environments/{id}/images`. See `CONTRIBUTING.md`
+  § API conventions.
+
+  **Action required for API-token consumers only.** Scripts calling any of the
+  thirteen endpoints above must read the rows from `.items`
+  (`resp.json()["items"]` instead of `resp.json()`). The Scrye web UI is
+  unaffected — it unwraps the envelope in its API client, and no page behavior
+  changed. ([L13 / APIR-8](docs/reviews/api-review.md))
+
+- **`GET /api/scans` is deprecated** in favour of `GET /api/scans/history`. It
+  returns a bare array with no total, so a client paging through it cannot tell
+  when the results are exhausted. Its response shape is a frozen contract and is
+  **unchanged**; only the OpenAPI `deprecated` marker and a description naming
+  the replacement were added. `/api/scans/history` supersedes it with the full
+  filter set and the standard `{total, items}` envelope.
+
 - **Docker socket proxy migrated to `wollomatic/socket-proxy`.** The optional
   `docker-env` sidecar — the only container in the stack that mounts
   `/var/run/docker.sock` — now runs `wollomatic/socket-proxy` (a from-scratch Go

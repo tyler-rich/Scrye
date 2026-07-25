@@ -1,6 +1,6 @@
 /** API calls for the signed-in user's own account: password, MFA, sessions. */
 
-import { api } from './client';
+import { api, apiList } from './client';
 
 export interface SessionInfo {
   id: number;
@@ -23,7 +23,7 @@ export const changePassword = (current_password: string, new_password: string) =
     body: { current_password, new_password },
   });
 
-export const listSessions = () => api<SessionInfo[]>('/api/auth/sessions');
+export const listSessions = () => apiList<SessionInfo>('/api/auth/sessions');
 export const revokeSession = (id: number) =>
   api<void>(`/api/auth/sessions/${id}`, { method: 'DELETE' });
 

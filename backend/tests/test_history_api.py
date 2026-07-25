@@ -407,7 +407,7 @@ def test_preset_crud_and_owner_isolation(client: TestClient) -> None:
     assert created.json()["filters"] == {"min_severity": "critical"}
 
     listed = client.get("/api/filter-presets").json()
-    assert len(listed) == 1 and listed[0]["name"] == "Criticals"
+    assert listed["total"] == 1 and listed["items"][0]["name"] == "Criticals"
 
     updated = client.put(
         f"/api/filter-presets/{preset_id}",
@@ -418,7 +418,7 @@ def test_preset_crud_and_owner_isolation(client: TestClient) -> None:
 
     # A different user cannot see or delete the admin's preset.
     viewer_csrf = _make_viewer(client, admin_csrf)
-    assert client.get("/api/filter-presets").json() == []
+    assert client.get("/api/filter-presets").json() == {"total": 0, "items": []}
     denied = client.delete(f"/api/filter-presets/{preset_id}", headers={CSRF: viewer_csrf})
     assert denied.status_code == 404
 

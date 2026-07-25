@@ -89,6 +89,44 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 }
 
 /**
+ * The `{total, items}` envelope every list-of-resources endpoint returns.
+ *
+ * Paginated endpoints (history, findings, audit) report the full match count in
+ * `total`; unpaginated ones return a single complete page where `total` equals
+ * `items.length`. See `backend/app/api/pagination.py` and CONTRIBUTING.md
+ * § API conventions for which endpoints are enveloped and which stay bare.
+ */
+export interface Page<T> {
+  total: number;
+  items: T[];
+}
+
+/**
+ * GET an enveloped list endpoint and unwrap it to the rows.
+ *
+ * Callers that only render the collection want the array, not the envelope, so
+ * the unwrap happens once here rather than at every call site. Endpoints that
+ * page (and so need `total`) call `api<Page<T>>` directly and keep the envelope.
+ *
+ * **This deliberately discards `total` and returns only `items`** — that is what
+ * lets the thirteen enveloped list functions keep their existing
+ * `Promise<T[]>` signatures, so no page component or test had to change when the
+ * envelope landed (L13 / APIR-8).
+ *
+ * The envelope is therefore *not* a purely server-side detail: when real
+ * pagination lands on any of these endpoints, `total` has to be threaded back
+ * through to any page wanting a "showing N of M" count or a page-count control.
+ * That means either calling `api<Page<T>>` directly at those call sites (as
+ * `listHistory` and `listFindings` already do) or widening this helper's return
+ * type — not just adding query parameters. Budget for that change here, not only
+ * in the backend.
+ */
+export async function apiList<T>(path: string, options: RequestOptions = {}): Promise<T[]> {
+  const page = await api<Page<T>>(path, options);
+  return page.items;
+}
+
+/**
  * POST multipart form data (file uploads), echoing the CSRF token like `api`.
  * Used for endpoints that accept an uploaded file (e.g. SBOM scans).
  */

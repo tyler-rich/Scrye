@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.pagination import Page, full_page
 from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.core.audit import record_audit
@@ -159,14 +160,14 @@ def list_events(_: AuthContext = Depends(_admin)) -> list[str]:
     return [e.value for e in NotificationEvent]
 
 
-@router.get("", response_model=list[NotificationChannelOut])
+@router.get("", response_model=Page[NotificationChannelOut])
 def list_channels(
     _: AuthContext = Depends(_admin),
     db: Session = Depends(get_db),
-) -> list[NotificationChannelOut]:
+) -> Page[NotificationChannelOut]:
     """List configured notification channels (admin; secrets masked)."""
     rows = db.scalars(select(NotificationChannel).order_by(NotificationChannel.name)).all()
-    return [_to_out(c) for c in rows]
+    return full_page([_to_out(c) for c in rows])
 
 
 @router.post("", response_model=NotificationChannelOut, status_code=status.HTTP_201_CREATED)

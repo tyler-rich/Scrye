@@ -1,6 +1,6 @@
 /** API types and calls for admin user management. */
 
-import { api } from './client';
+import { api, apiList } from './client';
 import type { Role, UserInfo } from './auth';
 
 export interface UserCreate {
@@ -15,7 +15,7 @@ export interface UserUpdate {
   password?: string;
 }
 
-export const listUsers = () => api<UserInfo[]>('/api/users');
+export const listUsers = () => apiList<UserInfo>('/api/users');
 export const createUser = (body: UserCreate) =>
   api<UserInfo>('/api/users', { method: 'POST', body });
 export const updateUser = (id: number, body: UserUpdate) =>

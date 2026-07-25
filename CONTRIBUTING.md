@@ -251,6 +251,53 @@ scrye/
   ```
 - Prefer Mantine components over bespoke CSS; no inline secrets or tokens.
 
+**API conventions**
+
+_List responses._ An endpoint that returns a **collection of persisted
+resources** answers with the shared `{total, items}` envelope
+(`backend/app/api/pagination.py`), whether or not it paginates:
+
+```jsonc
+{ "total": 42, "items": [ /* … */ ] }
+```
+
+- Paginated endpoints report the number of rows matching the query in `total`,
+  which is what tells a client when the pages are exhausted.
+- Unpaginated endpoints return one complete page via `full_page(...)`, where
+  `total == len(items)` by construction.
+
+Use `Page[ThingOut]` as the `response_model` and return `full_page([...])` —
+don't hand-roll the envelope. On the frontend, `apiList<Thing>(path)` in
+`src/api/client.ts` unwraps it, so client functions keep returning `Thing[]` and
+page components are unaffected.
+
+**The rule for a new endpoint:** _persisted resource collections_ — rows that
+grow with usage, where a count is a meaningful answer and pagination is a
+plausible future need — get the envelope. _Fixed enumerations_ and _live,
+non-persisted data_ stay bare arrays, because `total` there answers a question
+nobody asks. Enveloping the unpaginated lists also keeps adding pagination
+additive later: a `limit`/`offset` parameter can be introduced without changing
+a shape consumers already parse.
+
+**Deliberate bare-array exceptions** (these are decisions, not drift — please
+don't "fix" them):
+
+| Endpoint | Why it stays bare |
+|---|---|
+| `GET /api/registries/options` | id/name value list for a `<Select>`, not a resource view |
+| `GET /api/git-credentials/options` | same |
+| `GET /api/notifications/events` | fixed enumeration of event names (`list[str]`) |
+| `GET /api/docker-environments/{id}/images` | live enumeration proxied from a Docker daemon; nothing persisted |
+
+`GET /api/scans` is a fifth bare array, but a different case: it is a **frozen
+legacy contract** from Phase P4, superseded by `GET /api/scans/history`. It is
+marked `deprecated` in OpenAPI and its shape will not change. New clients should
+use `/api/scans/history`.
+
+`backend/tests/test_list_envelope.py` asserts all of the above, so a regression
+in either direction fails CI. Background: L13 / APIR-8 in
+[`docs/reviews/api-review.md`](docs/reviews/api-review.md).
+
 **Commits & branches**
 
 - [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`,

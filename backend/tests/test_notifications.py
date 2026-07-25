@@ -126,7 +126,7 @@ class TestNotificationCrud:
             headers={CSRF: csrf},
         ).json()["id"]
         assert client.delete(f"/api/notifications/{cid}", headers={CSRF: csrf}).status_code == 204
-        assert client.get("/api/notifications").json() == []
+        assert client.get("/api/notifications").json() == {"total": 0, "items": []}
 
 
 class TestNotificationTest:

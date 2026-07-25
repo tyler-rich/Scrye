@@ -46,5 +46,5 @@ class TestResponseTimestamps:
             json={"vuln_id": "CVE-2026-7777"},
             headers={CSRF: csrf},
         )
-        created_at = client.get("/api/trivy/ignore-rules").json()[0]["created_at"]
+        created_at = client.get("/api/trivy/ignore-rules").json()["items"][0]["created_at"]
         assert created_at.endswith("Z"), created_at

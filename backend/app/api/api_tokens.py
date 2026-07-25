@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.pagination import Page, full_page
 from app.api.schema_types import UtcDatetime
 from app.auth.api_tokens import generate_api_token
 from app.auth.deps import AuthContext, client_ip, require_auth, require_csrf
@@ -60,18 +61,18 @@ class ApiTokenCreatedOut(ApiTokenOut):
     token: str
 
 
-@router.get("", response_model=list[ApiTokenOut])
+@router.get("", response_model=Page[ApiTokenOut])
 def list_tokens(
     auth: AuthContext = Depends(require_auth),
     db: Session = Depends(get_db),
-) -> list[ApiTokenOut]:
+) -> Page[ApiTokenOut]:
     """List the caller's own API tokens (plaintext never included)."""
     rows = db.scalars(
         select(ApiToken)
         .where(ApiToken.owner_id == auth.user.id)
         .order_by(ApiToken.created_at.desc())
     ).all()
-    return [ApiTokenOut.model_validate(r) for r in rows]
+    return full_page([ApiTokenOut.model_validate(r) for r in rows])
 
 
 @router.post("", response_model=ApiTokenCreatedOut, status_code=status.HTTP_201_CREATED)
