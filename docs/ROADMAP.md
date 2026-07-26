@@ -40,6 +40,37 @@ Small, self-contained work that closes a concrete gap.
   been updated since then is still column-only. That fallback can only be dropped once every
   row has been re-encrypted, which is exactly what this action would do — one eager pass
   instead of waiting for each record's next write.
+- **Move the frontend build from Node 22 to Node 24.** The image's `frontend-builder` stage and
+  CI both run Node 22 (`jod`), which entered maintenance on 2025-10-21 and is supported only
+  through **2027-04-30**. Node 24 (`krypton`) is the Active LTS and is supported through
+  **2028-04-30**, so it is where this should land. Node **26** is deliberately not the target: it
+  does not become LTS until **2026-10-28**. The move spans three places that must change together
+  — `docker/Dockerfile`'s pinned `node:22-bookworm-slim` digest, `.github/workflows/ci.yml`'s
+  `node-version: "22"`, and `CONTRIBUTING.md`'s stated Node floor (plus the matching line in
+  `README.md` § Requirements) — which is exactly why it is its own item and not something a
+  Dependabot digest bump can carry. Until it happens, the 22 digest still needs refreshing on its
+  own schedule; Dependabot offers the 26 major instead of a 22 digest refresh, so declining the
+  major leaves the builder stale (see `ARCHIVE.md` §14, 2026-07-26).
+- **Frontend tooling majors from Dependabot #86.** After the Mantine/React ignores landed
+  (locked decision §2 — `ARCHIVE.md` §14, 2026-07-26), the rest of that grouped PR is still
+  wanted and still unapplied: **TypeScript 5.7 → 7.0**, **ESLint 9 → 10**, **`typescript-eslint`
+  8.19 → 8.65**, **Vite 6 → 8**, **Vitest 3 → 4**, **jsdom 26 → 29**, and the smaller bumps
+  alongside them. None of these is locked. They are grouped here because they share one risk:
+  every one of them lands on the **type-aware ESLint gate** turned on 2026-07-24, so the real
+  work is the lint-config churn they shake out, not the version numbers. Best done as a single
+  deliberate PR rather than folded into an unrelated change.
+- **Retire the deprecated Starlette status-code constants.** `status.HTTP_422_UNPROCESSABLE_ENTITY`
+  raises a `StarletteDeprecationWarning` on every attribute access — Starlette renamed it to
+  `HTTP_422_UNPROCESSABLE_CONTENT` — and it is referenced at **22 call sites** across seven routers
+  (`scans.py` ×10, `scan_schedules.py` ×4, `registries.py` ×3, `notifications.py` ×2, and one each
+  in `trivy_policy.py`, `git_credentials.py`, `backups.py`). The same rename hit
+  `HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `HTTP_413_CONTENT_TOO_LARGE`, at 2 more call sites in
+  `uploads.py`. These are the backend suite's standing deprecation warnings, recorded as
+  pre-existing at each of the last two interpreter bumps (`ARCHIVE.md` §14, 2026-07-03 and
+  2026-07-25) and never actually cleared. The change is mechanical — the constants are equal
+  integers, so no status code or behavior moves — and it takes the suite's warning output down to
+  the Starlette-TestClient httpx notice, so a genuinely new warning becomes visible instead of
+  being lost in known noise.
 - **Offline / air-gapped scanner-DB import.** The Scanners settings already drive scheduled
   online DB refreshes (`trivy image --download-db-only`, `grype db update`). Add an import path
   for environments with no outbound access to `mirror.gcr.io` / `grype.anchore.io`, so the Trivy
