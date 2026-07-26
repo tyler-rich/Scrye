@@ -17,10 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   **No interpreter CVE is cleared by this move.** It was scoped on the premise
   that 3.14.6 carried the **CVE-2025-15366** / **CVE-2025-15367** (imaplib/poplib
-  command injection) fixes; it does not — upstream declined the backport to 3.10
-  through 3.14, so they remain unfixable until 3.15, the same as on 3.13.
-  **CVE-2026-15308** and **CVE-2026-12003** were already known to be unaffected by
-  the move. All four stay waived in the dogfood scan; see issue #52.
+  command injection) fixes. It does not: released 3.14.6 has neither guard, so the
+  upgrade cleared nothing at the version the image pins. **CVE-2026-15308** and
+  **CVE-2026-12003** were already known to be unaffected by the move. All four stay
+  waived in the dogfood scan.
+
+  What *has* changed is the outlook, and only for one of them. Three of the four —
+  CVE-2026-15308, CVE-2026-12003 and **CVE-2025-15366** — now have their fixes
+  merged on the CPython `3.14` maintenance branch and unreleased, so they close on
+  the next point release, **3.14.7**; they are tracked in **issue #98** with a
+  2026-10-25 review. Only **CVE-2025-15367** (poplib) is genuinely unfixable below
+  3.15 — its fix exists on `main` alone with no backport to any maintenance branch —
+  and it is a standing accepted risk with an annual re-confirmation, tracked in
+  **issue #52**. An earlier version of this entry said all four were unfixable until
+  3.15 and pointed at #52 for all of them; both statements were wrong, and the
+  imaplib backport had in fact merged before this entry was first written.
 
   Dependencies bumped for 3.14: `pydantic` 2.10.4 → 2.13.4, `uvicorn[standard]`
   0.34.0 → 0.51.0, `sqlalchemy` 2.0.36 → 2.0.51, and a new explicit
