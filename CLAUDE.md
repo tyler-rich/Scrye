@@ -115,6 +115,27 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
     into the target branch. Confirm it directly: `git fetch origin <target-branch>` and diff/log
     against what was claimed to have landed, or check a marker file/line unique to the final
     change, and only then report the batch complete.
+- **Retargeting a stacked child PR after its parent was squash-merged requires
+  `git rebase --onto`, not just changing the base in the UI.** A squash-merge does not preserve
+  the parent branch's commits — it replaces them with one new commit on the target branch — so the
+  child's original commits are orphaned. Flipping the base in the GitHub UI does **not** re-parent
+  them: GitHub recomputes the merge base against the new target, finds the old parent commits
+  absent from its history, and falls back to a much older common ancestor, so the PR's diff
+  balloons to include everything the parent already landed. Rebase the child onto the true target
+  first, then change the base:
+  `git fetch origin <target> && git rebase --onto origin/<target> <old-parent-branch> <child-branch>`
+  followed by `git push --force-with-lease`. **Verify the diff after retargeting, every time** — a
+  child PR that suddenly shows its parent's files is this failure, not a conflict, and merging it
+  would re-apply already-landed work.
+- **A base-branch change alone never re-runs CI.** `on: pull_request` with no explicit `types:`
+  defaults to `opened`, `synchronize`, and `reopened` — it does **not** include `edited`, and
+  changing a PR's base is an `edited` event, not a `synchronize`. So after retargeting a stacked
+  PR the checks shown are the ones from the *old* base and are stale, even though they read green.
+  Either push a commit (any `synchronize` re-triggers the full workflow), re-run the workflow
+  manually, or close-and-reopen the PR — and **never treat a green check from before a base change
+  as the CI gate** required by § Definition of done item 3. A workflow that genuinely needs to
+  react to retargeting must opt in explicitly with
+  `on: pull_request: types: [opened, synchronize, reopened, edited]`.
 - **CI is created in Phase 0 and is the gate for every PR thereafter, including Phase 0's own.**
   `.github/workflows/ci.yml` runs on every pull request and push to `main`: lint the backend
   (`ruff` + `black --check`) and frontend (ESLint + Prettier), and run `pytest` plus the frontend
