@@ -178,10 +178,10 @@ scrye/
 ├── .env.example         # generated from the backend Settings model
 ├── .dockerignore        # keeps dev-only trees out of the build context
 ├── docs/
-│   ├── ARCHIVE.md       # historical build record + dated deviation log
+│   ├── ARCHIVE.md       # historical build record, dated deviation log (§14),
+│   │                    #   finding-ID decoder (§15), build-performance notes
 │   ├── ROADMAP.md       # forward-looking roadmap + known limitations
-│   ├── reviews/         # archived security/audit review notes + STATUS.md
-│   └── upgrades/        # scoping notes for larger upgrades
+│   └── screenshots/     # images embedded in the README
 ├── backend/
 │   ├── app/
 │   │   ├── main.py      # FastAPI app: API + SPA serving, startup key check,
@@ -339,8 +339,9 @@ marked `deprecated` in OpenAPI and its shape will not change. New clients should
 use `/api/scans/history`.
 
 `backend/tests/test_list_envelope.py` asserts all of the above, so a regression
-in either direction fails CI. Background: L13 / APIR-8 in
-[`docs/reviews/api-review.md`](docs/reviews/api-review.md).
+in either direction fails CI. Background: L13 / APIR-8 — see the finding-ID index
+in [`docs/ARCHIVE.md` §15](docs/ARCHIVE.md#15-finding-id-index-decoder-for-14s-citations),
+and §14's 2026-07-25 entry for the full rationale.
 
 **Commits & branches**
 

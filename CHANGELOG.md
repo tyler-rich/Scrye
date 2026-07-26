@@ -72,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   thirteen endpoints above must read the rows from `.items`
   (`resp.json()["items"]` instead of `resp.json()`). The Scrye web UI is
   unaffected — it unwraps the envelope in its API client, and no page behavior
-  changed. ([L13 / APIR-8](docs/reviews/api-review.md))
+  changed. (L13 / APIR-8 — see [`docs/ARCHIVE.md` §15](docs/ARCHIVE.md#15-finding-id-index-decoder-for-14s-citations))
 
 - **`GET /api/scans` is deprecated** in favour of `GET /api/scans/history`. It
   returns a bare array with no total, so a client paging through it cannot tell

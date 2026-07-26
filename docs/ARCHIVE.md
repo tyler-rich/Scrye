@@ -555,6 +555,14 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+**Document names in these entries.** Entries below cite the 2026-07 review reports by bare
+filename — `security-review.md`, `00-summary.md`, `full-audit-2026-07-05.md`,
+`claude-md-compliance.md`, `STATUS.md`, `python-3.14.md` and the rest. Those files lived under
+`docs/reviews/` and `docs/upgrades/` and were **deleted on 2026-07-26**; the names are kept
+because they are how the entries identify their sources, not because the paths still resolve.
+**[§15](#15-finding-id-index-decoder-for-14s-citations) is the decoder** for every finding ID
+they defined, and records how to recover any of the originals from git.
+
 **Ordering — read this before you go looking for something.** This log is **not** in one
 consistent order, and reordering it is not worth the cost: sixteen entries refer to each other
 *relatively* ("the entry below", "superseded by the entry above", "the two 2026-07-03 entries
@@ -570,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (104, newest first)
+### Index of §14 entries (105, newest first)
 
+- [2026-07-26 — Docs/Process — Review documents retired; §14 made contiguous and indexed; a false CVE claim removed from the CHANGELOG](#2026-07-26--docsprocess--review-documents-retired-14-made-contiguous-and-indexed-a-false-cve-claim-removed-from-the-changelog)
 - [2026-07-26 — Post-v1 — Socket-proxy operational behavior from a live Debian run documented (docs only)](#2026-07-26--post-v1--socket-proxy-operational-behavior-from-a-live-debian-run-documented-docs-only)
 - [2026-07-26 — Post-v1 — Stale socket-proxy wording retired from the code and Compose file](#2026-07-26--post-v1--stale-socket-proxy-wording-retired-from-the-code-and-compose-file)
 - [2026-07-26 — Infra/Process — Group A interpreter CVEs re-verified against the 3.14 branch; waivers re-pointed at a Group-A-only tracking issue (#98)](#2026-07-26--infraprocess--group-a-interpreter-cves-re-verified-against-the-314-branch-waivers-re-pointed-at-a-group-a-only-tracking-issue-98)
@@ -680,6 +689,154 @@ entry, and the anchors jump straight to it.
 ---
 
 
+### 2026-07-26 — Docs/Process — Review documents retired; §14 made contiguous and indexed; a false CVE claim removed from the CHANGELOG
+**What changed:** A docs-only cleanup acting on the 2026-07-26 repository audit
+(`docs/reviews/CLEANUP-AUDIT.md`, #101). No application code, CI, Compose, or configuration
+behavior changed. The audit's own findings were **re-verified rather than inherited** — it was
+explicit about what it had not checked, and two of its claims did not survive (see "Corrections"
+below).
+
+**1. `docs/reviews/` and `docs/upgrades/` are deleted; §15 replaces them.** Twelve review reports
+and one upgrade handoff doc — every finding in them closed — sat at the same directory level as
+the two live documents, so `docs/` read as twelve historical files next to two current ones. They
+are gone. `docs/` now contains exactly `ARCHIVE.md`, `ROADMAP.md`, and `screenshots/`.
+
+**A `docs/history/` subtree was considered and rejected.** The audit recommended moving the
+reports under `docs/history/reviews/` with a README banner. The argument against deletion was
+never "someone might want to read them" — it was that §14 cites bare finding IDs (`SC-12`,
+`P3-4`, `QUA-17`, `H5/CON-4`) relentlessly and never re-explains them, so without the reports
+those citations are unresolvable, and §14 is a document CLAUDE.md § Definition of done obliges us
+to keep writing to. That argument is satisfied by a **decoder**, not by the reports themselves:
+the new **§15** resolves every ID from all ten reports to one line and its resolving PR. Git is
+the archive for the rest. Keeping a `history/` tree would have preserved 300 KB of superseded
+reasoning to answer a question a 250-line table answers, and — as the audit itself observed about
+archiving an audit of an archive — is how the folder reached twelve files in the first place.
+
+**The originals are fully retrievable.** The commit immediately before the deletion is
+**`0780b07e5e440dcc34ce23f0a9f43fffb4079477`**. Any of them prints verbatim with:
+
+```
+git show 0780b07e5e440dcc34ce23f0a9f43fffb4079477:docs/reviews/full-audit-2026-07-05.md
+git show 0780b07e5e440dcc34ce23f0a9f43fffb4079477:docs/upgrades/python-3.14.md
+```
+
+§15 lists all thirteen paths. Nothing was rewritten before deletion, so what git holds is exactly
+what was reviewed.
+
+**Reference sweep.** Five live-document references were repointed —
+`CONTRIBUTING.md` § Project layout (both directories dropped, `screenshots/` added, and the
+`docs/` entry now names §14/§15), `CONTRIBUTING.md` § API conventions, `CHANGELOG.md`'s L13/APIR-8
+citation, and both `.github/dependabot.yml` D3 comments — all now pointing at §15. Inside §14, 59
+`docs/reviews/` and 7 `docs/upgrades/` path prefixes were stripped so the entries name the reports
+as **documents** rather than as paths that no longer resolve; a note at the top of §14 states that
+and sends the reader to §15. The dead link at the old `ARCHIVE.md:1004` —
+`claude-md-compliance-review.md`, a filename that never existed — was corrected to
+`claude-md-compliance.md` in the same pass. One reference was deliberately **left**: the
+2026-07-25 entry's record that `CONTRIBUTING.md` § Project layout had omitted `docs/upgrades/` is
+a statement about that document's state on that date, and editing it would falsify the record; it
+is marked "(as it then was)".
+
+**2. §14 is contiguous again, and indexed.** Twelve dated entries — every one from 2026-07-09
+onward, i.e. all recent work — sat underneath `## Build performance` rather than under §14, so
+scrolling §14 "to the end" stopped short of them. `## Build performance` was moved to the end of
+the file instead of re-parenting the twelve: it is self-contained and cross-referenced by **heading
+name** (`§ Build performance`) from CLAUDE.md and four workflow files, never by position, so the
+move breaks nothing — verified by grep before making it. All **104** dated entries are now under
+§14, confirmed programmatically.
+
+§14 now opens with a **newest-first index**, one anchored line per entry, plus a stated ordering
+convention: new entries go at the top. **The entries themselves were deliberately not reordered.**
+Sixteen of them refer to each other *relatively* — "the entry below", "superseded by the entry
+above", "the two 2026-07-03 entries above" — and a sort would silently invert every one of those,
+corrupting the record to fix a navigation problem. The three ordering regimes are documented
+instead, and because the index is sorted by date **regardless of physical position**, lookup no
+longer depends on the scroll order at all. This is the "document the regimes" option the scoping
+offered; it is strictly better here than a sort, not merely cheaper.
+
+**3. The `[Unreleased]` CHANGELOG carried a false, user-facing CVE claim.** It stated that
+CVE-2025-15366 and CVE-2025-15367 "remain unfixable until 3.15" because upstream declined the
+backport to 3.10–3.14, and pointed at issue **#52** for all four waived CVEs. Both halves are
+false as of the two 2026-07-26 entries below, and this text **ships verbatim as release notes** —
+tagging would have made it permanent published history. Corrected against `ci/grype.yaml` as it
+stands: three of the four (CVE-2026-15308, CVE-2026-12003 and **CVE-2025-15366**) have their fixes
+merged on the CPython `3.14` maintenance branch, unreleased, closing on **3.14.7**, tracked in
+**#98**; only CVE-2025-15367 (poplib) is genuinely 3.15-only and still tracked in **#52**. What
+was true is kept and restated: released 3.14.6 carries neither guard, so the runtime bump cleared
+nothing at the version the image pins.
+
+The same false claim sat in **§0 locked decision #7** — the "what is locked" summary a reader
+treats as current, unlike a dated entry — and was amended there too. The dated 2026-07-25 and
+2026-07-13 entries that carry the original claim were **not** edited: they are superseded in place
+by the entries below, and the trail is the point.
+
+**4. `ROADMAP.md`.** Struck two completed items — "Pin GitHub Actions to commit SHAs" (#57;
+verified: `ci.yml` 8 SHA-pinned `uses:`, `dev-nightly.yml` 3, `publish.yml` 3, `rescan.yml` 2) and
+"Frontend test runner" (#78; verified: `vitest 3.2.7`, `"test": "vitest run"`, 20 test files). The
+"Row-bound secret AAD" item was **false as stated** — it claimed secrets are bound to the column
+and not the row, but `secret_store.py`'s `row_aad()` has composed `<table>.<column>:<row-id>` since
+L1/SEC-7 (#64) and every write binds to the row. What actually remains is the *cutover*: the
+decrypt path still falls back to the bare column tag for pre-#64 ciphertext, and that fallback can
+only be dropped once every row has been re-encrypted. It is therefore folded into the existing
+"Admin bulk secret re-encryption" item rather than struck, since that is the action that would do
+it. Five settings-level items that existed only in §14 prose — and were therefore invisible for
+weeks — were collected into the public-repo governance checklist: Actions workflow permissions →
+read-only (2026-07-06), confirm the GHCR package is **public** (2026-07-06, a check whose premise
+inverted when the repo went public on 2026-07-09 and which is still unverified in either
+direction), delete the unused `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets (2026-07-09), set the
+GitHub profile display name to `tyler-rich` (R7/D4), and confirm Dependabot security alerts are
+enabled.
+
+**5. `CLAUDE.md` § Git & PR conventions gains two rules**, both learned the expensive way during
+the stacked-PR work and unrecorded until now: retargeting a stacked child PR after its parent was
+squash-merged requires `git rebase --onto` (flipping the base in the UI recomputes the merge base
+against an absent history and balloons the diff to re-include everything the parent landed), and
+`on: pull_request` without explicit `types:` does not fire on `edited`, so a base change never
+re-runs CI and the green check shown after a retarget is from the *old* base.
+
+**6. `CONTRIBUTING.md` § Releasing gains a "Before you tag" checklist.** The section documented the
+promotion-title convention and the tag mechanics but had no pre-tag gate, while this cleanup alone
+surfaced four things that must happen before a tag: review `[Unreleased]` for stale or false claims
+(item 3 above is exactly that failure), verify `THIRD_PARTY_LICENSES/` against the scanner versions
+actually pulled at build time, triage open Dependabot PRs, and regenerate `requirements.lock` if
+backend deps moved. Plus the two after-tag steps: back-merge `main` into `dev`, and re-run
+`rescan.yml`.
+
+**Corrections to the audit that produced this work.** Both were caught by checking rather than
+transcribing, which is the reason the scoping asked for verification:
+- It reported **"fourteen dated deviation entries"** misfiled under `## Build performance`. There
+  are **twelve**; the other two of the fourteen `###` headings under that section are Build
+  performance's own sub-headings ("Why the build was slow…", "Invariants — do NOT undo these").
+  Its own enumeration listed twelve line numbers, so the prose count was the error, not the list.
+- It reported **33 prunable remote branches out of 39**. The repository carries **42** branches
+  today: 36 merged leftovers, `dev`, `main`, and 4 Dependabot heads. Its own enumeration listed 35
+  (29 named + 6 review branches), so "33" was an undercount even when written; its own branch has
+  merged since.
+
+**Verified, not assumed.** `THIRD_PARTY_LICENSES/` — which the audit explicitly flagged as
+unchecked — was verified this session: the version table (Trivy 0.72.0, Grype 0.115.0, Syft
+1.46.0) matches the `TRIVY_VERSION`/`GRYPE_VERSION`/`SYFT_VERSION` args in `docker/Dockerfile`, and
+all four bundled files are **byte-identical** to what upstream ships at those tags
+(`trivy/LICENSE`, `trivy/NOTICE`, `grype/LICENSE`, `syft/LICENSE`); the claim that Grype and Syft
+ship no `NOTICE` was confirmed by 404 at both tags. Issues **#63** and **#83** were re-verified
+resolved in code (`docker/docker-compose.yml`'s wollomatic allowlist and seven regression tests;
+`AuthContext.tsx`'s `applyAuthenticated()` wired into all three authentication paths) and are safe
+for the maintainer to close by hand — closing keywords never fired because PRs target `dev`, not
+the default branch. No workflow, test, or source file references either deleted directory
+(grepped before deleting), and the four `§ Build performance` workflow cross-references are by
+heading name and survive the move.
+**Why:** `docs/` had accumulated twelve closed-finding documents beside two live ones, §14's most
+recent two weeks of entries were filed under an unrelated heading where nobody scrolling would
+find them, and the CHANGELOG was one `git tag` away from publishing a false CVE claim as release
+notes. The finding-ID index is the piece that makes deletion safe rather than lossy: it is what
+§14's citations actually need, and it is maintained in the same file as the citations instead of
+in a folder that drifts out from under them.
+**Plan section affected:** §0 (#7 — CVE wording corrected), §14 (structure, index, ordering
+convention), new §15 (finding-ID index), § Build performance (moved to end of file, content
+unchanged). `CLAUDE.md` § Git & PR conventions; `CONTRIBUTING.md` § Project layout, § API
+conventions, § Releasing; `CHANGELOG.md` `[Unreleased]`; `docs/ROADMAP.md`;
+`.github/dependabot.yml` comments. Docs and comments only — no code, schema, API-contract,
+security-model, job-model, auth, or CI-behavior change.
+
 ### 2026-07-25 — Docs/Process — README + CONTRIBUTING audited against the post-remediation codebase
 **What changed:** A docs-only pass reconciling the two user/contributor-facing documents with the
 state §14's remediation-cycle entries left the code in. No application code, CI, or configuration
@@ -730,7 +887,7 @@ re-checked at `file:line` before being written or left alone.
   gates, always with a stated reason — and the nine existing ones are named so the next reader
   doesn't have to re-derive whether they are drift.
 - **§ Project layout was stale.** It listed `ci.yml` as the only workflow (there are four), omitted
-  `.github/actions/build-image/`, `dependabot.yml`, `CHANGELOG.md`, `SECURITY.md`, `docs/upgrades/`,
+  `.github/actions/build-image/`, `dependabot.yml`, `CHANGELOG.md`, `SECURITY.md`, `` (as it then was),
   `frontend/src/lib/`, `frontend/src/test/`, and `api/pagination.py`.
 - **§ Releasing lacked the promotion-title convention that `CLAUDE.md` points at it for.**
   CLAUDE.md § Coding standards cites "`CONTRIBUTING.md` § Releasing" as the source for the plain
@@ -791,7 +948,7 @@ and reading two stdlib functions took minutes and settled a question two documen
 ### 2026-07-25 — Post-release — Backend runtime bumped Python 3.13 → 3.14 (locked decision revised)
 **What changed:** The locked backend runtime was revised from **Python 3.13 to Python 3.14** — the
 second interpreter bump, mirroring the 3.12 → 3.13 precedent below (2026-07-03). Executed from the
-scoping/handoff doc `docs/upgrades/python-3.14.md`, which the 2026-07-13 entry created when the move
+scoping/handoff doc `python-3.14.md`, which the 2026-07-13 entry created when the move
 was deferred. Concretely: the Dockerfile base image is now `python:3.14-slim-bookworm` (digest-pinned
 to `sha256:86f975ac…`, which is **3.14.6**) for both the venv-builder and runtime stages;
 `backend/pyproject.toml` `requires-python` is `>=3.14`; the CI backend job runs on Python `3.14` and
@@ -854,7 +1011,7 @@ oversight. ruff's target-version gates only which lint rules apply and emits no 
 it does track the real runtime floor at `py314`.
 
 **CVE outcome (issue #52) — the scoping doc's central premise turned out to be wrong, and this
-upgrade clears none of the four CVEs.** Both `docs/upgrades/python-3.14.md` and issue #52's
+upgrade clears none of the four CVEs.** Both `python-3.14.md` and issue #52's
 resolution-trigger line asserted that **Python 3.14.6 already carries the CVE-2025-15366 /
 CVE-2025-15367 fixes** (imaplib/poplib command injection, both MEDIUM), making "move off the 3.13
 line" the practical way to clear them — that was the stated reason this upgrade project existed. It
@@ -891,7 +1048,7 @@ above is confirmed by the CI dogfood report rather than a local scan.
 **Plan section affected:** §0 (#7, new locked runtime), §2 (tech stack), §9.1 (base image),
 §12 (Phase 6 self-scan), CLAUDE.md § Locked decisions #2; supersedes the 2026-07-13
 "CPython interpreter CVEs on 3.13 accepted as tracked risk; 3.14 deferred" entry below and closes
-out `docs/upgrades/python-3.14.md`.
+out `python-3.14.md`.
 
 ### 2026-07-24 — Post-release — P3-8 closed: `noUncheckedIndexedAccess` + type-aware ESLint
 **What changed:** The two TS-strictness flags P3-8 deferred to a dedicated pass are now on, in two
@@ -938,7 +1095,7 @@ the call site with **zero `eslint-disable` comments added**:
 discarded; the tuple retype and the hoisted lookup are type/structure-only; every handler's error
 path is untouched. Full suite (54 tests / 18 files), `tsc -b`, `eslint .`, Prettier, and
 `npm run build` all green.
-**Why:** Closes the last open item in `docs/reviews/STATUS.md` — P3-8's strictness-flag half, split
+**Why:** Closes the last open item in `STATUS.md` — P3-8's strictness-flag half, split
 out of #81 precisely so it could be reviewed on its own. Both flags are permanent gates from here:
 new indexed reads and new unawaited promises now fail CI rather than accumulating.
 **Plan section affected:** none — frontend build/lint configuration and type-level handling only; no
@@ -974,11 +1131,11 @@ wart that #82's machinery made closeable in a few lines. Reuses the codebase's g
 than introducing a third pattern, per the issue's scope note.
 **Plan section affected:** none — frontend session-state sequencing only; no schema, API,
 security-model, or job-model change. Companion to the P3-4 entry below
-(`docs/reviews/frontend-review.md` § Priority 3).
+(`frontend-review.md` § Priority 3).
 
 ### 2026-07-24 — Post-release — Test-debt back-fill for M19, M20, and M21 (tests only)
 **What changed:** Nothing in the application — this entry records **new tests only**, back-filling
-the three fixes `docs/reviews/STATUS.md` § "Test debt on already-shipped fixes" listed as
+the three fixes `STATUS.md` § "Test debt on already-shipped fixes" listed as
 "resolved in code, proof absent". The fixes landed in #62, before the jsdom/RTL harness existed
 (#78), so M19 had no coverage at all and M20/M21 were covered only at the pure-helper level
 (`lib/polling.test.ts`, `lib/latest.test.ts`) with the page-effect wiring that consumes those
@@ -1015,7 +1172,7 @@ they guard the fix's *non*-regression, and the pre-fix-failing assertions sit al
 the same files.
 
 **Plan section affected:** §12 Phase 6 / CLAUDE.md § Coding standards → Testing; closes the
-"Test debt on already-shipped fixes" block in `docs/reviews/STATUS.md` §1.
+"Test debt on already-shipped fixes" block in `STATUS.md` §1.
 
 ### 2026-07-24 — Post-release — P3-4: sequence auth refresh against session invalidation
 **What changed:** `frontend/src/auth/AuthContext.tsx` — `refresh()` wrote the `fetchAuthStatus`
@@ -1039,18 +1196,18 @@ mid-refresh) plus the happy path; both race tests were confirmed to fail against
 provider. `src/test/render.tsx` re-exports `act` so tests keep importing the whole Testing Library
 surface from one place.
 **Why:** P3-4 (frontend review, LOW with a correctness/security edge) — the last open finding in
-the Priority-3 batch, tracked in `docs/reviews/STATUS.md` § 1. Low likelihood and self-healing, but
+the Priority-3 batch, tracked in `STATUS.md` § 1. Low likelihood and self-healing, but
 it is a session-lifecycle defect: the UI can present an authenticated shell for a session the
 backend has already ended. A generation counter was chosen over aborting the request because the
 invalidation must also invalidate a response that has *already* been received but not yet applied,
 which an `AbortController` does not cover; it reuses the codebase's existing guard idiom rather
 than introducing a new one.
 **Plan section affected:** none — frontend session-state sequencing only; no schema, API,
-security-model, or job-model change. `docs/reviews/frontend-review.md` P3-4.
+security-model, or job-model change. `frontend-review.md` P3-4.
 
 ### 2026-07-24 — Post-release — Frontend Priority-3 polish batch (P3-1, P3-2, P3-5, P3-6, P3-7, P3-8)
-**What changed:** Worked the frontend-review "Priority 3" backlog (`docs/reviews/frontend-review.md`
-§Priority 3; tracked in `docs/reviews/STATUS.md`), one commit per finding:
+**What changed:** Worked the frontend-review "Priority 3" backlog (`frontend-review.md`
+§Priority 3; tracked in `STATUS.md`), one commit per finding:
 - **P3-1 (`ScansPage.tsx`)** — history filters/date-range/sort/page were `useState`-only, so
   Back/bookmark/share reset the view. The active view is now read from the URL on mount and mirrored
   back into `useSearchParams` (`replace`, defaults omitted), making History deep-linkable. jsdom test.
@@ -1084,8 +1241,8 @@ non-null-assertion fixes) and switching ESLint to `recommendedTypeChecked`/type-
 tracked as its own dedicated pass rather than folded into this polish batch (the review itself framed
 these as residual gaps, not violations). P3-3 was resolved earlier in #77; P3-4 remains open.
 **Plan section affected:** none — frontend UX/a11y/maintainability polish only; no schema,
-security-model, or job-model change. `docs/reviews/frontend-review.md` §Priority 3;
-`docs/reviews/STATUS.md`.
+security-model, or job-model change. `frontend-review.md` §Priority 3;
+`STATUS.md`.
 
 ### 2026-07-20 — Post-release — SC-12: pin and hash-lock the setuptools build backend
 **What changed:** `backend/pyproject.toml`'s `[build-system].requires` was `setuptools>=75` — unpinned
@@ -1101,7 +1258,7 @@ hash-verified setuptools already installed from the lock instead of pip fetching
 setuptools into an isolated build environment. Regression guards added/updated in
 `tests/test_dockerfile_supply_chain.py` (asserts the `--no-build-isolation` install form and that the
 lock carries a hash-pinned `setuptools==`).
-**Why:** SC-12 (supply-chain review, LOW; omitted from `00-summary.md` — see `docs/reviews/STATUS.md`).
+**Why:** SC-12 (supply-chain review, LOW; omitted from `00-summary.md` — see `STATUS.md`).
 Closes the last floating/unhashed build-time dependency, so a build of a given commit resolves setuptools
 identically and verifiably. A consequence is that setuptools (small, now hash-pinned) is present in the
 final `/opt/venv` — an accepted trade for a fully hash-verified build with no isolated-build PyPI fetch;
@@ -1112,7 +1269,7 @@ CI command emits only declared groups, keeping the lock reproducible and drift-g
 the CI compile command is idempotent (no lock drift).
 **Plan section affected:** none — build reproducibility / supply-chain hardening only. Locked decision §6
 (no floating deps / hash-pinned build), Coding standards § Dependency hygiene (hash-pinned lockfile).
-`docs/reviews/supply-chain-review.md` SC-12.
+`supply-chain-review.md` SC-12.
 
 ### 2026-07-20 — Post-release — D5b: pin ruff isort first-party classification so import ordering is version-stable
 **What changed:** `backend/tests/test_migrations.py`'s import block passed ruff's `I001` (import sorting)
@@ -1134,7 +1291,7 @@ intentionally **not** bumped in this change — that remains separate, deliberat
 §14 / `#59` note (bumping ruff needs its own review of new lint findings). Confirmed clean under both
 ruff `0.8.6` (pinned/CI) and `0.15.22` across the whole backend.
 **Plan section affected:** none — lint determinism only; no schema, security-model, or job-model change.
-`docs/reviews/claude-md-compliance-review.md` D5.
+`claude-md-compliance.md` D5.
 
 ### 2026-07-20 — Post-release — SC-14: keep the backend test suite and dev scripts out of the runtime image
 **What changed:** The final image stage copies the backend tree wholesale
@@ -1158,7 +1315,7 @@ but not that these dirs are *absent* — a **content assertion in the CI dogfood
 missing. No local `docker` daemon was available in the fix session, so image-content absence is confirmed
 live by that CI step (and was pre-confirmed by a faithful `.dockerignore` pattern-match simulation).
 **Plan section affected:** none — image-content hygiene only; no schema, security-model, or job-model
-change. `docs/reviews/supply-chain-review.md` SC-14; CLAUDE.md § Hard security rules (CIS baseline —
+change. `supply-chain-review.md` SC-14; CLAUDE.md § Hard security rules (CIS baseline —
 slim runtime image).
 
 ### 2026-07-20 — Post-release — P3-3: surface credential/filter option-fetch failures instead of silently swallowing them
@@ -1178,9 +1335,9 @@ look like "no credentials configured", the misleading path that could get a priv
 anonymously. No test added: the Vitest suite runs in the Node environment and covers only pure
 `src/lib/` helpers — there is no jsdom/React-Testing-Library harness to render a page component, and
 adding one is out of scope for a minimal LOW fix (consistent with the existing untested page-effect
-posture noted in `docs/reviews/STATUS.md` § 1).
+posture noted in `STATUS.md` § 1).
 **Plan section affected:** none — UI error-surfacing only; no schema, security-model, or job-model
-change. `docs/reviews/frontend-review.md` P3-3.
+change. `frontend-review.md` P3-3.
 
 ### 2026-07-20 — Docs/Process — CLAUDE.md: strip auto-appended PR-body attribution footers after opening
 **What changed:** Added a rule to `CLAUDE.md` § Git & PR conventions requiring that, immediately after
@@ -1200,7 +1357,7 @@ new rule to its own body.)
 security-model, or job-model change.
 
 ### 2026-07-13 — Post-release — H1/SEC-1: repository scan targets must be remote clone URLs (local-path arbitrary-read closed) [back-fill]
-_Back-fill entry (written 2026-07-20): records a fix that merged earlier (#53) without a §14 entry — see `docs/reviews/STATUS.md` § "ARCHIVE.md §14 gaps"._
+_Back-fill entry (written 2026-07-20): records a fix that merged earlier (#53) without a §14 entry — see `STATUS.md` § "ARCHIVE.md §14 gaps"._
 **What changed:** A `target_type=repository` scan was validated only for length and a leading `-`, then
 passed straight to `trivy repo --`. Trivy's `repo` subcommand also accepts a **local filesystem path**,
 so a target like `/data` or `/run/secrets` made Trivy walk the container filesystem and persist the
@@ -1223,10 +1380,10 @@ through the filesystem gate) fits the existing schema-layer validation and avoid
 repo capability Scrye never offered — the target field is documented as a clone URL with no UI/config for
 local paths.
 **Plan section affected:** §4 (scan targets / request validation), §6 (filesystem allowlist as the sole
-local-path gate); `docs/reviews/security-review.md` SEC-1. No schema or job-model change.
+local-path gate); `security-review.md` SEC-1. No schema or job-model change.
 
 ### 2026-07-13 — Post-release — H9/SC-2 + H10/SC-3: SHA-pin all Actions, expand Dependabot, harden publish checkouts [back-fill]
-_Back-fill entry (written 2026-07-20): records a fix that merged earlier (#57) without a §14 entry — see `docs/reviews/STATUS.md` § "ARCHIVE.md §14 gaps"._
+_Back-fill entry (written 2026-07-20): records a fix that merged earlier (#57) without a §14 entry — see `STATUS.md` § "ARCHIVE.md §14 gaps"._
 **What changed:** Supply-chain hardening of the CI/publish workflows (#57):
 - **SC-2 (H9).** Every external `uses:` in `.github/workflows/*.yml` **and** the composite action
   `.github/actions/build-image/action.yml` is pinned to a full commit SHA, with the human-readable
@@ -1251,15 +1408,15 @@ the composite action un-updated. Hardening the publish checkouts drops the persi
 the only token-bearing workflows; converging D3/L25 removes the version skew between the composite action
 and `ci.yml`.
 **Plan section affected:** locked decision §6 (publish/CI supply-chain hardening), CLAUDE.md § Dependency
-hygiene / CI; `docs/reviews/supply-chain-review.md` SC-2/SC-3/SC-11, `claude-md-compliance.md` D3. No
+hygiene / CI; `supply-chain-review.md` SC-2/SC-3/SC-11, `claude-md-compliance.md` D3. No
 schema, application-security-model, or job-model change.
 
 ### 2026-07-13 — Docs/Process — CLAUDE.md compliance-drift closure (D1, D2, R1–R6) [back-fill]
-_Back-fill entry (written 2026-07-20): records a docs-only fix that merged earlier (#65) without a §14 entry — see `docs/reviews/STATUS.md` § "ARCHIVE.md §14 gaps"._
+_Back-fill entry (written 2026-07-20): records a docs-only fix that merged earlier (#65) without a §14 entry — see `STATUS.md` § "ARCHIVE.md §14 gaps"._
 **What changed:** Documentation-only reconciliation (#65) closing the drift flagged in
-`docs/reviews/claude-md-compliance.md`. **D1:** swept ~100 dead `docs/PLAN.md` → `docs/ARCHIVE.md`
+`claude-md-compliance.md`. **D1:** swept ~100 dead `docs/PLAN.md` → `docs/ARCHIVE.md`
 cross-references across the backend, frontend, and Dockerfile (86 files, 106 references; section anchors
-unchanged; historical files under `docs/ARCHIVE.md` and `docs/reviews/` intentionally keep their PLAN.md
+unchanged; historical files under `docs/ARCHIVE.md` and `` intentionally keep their PLAN.md
 refs as build-history record). **D2:** corrected the stale "no registry publishing" comments in
 `docker/Dockerfile` and `docker/docker-compose.yml` to match locked decision §6 (GHCR publishing).
 **R1–R6:** amended CLAUDE.md text to describe current reality — hand-written typed API client (FE-2),
@@ -1276,7 +1433,7 @@ Recorded here as a short closure pointer to those existing entries rather than r
 already-logged §14 deviations. Process/docs only; no schema, security-model, or job-model change.
 
 ### 2026-07-13 — Post-release — Backend dev-dependency bumps (pytest, pytest-asyncio, black) [back-fill]
-_Back-fill entry (written 2026-07-20): records a fix that merged earlier (#59) without a §14 entry — see `docs/reviews/STATUS.md` § "ARCHIVE.md §14 gaps"._
+_Back-fill entry (written 2026-07-20): records a fix that merged earlier (#59) without a §14 entry — see `STATUS.md` § "ARCHIVE.md §14 gaps"._
 **What changed:** Bumped the `backend/pyproject.toml` dev extras (#59): `pytest` 8.3.4 → 9.0.3,
 `pytest-asyncio` 0.25.1 → 1.4.0, `black` 24.10.0 → 26.3.1; **`ruff` deliberately left at 0.8.6**. This
 corrected Dependabot's grouped pip bump (#58), which raised `pytest`/`black` but left `pytest-asyncio`
@@ -1289,7 +1446,7 @@ because it changed pinned versions it warrants a §14 line under the dependency-
 was held at 0.8.6 on purpose — bumping it would surface the latent `test_migrations.py` I001 straggler
 tracked as **D5b** (a separate follow-up), not something to fold into a routine bump. Dev/test-only pins:
 the runtime image and hash-pinned `backend/requirements.lock` are unaffected.
-**Plan section affected:** CLAUDE.md § Dependency hygiene (pinned dev deps); `docs/reviews/supply-chain-review.md`
+**Plan section affected:** CLAUDE.md § Dependency hygiene (pinned dev deps); `supply-chain-review.md`
 dev-dep staleness note. No runtime dependency, schema, security-model, or job-model change.
 
 ### 2026-07-13 — Post-release — CON-4 (H5): scanner JSON parse/normalize hopped off the event loop
@@ -1312,7 +1469,7 @@ remediation batch and had **no prior §14 entry** (it fell in the gap between th
 **same** `anyio.to_thread.run_sync` primitive CON-5 used for blocking DB work — a mechanical thread hop,
 no new concurrency primitive, no schema/security-model/job-model change (§0.2 single-container in-process
 async worker unchanged).
-**Plan section affected:** `docs/reviews/concurrency-review.md` CON-4; no change to §0/§4/§7. Also folds
+**Plan section affected:** `concurrency-review.md` CON-4; no change to §0/§4/§7. Also folds
 in L24/SC-11 (add `persist-credentials: false` to `.github/workflows/ci.yml` checkouts) as a separate
 commit — CLAUDE.md hard security rules / CI hygiene.
 
@@ -1322,7 +1479,7 @@ GitHub **squash-merge** authors the squashed commit with the merging account's *
 which the repo-local `git config user.name "tyler-rich"` cannot override. The rule therefore requires
 the GitHub profile display name to also read `tyler-rich` for the identity convention to hold
 end-to-end.
-**Why:** The CLAUDE.md compliance audit (`docs/reviews/claude-md-compliance.md`, GP4/D4) found 8
+**Why:** The CLAUDE.md compliance audit (`claude-md-compliance.md`, GP4/D4) found 8
 squash-merge promotion commits authored as "Tyler Richardson" (the account's display name) rather than
 `tyler-rich` — same account, same mandated no-reply email, only the *name* diverging. This is not
 something a session can fix via `git config`: squash authorship is assigned server-side at merge time
@@ -1338,7 +1495,7 @@ an explicit exception: `dev` → `main` **promotion** PRs use a plain `Promote d
 rather than a Conventional-Commit prefix, matching `CONTRIBUTING.md` § Releasing.
 **Why:** Promotions are deliberate, maintainer-initiated release steps (not routine feature work); the
 squash-merge subject names the release action rather than a code change, so a `feat:`/`fix:` prefix
-would misdescribe it. The CLAUDE.md compliance audit (`docs/reviews/claude-md-compliance.md`, GP6) noted
+would misdescribe it. The CLAUDE.md compliance audit (`claude-md-compliance.md`, GP6) noted
 the promotion titles were not Conventional-Commit-shaped; recording the convention as a stated
 exception — rather than "fixing" compliant release titles toward a prefix — matches the release process
 already documented in `CONTRIBUTING.md` § Releasing.
@@ -1346,9 +1503,9 @@ already documented in `CONTRIBUTING.md` § Releasing.
 schema, security-model, or job-model change.
 
 ### 2026-07-13 — Post-release — Security + supply-chain review batch (H11, M2–M5, M22–M26, L1–L4, L23)
-**What changed:** Worked the security-review (`docs/reviews/security-review.md`, SEC-*) and
-supply-chain-review (`docs/reviews/supply-chain-review.md`, SC-*) findings summarized in
-`docs/reviews/00-summary.md`, one commit per finding:
+**What changed:** Worked the security-review (`security-review.md`, SEC-*) and
+supply-chain-review (`supply-chain-review.md`, SC-*) findings summarized in
+`00-summary.md`, one commit per finding:
 - **H11 / SC-1.** Added a hash-pinned backend lockfile (`backend/requirements.lock`, compiled with
   `uv pip compile --generate-hashes` — uv is build/dev-time only, pyproject stays PEP 621). The
   image installs runtime deps with `pip install --require-hashes -r requirements.lock` then the app
@@ -1403,7 +1560,7 @@ schema or job-model change.
 
 ### 2026-07-13 — Post-release — Frontend-review wave 2 (M19–M21, L16–L22)
 **What changed:** Worked the remaining confirmed frontend-review findings from
-`docs/reviews/frontend-review.md` (summarized in `docs/reviews/00-summary.md`), one commit each.
+`frontend-review.md` (summarized in `00-summary.md`), one commit each.
 No schema, security-model, or contract change — all fixes are client-side lifecycle/UX/a11y:
 - **M19 / P1-2.** Settings forms (Retention, General, Backups schedule) no longer render editable
   with Save enabled before their initial GET resolves — they gate the inputs/Save on a `loaded`
@@ -1436,7 +1593,7 @@ touched.
 
 ### 2026-07-13 — Post-release — API-review batch (APIR-1…APIR-10)
 **What changed:** Worked the API/data-model review findings from
-`docs/reviews/api-review.md` (summarized in `docs/reviews/00-summary.md`), one commit each:
+`api-review.md` (summarized in `00-summary.md`), one commit each:
 - **APIR-1 (H7).** `IgnoreRuleIn.expires_at` now normalizes aware datetimes to naive UTC via a
   new shared `core.timeutil.to_naive_utc` (which `scan_filters` also reuses), so a Trivy ignore
   rule's offset is no longer silently dropped.
@@ -1482,13 +1639,13 @@ which only signalled the direct child. The helper (and the pre-existing `wait()`
 **Why:** `git clone` spawns `git-remote-https`, and trivy/grype can spawn their own helpers; on
 timeout, output-cap overflow, or worker-shutdown cancellation the direct child died but these
 grandchildren kept running with `SCRYE_GIT_PASSWORD`/`GIT_ASKPASS` still in their environment
-(`docs/reviews/concurrency-review.md` CON-2, Top 5 #4) — a leaked credential-bearing process racing
+(`concurrency-review.md` CON-2, Top 5 #4) — a leaked credential-bearing process racing
 `generic_repo_checkout`'s best-effort cache cleanup. Process-group kill is the review's recommended
 fix and covers every current and future scanner child through the single `run_command` seam.
 **Plan section affected:** none (bug fix; no schema, security-model, or job-model change).
 
 ### 2026-07-13 — Post-release — CON-1/CON-11/CON-3/SEC-2 remediation; worker seam gains optional hooks
-**What changed:** Three coupled fixes from the 2026-07-12 review batch (`docs/reviews/00-summary.md`
+**What changed:** Three coupled fixes from the 2026-07-12 review batch (`00-summary.md`
 Top 5 #2), landed as one change-set because they compound into a single failure theme:
 - **CON-1 + CON-11.** The worker's DB commits (the queued→running claim, `_persist_success`,
   `_fail`, `_store_failure_output`) now run through a bounded retry-with-backoff helper for SQLite
@@ -1524,7 +1681,7 @@ model (§0.2) — the worker stays a single-container in-process async worker.
 
 ### 2026-07-13 — Post-release — CON-5–CON-20 remediation: async-path, shutdown, and pool hygiene
 **What changed:** The remaining medium/low concurrency-review findings
-(`docs/reviews/concurrency-review.md`), each landed as its own commit with a regression test:
+(`concurrency-review.md`), each landed as its own commit with a regression test:
 - **CON-5** (event-loop offload). The maintenance tick's scanner-DB policy read
   (`workers/db_update.py`), the worker's per-scan Trivy/Grype policy loads, and the scan-queue
   insert/audit/commit (`api/scans.py`) now hop off the loop via a worker thread, matching the
@@ -1860,7 +2017,7 @@ and keep Trivy's native `GITHUB_TOKEN`/`GITLAB_TOKEN` env path (already off-argv
 the URL, which necessarily lands on argv. Cloning with the real `git` binary is the
 only way to keep the credential off the process list while still supporting generic
 hosts. Decision and implementation approach are per
-`docs/reviews/phase3-finding2-resolution.md` (Option 1). Two adaptations to that
+`phase3-finding2-resolution.md` (Option 1). Two adaptations to that
 spec, both preserving its security mechanics: the askpass script is `0700` rather
 than `0600` because git *execs* it (a non-executable helper fails with `EACCES`),
 and the clone runs through the existing async `run_command` seam on the container's
@@ -2596,7 +2753,7 @@ letting contributors work freely without risking the release branch.
 architectural sections affected.
 
 ### 2026-07-05 — Post-P6 audit remediation (P0) — token-mint capping, backup/restore, webhook URLs
-**What changed:** First tier (P0) of the full-repo audit (`docs/reviews/full-audit-2026-07-05.md`,
+**What changed:** First tier (P0) of the full-repo audit (`full-audit-2026-07-05.md`,
 §10). Fixes carry their audit finding IDs:
 - **QUA-1 (§5, privilege escalation):** `POST /api/api-tokens` capped minting against the owner's
   account role instead of the caller's effective (token-capped) role, so a low-privilege token
@@ -2975,7 +3132,7 @@ CPython point-release cadence; Group B / 2025-15366 + 2025-15367 later, tied to 
 horizon), each referencing tracking issue #52. The now-stale `ci/grype.yaml` note claiming 3.13's
 current patch carries the interpreter fixes is corrected in the same change. The move to Python 3.14
 was evaluated and **deferred to a separate, deliberately-scoped project** (handoff doc:
-`docs/upgrades/python-3.14.md`), not undertaken as a reaction to this scan.
+`python-3.14.md`), not undertaken as a reaction to this scan.
 **Why:** All four are genuinely unfixable-by-us on 3.13 today — two await an unreleased 3.13.x point
 release, two are permanently 3.15+-only — which is exactly the "only genuinely unfixable upstream/
 OS-level items may remain, tracked" carve-out in CLAUDE.md § Dependency hygiene. Moving to 3.14 is
@@ -3008,13 +3165,13 @@ credential-load-failure warning. `eslint.config.js` gained a small override turn
 graph). CONTRIBUTING.md § Testing documents the `.test.ts`→node / `.test.tsx`→jsdom convention and
 the `renderWithProviders` pattern.
 **Why:** Four already-shipped fixes (P3-3, and M19/M20/M21's page-effect wiring) had only helper-level
-or no tests because there was no DOM harness to render components under — see `docs/reviews/STATUS.md`
+or no tests because there was no DOM harness to render components under — see `STATUS.md`
 § "Test debt on already-shipped fixes." This lands the infrastructure and proves it works; it does
 **not** backfill the M19/M20/M21/P3-3 page-level tests (that's follow-up work now unblocked). Aligns
 with CLAUDE.md § Testing ("the frontend uses Vitest … expanding over time"). Test-tooling only — no
 runtime dependency, schema, security-model, or job-model change.
 **Plan section affected:** CLAUDE.md § Testing (frontend Vitest coverage expanding), § Coding
-standards (TypeScript); `docs/reviews/STATUS.md` § "Remaining work" test-debt section. No change to
+standards (TypeScript); `STATUS.md` § "Remaining work" test-debt section. No change to
 §0/§2/§4/§7.
 
 ### 2026-07-24 — Post-v1 — Docker socket proxy migrated `tecnativa` → `wollomatic/socket-proxy` (issue #63, M23/SC-7 deferred half)
@@ -3118,7 +3275,7 @@ question nobody asks. Four endpoints are therefore deliberately *not* enveloped:
 `/api/docker-environments/{id}/images` (live enumeration proxied off a Docker daemon; nothing
 persisted). The rule and the four exceptions are documented in `CONTRIBUTING.md` § API conventions
 so a later review reads them as a decision rather than as drift — the same treatment the other
-deferrals got in `docs/reviews/STATUS.md` § 2.
+deferrals got in `STATUS.md` § 2.
 
 **Behind shared helpers, per the ROADMAP note.** New `backend/app/api/pagination.py` holds
 `Page[ItemT]` and `full_page(items)`; each route declares `response_model=Page[ThingOut]` and
@@ -3170,7 +3327,7 @@ paginates that didn't before. It argues against *paginating* these lists, not ag
 uniform shape.
 **Plan section affected:** none structurally (no schema, security-model, job-model, or auth change).
 `docs/ROADMAP.md` § Backend structural cleanup loses its list-envelope half; the four-secret-CRUD-
-router consolidation remains open. `docs/reviews/STATUS.md` moves L13 / APIR-8 out of § 2 "Deferred
+router consolidation remains open. `STATUS.md` moves L13 / APIR-8 out of § 2 "Deferred
 by decision". `CONTRIBUTING.md` gains § API conventions; `CHANGELOG.md` records the contract change.
 
 ### 2026-07-25 — Post-v1 — Socket-proxy follow-ups: API-version bound and `DOCKER_GID` blast radius documented (docs only)
@@ -3453,7 +3610,7 @@ API-contract, security-model, job-model, or auth change.
 ## 15. Finding-ID index (decoder for §14's citations)
 
 §14 cites bare finding IDs — `SC-12`, `P3-4`, `QUA-17`, `H5/CON-4` — and never re-explains them.
-Those IDs came from ten review documents that lived under `docs/reviews/` and `docs/upgrades/`
+Those IDs came from ten review documents that lived under `` and ``
 until 2026-07-26, when they were deleted: every finding in them was closed, and a folder of
 closed findings sitting beside the two live documents was costing more than it returned. This
 section is what replaced them — **a decoder, not a summary**. It resolves an ID to one line of
@@ -3461,7 +3618,7 @@ what it was and, where known, the PR that closed it. It is not a backlog: nothin
 
 **The originals are still retrievable.** They were removed in a single commit; the commit
 immediately before it is recorded in the 2026-07-26 §14 entry "Review documents retired…", and
-`git show <sha>:docs/reviews/<file>` prints any of them verbatim. Use that when one line here
+`git show <sha>:<file>` prints any of them verbatim. Use that when one line here
 isn't enough — the reasoning lives in git, not in the working tree.
 
 **Two namespaces reuse the same prefix.** `SEC-*` means one thing in the 2026-07-12

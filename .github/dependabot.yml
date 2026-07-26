@@ -13,7 +13,7 @@ updates:
     # Covers .github/workflows/*. Dependabot's github-actions ecosystem only
     # scans workflow files under the given directory, not composite actions
     # nested elsewhere in the repo — the composite build action needs its own
-    # entry below (see docs/reviews/claude-md-compliance.md D3).
+    # entry below (compliance finding D3; see docs/ARCHIVE.md §15).
     directory: "/"
     # Open bumps against `dev`, not the default branch (`main`). Per the
     # branching model, `main` is protected and receives only deliberate `dev`->
@@ -32,9 +32,9 @@ updates:
 
   - package-ecosystem: "github-actions"
     # The reusable composite action's `uses:` refs live outside .github/workflows/
-    # and need their own directory entry to be scanned (docs/reviews/
-    # claude-md-compliance.md D3 — the single "/" entry above does not reach
-    # this file).
+    # and need their own directory entry to be scanned (compliance finding D3,
+    # docs/ARCHIVE.md §15 — the single "/" entry above does not reach this
+    # file).
     directory: "/.github/actions/build-image"
     target-branch: "dev"
     schedule:
