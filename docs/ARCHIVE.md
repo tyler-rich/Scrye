@@ -3260,3 +3260,40 @@ operator, and only the live run could surface them.
 **Plan section affected:** none. `README.md` § Configuration, § Optional sidecars, and § Security
 model, plus the `CHANGELOG.md` `docker-env` action-required note. No schema, API-contract,
 security-model, job-model, or auth change; the allowlist itself is byte-for-byte unchanged.
+
+### 2026-07-26 — Post-v1 — Stale socket-proxy wording retired from the code and Compose file
+**What changed:** The 2026-07-26 entry above closed with a "**Not changed, deliberately**" paragraph
+naming two spots it left carrying pre-wollomatic wording because that entry was scoped docs-only.
+Both are now fixed; nothing else in this change.
+
+**1. `backend/app/core/docker_proxy.py` — the non-200 error detail.** It advised checking that the
+proxy is "read-only with `IMAGES=1` and reachable on the internal network." `IMAGES=1` is a
+**tecnativa** env var that has not existed in this stack since the wollomatic migration (#89), and
+this string prints in exactly the 403 case the README now teaches operators to diagnose — so it was
+actively pointing them at a knob that isn't there. It now names the real causes: a non-allowlisted
+path (`-allowGET` permits only `/images/json` and `/v1.NN/images/json`), a non-GET method (405), or
+the `-allowfrom` source check rejecting a client that isn't the `scrye` container — with the note
+that the proxy's own log distinguishes the last two (`blocked request … forbidden IP`), and a
+pointer to the README's § Optional sidecars rather than a restatement of it. It stays an error
+detail, not documentation.
+
+`backend/tests/test_docker_proxy.py` gains a regression guard: it drives `list_images()` through an
+`httpx.MockTransport` returning 403 and asserts the message carries `-allowGET`, `-allowfrom`, and
+`forbidden IP` and does **not** carry `IMAGES=1`. No existing test asserted on the old string, so
+nothing needed updating — only adding.
+
+**2. `docker/docker-compose.yml` — the `DOCKER_GID` comment.** It called `999` "the Debian/Ubuntu
+default … used here as a fallback only," the same wording the README corrected when the live run
+measured **`989`** on the Debian host. It now matches the README: `999` is a **placeholder, not a
+safe default**, it was `989` on the host this was last verified against, and the
+`stat -c '%g' /var/run/docker.sock` derivation remains the instruction. The adjacent failure-mode
+sentence ("shows up as the proxy logging a socket permission error on start") was corrected in the
+same comment for the same reason the README's was — the real behavior is a **crash loop** under
+`restart: unless-stopped` (STATUS `Restarting`, never `Exited`), and a comment that says "on start"
+sends an operator looking for a stopped container.
+**Why:** Both were tracked as follow-ups precisely because a docs-only change can't reach them, and
+a stale env-var name in the one error string an operator reads while debugging a 403 is worse than
+no advice at all.
+**Plan section affected:** none. One error-message string, one Compose comment, one added test. No
+schema, API-contract, security-model, job-model, or auth change; the `-allowGET` pattern, the option
+set, and the `${DOCKER_GID:-999}` value itself are all unchanged.

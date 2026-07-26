@@ -142,9 +142,12 @@ services:
     # HAProxy image, this one must be given the *host's* docker GID to read the
     # socket at all: /var/run/docker.sock is root:docker mode 0660. Find it with
     #   stat -c '%g' /var/run/docker.sock
-    # on the Docker host and set DOCKER_GID to match (a `docker` group of 999 is
-    # the Debian/Ubuntu default and is used here as a fallback only). A wrong GID
-    # shows up as the proxy logging a socket permission error on start.
+    # on the Docker host and set DOCKER_GID to match. Derive it, don't guess: the
+    # 999 below is a placeholder, not a safe default — it was 989 on the Debian
+    # host this was last verified against, where the fallback would have failed
+    # outright. A wrong GID crash-loops this sidecar (it logs a socket permission
+    # error, exits, and `restart: unless-stopped` restarts it into the same
+    # failure — STATUS `Restarting`, never `Exited`); nothing else is affected.
     user: "65534:${DOCKER_GID:-999}"
     command:
       - "-loglevel=info"
