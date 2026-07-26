@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (105, newest first)
+### Index of §14 entries (106, newest first)
 
+- [2026-07-26 — Infra/Process — `node:22-bookworm-slim` digest refreshed; the Node 24 move and the #86 frontend tooling majors recorded in the roadmap](#2026-07-26--infraprocess--node22-bookworm-slim-digest-refreshed-the-node-24-move-and-the-86-frontend-tooling-majors-recorded-in-the-roadmap)
 - [2026-07-26 — Docs/Process — Review documents retired; §14 made contiguous and indexed; a false CVE claim removed from the CHANGELOG](#2026-07-26--docsprocess--review-documents-retired-14-made-contiguous-and-indexed-a-false-cve-claim-removed-from-the-changelog)
 - [2026-07-26 — Post-v1 — Socket-proxy operational behavior from a live Debian run documented (docs only)](#2026-07-26--post-v1--socket-proxy-operational-behavior-from-a-live-debian-run-documented-docs-only)
 - [2026-07-26 — Post-v1 — Stale socket-proxy wording retired from the code and Compose file](#2026-07-26--post-v1--stale-socket-proxy-wording-retired-from-the-code-and-compose-file)
@@ -686,6 +687,81 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+
+### 2026-07-26 — Infra/Process — `node:22-bookworm-slim` digest refreshed; the Node 24 move and the #86 frontend tooling majors recorded in the roadmap
+
+**What changed:** Two small, related items.
+
+**1. `docker/Dockerfile`'s `frontend-builder` base digest rolled forward.**
+`node:22-bookworm-slim` was pinned at `sha256:53ada149…`; the tag now resolves to
+`sha256:6c74791e…`, which is **Node 22.23.1** (`jod`), pushed 2026-07-14. Verified against the
+registry rather than taken from the bump metadata: `registry-1.docker.io`'s manifest endpoint
+returns that digest for the `22-bookworm-slim` tag, the index it points at is an OCI image index
+carrying both `linux/amd64` and `linux/arm64` (both legs of the multi-arch build), and Docker Hub's
+tag listing shows the same digest shared by `22.23.1-bookworm-slim`, `22.23-bookworm-slim` and
+`jod-bookworm-slim` — which is what actually establishes the version behind the moving tag. The
+line also gained a comment recording why it stays on 22 and where the 24 move is tracked.
+**Nothing structural changed** — no stage boundary, no layer ordering, no cache scope
+(`CLAUDE.md` § Build performance, `§ Build performance` § Invariants). Only the digest moved.
+
+**Why it was stale.** This is the same case as the `debian:bookworm-slim` refresh in #104, and it
+has the same cause. Dependabot's `docker-images` group does not offer digest refreshes within a
+major line — it offered **node 22 → 26**, a major on a line that is not LTS. Declining that major
+is correct, but declining it is *all* that happened, so the 22 pin simply sat where it was. A
+digest pin does not maintain itself, and the bot that would normally nag about it was proposing
+something else entirely. Refreshing the digest is the actual maintenance action; the major was
+never the same question.
+
+**Why 22 and not 26 — and why 24 is the eventual answer.** From the upstream release schedule
+(`nodejs/Release`): **22** (`jod`) entered maintenance 2025-10-21 and is supported through
+**2027-04-30**. **24** (`krypton`) has been Active LTS since 2025-10-28 and is supported through
+**2028-04-30** — it is the current Active LTS and the right target. **26** does not become LTS
+until **2026-10-28**, so today it is `Current`, not a base for a build image. Staying on 22 is
+therefore a hold, not a decision to stay: it is where the pin is until the 24 move is done
+properly, since that move also touches `.github/workflows/ci.yml` (`node-version: "22"`) and
+`CONTRIBUTING.md`'s Node floor and has to land as one change across all three.
+
+**2. Three deferred items written into `docs/ROADMAP.md` § Near-term.** All three already
+existed as decisions; none of them existed anywhere a reader would find them, which is the
+failure mode this repo has hit before (see the 2026-07-26 governance-checklist entry — items sat
+invisible in §14 prose for weeks).
+
+- **Node 22 → 24**, with the three-file scope above and the note that Dependabot will keep
+  offering 26 rather than the refresh.
+- **The frontend tooling majors left over from Dependabot #86** after the Mantine/React ignores
+  landed: TypeScript 5.7 → 7.0, ESLint 9 → 10, `typescript-eslint` 8.19 → 8.65, Vite 6 → 8,
+  Vitest 3 → 4, jsdom 26 → 29 and the smaller bumps beside them. The 2026-07-26 Dependabot entry
+  already said these were "not locked, wanted, and their own PR" — but that sentence was inside an
+  entry about *ignoring Mantine and React*, so the wanted half was recorded only as an aside to
+  the declined half. They share one real risk: every one of them lands on the type-aware ESLint
+  gate turned on 2026-07-24, so the work is the lint-config churn, not the version numbers.
+- **The deprecated Starlette status-code constants.** `status.HTTP_422_UNPROCESSABLE_ENTITY`
+  emits a `StarletteDeprecationWarning` on every attribute access, at **22 call sites** across
+  seven routers; the same rename hit `HTTP_413_REQUEST_ENTITY_TOO_LARGE` at 2 more in
+  `uploads.py`. These have been noted as "pre-existing" in the validation paragraph of both
+  interpreter-bump entries (2026-07-03, 2026-07-25) and cleared by neither — a warning described
+  as pre-existing twice is a backlog item, not a footnote.
+
+  Verified against the pinned **starlette 1.3.1**, not assumed from the warning text: both old
+  names still resolve and both warn, the replacements `HTTP_422_UNPROCESSABLE_CONTENT` and
+  `HTTP_413_CONTENT_TOO_LARGE` exist, and each pair is the same integer (422, 413) — so the
+  cleanup cannot move a status code. The count is from the tree (`grep` over `backend/app`): **22**
+  and **2** call sites, not the 44 the item was scoped at.
+
+**Validation.** Lint and the test suites are CI's — the local container has no Python 3.14, so the
+backend suite could not be run here and is not claimed to have been. The digest claim was checked
+directly against `registry-1.docker.io` and the Docker Hub tag API; the Node dates against
+`nodejs/Release`'s `schedule.json`; the Starlette constants against an install of the exact pinned
+version. Backend code is untouched by this entry, so no test outcome changes; the image build is
+the gate that matters and it runs in CI.
+
+**Plan section affected:** §9.1 (image build), `CLAUDE.md` § Dependency hygiene, § Build
+performance (invariants respected — read, not altered), § Required deliverables
+(`docs/ROADMAP.md`). No application code, schema, API-contract, security-model, job-model, or auth
+change.
 
 ---
 

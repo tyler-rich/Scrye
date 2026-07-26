@@ -14,7 +14,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # --- Stage 1: build the React/Vite SPA ---------------------------------------
-FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS frontend-builder
+# Node 22 (`jod`), digest-pinned. Keep this on the 22 line: 24 (`krypton`) is the
+# intended next move — it is the Active LTS and is supported through 2028-04-30,
+# versus 22's 2027-04-30 — but that bump also touches ci.yml's `node-version` and
+# CONTRIBUTING, so it is tracked as its own item in docs/ROADMAP.md rather than
+# ridden in on a digest refresh. Node 26 is not LTS until 2026-10-28 and is not a
+# candidate. Refresh this digest against the registry (the `22-bookworm-slim` tag
+# moves with each 22.x patch); do not let a Dependabot major stand in for it.
+FROM node:22-bookworm-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS frontend-builder
 WORKDIR /build/frontend
 
 # Install deps from the lockfile first for better layer caching. The BuildKit
