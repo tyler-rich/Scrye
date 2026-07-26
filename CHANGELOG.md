@@ -87,7 +87,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Action required if you use the `docker-env` profile:** the proxy now runs
   unprivileged and must be given the host's docker group id to read the socket —
   set `DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"` before
-  `docker compose --profile docker-env up`. No Scrye configuration changes;
+  `docker compose --profile docker-env up`. Derive it rather than trusting the
+  Compose fallback of `999` — that is a convention, not a guarantee, and the
+  Debian host this was verified on used `989`. A wrong value crash-loops the
+  sidecar (STATUS `Restarting`) and leaves image enumeration returning 502; it
+  does not affect the rest of Scrye. No Scrye configuration changes;
   `SCRYE_DOCKER_PROXY_URL` and port 2375 are unchanged.
 
 ## [0.1.0] - 2026-07-09
