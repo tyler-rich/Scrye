@@ -98,7 +98,12 @@ async def list_images(proxy_url: str) -> list[DockerImage]:
     if response.status_code != 200:
         raise DockerProxyError(
             f"Docker proxy at {base} returned HTTP {response.status_code}. "
-            "Check that it is read-only with IMAGES=1 and reachable on the internal network."
+            "403 means the proxy refused the request: either a non-allowlisted path "
+            "(-allowGET permits only /images/json and /v1.NN/images/json) or the "
+            "-allowfrom source check rejecting a client that is not the scrye container "
+            "— the proxy's own log distinguishes them ('blocked request ... forbidden IP'). "
+            "405 means a non-GET method. See the README's 'docker-socket-proxy' section "
+            "under Optional sidecars."
         )
     try:
         payload = response.json()
