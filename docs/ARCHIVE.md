@@ -585,6 +585,7 @@ entry, and the anchors jump straight to it.
 - [2026-07-26 — Post-v1 — Stale socket-proxy wording retired from the code and Compose file](#2026-07-26--post-v1--stale-socket-proxy-wording-retired-from-the-code-and-compose-file)
 - [2026-07-26 — Infra/Process — Group A interpreter CVEs re-verified against the 3.14 branch; waivers re-pointed at a Group-A-only tracking issue (#98)](#2026-07-26--infraprocess--group-a-interpreter-cves-re-verified-against-the-314-branch-waivers-re-pointed-at-a-group-a-only-tracking-issue-98)
 - [2026-07-26 — Infra/Process — CVE-2025-15366 (imaplib) regrouped from Group B to Group A: the backport did land on 3.14](#2026-07-26--infraprocess--cve-2025-15366-imaplib-regrouped-from-group-b-to-group-a-the-backport-did-land-on-314)
+- [2026-07-26 — Infra/Process — Dependabot told to stop proposing Mantine/React majors (locked decision §2)](#2026-07-26--infraprocess--dependabot-told-to-stop-proposing-mantinereact-majors-locked-decision-2)
 - [2026-07-25 — Docs/Process — README + CONTRIBUTING audited against the post-remediation codebase](#2026-07-25--docsprocess--readme--contributing-audited-against-the-post-remediation-codebase)
 - [2026-07-25 — Docs/Process — Interpreter CVEs must be verified at the source before a bump is justified on security grounds](#2026-07-25--docsprocess--interpreter-cves-must-be-verified-at-the-source-before-a-bump-is-justified-on-security-grounds)
 - [2026-07-25 — Post-release — Backend runtime bumped Python 3.13 → 3.14 (locked decision revised)](#2026-07-25--post-release--backend-runtime-bumped-python-313--314-locked-decision-revised)
@@ -3604,6 +3605,45 @@ arriving on either date knows which question they are being asked.
 **Plan section affected:** §9.1 (base image / dogfood self-scan), §12 (Phase 6 self-scan),
 CLAUDE.md § Dependency hygiene. Configuration and documentation only — no application code, schema,
 API-contract, security-model, job-model, or auth change.
+
+---
+
+### 2026-07-26 — Infra/Process — Dependabot told to stop proposing Mantine/React majors (locked decision §2)
+
+**What changed:** `.github/dependabot.yml`'s npm entry gained an `ignore:` block that drops
+**major** updates for `@mantine/*`, `react`, `react-dom`, `@types/react` and `@types/react-dom`.
+Minor and patch updates inside Mantine v7 and React 18 are untouched and still open as usual. No
+other ecosystem entry changed.
+
+**Why:** locked decision §2 fixes the frontend at **React 18 + Mantine v7**. Dependabot did not
+know that, so the weekly frontend group PR (#86, 25 updates) proposed `@mantine/*`
+7.15.2 → **9.4.2** and `react`/`react-dom` 18.3.1 → **19.2.8** — two locked decisions re-opened by
+a bot, in the same PR as a dozen updates that are perfectly fine. That grouping is the actual
+problem, not the majors themselves: because Dependabot groups the whole ecosystem into one branch,
+a single unmergeable entry makes the entire PR unmergeable, and closing it throws away the
+mergeable bumps sitting next to it. #86 was closed by hand for exactly this reason. Without the
+ignores, next week's run rebuilds the same PR and the same manual close happens again — the config
+is where the lock has to be expressed, once, or it gets re-litigated weekly.
+
+**Why `@types/react*` are in the list even though the ask named only Mantine and React.** Their
+major version tracks React's: `@types/react` 19 against `react` 18 is a type-level mismatch, and
+this repo turned on **type-aware ESLint** on 2026-07-24, so that mismatch surfaces as a failing
+lint gate rather than as a quiet inconsistency. Ignoring the runtime majors while letting their
+`@types` majors through would leave the group unmergeable for the same reason it already was.
+
+**What this deliberately does not do.** It does not touch the frontend **tooling** majors that #86
+also proposed — TypeScript 5.7 → 7.0, ESLint 9 → 10, `typescript-eslint` 8.19 → 8.65, Vite 6 → 8,
+Vitest 3 → 4, jsdom 26 → 29. Those are not locked, they are wanted, and all of them land on the
+type-aware ESLint gate, so they are real work with a real chance of churn in the lint config —
+scoped as their own PR rather than folded into a config change or into a bump PR. Nor is it a
+permanent verdict on React 19 / Mantine v9: an ignore rule is a statement that a bot may not make
+this decision, not that the decision can never be made. Lifting either line is a locked-decision
+change and goes through the user first (CLAUDE.md § When to ask vs. decide).
+
+**Plan section affected:** CLAUDE.md locked decision §2, § Dependency hygiene, § Required
+deliverables (`.github/dependabot.yml`). Repository configuration only — no application code,
+schema, API-contract, security-model, job-model, or auth change, and no dependency version moved
+in either direction by this entry.
 
 ---
 
