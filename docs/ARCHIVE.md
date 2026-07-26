@@ -9,8 +9,12 @@
 > (§0), the data model and architecture as originally specified, the full **Deviations log**
 > (§14 — every place the implementation diverged from the plan, dated, with rationale: the
 > Python 3.13 bump, the INF-2 → GHCR-nightly migration, the post-promotion back-merge process
-> fix, the multi-tier security-audit remediation, etc.), and the durable **Build performance**
-> notes at the end.
+> fix, the multi-tier security-audit remediation, etc.), the **finding-ID index** (§15 — the
+> decoder for the bare `SC-12`/`P3-4`/`QUA-17` citations §14 is full of, which replaced the
+> deleted `docs/reviews/` reports), and the durable **Build performance** notes at the end.
+>
+> §14 opens with a **newest-first index of all its entries** — use that rather than scrolling;
+> the entries themselves are not in one consistent order, and §14 explains why.
 >
 > It is **not** forward-looking. For what's next — open work, known limitations, and planned
 > features — see [`ROADMAP.md`](./ROADMAP.md). For what Scrye is and how to run it, see the
@@ -58,9 +62,13 @@ These were decided and are not open for re-litigation during the build:
    incremental GC leaked resident memory in long-running servers and was reverted in 3.14.5).
    (Originally locked to Python 3.12; revised to 3.13 in Phase 6 to resolve Grype-flagged CPython
    interpreter CVEs whose fixes are only available in 3.13+; revised again to 3.14 post-v1. Note
-   that the second bump did **not** deliver the CVE clearance it was scoped for — CVE-2025-15366 /
-   CVE-2025-15367 are unfixable on 3.14 too — see § Deviations for the full rationale of both bumps
-   and that correction.)
+   that the second bump did **not** deliver the CVE clearance it was scoped for: released 3.14.6
+   carries neither the CVE-2025-15366 (`imaplib`) nor the CVE-2025-15367 (`poplib`) guard, so it
+   cleared nothing at the version the image pins. The two have since diverged, though —
+   CVE-2025-15366's backport **did** land on the `3.14` maintenance branch (2026-07-07) and closes
+   on **3.14.7**, tracked in issue **#98**; only CVE-2025-15367 remains a standing acceptance below
+   3.15, tracked in **#52**. See § Deviations (2026-07-25 and both 2026-07-26 entries) for the full
+   rationale of both bumps and that correction.)
 
 ---
 
@@ -546,6 +554,131 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Why:** <reason — constraint discovered, better approach found, plan ambiguity resolved, etc.>
 **Plan section affected:** <§ reference>
 ```
+
+**Ordering — read this before you go looking for something.** This log is **not** in one
+consistent order, and reordering it is not worth the cost: sixteen entries refer to each other
+*relatively* ("the entry below", "superseded by the entry above", "the two 2026-07-03 entries
+above"), and every one of those would silently invert. The three regimes as they actually stand:
+
+1. **Newest-first** from the first entry (2026-07-25) back to 2026-07-07.
+2. **Oldest-first** from 2026-06-30 forward through the 2026-07-09 GHCR consolidation.
+3. **Oldest-first** again for the tail, 2026-07-09 → 2026-07-26 — the twelve entries that were
+   misfiled under `## Build performance` until 2026-07-26 and are now back under this section.
+
+**New entries go at the top of regime 1**, immediately below this index: that is where the most
+recent work already sits and where a reader looks first. The index itself is sorted **newest-first
+regardless of physical position**, so it — not the scroll order — is the reliable way to find an
+entry, and the anchors jump straight to it.
+
+### Index of §14 entries (104, newest first)
+
+- [2026-07-26 — Post-v1 — Socket-proxy operational behavior from a live Debian run documented (docs only)](#2026-07-26--post-v1--socket-proxy-operational-behavior-from-a-live-debian-run-documented-docs-only)
+- [2026-07-26 — Post-v1 — Stale socket-proxy wording retired from the code and Compose file](#2026-07-26--post-v1--stale-socket-proxy-wording-retired-from-the-code-and-compose-file)
+- [2026-07-26 — Infra/Process — Group A interpreter CVEs re-verified against the 3.14 branch; waivers re-pointed at a Group-A-only tracking issue (#98)](#2026-07-26--infraprocess--group-a-interpreter-cves-re-verified-against-the-314-branch-waivers-re-pointed-at-a-group-a-only-tracking-issue-98)
+- [2026-07-26 — Infra/Process — CVE-2025-15366 (imaplib) regrouped from Group B to Group A: the backport did land on 3.14](#2026-07-26--infraprocess--cve-2025-15366-imaplib-regrouped-from-group-b-to-group-a-the-backport-did-land-on-314)
+- [2026-07-25 — Docs/Process — README + CONTRIBUTING audited against the post-remediation codebase](#2026-07-25--docsprocess--readme--contributing-audited-against-the-post-remediation-codebase)
+- [2026-07-25 — Docs/Process — Interpreter CVEs must be verified at the source before a bump is justified on security grounds](#2026-07-25--docsprocess--interpreter-cves-must-be-verified-at-the-source-before-a-bump-is-justified-on-security-grounds)
+- [2026-07-25 — Post-release — Backend runtime bumped Python 3.13 → 3.14 (locked decision revised)](#2026-07-25--post-release--backend-runtime-bumped-python-313--314-locked-decision-revised)
+- [2026-07-25 — Post-v1 — List-response envelope standardized behind shared helpers (L13 / APIR-8 deferred half)](#2026-07-25--post-v1--list-response-envelope-standardized-behind-shared-helpers-l13--apir-8-deferred-half)
+- [2026-07-25 — Post-v1 — Socket-proxy follow-ups: API-version bound and `DOCKER_GID` blast radius documented (docs only)](#2026-07-25--post-v1--socket-proxy-follow-ups-api-version-bound-and-docker_gid-blast-radius-documented-docs-only)
+- [2026-07-24 — Post-release — P3-8 closed: `noUncheckedIndexedAccess` + type-aware ESLint](#2026-07-24--post-release--p3-8-closed-nouncheckedindexedaccess--type-aware-eslint)
+- [2026-07-24 — Post-release — #83: a completed authentication is never undone by an in-flight refresh](#2026-07-24--post-release--83-a-completed-authentication-is-never-undone-by-an-in-flight-refresh)
+- [2026-07-24 — Post-release — Test-debt back-fill for M19, M20, and M21 (tests only)](#2026-07-24--post-release--test-debt-back-fill-for-m19-m20-and-m21-tests-only)
+- [2026-07-24 — Post-release — P3-4: sequence auth refresh against session invalidation](#2026-07-24--post-release--p3-4-sequence-auth-refresh-against-session-invalidation)
+- [2026-07-24 — Post-release — Frontend Priority-3 polish batch (P3-1, P3-2, P3-5, P3-6, P3-7, P3-8)](#2026-07-24--post-release--frontend-priority-3-polish-batch-p3-1-p3-2-p3-5-p3-6-p3-7-p3-8)
+- [2026-07-24 — Post-v1 — Docker socket proxy migrated `tecnativa` → `wollomatic/socket-proxy` (issue #63, M23/SC-7 deferred half)](#2026-07-24--post-v1--docker-socket-proxy-migrated-tecnativa--wollomaticsocket-proxy-issue-63-m23sc-7-deferred-half)
+- [2026-07-20 — Post-release — SC-12: pin and hash-lock the setuptools build backend](#2026-07-20--post-release--sc-12-pin-and-hash-lock-the-setuptools-build-backend)
+- [2026-07-20 — Post-release — D5b: pin ruff isort first-party classification so import ordering is version-stable](#2026-07-20--post-release--d5b-pin-ruff-isort-first-party-classification-so-import-ordering-is-version-stable)
+- [2026-07-20 — Post-release — SC-14: keep the backend test suite and dev scripts out of the runtime image](#2026-07-20--post-release--sc-14-keep-the-backend-test-suite-and-dev-scripts-out-of-the-runtime-image)
+- [2026-07-20 — Post-release — P3-3: surface credential/filter option-fetch failures instead of silently swallowing them](#2026-07-20--post-release--p3-3-surface-credentialfilter-option-fetch-failures-instead-of-silently-swallowing-them)
+- [2026-07-20 — Docs/Process — CLAUDE.md: strip auto-appended PR-body attribution footers after opening](#2026-07-20--docsprocess--claudemd-strip-auto-appended-pr-body-attribution-footers-after-opening)
+- [2026-07-20 — Post-v1 — Frontend jsdom + React Testing Library test harness](#2026-07-20--post-v1--frontend-jsdom--react-testing-library-test-harness)
+- [2026-07-13 — Post-release — H1/SEC-1: repository scan targets must be remote clone URLs (local-path arbitrary-read closed) [back-fill]](#2026-07-13--post-release--h1sec-1-repository-scan-targets-must-be-remote-clone-urls-local-path-arbitrary-read-closed-back-fill)
+- [2026-07-13 — Post-release — H9/SC-2 + H10/SC-3: SHA-pin all Actions, expand Dependabot, harden publish checkouts [back-fill]](#2026-07-13--post-release--h9sc-2--h10sc-3-sha-pin-all-actions-expand-dependabot-harden-publish-checkouts-back-fill)
+- [2026-07-13 — Docs/Process — CLAUDE.md compliance-drift closure (D1, D2, R1–R6) [back-fill]](#2026-07-13--docsprocess--claudemd-compliance-drift-closure-d1-d2-r1r6-back-fill)
+- [2026-07-13 — Post-release — Backend dev-dependency bumps (pytest, pytest-asyncio, black) [back-fill]](#2026-07-13--post-release--backend-dev-dependency-bumps-pytest-pytest-asyncio-black-back-fill)
+- [2026-07-13 — Post-release — CON-4 (H5): scanner JSON parse/normalize hopped off the event loop](#2026-07-13--post-release--con-4-h5-scanner-json-parsenormalize-hopped-off-the-event-loop)
+- [2026-07-13 — Docs/Process — Squash-merge authorship follows the GitHub profile display name (D4 doc-side)](#2026-07-13--docsprocess--squash-merge-authorship-follows-the-github-profile-display-name-d4-doc-side)
+- [2026-07-13 — Docs/Process — dev→main promotion PRs use a plain "Promote dev to main: …" title](#2026-07-13--docsprocess--devmain-promotion-prs-use-a-plain-promote-dev-to-main--title)
+- [2026-07-13 — Post-release — Security + supply-chain review batch (H11, M2–M5, M22–M26, L1–L4, L23)](#2026-07-13--post-release--security--supply-chain-review-batch-h11-m2m5-m22m26-l1l4-l23)
+- [2026-07-13 — Post-release — Frontend-review wave 2 (M19–M21, L16–L22)](#2026-07-13--post-release--frontend-review-wave-2-m19m21-l16l22)
+- [2026-07-13 — Post-release — API-review batch (APIR-1…APIR-10)](#2026-07-13--post-release--api-review-batch-apir-1apir-10)
+- [2026-07-13 — Post-release — CON-2/CON-14 remediation: process-group kills for scanner subprocesses](#2026-07-13--post-release--con-2con-14-remediation-process-group-kills-for-scanner-subprocesses)
+- [2026-07-13 — Post-release — CON-1/CON-11/CON-3/SEC-2 remediation; worker seam gains optional hooks](#2026-07-13--post-release--con-1con-11con-3sec-2-remediation-worker-seam-gains-optional-hooks)
+- [2026-07-13 — Post-release — CON-5–CON-20 remediation: async-path, shutdown, and pool hygiene](#2026-07-13--post-release--con-5con-20-remediation-async-path-shutdown-and-pool-hygiene)
+- [2026-07-13 — Security — account-takeover chain fix: XSS sink containment + baseline security headers](#2026-07-13--security--account-takeover-chain-fix-xss-sink-containment--baseline-security-headers)
+- [2026-07-13 — Infra — runtime-stage curl/libcurl explicitly version-pinned for CVE-2026-5773](#2026-07-13--infra--runtime-stage-curllibcurl-explicitly-version-pinned-for-cve-2026-5773)
+- [2026-07-13 — Infra/Process — CPython interpreter CVEs on 3.13 accepted as tracked risk; 3.14 deferred](#2026-07-13--infraprocess--cpython-interpreter-cves-on-313-accepted-as-tracked-risk-314-deferred)
+- [2026-07-09 — Infra/Process — repo goes public; distribution consolidated to GHCR-only](#2026-07-09--infraprocess--repo-goes-public-distribution-consolidated-to-ghcr-only)
+- [2026-07-09 — Post-v1 — teal hue refinement, scan deletion, nav active-match fix](#2026-07-09--post-v1--teal-hue-refinement-scan-deletion-nav-active-match-fix)
+- [2026-07-09 — Post-v1 — v0.1.0 bundled-binary CVE check: no upstream fix available yet](#2026-07-09--post-v1--v010-bundled-binary-cve-check-no-upstream-fix-available-yet)
+- [2026-07-07 — Process — back-merge step after promotion; Dependabot retargeted to `dev`](#2026-07-07--process--back-merge-step-after-promotion-dependabot-retargeted-to-dev)
+- [2026-07-06 — Infra — dev publishing moved to a nightly GHCR build (registry split + INF-2 resolved)](#2026-07-06--infra--dev-publishing-moved-to-a-nightly-ghcr-build-registry-split--inf-2-resolved)
+- [2026-07-05 — Post-P6 audit remediation (P0) — token-mint capping, backup/restore, webhook URLs](#2026-07-05--post-p6-audit-remediation-p0--token-mint-capping-backuprestore-webhook-urls)
+- [2026-07-05 — Post-P6 audit remediation (P1) — availability/performance under real volume](#2026-07-05--post-p6-audit-remediation-p1--availabilityperformance-under-real-volume)
+- [2026-07-05 — Post-P6 audit remediation (P2) — supply chain / deployment hardening](#2026-07-05--post-p6-audit-remediation-p2--supply-chain--deployment-hardening)
+- [2026-07-05 — Post-P6 audit remediation (P3) — feature gaps that mislead users](#2026-07-05--post-p6-audit-remediation-p3--feature-gaps-that-mislead-users)
+- [2026-07-05 — Post-P6 audit remediation (P4) — frontend correctness / UX](#2026-07-05--post-p6-audit-remediation-p4--frontend-correctness--ux)
+- [2026-07-05 — Deviation-logging debt from the audit (FE-2, INF-10, API-12, FEAT-4)](#2026-07-05--deviation-logging-debt-from-the-audit-fe-2-inf-10-api-12-feat-4)
+- [2026-07-05 — Post-P6 audit remediation (P5) — maintainability, process, long tail](#2026-07-05--post-p6-audit-remediation-p5--maintainability-process-long-tail)
+- [2026-07-04 — Post-P6 — Full-repo security audit remediation](#2026-07-04--post-p6--full-repo-security-audit-remediation)
+- [2026-07-04 — Post-P6 — Security-audit hotfix (follow-up to the merge above)](#2026-07-04--post-p6--security-audit-hotfix-follow-up-to-the-merge-above)
+- [2026-07-04 — Post-P6 — Scanner/report review fixes: diff identity and dashboard grouping revised](#2026-07-04--post-p6--scannerreport-review-fixes-diff-identity-and-dashboard-grouping-revised)
+- [2026-07-04 — Phase 6 — Docker Hub publishing (tagged releases + dev continuous build)](#2026-07-04--phase-6--docker-hub-publishing-tagged-releases--dev-continuous-build)
+- [2026-07-04 — Process — Adopted a dev/main branching model ahead of going public](#2026-07-04--process--adopted-a-devmain-branching-model-ahead-of-going-public)
+- [2026-07-03 — Phase P1 — First-admin bootstrap via explicit setup endpoint](#2026-07-03--phase-p1--first-admin-bootstrap-via-explicit-setup-endpoint)
+- [2026-07-03 — Phase P1 — Master key file supports optional multi-version format](#2026-07-03--phase-p1--master-key-file-supports-optional-multi-version-format)
+- [2026-07-03 — Phase P2 — Raw artifact bytes stored on the filesystem](#2026-07-03--phase-p2--raw-artifact-bytes-stored-on-the-filesystem)
+- [2026-07-03 — Phase P2 — Frontend routing via `react-router-dom` v7](#2026-07-03--phase-p2--frontend-routing-via-react-router-dom-v7)
+- [2026-07-03 — Phase P2 — Scan views use Mantine `Table`, not `mantine-datatable`](#2026-07-03--phase-p2--scan-views-use-mantine-table-not-mantine-datatable)
+- [2026-07-03 — Phase P2 — Scan cancellation limited to queued scans](#2026-07-03--phase-p2--scan-cancellation-limited-to-queued-scans)
+- [2026-07-03 — Phase P3 — Filesystem scans gated behind an allowlist](#2026-07-03--phase-p3--filesystem-scans-gated-behind-an-allowlist)
+- [2026-07-03 — Phase P3 — Git authentication mechanism per provider](#2026-07-03--phase-p3--git-authentication-mechanism-per-provider)
+- [2026-07-03 — Phase P3 — SBOM generation is an opt-in per-scan pass](#2026-07-03--phase-p3--sbom-generation-is-an-opt-in-per-scan-pass)
+- [2026-07-03 — Phase P3 — Registry credential helpers configured but not bundled](#2026-07-03--phase-p3--registry-credential-helpers-configured-but-not-bundled)
+- [2026-07-03 — Phase P3 — Runtime deps (httpx, python-multipart) and read scope](#2026-07-03--phase-p3--runtime-deps-httpx-python-multipart-and-read-scope)
+- [2026-07-03 — Phase P3 — Security Review #2: generic-host git auth off-argv](#2026-07-03--phase-p3--security-review-2-generic-host-git-auth-off-argv)
+- [2026-07-03 — Phase P3 — Security Review #5: credential lists are admin-only](#2026-07-03--phase-p3--security-review-5-credential-lists-are-admin-only)
+- [2026-07-03 — Phase P4 — History exposed via a dedicated `/scans/history` endpoint](#2026-07-03--phase-p4--history-exposed-via-a-dedicated-scanshistory-endpoint)
+- [2026-07-03 — Phase P4 — Scan tags modeled as a `scan_tags` table, set by operators](#2026-07-03--phase-p4--scan-tags-modeled-as-a-scan_tags-table-set-by-operators)
+- [2026-07-03 — Phase P4 — Saved filter presets are owner-scoped](#2026-07-03--phase-p4--saved-filter-presets-are-owner-scoped)
+- [2026-07-03 — Phase P4 — Export scope semantics and diff constraints](#2026-07-03--phase-p4--export-scope-semantics-and-diff-constraints)
+- [2026-07-03 — Phase P4 — History view uses the base Mantine `Table`, not `mantine-datatable`](#2026-07-03--phase-p4--history-view-uses-the-base-mantine-table-not-mantine-datatable)
+- [2026-07-03 — Phase P5 — Runtime settings stored in a generic `settings` table](#2026-07-03--phase-p5--runtime-settings-stored-in-a-generic-settings-table)
+- [2026-07-03 — Phase P5 — Dependencies added: Authlib and pyotp](#2026-07-03--phase-p5--dependencies-added-authlib-and-pyotp)
+- [2026-07-03 — Phase P5 — OIDC uses Authlib's `jose`, isolated behind an import shim](#2026-07-03--phase-p5--oidc-uses-authlibs-jose-isolated-behind-an-import-shim)
+- [2026-07-03 — Phase P5 — OIDC provisioning: username sanitization and admin-group mapping](#2026-07-03--phase-p5--oidc-provisioning-username-sanitization-and-admin-group-mapping)
+- [2026-07-03 — Phase P5 — TOTP MFA: two-step enrollment and in-process login challenge](#2026-07-03--phase-p5--totp-mfa-two-step-enrollment-and-in-process-login-challenge)
+- [2026-07-03 — Phase P5 — API tokens: bearer auth, CSRF exemption, and role capping](#2026-07-03--phase-p5--api-tokens-bearer-auth-csrf-exemption-and-role-capping)
+- [2026-07-03 — Phase P5 — Notifications: channels + test-send now; event dispatch deferred](#2026-07-03--phase-p5--notifications-channels--test-send-now-event-dispatch-deferred)
+- [2026-07-03 — Phase P5 — Scanner DB schedule/offline-import stored but not yet actuated](#2026-07-03--phase-p5--scanner-db-scheduleoffline-import-stored-but-not-yet-actuated)
+- [2026-07-03 — Phase P5 — Backup bundle is a logical row dump with passphrase re-wrap](#2026-07-03--phase-p5--backup-bundle-is-a-logical-row-dump-with-passphrase-re-wrap)
+- [2026-07-03 — Phase P5 — Scheduled backups run on an in-process asyncio loop](#2026-07-03--phase-p5--scheduled-backups-run-on-an-in-process-asyncio-loop)
+- [2026-07-03 — Phase P5 — Self-service Account page; role-gated Settings tabs](#2026-07-03--phase-p5--self-service-account-page-role-gated-settings-tabs)
+- [2026-07-03 — Phase P5 — Security review hardening: OIDC alg allowlist + scrypt work factor](#2026-07-03--phase-p5--security-review-hardening-oidc-alg-allowlist--scrypt-work-factor)
+- [2026-07-03 — Phase P6 — Branch name `phase/P6`](#2026-07-03--phase-p6--branch-name-phasep6)
+- [2026-07-03 — Phase P6 — Cron scheduling via a self-contained evaluator](#2026-07-03--phase-p6--cron-scheduling-via-a-self-contained-evaluator)
+- [2026-07-03 — Phase P6 — Notification dispatch: per-channel event subscriptions](#2026-07-03--phase-p6--notification-dispatch-per-channel-event-subscriptions)
+- [2026-07-03 — Phase P6 — Trivy VEX/ignore applied via env vars, ignore rules structured](#2026-07-03--phase-p6--trivy-vexignore-applied-via-env-vars-ignore-rules-structured)
+- [2026-07-03 — Phase P6 — Dashboard "open" posture from the latest scan per target](#2026-07-03--phase-p6--dashboard-open-posture-from-the-latest-scan-per-target)
+- [2026-07-03 — Phase P6 — `/metrics` is authenticated; hand-rolled exposition](#2026-07-03--phase-p6--metrics-is-authenticated-hand-rolled-exposition)
+- [2026-07-03 — Phase P6 — Retention prunes raw artifacts only; config in the settings table](#2026-07-03--phase-p6--retention-prunes-raw-artifacts-only-config-in-the-settings-table)
+- [2026-07-03 — Phase P6 — Dogfood self-scan gates on fixable High/Critical with triage allowlists](#2026-07-03--phase-p6--dogfood-self-scan-gates-on-fixable-highcritical-with-triage-allowlists)
+- [2026-07-03 — Phase P6 — Fix wrong `debian:bookworm-slim` base digest](#2026-07-03--phase-p6--fix-wrong-debianbookworm-slim-base-digest)
+- [2026-07-03 — Phase P6 — Dogfood gate excludes the bundled scanner binaries](#2026-07-03--phase-p6--dogfood-gate-excludes-the-bundled-scanner-binaries)
+- [2026-07-03 — Phase P6 — Dogfood-driven dependency bumps (FastAPI/Starlette/multipart)](#2026-07-03--phase-p6--dogfood-driven-dependency-bumps-fastapistarlettemultipart)
+- [2026-07-03 — Phase P6 — Grype gate excludes the CPython interpreter binary](#2026-07-03--phase-p6--grype-gate-excludes-the-cpython-interpreter-binary)
+- [2026-07-03 — Phase P6 — Bundled Trivy bumped 0.71.2 → 0.72.0](#2026-07-03--phase-p6--bundled-trivy-bumped-0712--0720)
+- [2026-07-03 — Phase P6 — Backend runtime bumped Python 3.12 → 3.13 (locked decision revised)](#2026-07-03--phase-p6--backend-runtime-bumped-python-312--313-locked-decision-revised)
+- [2026-07-03 — Phase P6 — Scanner temp/cache dirs pinned to the writable `/cache` volume; `/tmp` tmpfs owned by the app uid](#2026-07-03--phase-p6--scanner-tempcache-dirs-pinned-to-the-writable-cache-volume-tmp-tmpfs-owned-by-the-app-uid)
+- [2026-07-03 — Phase P6 — Scanner cache redirected via env vars for **every** invocation (incl. probes)](#2026-07-03--phase-p6--scanner-cache-redirected-via-env-vars-for-every-invocation-incl-probes)
+- [2026-07-03 — Post-P6 bug-fix round — `/tmp` tmpfs kept at 200 MB; footprint documented; cache/staging fix re-verified live end-to-end](#2026-07-03--post-p6-bug-fix-round--tmp-tmpfs-kept-at-200-mb-footprint-documented-cachestaging-fix-re-verified-live-end-to-end)
+- [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
+- [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
+- [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
 
 ### 2026-07-25 — Docs/Process — README + CONTRIBUTING audited against the post-remediation codebase
 **What changed:** A docs-only pass reconciling the two user/contributor-facing documents with the
@@ -2716,116 +2849,6 @@ locked decision `CLAUDE.md` §6 is updated accordingly.
 CLAUDE.md § Locked decisions §6. Supersedes the Docker Hub role in the 2026-07-06 entry; completes
 and closes INF-2 (2026-07-05 P2 / 2026-07-06 entries).
 
----
-
-## Build performance
-
-Durable notes on why the image build is structured the way it is, and — critically —
-what **not** to undo. Cross-referenced from `CLAUDE.md` § Coding standards → Build
-performance, `docker/Dockerfile`, and the four build workflows. Read this before
-restructuring the Dockerfile or the build workflows' caching.
-
-### Why the build was slow, and what was changed (2026-07-07)
-
-**Diagnosis (from actual CI logs, not the YAML).** The CI "image" work is four jobs:
-`backend`, `frontend`, the amd64-only `image` (build + Trivy/Grype dogfood scan), and
-`image-multiarch` (a `linux/amd64,linux/arm64` build-only check). The first three each
-finish in 1–5 min; the ~12 min wall-clock was set almost entirely by **`image-multiarch`**.
-Reading the buildkit step timings for a representative run:
-
-- The arm64 leg runs the whole Dockerfile under **QEMU emulation**, which is 5–15× slower
-  than the native amd64 leg per step (e.g. `apt-get install` 15s→333s, `npm ci` 26s→278s,
-  `npm run build` 20s→328s, `pip install` 21s→231s under emulation).
-- **The GHA layer cache was cold on essentially every run** (0 `CACHED` layers observed).
-  Root cause: the recent cost-reduction pass partitioned the `type=gha` cache into per-build
-  scopes (`amd64-ci`, `multiarch`, `dev-multiarch`) to stop them evicting each other under
-  the repo's 10 GB budget — correct — but the `multiarch` scope is *written* only by rare
-  events (a PR targeting `main`, or a release tag), so between its own invocations its
-  entries age out and it is cold when it next runs. A cold cache means the QEMU-emulated
-  arm64 layers are **re-executed from scratch** rather than restored — a `type=gha` cache
-  *hit* skips executing a layer entirely, emulation cost included. So the recurring cost was
-  the cold cache forcing a full emulated rebuild, more than QEMU per se.
-
-**Changes made (this pass). No security posture was weakened** — the scanner-binary
-checksum verification, the digest-pinned base images, and the non-root/hardened final stage
-are all unchanged.
-
-1. **Cross-seed the cache scopes (config-level, all four paths).** Each build path still
-   *writes* exactly one scope (preserving the 10 GB budget partitioning), but now also
-   *reads* the frequently-warm sibling scope, so a rarely-run build restores warm layers
-   instead of rebuilding cold:
-   - `.github/actions/build-image` gained an `extra-cache-scopes` input; a shell step composes
-     `cache-from` = primary + extras (read many) while `cache-to` stays primary-only (write one).
-   - `image-multiarch` (ci.yml) and the tagged-release build (publish.yml): write `multiarch`,
-     additionally **read** `dev-multiarch`. `main`/release content is promoted `dev`, so the
-     daily nightly build usually carries bit-identical base/apt/venv/npm-ci/arm64 layers.
-   - the nightly (dev-nightly.yml): writes `dev-multiarch`, additionally reads `multiarch`
-     (symmetric — a recent release seeds the nightly). The nightly is what keeps
-     `dev-multiarch` warm for the others to read.
-   - the amd64-only `image` job (ci.yml): writes `amd64-ci`, additionally reads `dev-multiarch`
-     (its amd64 layers are reusable by an amd64-only build and are refreshed daily).
-2. **Persist pip/npm download caches across builds (Dockerfile).** `pip install` and `npm ci`
-   use BuildKit `--mount=type=cache` mounts (and `PIP_NO_CACHE_DIR` was dropped) so an
-   unchanged dependency isn't re-downloaded when its install layer rebuilds. The cache lives
-   in the mount, not the image layer, so nothing bloats the (discarded) builder stages or the
-   final image. (Note: BuildKit cache mounts are not exported to `type=gha`, so this mainly
-   speeds **local** rebuilds and dependency-change rebuilds; the CI recurring win is item 1.)
-3. **Parallelize the scanner-binary downloads (Dockerfile).** The trivy/grype/syft
-   download→verify→extract pipelines were sequential; they now run concurrently in background
-   subshells joined by `wait`. This roughly halves a cold scanner stage, most visibly on the
-   emulated arm64 leg. **Integrity is unchanged:** each binary is still fetched with its
-   publisher's signed checksums file and verified with `sha256sum -c` *before* extraction, and
-   a failure in any subshell (download error or checksum mismatch) propagates through `wait`
-   under `set -e` to fail the build (verified under both dash and bash).
-
-**Expected before/after per build path** (estimates; the dominant variable is cache warmth):
-
-| Build path | Trigger | Before | After (typical) | Mechanism |
-|---|---|---|---|---|
-| `image` (amd64 dogfood) | every PR / main push | ~4 min | ~2–4 min | reads warm `dev-multiarch` amd64 layers |
-| `image-multiarch` | PR→main / main push | ~10–12.5 min | **~3–5 min** when `dev-multiarch` is warm (common); ~10–12 min only on a genuine cold/dep-change build | reads the nightly's warm arm64 layers → arm64 layers CACHED, QEMU rebuild skipped |
-| nightly `:dev` → GHCR | 04:00 UTC (skip if idle) | ~10–12 min | ~10–12 min first build after a dep change; faster when reading a warm `multiarch` | self-warms `dev-multiarch`; still pays QEMU on true cold builds |
-| tagged release → Docker Hub | `v*.*.*` on main | ~10–12 min | ~3–5 min when `dev-multiarch` is warm | reads the nightly's warm arm64 layers |
-
-**Not done (deliberately):** switching the arm64 leg to native `ubuntu-24.04-arm` hosted
-runners (matrix + manifest merge). It would remove QEMU from cold builds too (~12→~4–5 min
-even cold), but this is a **private** repo, so hosted arm64 runners bill per-minute and CI
-would break if the runner label isn't enabled for the account. Left as a documented future
-option, gated on that cost/availability decision. If revisited, it replaces item-1's reliance
-on cache warmth for the cold case; it does not conflict with items 2–3.
-
-### Invariants — do NOT undo these
-
-- **Keep the multi-stage split.** `frontend-builder` (Node), `scanners` (curl/tar), and
-  `backend-builder` (venv) are separate stages precisely so their toolchains never reach the
-  final `runtime` image. Do **not** consolidate stages or install build tooling in `runtime` —
-  it would bloat the image and enlarge its attack surface. The final stage copies only the
-  built venv, the three verified scanner binaries, backend source (for Alembic), the compiled
-  SPA `dist/`, the entrypoint, and the licenses.
-- **Keep the layer ordering.** Dependency manifests (`package*.json`, `pyproject.toml`) are
-  copied and installed **before** the app source is copied, so a code-only change doesn't
-  invalidate the (expensive) dependency-install layers. Do not reorder these.
-- **Keep the cache scopes partitioned by *writer*.** Each build path writes exactly one
-  `type=gha` scope; cross-seeding is **read-only** (`cache-from`). Do **not** make two paths
-  write the same scope or have a path write multiple scopes — that reintroduces the eviction
-  churn under the 10 GB budget that the partitioning exists to prevent. Broadening `cache-from`
-  is safe; broadening `cache-to` is not.
-- **Keep download-then-verify-then-extract for the scanner binaries.** The parallelism is
-  cosmetic to the integrity control; the ordering (fetch signed checksums → `sha256sum -c` →
-  only then `tar -x`) and the digest-pinned bases are the supply-chain guarantee
-  (`CLAUDE.md` § Hard security rules). Do not collapse to `curl | tar`, and do not drop the
-  per-binary checksum step to save time.
-
-**Deployment note (what must reach `main`).** The default branch is `main`; scheduled
-workflows and tag-triggered workflows run from the **default branch's** copy. So:
-`image` (amd64) Dockerfile/cache improvements take effect on `dev` PRs as soon as this merges
-to `dev`; but `image-multiarch` (runs only on main-scoped events), the release build
-(publish.yml, tag on `main`), and the nightly's own symmetric `multiarch` read
-(dev-nightly.yml runs from `main`) only take effect once promoted to `main`. The nightly keeps
-warming `dev-multiarch` from `main`'s existing copy regardless, so the cross-seed reads in the
-other paths work as soon as those paths land on their trigger branches.
-
-**Plan section affected:** §9.1 (image build), §0.6 (distribution/CI paths), process.
 
 ### 2026-07-09 — Post-v1 — teal hue refinement, scan deletion, nav active-match fix
 **What changed:** Three small frontend/backend changes:
@@ -3424,3 +3447,471 @@ arriving on either date knows which question they are being asked.
 **Plan section affected:** §9.1 (base image / dogfood self-scan), §12 (Phase 6 self-scan),
 CLAUDE.md § Dependency hygiene. Configuration and documentation only — no application code, schema,
 API-contract, security-model, job-model, or auth change.
+
+---
+
+## 15. Finding-ID index (decoder for §14's citations)
+
+§14 cites bare finding IDs — `SC-12`, `P3-4`, `QUA-17`, `H5/CON-4` — and never re-explains them.
+Those IDs came from ten review documents that lived under `docs/reviews/` and `docs/upgrades/`
+until 2026-07-26, when they were deleted: every finding in them was closed, and a folder of
+closed findings sitting beside the two live documents was costing more than it returned. This
+section is what replaced them — **a decoder, not a summary**. It resolves an ID to one line of
+what it was and, where known, the PR that closed it. It is not a backlog: nothing here is open.
+
+**The originals are still retrievable.** They were removed in a single commit; the commit
+immediately before it is recorded in the 2026-07-26 §14 entry "Review documents retired…", and
+`git show <sha>:docs/reviews/<file>` prints any of them verbatim. Use that when one line here
+isn't enough — the reasoning lives in git, not in the working tree.
+
+**Two namespaces reuse the same prefix.** `SEC-*` means one thing in the 2026-07-12
+`security-review.md` and a different thing in the 2026-07-05 `full-audit-2026-07-05.md`; the two
+sets are unrelated and are labelled **(review)** and **(audit)** below. `SEC-1` is the case that
+actually bites: the *review's* SEC-1 is the repository-target local-path read (#53), the *audit's*
+SEC-1 is the plaintext webhook URL (2026-07-05 P0). §14 flags this inline at the H1 back-fill entry.
+
+---
+
+### Summary IDs (`00-summary.md`, 2026-07-12) → source finding
+
+The severity-ranked backlog used its own H/M/L numbering on top of the source reports. §14 cites
+both forms, often paired (`H5/CON-4`, `M23/SC-7`). Resolving PRs are on the source rows below.
+
+`H1`=SEC-1(review) · `H2`=CON-1 · `H3`=CON-2 · `H4`=CON-3 · `H5`=CON-4 · `H6`=P1-1+SEC-5(review) ·
+`H7`=APIR-1 · `H8`=APIR-2 · `H9`=SC-2 · `H10`=SC-3 · `H11`=SC-1
+
+`M1`=SEC-2(review) · `M2`=SEC-3 · `M3`=SEC-4 · `M4`=SEC-5 · `M5`=SEC-6 · `M6`=CON-5 · `M7`=CON-6 ·
+`M8`=CON-7 · `M9`=CON-8 · `M10`=CON-9 · `M11`=CON-10 · `M12`=CON-11 · `M13`=CON-12 · `M14`=CON-13 ·
+`M15`=APIR-3 · `M16`=APIR-4 · `M17`=APIR-5 · `M18`=APIR-6 · `M19`=P1-2 · `M20`=P1-3 · `M21`=P1-4 ·
+`M22`=SC-6 · `M23`=SC-7 · `M24`=SC-4 · `M25`=SC-5 · `M26`=SC-8
+
+`L1`=SEC-7(review) · `L2`=SEC-8 · `L3`=SEC-9 · `L4`=SEC-10 · `L5`=CON-14 · `L6`=CON-15 ·
+`L7`=CON-16 · `L8`=CON-17 · `L9`=CON-18 · `L10`=CON-19 · `L11`=CON-20 · `L12`=APIR-7 ·
+`L13`=APIR-8 · `L14`=APIR-9 · `L15`=APIR-10 · `L16`=P2-1 · `L17`=P2-2 · `L18`=P2-3 · `L19`=P2-4 ·
+`L20`=P2-5 · `L21`=P2-6 · `L22`=P2-7 · `L23`=SC-9 · `L24`=SC-11 · `L25`=D3/SC-10
+
+---
+
+### `SEC-*` (review) — `security-review.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| SEC-1 | `repository` scan targets accepted local paths, bypassing the filesystem-scan allowlist → arbitrary host-file read | #53 |
+| SEC-2 | Backup restore trusted bundle-supplied scrypt cost params with no ceiling → pre-passphrase memory-exhaustion DoS | #54 |
+| SEC-3 | No entropy floor / key stretching on the master key | #64 |
+| SEC-4 | Log redaction only prefix-masked unquoted secrets containing spaces or commas | #64 |
+| SEC-5 | No CSP / `X-Frame-Options` / `nosniff` / `Referrer-Policy`; CSRF cookie JS-readable by design | #55 |
+| SEC-6 | SSRF: notification / registry / docker-proxy fetchers reached arbitrary internal and link-local hosts | #64 |
+| SEC-7 | Field-encryption AAD bound to the column, not the row | #64 (row-bindable, lazy upgrade-on-write) |
+| SEC-8 | Mandatory-MFA policy not enforced on the OIDC login path | #64 (accepted limitation + audit visibility) |
+| SEC-9 | Forced-enrollment window let a password-only attacker bind their own TOTP | #64 (same) |
+| SEC-10 | Auth rate-limiter and pending-MFA store grew unbounded by distinct key | #64 |
+
+### `SC-*` — `supply-chain-review.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| SC-1 | No backend lockfile — transitive Python deps floated unpinned at every image build | #64 |
+| SC-2 | Every workflow `uses:` tag-pinned, not SHA-pinned, incl. the `packages: write` publish paths | #57 |
+| SC-3 | Dependabot watched only `github-actions`; pip, npm and docker unmonitored | #57 |
+| SC-4 | Published images carried no SLSA provenance or SBOM attestation | #64 |
+| SC-5 | No scheduled re-scan of the already-published `:latest`/`:dev` images | #64 (`rescan.yml`) |
+| SC-6 | `node:22-bookworm-slim` build-stage digest stale | #64 |
+| SC-7 | `tecnativa/docker-socket-proxy:0.3.0` ~15 months stale — the one sidecar holding the socket | #64 (→v0.4.2), #89 (→wollomatic) |
+| SC-8 | Scanner `checksums.txt` verified same-origin only, no signature check | #64 (cosign keyless) |
+| SC-9 | `# syntax=docker/dockerfile:1.7` BuildKit frontend tag-pinned, not digest-pinned | #64 |
+| SC-10 | `ci.yml` and the composite build action pinned different majors of the same actions | #57 |
+| SC-11 | `persist-credentials: false` missing on token-bearing workflow checkouts | #57 (publish), #67 (`ci.yml`) |
+| SC-12 | `[build-system].requires = setuptools>=75` — the one floating, unhashed build-time dep | #80 |
+| SC-13 | Mantine 7.15.2 is two majors behind current | **Not a defect** — locked decision §2 pins v7 |
+| SC-14 | Runtime image shipped `backend/tests/` and `backend/scripts/` | #77 |
+
+### `APIR-*` — `api-review.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| APIR-1 | Timezone-aware `expires_at` on Trivy ignore rules stored with its offset silently dropped | #61 |
+| APIR-2 | Two incompatible 422 body shapes; the SPA rendered only one → blank "Request failed (422)" | #61 |
+| APIR-3 | Scan-diff: SPA's Compare gate missed `target_type`; diff payload omitted `location` | #61 |
+| APIR-4 | Filtered-history export silently truncated at 5 000 scans with no signal | #61 |
+| APIR-5 | Naive-UTC timestamps serialized with no `Z`; one consumer already parsed them wrong | #61 |
+| APIR-6 | Update paths accepted states create paths forbid on secret-bearing resources | #61 |
+| APIR-7 | "Run now" left `last_run_at`/`last_status` stale, contradicting `last_scan_id` | #60 (via CON-17), assertion #61 |
+| APIR-8 | Three list-envelope conventions across endpoints | #61 (`entries`→`items`), 2026-07-25 (full standardization) |
+| APIR-9 | List/history rows shipped `options` + unbounded `error` text the views never render | #61 |
+| APIR-10 | Scanner↔target matrix defined twice and already drifted | #61 |
+
+### `CON-*` — `concurrency-review.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| CON-1 | SQLite lock contention unhandled → scans stuck `running` forever, artifact files deleted | #54 |
+| CON-2 | `proc.kill()` signalled only the direct child; credential-bearing git/scanner grandchildren survived | #56 |
+| CON-3 | Restore's "no active scans" guard was check-then-act across the upload `await` | #54 |
+| CON-4 | Scanner JSON parse/normalize ran on the event loop; a large report froze the app | #67 |
+| CON-5 | Synchronous SQLite commits/reads on the event loop in async contexts | #54 (claim/fail), #60 (rest) |
+| CON-6 | Shutdown arithmetic exceeded Docker's 10 s stop grace → SIGKILL mid-commit | #60 |
+| CON-7 | Lifespan shutdown unshielded; a second cancellation skipped `worker.shutdown()` | #60 |
+| CON-8 | `PendingMfaStore` not thread-safe but shared across threadpool threads | #60 |
+| CON-9 | Backup bundle had no single-transaction snapshot; scheduled path had no active-scan guard | #60 |
+| CON-10 | Every running scan pinned a pooled DB connection for its full wall-clock | #60 |
+| CON-11 | Scans committed `queued` and never submitted on shutdown races; caller still saw 201 | #54 (watchdog) |
+| CON-12 | Scanner-DB auto-update marked itself done *before* running → failure not retried for a full interval | #60 |
+| CON-13 | Maintenance tick fully serialized; slow DB updates delayed schedules/retention ~20 min | #60 |
+| CON-14 | `proc.kill()` unprotected against `ProcessLookupError`; on the cancel path could replace the cancellation | #56 |
+| CON-15 | Notification dispatch ran while the scan still held its concurrency-semaphore slot | #60 |
+| CON-16 | Per-scan task exceptions outside `_execute`'s `try` never retrieved; task spawning unbounded | #60 |
+| CON-17 | "Run now" raced the cron tick — duplicate scans, lost `last_scan_id` | #60 |
+| CON-18 | Dashboard `gather` without `return_exceptions` abandoned in-flight probe subprocesses | #60 |
+| CON-19 | Worker could notify for a scan deleted milliseconds earlier (stale identity-map read) | #60 |
+| CON-20 | Multi-GB checkout `shutil.rmtree` ran synchronously on the event loop | #60 |
+
+### `P1-*` / `P2-*` / `P3-*` — `frontend-review.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| P1-1 | XSS: scanner-derived `primary_url` rendered as an unvalidated `href` | #55 (`safeHttpUrl`) |
+| P1-2 | Settings forms rendered editable before their initial GET resolved → Save could write defaults | #62 (tests back-filled 2026-07-24) |
+| P1-3 | Scan-detail poller never stopped or backed off on errors, behind a stale "running" badge | #62 |
+| P1-4 | History fetch had no stale-response guard — table could contradict the filter controls | #62 |
+| P2-1 | Tag draft wiped every 2.5 s by the status poll | #62 |
+| P2-2 | Navigating between scan details mixed two scans' state | #62 |
+| P2-3 | Findings panel: empty-state flash, stale rows during filter changes, no loading flag | #62 |
+| P2-4 | Unguarded double-fire mutations — incl. minting an invisible second API token | #62 |
+| P2-5 | History table unusable by keyboard: click-only sort, click-only row navigation | #62 |
+| P2-6 | Unlabeled form controls (filters, tags input, segmented controls, MFA PinInput) | #62 |
+| P2-7 | All navigation disappeared below the `sm` breakpoint | #62 |
+| P3-1 | History filters lived only in memory — Back/bookmark/share lost the view | batch 2026-07-24 |
+| P3-2 | Compare selection drifted from the visible table (phantom "1/2", deleted-scan 404) | batch 2026-07-24 |
+| P3-3 | Silent empty catches hid credential/filter fetch failures → private target scanned anonymously | #77 |
+| P3-4 | Auth refresh could resurrect a logged-out session (narrow race) | #82 |
+| P3-5 | 500-row findings table re-rendered on every unrelated keystroke and poll | batch 2026-07-24 |
+| P3-6 | Loading states silent for screen readers; chart ARIA inert | batch 2026-07-24 |
+| P3-7 | Theme-token drift (hardcoded severity colors, pinned `teal-6` chart) | batch 2026-07-24 |
+| P3-8 | TypeScript strictness gaps: blind `as T` casts, `noUncheckedIndexedAccess`, type-aware ESLint | #81 (casts), batch 2026-07-24 (both flags) |
+
+**Mirror finding:** issue **#83** is P3-4's companion running the other way — a stale pre-login
+`refresh()` wiping a just-completed `login()` — fixed in **#87**.
+
+### `D-*` / `R-*` — `claude-md-compliance.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| D1 | ~100 dead `docs/PLAN.md` references across backend, frontend and Dockerfile | #65 |
+| D2 | Stale "no registry publishing" comments contradicting locked decision §6 | #65 |
+| D3 | Composite build action pinned older action majors than `ci.yml`; Dependabot didn't reach it | #57 |
+| D4 | 8 squash-merge commits authored as "Tyler Richardson" (GitHub profile display name) | #65 / §14 — doc-side only; the profile setting is still open, see `ROADMAP.md` |
+| D5a | The one `except Exception` in `inprocess.py` without an explanatory comment | batch hygiene |
+| D5b | `test_migrations.py` import block that a newer ruff would re-sort (latent `I001`) | #80 |
+| R1 | CLAUDE.md still mandated an OpenAPI-*generated* API client; FE-2 kept the hand-written one | #65 |
+| R2 | CLAUDE.md said CI resolves "all fixable findings"; the gate is fixable HIGH/CRITICAL (INF-10) | #65 |
+| R3 | CLAUDE.md referenced frontend tests that did not exist (FE-10) | #65 |
+| R4 | CLAUDE.md's `.env.example` rule named an `OIDC_CLIENT_SECRET` placeholder that must not exist | #65 |
+| R5 | Required-deliverables list missing CHANGELOG, SECURITY.md, CODEOWNERS, ROADMAP, dependabot, `ci/` | #65 |
+| R6 | Code comments still pointing at `docs/PLAN.md` (with D1/D2) | #65 |
+| R7 | Squash-merge authorship follows the GitHub *profile display name*, not `git config` | #65 / §14 2026-07-13 |
+| R8 | Promotion-PR title convention (`Promote dev to main: …`) undefined | §14 2026-07-13 |
+
+That report also carried pass/fail checkpoints under four prefixes — `LD1–LD7` (locked decisions),
+`HS1–HS7` (hard security rules), `GP1–GP7` (git & PR conventions), `CS1–CS8` (coding standards).
+All passed except `GP4` (author identity → D4) and `GP6` (Conventional Commits on promotions → R8),
+which are the only two §14 cites.
+
+---
+
+### `full-audit-2026-07-05.md` — `INF-*` / `SEC-*` (audit) / `SCN-*` / `API-*` / `FE-*` / `FEAT-*` / `QUA-*` / `DOC-*`
+
+Remediated in tiers **P0–P5**, each with its own dated 2026-07-05 §14 entry; those entries name the
+IDs they closed. Where a row says "P0"…"P5" below, that is the tier entry that closed it.
+
+**`INF-*` — infrastructure & deployment**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| INF-1 | Actions tag-pinned, not SHA-pinned | P2 (Dependabot), #57 (SHA pins) |
+| INF-2 | `:dev` publish silently failed for merged fork PRs (secrets withheld) | 2026-07-06, fully retired 2026-07-09 |
+| INF-3 | Locked decision §6 text contradicted the implemented `:dev` trigger | P2 |
+| INF-4 | `trivy-server` sidecar runs as root | P2 — documented exception (still true) |
+| INF-5 | `docker-socket-proxy` under `read_only` + `cap_drop: ALL` needed a writable `/run` | P2; moot after #89 (wollomatic needs none) |
+| INF-6 | Dockerfile / Compose "no registry publishing" comments stale | P3 / #65 (= D2) |
+| INF-7 | Dockerfile comment overstated verification — checksums same-origin, not signed | P2 wording; #64 added cosign (= SC-8) |
+| INF-8 | Two near-simultaneous release tags could leave `:latest` on the older version | Accepted — single-maintainer release flow |
+| INF-9 | No CI ran on `dev` while `:dev` was built from the merge commit | Retired by the 2026-07-06 nightly split |
+| INF-10 | Dogfood gate is HIGH/CRITICAL-only while CLAUDE.md said "all fixable" | Logged deviation 2026-07-05; CLAUDE.md amended in #65 (= R2) |
+| INF-11 | README said generic private repos clone into tmpfs; they check out under `/cache/tmp` | P3 |
+| INF-12 | Generic private-repo `git clone` ran with a minimal env dropping proxy/TLS vars | Accepted — deliberate env stripping |
+| INF-13 | Healthchecks hard-coded port 8089 while `SCRYE_PORT` is configurable | Info-level; unchanged |
+| INF-14 | `trivy-server` healthcheck (`trivy version`) didn't test the listener | Info-level; unchanged |
+| INF-15 | `trivy-server` tmpfs unsized and root-owned | Info-level; unchanged |
+| INF-16 | Release publish had no dependency on a green CI run for the tagged commit | Accepted — promotion PR is the gate |
+| INF-17 | Production image shipped the full `backend/` tree incl. `tests/`/`scripts/` | #77 (= SC-14) |
+| INF-18 | README quick start only built locally; the published image was documented in CONTRIBUTING | P3 (= DOC-1) |
+| INF-19 | Large multipart uploads spooled to the 200 MB `/tmp` tmpfs | P1 (`read_upload_capped`) |
+
+**`SEC-*` (audit) — distinct from the review's SEC-\* above**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| SEC-1 | Token-bearing generic-webhook URL stored in plaintext and returned on read | P0 |
+| SEC-2 | `logging.py` comment claimed OIDC `code`/`state` redaction that did not exist | Comment corrected |
+| SEC-3 | Password-gated re-auth endpoints not rate-limited | Info-level |
+| SEC-4 | Auth rate-limiter per-IP bucket map grew unbounded | #64 (= SEC-10 review) |
+| SEC-5 | Unauthenticated OIDC login endpoint created DB rows with no rate limit | Info-level |
+| SEC-6 | TOTP codes had no replay/last-used tracking within their validity window | Info-level |
+| SEC-7 | API-token display prefix exposed 4 characters of the secret body | Accepted — prefix is for display |
+| SEC-8 | Registry *create* encrypted a secret for credential-helper auth types that *update* rejects | Validation inconsistency |
+| SEC-9 | `registry_check` returned a raw exception string to the response | No secret leaked; noted |
+
+**`SCN-*` — scanner orchestration, workers, credentials-at-scan-time**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| SCN-1 | Unbounded scanner stdout read into memory (no output size cap) | P1 (`SCRYE_SCANNER_MAX_OUTPUT_BYTES`) |
+| SCN-2 | Docker-proxy and registry-check responses read without a size limit | Low |
+| SCN-3 | `list[str]` settings couldn't be parsed from their documented comma-separated env form | P2 (startup bug) |
+| SCN-4 | `git checkout <commit>` had no `--` end-of-options terminator | 2026-07-04 audit remediation |
+| SCN-5 | Registry credential forwarded to a bearer realm chosen by the probed registry | 2026-07-04 (refuses non-HTTPS realms) |
+| SCN-6 | Multi-step scans had no aggregate wall-clock bound (~2× the configured timeout) | Low |
+| SCN-7 | Cron evaluated in UTC with no timezone affordance | Documented |
+| SCN-8 | A DB error on one schedule aborted the whole due-firing batch for that tick | Low |
+| SCN-9 | Filesystem-allowlist TOCTOU and symlinks inside an allowed root (PLAUSIBLE) | Documented — admin-configured roots |
+| SCN-10 | Deleting a credential NULLed the schedule FK but left the stale id in `options` JSON | Fails closed (= QUA-2) |
+
+**`API-*` — API layer, data model, reports, backup/restore, performance**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| API-1 | N+1 lazy-load of `scan.tags` in `list_scans`/`list_history` | P1 |
+| API-2 | `restore_bundle` (scrypt + full DB rebuild) ran directly on the event loop | P0 |
+| API-3 | Bundle build materialized the whole DB as in-memory JSON, held ~3× | P0 |
+| API-4 | Upload endpoints read the entire body into memory *before* the size cap | P1 |
+| API-5 | Worker persisted findings and raw artifacts synchronously on the event loop | P1 |
+| API-6 | Large findings commit could exceed `busy_timeout` and surface as a 500 (PLAUSIBLE) | #54 (= CON-1) |
+| API-7 | Dashboard/metrics hydrated a full ORM row per target, unbounded and uncached | P1 (TTL cache) |
+| API-8 | Backup download read the whole bundle into memory instead of streaming | Low |
+| API-9 | Malformed-but-decryptable bundles crashed restore with a 500 instead of a 400 | 2026-07-13 (`BackupError`) |
+| API-10 | Backups carried no artifact files; restore produced rows pointing at nothing | P0 |
+| API-11 | Restore didn't pause the worker; concurrent scans raced the table wipe | P0 (409), #54 (worker pause) |
+| API-12 | `scans` composite index uses `created_at`, plan §7 promised `started_at` | Logged deviation 2026-07-05 — index kept |
+| API-13 | History predicates on `created_by_username`/`highest_severity` unindexed | Low |
+| API-14 | Scan diff returned every added/removed finding uncapped | Low |
+| API-15 | Retention pruning and schedule firing ran sync DB + file I/O on the loop each tick | P1 |
+| API-16 | `GET /api/settings/about` spawned three uncached scanner subprocesses per request | 2026-07-04 (TTL cache) |
+| API-17 | Pagination envelope naming drift (`entries` vs `items` vs bare array) | #61, then 2026-07-25 (= QUA-9 / APIR-8) |
+| API-18 | `FilterPresetIn.filters` an unbounded, unvalidated `dict[str, Any]`, no per-user cap | Low |
+| API-19 | Diff `severity_delta` counts deduplicated keys (PLAUSIBLE) | Info-level |
+| API-20 | `load_only` report queries had no `raiseload` guard against future drift | Info-level |
+| API-21 | `delete_backup` unlinked the file before the DB commit | Info-level (= QUA-18) |
+
+**`FE-*` — frontend (audit numbering; distinct from `P1/P2/P3-*`)**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| FE-1 | No global 401/session-expiry handling; stale authenticated shell after session death | P4 |
+| FE-2 | API client hand-rolled, not generated from the OpenAPI schema | Logged deviation 2026-07-05 — kept; CLAUDE.md amended #65 (= R1) |
+| FE-3 | Account/Backups/Schedules rendered naive-UTC timestamps as local | P4 (`lib/dates.ts`) |
+| FE-4 | `BackupsPanel` restore file held in `useRef`; "No file selected" never updated | P4 |
+| FE-5 | `ScheduledScansPanel` had no scanner/target matrix and no role gating | P4 |
+| FE-6 | History fetch had an out-of-order response race | #62 (= P1-4) |
+| FE-7 | Status polling recreated its interval every tick, no backoff, no hidden-tab pause | #62 (= P1-3) |
+| FE-8 | 422 `detail` arrays surfaced as a generic "Request failed (422)" | #61 (= APIR-2) |
+| FE-9 | Finding `primary_url` rendered as an anchor with no scheme validation | #55 (= P1-1) |
+| FE-10 | Zero frontend tests and no test runner | #78 (Vitest), #78+ (jsdom/RTL harness) |
+| FE-11 | `UsersPanel` docstring promised a reset-password action with no UI | Info-level |
+| FE-12 | Forced-MFA enrollment stored `otpauth_uri` but never rendered it; no QR anywhere | Info-level |
+| FE-13 | `UserMenu` logout swallowed a rejected `apiLogout` with no catch | Info-level |
+| FE-14 | Date-range filters serialized local day boundaries as naive UTC | Info-level |
+| FE-15 | `AuthenticationPanel` OIDC save had redundant secret handling + an unchecked cast | Info-level |
+| FE-16 | Assorted small UI items (partial row-click, hidden token expiry, shared `busy` flag, …) | Info-level |
+
+**`FEAT-*` — feature completeness vs. the plan**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| FEAT-1 | Uploaded image-tar (`docker save`) targets not implemented | De-scoped in docs (P3); on `ROADMAP.md` |
+| FEAT-2 | "Scan running images" is enumerate-only; no multi-select launch | De-scoped (P3); on `ROADMAP.md` |
+| FEAT-3 | Grype filesystem "uploaded archive" target missing | De-scoped (P3); on `ROADMAP.md` |
+| FEAT-4 | Scanner-DB update schedule was a stored no-op | P3 (`workers/db_update.py`) |
+| FEAT-5 | Offline / air-gapped DB import missing entirely | De-scoped (P3); on `ROADMAP.md` |
+| FEAT-6 | Grype ignore rules stored but never applied at scan time | P3 (`scanners/grype_policy.py`) |
+| FEAT-7 | Scanner default options/thresholds stored but applied nowhere | P3 (New Scan prefill) |
+| FEAT-8 | VEX and `.trivyignore` are global-only, not the per-scan options the plan lists | Documented (P3) |
+| FEAT-9 | Trivy server URL is deploy-time env only, not a Scanners setting | Documented |
+| FEAT-10 | Key rotation has no admin-facing bulk re-encryption path | De-scoped (P3); on `ROADMAP.md` |
+| FEAT-11 | `SCRYE_DOCKER_PROXY_URL` is a dead config knob | Info-level (= QUA-20) |
+| FEAT-12 | SBOM generation unavailable for repository scans | Info-level |
+| FEAT-13 | Restore's destructive confirm is a single click | Info-level |
+| FEAT-14 | Audit log has an admin API but no UI | Info-level |
+
+**`QUA-*` — backend code quality**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| QUA-1 | API-token minting capped against the *owner's* role, not the effective role → privilege escalation | P0 |
+| QUA-2 | `ScanSchedule` stores credential references twice; the FK `SET NULL` is cosmetic | Low (= SCN-10) |
+| QUA-3 | Five `ScannerSettings` fields editable via the API but consumed by nothing | P3 (= FEAT-4/6/7) |
+| QUA-4 | Four near-identical secret-CRUD routers (~900 lines of parallel code) | **Deferred** — `ROADMAP.md` § Backend structural cleanup |
+| QUA-5 | `_ALLOWED_SCANNERS` matrix duplicated with divergence | #61 (= APIR-10) |
+| QUA-6 | Scan-from-template construction duplicated across two modules | Low |
+| QUA-7 | Pagination params re-declared per endpoint with four different caps | Low |
+| QUA-8 | Trivy version probe implemented twice | Low |
+| QUA-9 | Three list-envelope conventions across phases | #61, then 2026-07-25 (= APIR-8) |
+| QUA-10 | Create schemas strip/validate; Update schemas don't | #61 (= APIR-6) |
+| QUA-11 | Notification secret rules asymmetric between create and update | #61 (= APIR-6) |
+| QUA-12 | Two mask literals — 8-bullet `SECRET_MASK` vs 6-bullet `_URL_MASK` | Low |
+| QUA-13 | Name-clash check idioms differ between routers | Trivial |
+| QUA-14 | `filter_presets` router skips auditing and uses a different commit pattern | Trivial (plausibly intended) |
+| QUA-15 | `run_schedule_now` left `last_run_at`/`last_status` stale (PLAUSIBLE) | #60 (= CON-17 / APIR-7) |
+| QUA-16 | No type checker anywhere | **Deferred** — `ROADMAP.md` § Type-checking in CI (blocked on QUA-17) |
+| QUA-17 | Annotation lies and `Any` seams (`-> object`, un-parameterized dicts, `**vars(p)` reflection) | **Open** — the blocker under QUA-16 |
+| QUA-18 | `delete_backup` unlinks before commit; `create_backup` writes before insert | Info (= API-21) |
+| QUA-19 | `backups.py` re-validates a passphrase length the schema already enforces | Trivial (unreachable) |
+| QUA-20 | `Settings.docker_proxy_url` dead knob | Info (= FEAT-11) |
+| QUA-21 | `backup/store.py` write/read/delete helpers exported but never called | Trivial |
+| QUA-22 | `workers/schedules.py` `if created: db.commit() else: db.commit()` — identical branches | Trivial |
+| QUA-23 | `conftest.py` built the schema via `create_all`, never the Alembic chain | P5 (`tests/test_migrations.py`) |
+| QUA-24 | Coverage gaps — no test for the QUA-1 hole, no rate-limiter unit test | P5 + later back-fills |
+
+**`DOC-*` — documentation deliverables**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| DOC-1 | README contradicted locked decision §6 on registry publishing | P3 |
+| DOC-2 | README overstated unimplemented features (image-tar, multi-select, archive upload) | P3 |
+| DOC-3 | README config table omitted `SCRYE_FORWARDED_ALLOW_IPS` and `SCRYE_SCANNER_CACHE_DIR` | Low |
+| DOC-4 | Duplicate `## Releasing` heading in `CONTRIBUTING.md` | Low |
+| DOC-5 | README advertised ECR/GCR/ACR helpers without noting the binaries aren't bundled | P3 |
+
+---
+
+### Documents this index replaces
+
+All were deleted 2026-07-26; recover any of them with `git show <sha>:<path>` using the SHA in that
+day's §14 entry.
+
+| Path | What it held |
+|---|---|
+| `docs/reviews/00-summary.md` | The H/M/L severity backlog + Top-5; the summary-ID → source-ID map above |
+| `docs/reviews/security-review.md` | `SEC-*` (review) |
+| `docs/reviews/supply-chain-review.md` | `SC-*` |
+| `docs/reviews/api-review.md` | `APIR-*` |
+| `docs/reviews/frontend-review.md` | `P1-*`, `P2-*`, `P3-*` |
+| `docs/reviews/concurrency-review.md` | `CON-*` |
+| `docs/reviews/claude-md-compliance.md` | `D*`, `R*`, `LD*`/`HS*`/`GP*`/`CS*` |
+| `docs/reviews/full-audit-2026-07-05.md` | `INF-*`, `SEC-*` (audit), `SCN-*`, `API-*`, `FE-*`, `FEAT-*`, `QUA-*`, `DOC-*` |
+| `docs/reviews/STATUS.md` | Remediation tracker — the ID → resolving-PR column above came from its §3 ledger |
+| `docs/reviews/fix-verification.md` | A 2026-07-13 verification pass, superseded by STATUS.md |
+| `docs/reviews/phase3-finding2-resolution.md` | Pre-implementation design note for generic-host git auth (§14 2026-07-03 implements it) |
+| `docs/reviews/CLEANUP-AUDIT.md` | The 2026-07-26 audit that produced this cleanup; its conclusions are the §14 entry |
+| `docs/upgrades/python-3.14.md` | Python 3.14 scoping/handoff doc — superseded by §14 2026-07-25, and wrong on its central CVE premise |
+
+---
+
+## Build performance
+
+Durable notes on why the image build is structured the way it is, and — critically —
+what **not** to undo. Cross-referenced from `CLAUDE.md` § Coding standards → Build
+performance, `docker/Dockerfile`, and the four build workflows. Read this before
+restructuring the Dockerfile or the build workflows' caching.
+
+### Why the build was slow, and what was changed (2026-07-07)
+
+**Diagnosis (from actual CI logs, not the YAML).** The CI "image" work is four jobs:
+`backend`, `frontend`, the amd64-only `image` (build + Trivy/Grype dogfood scan), and
+`image-multiarch` (a `linux/amd64,linux/arm64` build-only check). The first three each
+finish in 1–5 min; the ~12 min wall-clock was set almost entirely by **`image-multiarch`**.
+Reading the buildkit step timings for a representative run:
+
+- The arm64 leg runs the whole Dockerfile under **QEMU emulation**, which is 5–15× slower
+  than the native amd64 leg per step (e.g. `apt-get install` 15s→333s, `npm ci` 26s→278s,
+  `npm run build` 20s→328s, `pip install` 21s→231s under emulation).
+- **The GHA layer cache was cold on essentially every run** (0 `CACHED` layers observed).
+  Root cause: the recent cost-reduction pass partitioned the `type=gha` cache into per-build
+  scopes (`amd64-ci`, `multiarch`, `dev-multiarch`) to stop them evicting each other under
+  the repo's 10 GB budget — correct — but the `multiarch` scope is *written* only by rare
+  events (a PR targeting `main`, or a release tag), so between its own invocations its
+  entries age out and it is cold when it next runs. A cold cache means the QEMU-emulated
+  arm64 layers are **re-executed from scratch** rather than restored — a `type=gha` cache
+  *hit* skips executing a layer entirely, emulation cost included. So the recurring cost was
+  the cold cache forcing a full emulated rebuild, more than QEMU per se.
+
+**Changes made (this pass). No security posture was weakened** — the scanner-binary
+checksum verification, the digest-pinned base images, and the non-root/hardened final stage
+are all unchanged.
+
+1. **Cross-seed the cache scopes (config-level, all four paths).** Each build path still
+   *writes* exactly one scope (preserving the 10 GB budget partitioning), but now also
+   *reads* the frequently-warm sibling scope, so a rarely-run build restores warm layers
+   instead of rebuilding cold:
+   - `.github/actions/build-image` gained an `extra-cache-scopes` input; a shell step composes
+     `cache-from` = primary + extras (read many) while `cache-to` stays primary-only (write one).
+   - `image-multiarch` (ci.yml) and the tagged-release build (publish.yml): write `multiarch`,
+     additionally **read** `dev-multiarch`. `main`/release content is promoted `dev`, so the
+     daily nightly build usually carries bit-identical base/apt/venv/npm-ci/arm64 layers.
+   - the nightly (dev-nightly.yml): writes `dev-multiarch`, additionally reads `multiarch`
+     (symmetric — a recent release seeds the nightly). The nightly is what keeps
+     `dev-multiarch` warm for the others to read.
+   - the amd64-only `image` job (ci.yml): writes `amd64-ci`, additionally reads `dev-multiarch`
+     (its amd64 layers are reusable by an amd64-only build and are refreshed daily).
+2. **Persist pip/npm download caches across builds (Dockerfile).** `pip install` and `npm ci`
+   use BuildKit `--mount=type=cache` mounts (and `PIP_NO_CACHE_DIR` was dropped) so an
+   unchanged dependency isn't re-downloaded when its install layer rebuilds. The cache lives
+   in the mount, not the image layer, so nothing bloats the (discarded) builder stages or the
+   final image. (Note: BuildKit cache mounts are not exported to `type=gha`, so this mainly
+   speeds **local** rebuilds and dependency-change rebuilds; the CI recurring win is item 1.)
+3. **Parallelize the scanner-binary downloads (Dockerfile).** The trivy/grype/syft
+   download→verify→extract pipelines were sequential; they now run concurrently in background
+   subshells joined by `wait`. This roughly halves a cold scanner stage, most visibly on the
+   emulated arm64 leg. **Integrity is unchanged:** each binary is still fetched with its
+   publisher's signed checksums file and verified with `sha256sum -c` *before* extraction, and
+   a failure in any subshell (download error or checksum mismatch) propagates through `wait`
+   under `set -e` to fail the build (verified under both dash and bash).
+
+**Expected before/after per build path** (estimates; the dominant variable is cache warmth):
+
+| Build path | Trigger | Before | After (typical) | Mechanism |
+|---|---|---|---|---|
+| `image` (amd64 dogfood) | every PR / main push | ~4 min | ~2–4 min | reads warm `dev-multiarch` amd64 layers |
+| `image-multiarch` | PR→main / main push | ~10–12.5 min | **~3–5 min** when `dev-multiarch` is warm (common); ~10–12 min only on a genuine cold/dep-change build | reads the nightly's warm arm64 layers → arm64 layers CACHED, QEMU rebuild skipped |
+| nightly `:dev` → GHCR | 04:00 UTC (skip if idle) | ~10–12 min | ~10–12 min first build after a dep change; faster when reading a warm `multiarch` | self-warms `dev-multiarch`; still pays QEMU on true cold builds |
+| tagged release → Docker Hub | `v*.*.*` on main | ~10–12 min | ~3–5 min when `dev-multiarch` is warm | reads the nightly's warm arm64 layers |
+
+**Not done (deliberately):** switching the arm64 leg to native `ubuntu-24.04-arm` hosted
+runners (matrix + manifest merge). It would remove QEMU from cold builds too (~12→~4–5 min
+even cold), but this is a **private** repo, so hosted arm64 runners bill per-minute and CI
+would break if the runner label isn't enabled for the account. Left as a documented future
+option, gated on that cost/availability decision. If revisited, it replaces item-1's reliance
+on cache warmth for the cold case; it does not conflict with items 2–3.
+
+### Invariants — do NOT undo these
+
+- **Keep the multi-stage split.** `frontend-builder` (Node), `scanners` (curl/tar), and
+  `backend-builder` (venv) are separate stages precisely so their toolchains never reach the
+  final `runtime` image. Do **not** consolidate stages or install build tooling in `runtime` —
+  it would bloat the image and enlarge its attack surface. The final stage copies only the
+  built venv, the three verified scanner binaries, backend source (for Alembic), the compiled
+  SPA `dist/`, the entrypoint, and the licenses.
+- **Keep the layer ordering.** Dependency manifests (`package*.json`, `pyproject.toml`) are
+  copied and installed **before** the app source is copied, so a code-only change doesn't
+  invalidate the (expensive) dependency-install layers. Do not reorder these.
+- **Keep the cache scopes partitioned by *writer*.** Each build path writes exactly one
+  `type=gha` scope; cross-seeding is **read-only** (`cache-from`). Do **not** make two paths
+  write the same scope or have a path write multiple scopes — that reintroduces the eviction
+  churn under the 10 GB budget that the partitioning exists to prevent. Broadening `cache-from`
+  is safe; broadening `cache-to` is not.
+- **Keep download-then-verify-then-extract for the scanner binaries.** The parallelism is
+  cosmetic to the integrity control; the ordering (fetch signed checksums → `sha256sum -c` →
+  only then `tar -x`) and the digest-pinned bases are the supply-chain guarantee
+  (`CLAUDE.md` § Hard security rules). Do not collapse to `curl | tar`, and do not drop the
+  per-binary checksum step to save time.
+
+**Deployment note (what must reach `main`).** The default branch is `main`; scheduled
+workflows and tag-triggered workflows run from the **default branch's** copy. So:
+`image` (amd64) Dockerfile/cache improvements take effect on `dev` PRs as soon as this merges
+to `dev`; but `image-multiarch` (runs only on main-scoped events), the release build
+(publish.yml, tag on `main`), and the nightly's own symmetric `multiarch` read
+(dev-nightly.yml runs from `main`) only take effect once promoted to `main`. The nightly keeps
+warming `dev-multiarch` from `main`'s existing copy regardless, so the cross-seed reads in the
+other paths work as soon as those paths land on their trigger branches.
+
+**Plan section affected:** §9.1 (image build), §0.6 (distribution/CI paths), process.
