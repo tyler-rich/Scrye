@@ -3353,3 +3353,74 @@ that never happened.
 § Dependency hygiene. Configuration and documentation only — no application code, schema,
 API-contract, security-model, job-model, or auth change, and no change to the waiver list itself
 (still four entries).
+
+### 2026-07-26 — Infra/Process — CVE-2025-15366 (imaplib) regrouped from Group B to Group A: the backport did land on 3.14
+**What changed:** `ci/grype.yaml`'s Group B waiver block covered two CVEs on the rationale that
+upstream had declined the backport to 3.10–3.14, making them permanently unfixable below 3.15.
+Checking that rationale at the source before restating it in the re-scoped tracking issue showed it
+is **no longer true of CVE-2025-15366**. The waiver moved to Group A; Group B is now
+CVE-2025-15367 alone. No CVE was un-waived — the list goes from four entries to four entries, three
+in Group A and one in Group B.
+
+**The evidence, not just the conclusion.** `Lib/imaplib.py` and `Lib/poplib.py` were fetched from
+the `3.14` branch, the `3.13` branch, the `v3.14.6` tag and `main`, and compared:
+- **imaplib — fix is on the maintenance branches.** `3.14` and `3.13` both define
+  `_control_chars = re.compile(b'[\x00\r\n]')` and raise
+  `ValueError("NUL, CR and LF not allowed in commands")` inside `IMAP4._command()`'s argument loop,
+  before each argument is appended to the wire buffer. `v3.14.6` has neither the constant nor the
+  guard. Upstream issue **gh-143921**; 3.14 backport **python/cpython#153137**, merge commit
+  `2981822`, merged **2026-07-07**; 3.13 backport **python/cpython#153287**, merge commit
+  `71926d9`, same day.
+- **It is queued, not released.** `Misc/NEWS.d/next/Security/2026-01-16-11-41-06.gh-issue-143921.AeCOor.rst`
+  ("Reject NUL, CR and LF characters in IMAP commands. Other control characters are allowed and
+  sent quoted.") is present on `3.14` and `3.13` and **404s on `v3.14.6`**. Still under `next/`, so
+  it ships in the next point release and has shipped in none — exactly the Group A shape.
+- **poplib was NOT backported.** `POP3._putcmd()`'s
+  `re.search(b'[\x00-\x1F\x7F]', line)` → `ValueError('Control characters not allowed in commands')`
+  guard exists on `main` only; the `3.14` branch, the `3.13` branch and `v3.14.6` all still pass the
+  line to `_putline()` unvalidated. Upstream issue **gh-143923** lists a single PR
+  (**python/cpython#143924**, commit `b234a2b`, 2026-01-20, `main`) and no backport PR against any
+  maintenance branch.
+- **Why the companion fixes diverged** — this is the part that makes the split make sense rather
+  than look arbitrary. The original imaplib fix (**python/cpython#143922**) rejected *all* control
+  characters, and that breadth is what drew the compatibility-regression concern behind the original
+  no-backport decision. A follow-up, **python/cpython#153067**, narrowed the check to NUL, CR and LF
+  only — other control characters are legal in quoted strings and are sent quoted — and it is the
+  **narrowed** version that was backported (the 3.14 commit message records it as a combined
+  backport of GH-143922 and GH-153067). poplib's fix still rejects the full `[\x00-\x1F\x7F]` range
+  and has had no equivalent narrowing, which is consistent with it remaining un-backported. So the
+  two were never going to move together, despite the identical stated reasoning in our own record.
+
+**On the 2026-07-25 entry: superseded for CVE-2025-15366 only, and left in place unedited.** That
+entry's own reading was correct and is not being retracted — it verified **3.14.6**, the released
+interpreter, and 3.14.6 genuinely lacks both guards; that remains true today. What does not survive
+is the *generalisation* it drew from that reading: "upstream declined the backport to 3.10–3.14, so
+these are fixed only in 3.15+ and no 3.14.x point release will ever clear them." The honest
+chronology is that the imaplib backport merged on **2026-07-07**, **18 days before** that entry was
+written — so the claim was already stale when recorded, not overtaken afterwards. The check looked
+at the released tag and concluded something about the maintenance *branch*, which the tag cannot
+tell you. **Nothing in the 2026-07-25 entry was edited**; it stands as written and this entry
+supersedes it on that one point.
+
+**The lesson is narrower than "verify at the source," which was already the rule.** Source
+verification was performed on 2026-07-25 and still produced a wrong standing conclusion, because
+the ref it read could not answer the question being asked. A claim about whether a fix *will ever*
+arrive on a line is a claim about the **branch**; only a claim about what is shipping *today* can be
+settled from a tag. Both refs are cheap to check — this pass read four — and a waiver whose
+rationale is "permanently unfixable" should be pinned to the branch, not the release.
+
+`ci/grype.yaml` changes: CVE-2025-15366 moved into the Group A list with the imaplib backport added
+to the Group A source-verification block; Group B rewritten for poplib alone, with its own
+source-verification lines, the divergence explanation, and issue #52 as its tracker; the shared
+header's ARCHIVE pointer extended to this entry. The Group B **review cadence (annual, next
+2027-07-25)**, the standing-acceptance framing, and the explicit "do not scope a 3.15 move as a
+reaction to this" instruction are all carried over unchanged — the acceptance itself was not
+re-opened, only its membership.
+**Why:** A waiver is only as good as the rationale beside it, and this one had drifted from
+"accepted because unfixable" to "accepted because unfixable, except it was fixed three weeks ago."
+Regrouping keeps the two blocks meaning what they say — Group A has a trigger and a review date
+tied to a release, Group B is a standing acceptance with an annual re-confirmation — so a reviewer
+arriving on either date knows which question they are being asked.
+**Plan section affected:** §9.1 (base image / dogfood self-scan), §12 (Phase 6 self-scan),
+CLAUDE.md § Dependency hygiene. Configuration and documentation only — no application code, schema,
+API-contract, security-model, job-model, or auth change.
