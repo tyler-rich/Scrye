@@ -3191,3 +3191,72 @@ otherwise be diagnosed from a symptom (a 403; a crash-looping sidecar) that poin
 actual cause.
 **Plan section affected:** none. Docs and a Compose comment only — no schema, API-contract,
 security-model, job-model, or auth change, and no change to the allowlist itself.
+
+### 2026-07-26 — Post-v1 — Socket-proxy operational behavior from a live Debian run documented (docs only)
+**What changed:** The 2026-07-24 migration entry closed with "**Still to do on a Docker-capable
+host:** one `docker compose --profile docker-env up` to confirm the published image boots under the
+full hardened option set and that `DOCKER_GID` is correct for that host." That run has now happened,
+on a real Debian host with a live Docker daemon. Everything the docs assert about the *allowlist*
+held — this entry records the four **operational** behaviors the run surfaced that the docs either
+got wrong or never said. Docs only: no code, Compose, CI, or configuration change, and the
+`-allowGET` pattern and option set are untouched.
+
+**Confirmed as documented (no change needed):** the digest-pinned `wollomatic/socket-proxy:1.12.3`
+image boots under `user: "65534:<gid>"` with `read_only: true`, `cap_drop: ALL`, and
+`no-new-privileges`; `GET /images/json` and `GET /v1.NN/images/json` return **200**; `/info`,
+`/containers/json`, and `/version` return **403**; any `POST` returns **405**. This retires the
+2026-07-24 "still to do" item — the compiled-upstream harness used there predicted the published
+image's behavior exactly.
+
+**1. `999` is a convention, not a fallback anyone should rely on — the host measured `989`.** Both
+the README's § Configuration note and the 2026-07-24 entry called `999` "the Debian/Ubuntu default,"
+which reads as "probably right." On the Debian host actually used, `stat -c '%g' /var/run/docker.sock`
+returned **`989`**, so the Compose fallback would have failed outright. The README now calls `999` a
+placeholder rather than a default and cites the measured `989`; the `stat` derivation was already
+the instruction and remains it.
+
+**2. The `-allowfrom` source check rejects before the path and method rules are evaluated.**
+wollomatic resolves the client address back to a hostname and compares it to `scrye` *first*. A
+request from a non-matching source gets **403** for everything — including methods that would
+otherwise answer 405. So from the client, a wrong source and a disallowed path are
+indistinguishable, and an operator debugging "403 on an endpoint that should work" will suspect the
+`-allowGET` regex when the cause is the source check. (The proxy's own log does distinguish them:
+`blocked request … forbidden IP`.) Documented in the README's § Optional sidecars and § Security
+model, with the "check the log before editing the pattern" instruction attached.
+
+**3. The wrong-GID failure mode is a crash loop, not a clean exit.** The README said the proxy
+"reports a socket permission error and stays down," which sends an operator looking for a stopped
+container. What actually happens: it logs
+`dial unix /var/run/docker.sock: connect: permission denied`, exits, and `restart: unless-stopped`
+restarts it into the identical failure, repeating under Docker's restart backoff. `docker compose ps`
+shows STATUS **`Restarting`** — never `Exited`. The README now describes it that way.
+
+**4. From the client, a crash-looping proxy is a connection error, not an HTTP status.** Nothing is
+listening, so `curl` reports **`000`** and `docker_proxy.list_images()` raises `DockerProxyError`
+from `httpx.HTTPError` ("Could not reach the Docker proxy at …") rather than from a non-200
+response. Both paths surface as **502** on `GET /api/docker-environments/{id}/images` — the
+distinguishing signal is the detail text, not the status code. That is the cheapest way to tell a
+broken sidecar (connection error / `000`) from a working-but-restrictive allowlist (`returned HTTP
+403`), and the README now says so at the point where the 502 is described.
+
+**Structural re-confirmation: a crash-looping proxy does not block the app.** Re-verified against
+`docker/docker-compose.yml` this session — grepped repo-wide, **no `depends_on` exists in any
+Compose file, for any service, in any profile**, so there is no `condition: service_healthy` gate,
+the `scrye` container neither waits on the proxy nor is torn down by it, and the proxy's healthcheck
+is consumed by nothing but itself. Scrye starts and stays up while the sidecar cycles. This matches
+what the 2026-07-25 entry recorded; nothing needed flagging or changing.
+
+**Not changed, deliberately.** Two spots still carry the softer wording, left alone because this was
+scoped docs-only: `docker/docker-compose.yml`'s `DOCKER_GID` comment ("a `docker` group of 999 is
+the Debian/Ubuntu default") is a configuration file, and
+`backend/app/core/docker_proxy.py`'s non-200 error message still advises checking that the proxy is
+"read-only with `IMAGES=1`" — a stale tecnativa env-var reference that has been wrong since
+2026-07-24 and is code. Both are cosmetic and tracked for a follow-up that is allowed to touch
+non-doc files.
+**Why:** Every one of these is a symptom that points away from its cause — a 403 that looks like a
+regex bug, a crash loop that looks like a stopped container, a connection error that looks like an
+API rejection, and a GID default that looks safe. They cost debugging time exactly once per
+operator, and only the live run could surface them.
+**Plan section affected:** none. `README.md` § Configuration, § Optional sidecars, and § Security
+model, plus the `CHANGELOG.md` `docker-env` action-required note. No schema, API-contract,
+security-model, job-model, or auth change; the allowlist itself is byte-for-byte unchanged.

@@ -503,24 +503,53 @@ neither in the table above nor in `.env.example`:
   [`docker-env` profile](#docker-socket-proxy--scan-running-images) is enabled.
   It must be the **host's** docker group id
   (`stat -c '%g' /var/run/docker.sock`) — the socket proxy runs unprivileged and
-  needs that group to read the socket. It defaults to `999` (the Debian/Ubuntu
-  default), which is a fallback, not a guarantee.
+  needs that group to read the socket. The Compose file falls back to `999` if
+  you leave it unset, but treat that as a **placeholder, not a safe default**:
+  `999` is a packaging convention, not a guarantee, and it is often wrong. On
+  the Debian host this sidecar was last exercised on, the docker group was
+  **`989`** — the fallback would have failed there. Always derive the value with
+  `stat`; never assume it.
 - **`SCRYE_ALLOW_WEAK_MASTER_KEY`** — a temporary migration escape hatch read
   directly by the crypto module, not by the config loader. See
   [The master key](#the-master-key); it is not meant to be left enabled.
 
-**A wrong `DOCKER_GID` fails only the sidecar, never Scrye.** The proxy cannot
-open `/var/run/docker.sock` (`root:docker`, mode 0660) without the right group,
-so it reports a socket permission error and stays down — the container never
-becomes healthy and `restart: unless-stopped` keeps retrying it. Nothing else is
-affected: no service declares `depends_on` for the proxy, so the `scrye`
-container neither waits on it at startup nor stops when it fails, and its
-healthcheck is consumed by nothing but itself. The one visible symptom inside the
-app is that enumerating images for that Docker environment returns
-**502 Bad Gateway** with the proxy's connection error; scans, history, schedules,
-and every other feature are untouched. So a permission error at proxy start means
-**"docker-env is unavailable"**, not "Scrye is broken" — fix `DOCKER_GID` and
-restart the sidecar alone.
+**A wrong `DOCKER_GID` crash-loops the sidecar — and only the sidecar.** The
+proxy cannot open `/var/run/docker.sock` (`root:docker`, mode 0660) without the
+right group, so it logs
+
+```text
+dial unix /var/run/docker.sock: connect: permission denied
+```
+
+and exits. It does not then sit there stopped: `restart: unless-stopped` starts
+it again, it fails identically, and Docker keeps retrying it under its restart
+backoff. In `docker compose ps` / `docker ps -a` the container shows STATUS
+**`Restarting`** (cycling, occasionally caught mid-attempt) — **not** `Exited`,
+so don't go looking for a stopped container.
+
+**Scrye itself starts and stays up throughout.** That is structural, not luck:
+no service in `docker/docker-compose.yml` declares `depends_on` at all, in any
+profile. The `scrye` container therefore never waits on the proxy at startup and
+is never torn down when it fails; there is no `condition: service_healthy` gate
+to block on, and the proxy's healthcheck is consumed by nothing but itself.
+
+The one visible symptom inside the app is that enumerating images for that
+Docker environment returns **502 Bad Gateway**. Read the detail text — it tells
+you which of the two failures you have:
+
+- **A connection error** (`Could not reach the Docker proxy at …`) — nothing is
+  listening, i.e. the sidecar is crash-looping. Probing by hand shows the same
+  thing: `curl` reports status **`000`**, not an HTTP status, because the TCP
+  connection itself never completes. This is the `DOCKER_GID` case.
+- **`returned HTTP 403`** — the proxy is up and answering, and the request was
+  refused by its allowlist (a non-allowlisted path, or a source that isn't the
+  `scrye` container). `DOCKER_GID` is fine.
+
+That distinction — connection failure vs. an HTTP status — is the signal that
+separates a broken sidecar from a working-but-restrictive allowlist. Either way,
+scans, history, schedules, and every other feature are untouched: a permission
+error at proxy start means **"docker-env is unavailable"**, not "Scrye is
+broken." Fix `DOCKER_GID` and restart the sidecar alone.
 
 ### The master key
 
@@ -663,8 +692,10 @@ Enable one only if you want the specific capability it adds.
   **host's** docker group id to open `/var/run/docker.sock` (`root:docker`, mode
   0660). Set `DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"` before bringing
   the profile up — including if you copy the service into your own Compose file.
-  Getting it wrong takes down only this sidecar, never Scrye (see
-  [Configuration](#configuration)).
+  **Derive it, don't guess:** the Compose fallback of `999` is only a convention
+  and was `989` on the Debian host this was last verified against. Getting it
+  wrong crash-loops this sidecar (STATUS `Restarting`) and nothing else — Scrye
+  starts and runs normally (see [Configuration](#configuration)).
 - **Without it:** you simply don't get the image-enumeration convenience. You can
   still scan **any** image by typing its reference into New scan — nothing else is
   lost.
@@ -676,6 +707,16 @@ Enable one only if you want the specific capability it adds.
   non-listing `/images/…` route) is refused with **403**, and every method other
   than `GET` with **405**, before it reaches the socket. Only the `scrye`
   container may connect at all.
+- **Reading a 403 from the proxy.** The `-allowfrom` source check is evaluated
+  **before** the path and method rules — wollomatic resolves the client address
+  back to a hostname and compares it to `scrye`, and a request from any other
+  source is refused with **403** whatever it asked for, including methods that
+  would otherwise answer 405. A wrong source and a disallowed path are therefore
+  indistinguishable from the client. If you renamed the app service, or you are
+  probing by hand from another container or from the host, that 403 is the
+  source check, not the `-allowGET` regex; the proxy logs
+  `blocked request … forbidden IP` when it is. Check the proxy's log before
+  editing the allowlist pattern.
 - **Residual risk:** this is the **only** place a Docker socket is mounted (read-
   only). Anyone who can reach the proxy can enumerate the host's image list, so
   enable it deliberately, keep it on the internal network (no host port), and see
@@ -852,7 +893,9 @@ only in memory at scan time.
   is rejected at the proxy (403 for any other path, 405 for any other method) and
   never reaches the socket. A `-allowfrom` source allowlist additionally limits
   connections to the `scrye` container, so nothing else on the Compose network
-  can reach it. The container itself is a from-scratch image (no shell, no
+  can reach it; that source check runs **first**, ahead of the path and method
+  rules, so a connection from anywhere else is refused with 403 regardless of
+  what it requests. The container itself is a from-scratch image (no shell, no
   package manager) running as uid 65534 with a read-only root filesystem, no
   writable path at all, `cap_drop: ALL`, and `no-new-privileges`. It needs the
   host's docker GID (`DOCKER_GID`) purely to read the socket. The residual
