@@ -3297,3 +3297,59 @@ no advice at all.
 **Plan section affected:** none. One error-message string, one Compose comment, one added test. No
 schema, API-contract, security-model, job-model, or auth change; the `-allowGET` pattern, the option
 set, and the `${DOCKER_GID:-999}` value itself are all unchanged.
+
+### 2026-07-26 — Infra/Process — Group A interpreter CVEs re-verified against the 3.14 branch; waivers re-pointed at a Group-A-only tracking issue (#98)
+**What changed:** `ci/grype.yaml`'s **Group A** waivers — CVE-2026-15308 (HIGH, `html.parser`
+quadratic-complexity CPU DoS) and CVE-2026-12003 (MEDIUM, `getpath.py` in-tree search-path
+fallback) — were re-verified against the runtime the image actually pins, and their tracking
+reference was moved off issue #52 onto a new **Group-A-only** issue, #98. **Group B was not
+touched**: CVE-2025-15366 / CVE-2025-15367 remain the standing acceptance on any interpreter below
+3.15 with the annual re-confirmation the 2026-07-25 process entry gave them, and nothing about the
+3.14 move changes that.
+
+**Verification, done at the source** per CLAUDE.md § Dependency hygiene (the rule the 2026-07-25
+process entry added) — the `3.14` branch and the `v3.14.6` tag were fetched and diffed file by file,
+rather than reading Grype's `FIXED IN` column, which still reports 3.15.x for both:
+- **CVE-2026-15308 / `Lib/html/parser.py`** — the `3.14` branch carries the buffered-`feed()`
+  rewrite (`_pending` / `_pending_len` / `_parse_threshold`, with `close()` flushing the pending
+  list) from backport PR python/cpython#153039, commit `07efb08`, merged 2026-07-04. `v3.14.6`
+  still has the unguarded `self.rawdata = self.rawdata + data; self.goahead(0)`.
+- **CVE-2026-12003 / `Modules/getpath.py`** — the `3.14` branch has the `BUILD_LANDMARK` constants
+  (`Modules/Setup.local`, `%VPATH%\Modules\Setup.local`) and the `isfile(joinpath(
+  real_executable_dir, BUILD_LANDMARK))` fallback removed, with an inline `gh-151544;
+  CVE-2026-12003` comment in their place, from backport PR python/cpython#151682, commit `b93d6d3`,
+  merged 2026-06-22. `v3.14.6` still has both.
+- **Release state** — `Include/patchlevel.h` on the `3.14` branch reads `PY_VERSION "3.14.6+"`;
+  there is no `v3.14.7` tag and no `Misc/NEWS.d/3.14.7.rst`. 3.14.6 (released 2026-06-10) is the
+  latest 3.14.x, and both backports merged after it. **3.14.7 is the first release that will carry
+  either fix**, so both waivers stand and the 2026-10-25 review date is unchanged.
+
+**Two premises this pass was scoped on did not survive checking, and the work was adjusted rather
+than forced to fit:**
+1. **The Group A comment was expected to still read "next 3.13.x."** It did not — the 2026-07-25
+   upgrade entry had already retargeted it to "next 3.14.x." No trigger correction was needed; what
+   the block was actually missing was the concrete release (3.14.7) and any record of the fixes
+   having been verified rather than assumed. Those were added instead.
+2. **Issue #52 was expected to be closed.** It is open — checked twice through different APIs, and
+   the repository has zero closed issues. #98 was therefore opened on the ground that does hold:
+   #52 is the older all-four tracker, written end to end against the 3.13 runtime, and stale since
+   the 3.14 move — including a resolution-trigger line still asserting that 3.14.6 carries the
+   Group B fixes, which the 2026-07-25 entry records as false. The waiver comment says #98
+   **supersedes #52 for Group A** and notes #52 is still open; it does not claim #52 is closed.
+   Whether to close #52 or re-scope it to Group B is left to the maintainer.
+
+`ci/grype.yaml` changes: the shared header no longer names a single tracking issue for all four
+CVEs (the two groups have different triggers and different trackers, and one blanket "Tracked in
+issue #52" line is what let a Group-A reference go stale behind a Group-B-shaped issue); the Group A
+block gains the dated source-verification note, the named 3.14.7 trigger, and the #98 reference.
+**Why:** The waivers' tracking reference had drifted out from under them — #52 describes a runtime
+Scrye no longer runs, and its own text contradicts what §14 records as true — so a waiver reviewer
+arriving on 2026-10-25 would have been sent to a document that is wrong about the thing they are
+reviewing. Re-verifying at the source before re-dating anything is the 2026-07-25 rule applied to
+its first real case, and it is what caught premise (1): the trigger was already correct, and a pass
+that had assumed otherwise would have "fixed" it into the same state while recording a correction
+that never happened.
+**Plan section affected:** §9.1 (base image / dogfood self-scan), §12 (Phase 6 self-scan), CLAUDE.md
+§ Dependency hygiene. Configuration and documentation only — no application code, schema,
+API-contract, security-model, job-model, or auth change, and no change to the waiver list itself
+(still four entries).
