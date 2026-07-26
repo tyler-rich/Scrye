@@ -437,6 +437,35 @@ Releasing is a deliberate, maintainer-initiated step. `main` is protected and on
 a release — it is never a target for routine contribution PRs. Contributors don't need to do
 anything differently: keep branching from and PR'ing into `dev` as usual.
 
+### Before you tag
+
+Run through this first — every item is something that is permanent, or expensive to undo, once
+the tag exists.
+
+- [ ] **`CHANGELOG.md` `## [Unreleased]` reviewed for stale or false claims.** It ships *verbatim*
+      as the release notes, so anything wrong in it becomes permanent published history. Re-check
+      any claim that depends on the outside world (CVE status, upstream fix versions, issue
+      numbers) against the current source rather than against what the entry said when written.
+- [ ] **`THIRD_PARTY_LICENSES/` verified against the Trivy / Grype / Syft versions actually
+      pulled at build time.** The version table in its `README.md` must match the `TRIVY_VERSION`
+      / `GRYPE_VERSION` / `SYFT_VERSION` args in `docker/Dockerfile`, and each bundled
+      `LICENSE`/`NOTICE` must be the file upstream ships at that tag (see `CLAUDE.md`
+      § Third-party license attribution — Apache-2.0 §4 requires the real text, not a paraphrase).
+- [ ] **Open Dependabot PRs triaged.** Land, close, or consciously defer each one; don't tag on
+      top of an unreviewed queue. Check any bump against the locked decisions in `CLAUDE.md` §
+      Locked decisions before merging — a grouped PR can quietly propose a major that a locked
+      decision forbids.
+- [ ] **`backend/requirements.lock` regenerated if backend deps moved.** Any change to
+      `pyproject.toml`'s dependencies needs the pinned `uv pip compile --generate-hashes` rerun
+      (see § Backend dependency lock); CI fails on lock drift, so catch it before the tag.
+
+And immediately after the tag:
+
+- [ ] **Back-merge `main` into `dev`** — see step 3 below and `CLAUDE.md` § Git & PR conventions.
+- [ ] **Re-run `rescan.yml`** (Actions → *Run workflow*) to confirm the newly published image is
+      clean. The weekly re-scan opens/updates a tracking issue against `:latest`; running it on
+      demand is what closes out a release whose whole point was shipping accumulated fixes.
+
 ### Promoting `dev` to `main`, then back-merging
 
 1. When `dev` is in a releasable state, the maintainer opens a **promotion PR** from `dev` into
