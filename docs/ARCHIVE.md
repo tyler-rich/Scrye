@@ -547,6 +547,83 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+### 2026-07-25 — Docs/Process — README + CONTRIBUTING audited against the post-remediation codebase
+**What changed:** A docs-only pass reconciling the two user/contributor-facing documents with the
+state §14's remediation-cycle entries left the code in. No application code, CI, or configuration
+was touched. Verified against the tree rather than against the prior entries — each claim below was
+re-checked at `file:line` before being written or left alone.
+
+`README.md`:
+- **Field-encryption AAD was documented as "column-bound"** — stale since L1/SEC-7 (#64). The
+  security model now describes the **row-bound** AAD (`<table>.<column>:<row-id>`), applied on
+  write with the column-only tag as a read fallback so legacy ciphertext still decrypts and
+  upgrades on next write (`backend/app/core/secret_store.py:54`).
+- **H1/SEC-1 was absent from the security model.** Added a bullet naming
+  `SCRYE_FILESYSTEM_SCAN_ROOTS` as the **sole** gate on local-path scanning, and the
+  remote-clone-URL requirement on `repository` targets (422 at request validation, inherited by
+  scheduled scans) that closes the `trivy repo <local path>` route around it. § Features and
+  § Usage previously said "HTTPS clone URL"; both now say remote clone URL and name the four
+  accepted schemes, matching `is_remote_repo_url()`.
+- **New § Supply chain.** The supply-chain hardening from H11/SC-1, H9/SC-2, H10/SC-3, M24/SC-4,
+  M26/SC-8, SC-12, and SC-14 had no user-facing home — a consumer had no documented way to verify
+  a pulled image. The section covers the `gh attestation verify` command for the SLSA provenance +
+  SPDX SBOM attestations, cosign keyless verification of the scanner `checksums.txt` before
+  `sha256sum -c`, the hash-pinned `requirements.lock` (`pip --require-hashes`) and pinned build
+  backend, digest-pinned base/sidecar images, SHA-pinned Actions, Dependabot's five ecosystems
+  including the composite-action directory, and the exclusion of `backend/tests/` and
+  `backend/scripts/` from the runtime image. The § Security model CIS bullet now says
+  "cosign-verified" rather than the vaguer "verified against their signed checksum files" and links
+  here.
+- **§ Configuration.** The "one variable is not a Scrye setting" note listed only `DOCKER_GID`;
+  `SCRYE_ALLOW_WEAK_MASTER_KEY` is also an env var absent from `.env.example` (it is read directly
+  by `core/crypto.py:47`, not by the `Settings` model), so the note now covers both and explains
+  why neither is generated.
+- **§ Optional sidecars.** The socket-proxy entry described the wollomatic allowlist correctly but
+  buried the `DOCKER_GID` prerequisite in a shell comment, where an operator copying the service
+  into their own Compose file would miss it. It is now its own bullet, with the digest pin and
+  uid 65534 named alongside.
+
+`CONTRIBUTING.md`:
+- **The TypeScript strictness gates were undocumented.** `noUncheckedIndexedAccess` and type-aware
+  ESLint (`recommendedTypeChecked` + `projectService`) have been enforced since the P3-8 close
+  (2026-07-24) and fail the build, but a contributor had no way to know. § Coding standards now
+  documents both, the preference for encoding an invariant in the type over a non-null assertion
+  (the tree has zero `!` assertions), and the `void`-operator idiom for the promise rules.
+- **`eslint-disable` stance, stated accurately.** The scoping for this pass described the codebase
+  as using none. It uses **nine** — two `react-refresh/only-export-components` with `--`
+  justifications and seven `react-hooks/exhaustive-deps` on mount-only effects. What the P3-8 entry
+  actually claims is that *that pass added zero*, which is a different statement. The rule is
+  therefore written as: targeted `eslint-disable-next-line` only, never file-level, never on the two
+  gates, always with a stated reason — and the nine existing ones are named so the next reader
+  doesn't have to re-derive whether they are drift.
+- **§ Project layout was stale.** It listed `ci.yml` as the only workflow (there are four), omitted
+  `.github/actions/build-image/`, `dependabot.yml`, `CHANGELOG.md`, `SECURITY.md`, `docs/upgrades/`,
+  `frontend/src/lib/`, `frontend/src/test/`, and `api/pagination.py`.
+- **§ Releasing lacked the promotion-title convention that `CLAUDE.md` points at it for.**
+  CLAUDE.md § Coding standards cites "`CONTRIBUTING.md` § Releasing" as the source for the plain
+  `Promote dev to main: …` title exception, but § Releasing never stated it — a dangling
+  cross-reference between the two documents. Now stated where CLAUDE.md says it lives.
+- **§ Pull request process** gained the lock-regeneration and dated-§14-deviation checklist items,
+  `tsc -b`, the no-AI-attribution-footer requirement on commits *and* the PR body, and an explicit
+  statement that CI is the merge gate — aligning the contributor-facing checklist with CLAUDE.md
+  § Definition of done.
+
+**Deliberately left alone.** § Backend dependency lock was re-verified end to end (pinned
+`uv==0.8.17` matching `ci.yml:71`, `uv pip compile pyproject.toml --group build --generate-hashes
+--python-version 3.14`, `pip --require-hashes`, the `--no-deps --no-build-isolation` app install,
+and the CI drift gate) and is **accurate and complete after SC-12** — no change. The frontend test
+conventions (`.test.ts`→node, `.test.tsx`→jsdom, `renderWithProviders`) were likewise already
+correct and complete. The README's Python **3.14** prerequisite was confirmed against
+`docker/Dockerfile` (both stages pin the 3.14.6 digest) rather than assumed from the scoping note,
+which expected 3.13.
+**Why:** The compliance audit's finding was three sources of truth drifting apart, so the value of
+this pass is in the cross-document reconciliation, not the individual corrections. Two contradictions
+were found and closed by editing the doc that was wrong, not the contract: the dangling CLAUDE.md →
+CONTRIBUTING § Releasing promotion-title reference, and the `.env.example`-vs-README account of which
+env vars are `Settings` fields. `CLAUDE.md` was **not** amended in this pass by instruction.
+**Plan section affected:** §10.1 (`README.md`), §10.2 (`CONTRIBUTING.md`). Docs only — no code, CI,
+configuration, schema, security-model, or job-model change.
+
 ### 2026-07-25 — Docs/Process — Interpreter CVEs must be verified at the source before a bump is justified on security grounds
 **What changed:** A new standing rule in `CLAUDE.md` § Coding standards § Dependency hygiene:
 scanner output, advisory "fixed in" fields, and this repo's own issue summaries are **evidence, not

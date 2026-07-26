@@ -54,6 +54,7 @@ single findings model so Trivy and Grype render in one table.
 - [Backup & restore](#backup--restore)
 - [Monitoring](#monitoring)
 - [Building the image yourself](#building-the-image-yourself)
+- [Supply chain](#supply-chain)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
@@ -75,8 +76,10 @@ and one normalized findings model.
 
 - **Trivy scanning**
   - Targets: a **single container image** (registry reference) and a **git
-    repository** (public or private, by HTTPS clone URL with optional
-    branch/commit/tag).
+    repository** (public or private, by **remote clone URL** — `http`, `https`,
+    `ssh`, or `git` — with optional branch/commit/tag). A local filesystem path
+    is **rejected** as a repository target; see
+    [Security model](#security-model).
   - Scanners (selectable per scan, default all): **vulnerabilities/CVEs**
     (`vuln`), **misconfiguration/IaC** (`misconfig`), **secrets** (`secret`),
     and **licenses** (`license`). An optional Syft **SBOM** can be generated
@@ -492,13 +495,19 @@ have to touch it:
 | `SCRYE_SYFT_BINARY` | `syft` | Optional | Syft binary path/name. |
 | `SCRYE_FRONTEND_DIST_DIR` | `/app/frontend/dist` | Optional | Directory of the built SPA served by FastAPI. |
 
-One Compose-level variable is **not** a Scrye setting and so is not in the table
-above: `DOCKER_GID`. It is read only by `docker/docker-compose.yml`, only when
-the [`docker-env` profile](#docker-socket-proxy--scan-running-images) is enabled,
-and it must be the **host's** docker group id
-(`stat -c '%g' /var/run/docker.sock`) — the socket proxy runs unprivileged and
-needs that group to read the socket. It defaults to `999` (the Debian/Ubuntu
-default), which is a fallback, not a guarantee.
+Two environment variables are **not** Scrye `Settings` fields, so they appear
+neither in the table above nor in `.env.example`:
+
+- **`DOCKER_GID`** — a Compose-level variable read only by
+  `docker/docker-compose.yml`, only when the
+  [`docker-env` profile](#docker-socket-proxy--scan-running-images) is enabled.
+  It must be the **host's** docker group id
+  (`stat -c '%g' /var/run/docker.sock`) — the socket proxy runs unprivileged and
+  needs that group to read the socket. It defaults to `999` (the Debian/Ubuntu
+  default), which is a fallback, not a guarantee.
+- **`SCRYE_ALLOW_WEAK_MASTER_KEY`** — a temporary migration escape hatch read
+  directly by the crypto module, not by the config loader. See
+  [The master key](#the-master-key); it is not meant to be left enabled.
 
 **A wrong `DOCKER_GID` fails only the sidecar, never Scrye.** The proxy cannot
 open `/var/run/docker.sock` (`root:docker`, mode 0660) without the right group,
@@ -645,11 +654,17 @@ Enable one only if you want the specific capability it adds.
 
 ### `docker-socket-proxy` — "scan running images"
 
-- **Optional.** A **read-only** proxy ([`wollomatic/socket-proxy`](https://github.com/wollomatic/socket-proxy))
-  in front of the Docker socket that lets Scrye **enumerate** the images on a
-  Docker host. Point Scrye at it with
-  `SCRYE_DOCKER_PROXY_URL=http://docker-socket-proxy:2375` and register the
-  environment under Settings → Docker environments.
+- **Optional.** A **read-only** proxy ([`wollomatic/socket-proxy`](https://github.com/wollomatic/socket-proxy),
+  digest-pinned, a from-scratch Go binary running as uid `65534`) in front of the
+  Docker socket that lets Scrye **enumerate** the images on a Docker host. Point
+  Scrye at it with `SCRYE_DOCKER_PROXY_URL=http://docker-socket-proxy:2375` and
+  register the environment under Settings → Docker environments.
+- **Prerequisite: `DOCKER_GID`.** The proxy runs unprivileged, so it needs the
+  **host's** docker group id to open `/var/run/docker.sock` (`root:docker`, mode
+  0660). Set `DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"` before bringing
+  the profile up — including if you copy the service into your own Compose file.
+  Getting it wrong takes down only this sidecar, never Scrye (see
+  [Configuration](#configuration)).
 - **Without it:** you simply don't get the image-enumeration convenience. You can
   still scan **any** image by typing its reference into New scan — nothing else is
   lost.
@@ -724,8 +739,11 @@ adjust to match:
   `ghcr.io/org/app:tag`). For a private registry, select a **registry credential**
   (Settings → Registries). For Trivy, choose which scanners run and an optional
   severity filter; optionally toggle **Generate SBOM** to also produce a Syft SBOM.
-- **Repository (Trivy)** — enter an HTTPS clone URL and optionally a
-  branch/commit/tag. For a private repo, select a **git credential** (Settings →
+- **Repository (Trivy)** — enter a **remote clone URL** (`http`, `https`, `ssh`,
+  or `git`) and optionally a branch/commit/tag. A local filesystem path is
+  refused with a 422 — repositories are always cloned from a remote, and local
+  paths are reachable only through the filesystem allowlist below. For a private
+  repo, select a **git credential** (Settings →
   Git providers): GitHub/GitLab use Trivy's token env vars; a generic host is
   cloned with the system `git` binary via a transient `GIT_ASKPASS` helper, so the
   credential never touches the process argument list, is never stored, and is
@@ -771,8 +789,12 @@ only in memory at scan time.
 - **Field-level encryption.** Stored secrets (registry creds, git tokens, OIDC
   client secret, notification secrets/URLs, TOTP MFA secrets, scheduled-backup
   passphrase) are encrypted with **AES-256-GCM** (random per-secret nonce,
-  HKDF-derived key, key-version tagged, column-bound AAD). The database never
-  holds plaintext secrets.
+  HKDF-derived key, key-version tagged, and **row-bound** associated data —
+  `<table>.<column>:<row-id>` — so a ciphertext can't be replayed into another
+  row of the same column). Binding is applied on write and falls back to the
+  older column-only tag on read, so pre-existing ciphertext keeps decrypting and
+  upgrades the next time its row is written. The database never holds plaintext
+  secrets.
 - **Master key via secret file.** The key comes from a Docker secret file
   (`SCRYE_APP_SECRET_KEY_FILE`) — never an env var or image layer.
 - **Authentication.** Local accounts use **argon2id** with revocable server-side
@@ -799,10 +821,19 @@ only in memory at scan time.
 - **Scan-time only.** Secrets are decrypted in memory into transient credential
   files on **tmpfs** (Docker `config.json`, `GIT_ASKPASS` helper), used for the
   scanner subprocess, then shredded.
+- **`SCRYE_FILESYSTEM_SCAN_ROOTS` is the only gate on local-path scanning.**
+  Filesystem (Grype `dir:`) scanning is off unless an admin sets that allowlist,
+  and targets outside it are refused. No other target type may reach a local
+  path: a **repository** target must be a remote clone URL
+  (`http`/`https`/`ssh`/`git`), rejected at request validation with a 422
+  otherwise — Trivy's `repo` subcommand also accepts a bare filesystem path, so
+  without that check a target like `/data` or `/run/secrets` would have walked
+  the container filesystem and published the results as a downloadable artifact,
+  around the allowlist. Scheduled scans inherit the same validation.
 - **CIS-aligned container posture.** Base images are pinned by digest;
   `trivy`/`grype`/`syft` are installed from the publishers' release archives and
-  verified against their signed checksum files before extraction (never
-  `curl | bash`); the image runs as a **non-root** user with `cap_drop: ALL`,
+  **cosign-verified** before extraction (never `curl | bash` — see
+  [Supply chain](#supply-chain)); the image runs as a **non-root** user with `cap_drop: ALL`,
   `no-new-privileges`, a **read-only** root filesystem + tmpfs, resource limits, a
   healthcheck, and loopback-only port binding.
 - **Writable scratch under a read-only root.** The only writable paths are the
@@ -970,6 +1001,59 @@ images and re-runs the same Trivy/Grype gate against them. A newly disclosed,
 fixable HIGH/CRITICAL CVE in a shipped image opens (or comments on) a tracking
 issue rather than gating a merge — so a quiet period can't hide a fresh CVE in the
 image you're running.
+
+---
+
+## Supply chain
+
+Scrye is a security tool, so its own build pipeline is held to the same standard
+as what it scans. Every input is pinned and verified, and every published image
+carries attestations you can check yourself.
+
+**Verifying an image you pulled.** Both publish paths attach a BuildKit **SLSA
+provenance** attestation (`mode=max`) and an **SPDX SBOM** to the image manifest,
+plus a **GitHub-signed** build-provenance attestation. Confirm a pulled image was
+built by this repository's workflow, from a known commit:
+
+```bash
+gh attestation verify oci://ghcr.io/tyler-rich/scrye:latest --owner tyler-rich
+```
+
+**What is pinned and verified at build time:**
+
+- **Bundled scanner binaries.** `trivy`, `grype`, and `syft` are downloaded from
+  their publishers' GitHub releases, and the release `checksums.txt` is verified
+  with **cosign** (keyless, certificate identity pinned to the upstream project's
+  own release workflow and the GitHub Actions OIDC issuer) *before* the tarball is
+  checked with `sha256sum -c` and extracted. That raises the guarantee from
+  "matches what GitHub served" to "signed by the upstream project's release
+  pipeline". A signature *or* checksum mismatch fails the build.
+- **Python dependencies.** `backend/pyproject.toml` pins the direct runtime deps
+  and `backend/requirements.lock` is their fully-resolved transitive closure with
+  **hashes for every artifact**; the image installs it with
+  `pip install --require-hashes`, so an unpinned or substituted transitive package
+  cannot enter the image. The PEP 517 build backend (`setuptools`) is pinned and
+  hash-locked the same way. CI fails if the lock drifts from `pyproject.toml`.
+- **Base and sidecar images** are pinned by **digest**, not tag — including the
+  `docker/dockerfile` frontend syntax directive and the socket-proxy sidecar.
+- **GitHub Actions.** Every external `uses:` in every workflow *and* in the
+  composite build action is pinned to a full **commit SHA** (with the human-readable
+  version as a trailing comment), so a moved tag can't change what CI runs.
+- **Dependabot** watches `pip` (`/backend`), `npm` (`/frontend`), `docker` and
+  `docker-compose` (`/docker`), and `github-actions` for both `/` and the composite
+  action directory — which Dependabot does not otherwise recurse into. All updates
+  target `dev`.
+
+**What ships in the image.** The runtime stage carries only what the app needs:
+the built SPA, the backend package, Alembic migrations, and the three scanner
+binaries. The pytest suite (`backend/tests/`) and dev helper scripts
+(`backend/scripts/`) are excluded from the build context, and CI asserts against
+the real built image that they are absent.
+
+**Continuous verification.** CI dogfoods every code change by scanning Scrye's own
+image with Trivy and Grype, gating on fixable HIGH/CRITICAL findings, and the
+weekly re-scan applies the same gate to the already-published `:latest` and `:dev`
+images (see [Building the image yourself](#building-the-image-yourself)).
 
 ---
 

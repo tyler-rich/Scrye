@@ -172,12 +172,16 @@ scrye/
 ├── CLAUDE.md            # operating contract for AI-assisted work
 ├── README.md            # user-facing documentation
 ├── CONTRIBUTING.md      # this file
+├── CHANGELOG.md         # Keep a Changelog format
+├── SECURITY.md          # private vulnerability disclosure policy
 ├── LICENSE              # MIT
 ├── .env.example         # generated from the backend Settings model
+├── .dockerignore        # keeps dev-only trees out of the build context
 ├── docs/
 │   ├── ARCHIVE.md       # historical build record + dated deviation log
 │   ├── ROADMAP.md       # forward-looking roadmap + known limitations
-│   └── reviews/         # archived security/audit review notes
+│   ├── reviews/         # archived security/audit review notes + STATUS.md
+│   └── upgrades/        # scoping notes for larger upgrades
 ├── backend/
 │   ├── app/
 │   │   ├── main.py      # FastAPI app: API + SPA serving, startup key check,
@@ -185,7 +189,8 @@ scrye/
 │   │   ├── api/         # routers: health, metrics, auth, users, audit,
 │   │   │                #   dashboard, scans, scan_schedules, registries,
 │   │   │                #   git_credentials, docker_environments, settings,
-│   │   │                #   trivy_policy, oidc, notifications, api_tokens, backups
+│   │   │                #   trivy_policy, oidc, notifications, api_tokens,
+│   │   │                #   backups; pagination.py holds the shared list envelope
 │   │   ├── auth/        # passwords (argon2id), sessions, RBAC/CSRF+token deps,
 │   │   │                #   OIDC client, TOTP MFA, API-token minting
 │   │   ├── core/        # config, crypto (AES-GCM envelope), secret_store,
@@ -213,16 +218,27 @@ scrye/
 │   │   │                #   (list/new/detail), settings (all tabs)
 │   │   ├── components/  # shared components (toggle, user menu, badges),
 │   │   │                #   settings/ panels
+│   │   ├── lib/         # pure helpers (polling, latest-wins guard, url, arrays)
+│   │   ├── test/        # setup.ts (jsdom) + render.tsx (renderWithProviders)
 │   │   └── api/         # API client (CSRF-aware fetch + multipart upload)
-│   ├── vite.config.ts
+│   ├── eslint.config.js # type-aware ESLint (see § Coding standards)
+│   ├── tsconfig.app.json
+│   ├── vite.config.ts   # Vite + the two-project Vitest config
 │   └── package.json
 ├── docker/
 │   ├── Dockerfile       # multi-stage, CIS-aligned, multi-arch (amd64/arm64)
 │   ├── docker-compose.yml
 │   └── entrypoint.sh
 ├── ci/                  # dogfood self-scan triage allowlists (trivyignore, grype.yaml)
-└── .github/workflows/
-    └── ci.yml           # lint + tests, multi-arch build, Trivy/Grype self-scan
+└── .github/
+    ├── dependabot.yml   # pip, npm, docker, docker-compose, github-actions
+    ├── actions/
+    │   └── build-image/ # shared composite build action
+    └── workflows/
+        ├── ci.yml       # lint + tests, multi-arch build, Trivy/Grype self-scan
+        ├── publish.yml  # tagged release → GHCR :<version> + :latest
+        ├── dev-nightly.yml # nightly build of dev → GHCR :dev
+        └── rescan.yml   # weekly re-scan of the published images
 ```
 
 ---
@@ -245,11 +261,39 @@ scrye/
 
 **TypeScript**
 
-- ESLint + Prettier clean:
+- ESLint + Prettier clean, and the type-check clean (`npm run build` runs
+  `tsc -b` before `vite build`):
   ```bash
-  cd frontend && npm run lint && npm run format:check
+  cd frontend && npm run lint && npm run format:check && npm run build
   ```
 - Prefer Mantine components over bespoke CSS; no inline secrets or tokens.
+
+_Two strictness gates are enabled, and both fail CI._ They are not advisory —
+a PR that trips either one does not build:
+
+- **`noUncheckedIndexedAccess`** (`tsconfig.app.json`). Any indexed read —
+  `arr[0]`, `record[key]` — is typed `T | undefined`. Handle the `undefined`
+  case, hoist the lookup into a local, or encode the invariant in the type
+  (e.g. `SCANNERS_FOR` is typed as a non-empty tuple
+  `readonly [Scanner, ...Scanner[]]` so its first element is `Scanner` by
+  construction). **Prefer that over a non-null assertion (`!`)** — the codebase
+  currently has none, and `!` re-hides exactly what the flag exists to surface.
+- **Type-aware ESLint** (`eslint.config.js`): `tseslint.configs.recommendedTypeChecked`
+  with `projectService`, so rules that need type information are active across
+  `src/` *and* the test files. The two you will meet most often are
+  `no-floating-promises` and `no-misused-promises` — an `async` handler passed
+  into an `onClick`/`onChange` slot that expects a `void` return. The house idiom
+  is the `void` operator (`onClick={() => void save()}`), which the codebase
+  already uses; make sure the handler actually handles its own errors rather than
+  just silencing the rule.
+
+_On `eslint-disable`._ Use it as a last resort, always as a targeted
+`eslint-disable-next-line <rule>` — never a file-level or blanket disable, and
+never for the two gates above — and always with a comment saying why the rule
+does not apply here. There are nine in the tree today: two
+`react-refresh/only-export-components` (each carrying its `--` justification) and
+seven `react-hooks/exhaustive-deps` on deliberate mount-only effects. Adding to
+that set needs a reason in review, not just a passing lint run.
 
 **API conventions**
 
@@ -369,13 +413,21 @@ plaintext never appears in logs or API reads.
 1. Fork (or branch) from `dev` and create a short, descriptively named branch.
 2. Make your change with tests and updated docs.
 3. Ensure the checklist holds:
-   - [ ] `ruff` + `black` clean (Python), ESLint + Prettier clean (TypeScript)
-   - [ ] Tests added/updated and passing
+   - [ ] `ruff` + `black` clean (Python); ESLint + Prettier + `tsc -b` clean (TypeScript)
+   - [ ] Tests added/updated and passing (`pytest`; `npm test`)
    - [ ] `docker compose up` brings the stack up and `/healthz` is healthy
    - [ ] Docs updated (README / CONTRIBUTING / `.env.example` as applicable)
+   - [ ] `requirements.lock` regenerated if `pyproject.toml` dependencies changed
+   - [ ] Any deviation from the documented design logged in
+         [`docs/ARCHIVE.md`](docs/ARCHIVE.md) § Deviations, dated
    - [ ] No secrets, keys, or tokens committed
 4. Open the PR against `dev` (not `main` — see § Branching model above) with a clear summary of
-   what changed.
+   what changed. Commit messages and the PR body carry **no AI-attribution
+   footers** — no "Generated by …" line, co-author trailer, or session link. If
+   your tooling appends one, re-read the PR body after opening and strip it.
+5. CI (`.github/workflows/ci.yml`) is the gate: lint + tests for both halves, the
+   `.env.example` and `requirements.lock` drift checks, and the image build with
+   the Trivy/Grype dogfood self-scan. A PR is not ready to merge until it is green.
 
 ---
 
@@ -388,7 +440,10 @@ anything differently: keep branching from and PR'ing into `dev` as usual.
 ### Promoting `dev` to `main`, then back-merging
 
 1. When `dev` is in a releasable state, the maintainer opens a **promotion PR** from `dev` into
-   `main`. This PR must pass the same CI gate as any other before it can merge.
+   `main`. This PR must pass the same CI gate as any other before it can merge. A promotion PR
+   is the one **exception** to the Conventional Commits rule above: title it plainly as
+   `Promote dev to main: <what the release contains>`, not `feat:`/`fix:` — the squash-merge
+   subject names a release action, not a code change. Promotions are **squash**-merged.
 2. Once the promotion PR merges, `main` is **tagged** (e.g. `v0.x.0`) to mark the release. The tag
    is what triggers publishing (below).
 3. **Immediately back-merge `main` into `dev`** (`git fetch origin main dev && git checkout dev &&
