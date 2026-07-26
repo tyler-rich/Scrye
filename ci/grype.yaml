@@ -35,14 +35,29 @@ ignore:
 
   # ── CPython interpreter-binary CVEs on Python 3.14 — accepted risk ──────────────
   # The interpreter binary in python:3.14-slim-bookworm (3.14.6, current latest
-  # 3.14.x) carries these. Tracked in issue #52
-  # (https://github.com/tyler-rich/Scrye/issues/52) and docs/ARCHIVE.md §14
-  # (2026-07-25, the 3.13 → 3.14 runtime bump).
+  # 3.14.x) carries these. Background: docs/ARCHIVE.md §14 (2026-07-25, the
+  # 3.13 → 3.14 runtime bump; 2026-07-26, the Group A re-verification). Each group
+  # cites its own tracking issue below — they have different triggers and are not
+  # one decision.
   #
   # Group A — fix merged to both the 3.13 and 3.14 maintenance branches but not yet
-  # in any released point version, so it closes on the next 3.14.x point release.
+  # in any released point version, so it closes on the next 3.14.x point release
+  # (3.14.7 — 3.14.6 released 2026-06-10, both backports merged after it).
   # CVE-2026-15308 (HIGH) is the only one of the four that trips --fail-on high; the
   # rest are reported-but-non-gating Mediums, waived here for a clean report.
+  #
+  # Verified at the source on 2026-07-26, per CLAUDE.md § Dependency hygiene — not
+  # taken from Grype's FIXED IN column, which still reports 3.15.x for both. Each
+  # file was diffed between the `3.14` branch and the `v3.14.6` tag: the branch has
+  # the buffered `feed()`/`_parse_threshold` rewrite in Lib/html/parser.py
+  # (python/cpython#153039, 2026-07-04) and the BUILD_LANDMARK fallback removed from
+  # Modules/getpath.py (python/cpython#151682, 2026-06-22); 3.14.6 has neither.
+  # Expect the waivers to outlive 3.14.7 by a Grype-DB refresh cycle.
+  #
+  # Tracked in issue #98 (https://github.com/tyler-rich/Scrye/issues/98), which is
+  # Group A only. It supersedes issue #52 for these two — #52 is the older
+  # all-four tracker, written against the 3.13 runtime and stale since the 3.14 move
+  # (still open as of 2026-07-26; do not rely on it for Group A status).
   # REVIEW BY 2026-10-25 (covers the next 1-2 CPython point releases at their
   # ~2-month cadence, plus Grype-DB refresh lag on the backport).
   - vulnerability: CVE-2026-15308   # html.parser quadratic-complexity CPU DoS (HIGH)
