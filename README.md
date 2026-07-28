@@ -42,6 +42,7 @@ single findings model so Trivy and Grype render in one table.
   - [4. Start it](#4-start-it)
   - [5. First-run setup (admin bootstrap)](#5-first-run-setup-admin-bootstrap)
   - [6. Where persistent data lives](#6-where-persistent-data-lives)
+  - [Resource limits (and NAS platforms)](#resource-limits-and-nas-platforms)
   - [Which image tag?](#which-image-tag)
   - [Build from source instead](#build-from-source-instead)
   - [Troubleshooting first-run issues](#troubleshooting-first-run-issues)
@@ -296,13 +297,10 @@ services:
       # RAM-backed, owned by uid 1000, holds only transient credential files.
       # Do NOT enlarge to "fix" a scanner disk error — see "Requirements".
       - /tmp:size=200m,mode=1700,uid=1000,gid=1000
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 2G
-        reservations:
-          memory: 256M
+    # Memory containment. `mem_limit`/`mem_reservation` rather than a `deploy:`
+    # block — see "Resource limits" below, including how to add a CPU cap.
+    mem_limit: 2g
+    mem_reservation: 256m
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8089/healthz"]
       interval: 30s
@@ -378,6 +376,61 @@ Inspect their host paths with `docker volume inspect scrye_scrye_data`. For a
 fixed on-disk location, replace the named volumes with bind mounts to a directory
 you control (e.g. `/mnt/appdata/scrye/data:/data`).
 
+### Resource limits (and NAS platforms)
+
+Capping container resources is part of the hardened baseline Scrye ships — an
+unbounded scan should degrade, not take the host down with it. How those caps are
+spelled changed, because the Compose-native spelling isn't portable.
+
+**Memory limits are on by default and need nothing from you.** Every service in
+[`docker/docker-compose.yml`](docker/docker-compose.yml), and the paste-in stack
+[above](#3-create-docker-composeyml), sets `mem_limit` (and `mem_reservation` on
+the app), which every Compose implementation accepts:
+
+| Service | `mem_limit` | `mem_reservation` |
+| ------- | ----------- | ----------------- |
+| `scrye` | `2g` | `256m` |
+| `trivy-server` (optional) | `1g` | — |
+| `docker-socket-proxy` (optional) | `64m` | — |
+
+Memory is the cap that matters most: it bounds the OOM blast radius, and the
+RAM-backed `/tmp` tmpfs counts against it. Don't remove these.
+
+**CPU limits are opt-in, in a separate overlay file.** Compose expresses them
+through the Swarm-oriented `deploy.resources` block. Compose v2 honours `deploy:`
+for a plain `docker compose up`, but several NAS container platforms — **Synology
+Container Manager** and **QNAP Container Station** among them — reject or
+mishandle `deploy:` keys, so a base file carrying them won't deploy there at all.
+Rather than drop the caps, they moved to
+[`docker/docker-compose.cpu-limits.yml`](docker/docker-compose.cpu-limits.yml),
+which you add with a second `-f`:
+
+```bash
+docker compose -f docker/docker-compose.yml \
+               -f docker/docker-compose.cpu-limits.yml up -d
+```
+
+That applies `cpus: 2.0` to `scrye`, `1.0` to `trivy-server`, and `0.5` to
+`docker-socket-proxy` (the tightest cap, since it's the only container that
+mounts the Docker socket). The overlay uses the portable `cpus:` key rather than
+`deploy:`, so it works on anything that understands it — including NAS platforms
+that accept `cpus` but not `deploy`. Compose treats `cpus` and
+`deploy.resources.limits.cpus` as the same field, so this is the same limit, not
+a weaker one.
+
+**Name both files on every command for that stack** (`ps`, `logs`, `down`, not
+just `up`) — otherwise Compose recomputes the project without the overlay and
+recreates the containers uncapped. Set it once instead if you prefer:
+
+```bash
+export COMPOSE_FILE=docker/docker-compose.yml:docker/docker-compose.cpu-limits.yml
+```
+
+If you're on a NAS, skip the overlay and set CPU limits in your platform's own
+container UI, which writes them straight to the Docker API. If you deploy from
+the published image with your own Compose file, add `cpus:` to your service
+directly — there's no need for a second file.
+
 ### Which image tag?
 
 Everything publishes to GHCR (`ghcr.io/tyler-rich/scrye`):
@@ -413,7 +466,9 @@ docker compose -f docker/docker-compose.yml up --build -d
 ```
 
 See [Building the image yourself](#building-the-image-yourself) for multi-arch
-builds and the dogfooding self-scan.
+builds and the dogfooding self-scan, and
+[Resource limits](#resource-limits-and-nas-platforms) for the optional CPU-cap
+overlay.
 
 ### Troubleshooting first-run issues
 
@@ -733,6 +788,11 @@ export DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"
 docker compose -f docker/docker-compose.yml --profile docker-env up -d
 ```
 
+Both sidecars carry a `mem_limit` in the bundled Compose file; their CPU caps are
+in the opt-in
+[CPU-limit overlay](#resource-limits-and-nas-platforms), which you can add to
+either command above with a second `-f`.
+
 If you deploy from the published image with your own Compose file, copy the
 matching service definition from
 [`docker/docker-compose.yml`](docker/docker-compose.yml) (they carry the hardened
@@ -875,8 +935,12 @@ only in memory at scan time.
   `trivy`/`grype`/`syft` are installed from the publishers' release archives and
   **cosign-verified** before extraction (never `curl | bash` — see
   [Supply chain](#supply-chain)); the image runs as a **non-root** user with `cap_drop: ALL`,
-  `no-new-privileges`, a **read-only** root filesystem + tmpfs, resource limits, a
-  healthcheck, and loopback-only port binding.
+  `no-new-privileges`, a **read-only** root filesystem + tmpfs, memory limits, a
+  healthcheck, and loopback-only port binding. CPU limits are an
+  [opt-in overlay](#resource-limits-and-nas-platforms) rather than a default,
+  because the Compose key that carries them isn't accepted on every container
+  platform; memory limits — the ones that bound an OOM blast radius — are always
+  on.
 - **Writable scratch under a read-only root.** The only writable paths are the
   `/data` and `/cache` volumes and a small `/tmp` tmpfs (mounted owned by uid
   1000, holding only in-memory credential files). Every scanner invocation —

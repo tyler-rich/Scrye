@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (106, newest first)
+### Index of §14 entries (107, newest first)
 
+- [2026-07-28 — Post-v1 — Compose `deploy:` keys retired for NAS portability; memory limits made portable, CPU limits moved to an opt-in overlay](#2026-07-28--post-v1--compose-deploy-keys-retired-for-nas-portability-memory-limits-made-portable-cpu-limits-moved-to-an-opt-in-overlay)
 - [2026-07-26 — Infra/Process — `node:22-bookworm-slim` digest refreshed; the Node 24 move and the #86 frontend tooling majors recorded in the roadmap](#2026-07-26--infraprocess--node22-bookworm-slim-digest-refreshed-the-node-24-move-and-the-86-frontend-tooling-majors-recorded-in-the-roadmap)
 - [2026-07-26 — Docs/Process — Review documents retired; §14 made contiguous and indexed; a false CVE claim removed from the CHANGELOG](#2026-07-26--docsprocess--review-documents-retired-14-made-contiguous-and-indexed-a-false-cve-claim-removed-from-the-changelog)
 - [2026-07-26 — Post-v1 — Socket-proxy operational behavior from a live Debian run documented (docs only)](#2026-07-26--post-v1--socket-proxy-operational-behavior-from-a-live-debian-run-documented-docs-only)
@@ -687,6 +688,96 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+
+### 2026-07-28 — Post-v1 — Compose `deploy:` keys retired for NAS portability; memory limits made portable, CPU limits moved to an opt-in overlay
+
+**What changed:** `docker/docker-compose.yml` carried a `deploy.resources` block on **all three**
+services and nothing else under `deploy:` — no `replicas`, `restart_policy`, `placement` or
+`update_config`. A fourth copy of the same block sat in the paste-in stack in `README.md` § 3. All
+four are gone; the constraints they expressed are not.
+
+| Service | Was (`deploy.resources`) | Now |
+|---|---|---|
+| `scrye` | `limits.cpus "2.0"`, `limits.memory 2G`, `reservations.memory 256M` | `mem_limit: 2g` + `mem_reservation: 256m` in the base file; `cpus: 2.0` in the overlay |
+| `trivy-server` (profile `trivy-server`) | `limits.cpus "1.0"`, `limits.memory 1G` | `mem_limit: 1g`; `cpus: 1.0` in the overlay |
+| `docker-socket-proxy` (profile `docker-env`) | `limits.cpus "0.5"`, `limits.memory 64M` | `mem_limit: 64m`; `cpus: 0.5` in the overlay |
+
+New file: **`docker/docker-compose.cpu-limits.yml`**, applied with a second `-f`
+(`docker compose -f docker-compose.yml -f docker-compose.cpu-limits.yml up -d`), documented in
+README § "Resource limits (and NAS platforms)" and in the file's own header.
+
+**Why:** a user reported the stack would not deploy on their NAS. Several NAS container platforms
+— Synology Container Manager and QNAP Container Station among them — reject or mishandle `deploy:`
+keys, because the block is Swarm-oriented; Compose v2 honours it for a plain `docker compose up`,
+but that only helps on a real Compose v2 host. A hardening measure that prevents deployment
+outright is not providing the hardening, so the choice was between dropping the constraints and
+re-expressing them.
+
+**Why not just delete the limits.** They are a CIS-baseline containment control
+(`CLAUDE.md` § Hard security rules), and the `0.5` cap on `docker-socket-proxy` is deliberate
+rather than a round number: that sidecar is the only container in the stack that mounts
+`/var/run/docker.sock`, and its cap is the documented bound on a wedged or runaway proxy. Deleting
+the block would have discarded three tuned values and a documented control to fix a portability
+problem that has a portable fix.
+
+**Why the memory/CPU split is where it is.** Memory is the containment control that matters most
+here: it bounds the OOM blast radius, and the RAM-backed `/tmp` tmpfs is charged against it (the
+reason `docker-compose.yml` warns against enlarging that tmpfs). It also has a portable spelling
+that predates `deploy:` — `mem_limit` / `mem_reservation` — accepted by every Compose
+implementation, so it stays **on by default** and no platform has to opt in. CPU exhaustion
+degrades where memory exhaustion kills, so CPU is the right half to make opt-in. It went to an
+overlay rather than being deleted for the reason above; users whose platform rejects the overlay
+too can set CPU caps in their platform's own container UI, which writes them straight to the
+Docker API.
+
+**Why the overlay uses `cpus:` and not `deploy:`.** The first draft of the overlay used a
+`deploy.resources.limits.cpus` block — on the reasoning that opting in implies a platform that
+supports `deploy:`. `docker compose config` rejected the merged project outright:
+
+```
+services.scrye: can't set distinct values on 'mem_limit' and 'deploy.resources.limits.memory'
+```
+
+Compose normalizes `mem_limit` and `deploy.resources.limits.memory` into one field and validates
+that they agree; an overlay contributing a `deploy.resources.limits` map with no `memory` in it
+therefore conflicts with the base file's `mem_limit`. The overlay would not have applied at all.
+The portable `cpus:` key merges cleanly and is accepted by more implementations besides.
+
+**`cpus:` is the same limit, not a weaker one — verified, not assumed.** Compose enforces the
+identical normalization for CPU as for memory: a service setting both `cpus: 2.0` and
+`deploy.resources.limits.cpus: "3.0"` is rejected with `can't set distinct values on 'cpus' and
+'deploy.resources.limits.cpus'`, and setting both to the same value is accepted and normalizes to
+one limit. A key that were merely parsed and ignored could not participate in that check. This is
+the evidence the caps still bind; it is not a claim from documentation.
+
+**Validation.** `docker compose config` was run on all four combinations — base alone and
+base + overlay, each with no profiles and with `--profile trivy-server --profile docker-env` — and
+all four parse. The merged config reports exactly the pre-change values: `cpus 2` / `mem_limit
+2147483648` / `mem_reservation 268435456` for `scrye`, `cpus 1` / `1073741824` for `trivy-server`,
+`cpus 0.5` / `67108864` for `docker-socket-proxy`. Only the Compose CLI is available in this
+environment (no daemon), so **no container was started**: the claim verified here is that the
+files parse and normalize to the original limits, not that a live container was inspected for
+them. `docker compose up` / `/healthz` (§ Definition of done item 4) is unverified this session
+for that reason.
+
+Five regression guards were added to `backend/tests/test_compose_hardening.py` — no `deploy:` key
+in either file, a `mem_limit` for every service, `scrye`'s `mem_reservation`, a `cpus` entry in the
+overlay for every service the base file defines, and the overlay's use of the portable key. They
+were exercised against seven mutations of the real files (a `deploy:` block returning, the overlay
+deleted, `mem_limit`/`mem_reservation` dropped, a new uncapped service, the overlay reverting to
+`deploy:`, and the socket-proxy cap loosened) and each fires on the regression it names, with the
+unmodified files clean. They are string-level like the rest of that module, deliberately: the
+backend declares no YAML parser, and PyYAML is only present transitively. The backend suite could
+not be run here (this container has Python 3.11; the backend requires 3.14), so the test bodies
+were executed standalone against the checked-in files rather than under `pytest` — CI is the gate.
+`ruff` and `black` are clean.
+
+**Plan section affected:** §9.2 (Compose stack), `CLAUDE.md` § Hard security rules (CIS baseline —
+resource limits retained, one of the two now opt-in), § Required deliverables (README). No
+application code, schema, API-contract, security-model, job-model, or auth change.
 
 ---
 

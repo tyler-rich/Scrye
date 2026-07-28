@@ -7,6 +7,13 @@
 #   docker compose --profile trivy-server up
 #   docker compose --profile docker-env up      # see the residual-risk note below
 #
+# RESOURCE LIMITS. Memory limits are set inline with `mem_limit`/`mem_reservation`
+# rather than a Swarm-style `deploy:` block, because several NAS container
+# platforms (Synology Container Manager, QNAP Container Station) reject or choke
+# on `deploy:` even though Compose v2 honours it standalone. CPU limits are kept,
+# but moved to an opt-in overlay so this file stays parseable everywhere:
+#   docker compose -f docker-compose.yml -f docker-compose.cpu-limits.yml up -d
+#
 # Before first run, create the master-key secret (NEVER commit it):
 #   mkdir -p docker/secrets && openssl rand -base64 48 > docker/secrets/app_secret_key
 #
@@ -57,13 +64,13 @@ services:
       # error — vuln DBs and image-layer staging belong on /cache (see README
       # "Requirements" for the measured footprint and /cache sizing guidance).
       - /tmp:size=200m,mode=1700,uid=1000,gid=1000
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 2G
-        reservations:
-          memory: 256M
+    # Memory containment (CIS baseline): caps the OOM blast radius of a runaway
+    # scan, and bounds the RAM-backed /tmp tmpfs above, which counts against this
+    # limit. Expressed with the portable `mem_limit`/`mem_reservation` keys — see
+    # the RESOURCE LIMITS note at the top of this file for why, and for the
+    # opt-in CPU overlay.
+    mem_limit: 2g
+    mem_reservation: 256m
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8089/healthz"]
       interval: 30s
@@ -86,7 +93,8 @@ services:
   # creates root-owned) unwritable, breaking the DB download. The exposure is
   # bounded: the service is optional (profile-gated), reachable only on the
   # internal scrye_net (no host port), read-only root FS, no-new-privileges,
-  # cap_drop ALL, and CPU/memory-limited, so an in-container compromise cannot
+  # cap_drop ALL, and memory-limited (CPU too, under the opt-in
+  # docker-compose.cpu-limits.yml overlay), so an in-container compromise cannot
   # escalate privileges or reach the host filesystem. A future hardening is to
   # rebuild trivy-server on a non-root base with a writable cache path.
   trivy-server:
@@ -104,11 +112,7 @@ services:
       - trivy_cache:/root/.cache/trivy
     tmpfs:
       - /tmp
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 1G
+    mem_limit: 1g
     healthcheck:
       # The trivy binary is the image entrypoint; `version` is a cheap liveness probe.
       test: ["CMD", "trivy", "version"]
@@ -207,14 +211,11 @@ services:
     # No tmpfs. The old HAProxy image needed a writable /run for its pid/stats
     # socket under the read-only root FS (audit INF-5); this is a single static Go
     # binary with no writable path at all, so that carve-out is retired.
-    deploy:
-      # The highest-risk service (the only docker.sock mount) is capped so a
-      # runaway/wedged proxy can't exhaust host resources (CIS baseline). 64M is
-      # upstream's own suggested cap — the scratch image has no runtime to feed.
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 64M
+    # The highest-risk service (the only docker.sock mount) is capped so a
+    # runaway/wedged proxy can't exhaust host resources (CIS baseline). 64M is
+    # upstream's own suggested cap — the scratch image has no runtime to feed.
+    # Its 0.5-CPU cap lives in the docker-compose.cpu-limits.yml overlay.
+    mem_limit: 64m
     healthcheck:
       # The scratch image ships no shell/wget; upstream bundles a healthcheck
       # binary at / that probes the -allowhealthcheck listener (which in turn
