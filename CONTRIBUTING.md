@@ -64,15 +64,32 @@ uvicorn app.main:app --reload --port 8089
 The API is now at <http://localhost:8089>; check `GET /healthz` and the
 interactive docs at `/docs`.
 
-**Master key (local).** The master key is read from the file at
-`SCRYE_APP_SECRET_KEY_FILE`. For native development, generate one and point the
-variable at it (it is used by the crypto module from Phase 1 onward):
+**Master key (local).** You don't have to create one: with no key supplied, the
+app generates one on first start and persists it at
+`SCRYE_APP_SECRET_KEY_AUTOGEN_FILE` (default `/data/app_secret_key`, which is not
+writable in a native dev checkout — point it somewhere local):
+
+```bash
+export SCRYE_APP_SECRET_KEY_AUTOGEN_FILE="$PWD/.secrets/app_secret_key"   # never commit this
+```
+
+To use an explicitly generated key instead — which is what production does with a
+Docker secret — set the higher-precedence variable:
 
 ```bash
 mkdir -p .secrets
 openssl rand -base64 48 > .secrets/app_secret_key
 export SCRYE_APP_SECRET_KEY_FILE="$PWD/.secrets/app_secret_key"   # never commit this
 ```
+
+Note that once `SCRYE_APP_SECRET_KEY_FILE` is set, a missing file there is a
+startup error rather than a cue to generate one — an explicitly configured path is
+treated as an assertion that the key lives there, because substituting a fresh key
+would orphan every secret already encrypted under the real one. The same applies
+if you copy `.env.example` to `.env`: comment its `SCRYE_APP_SECRET_KEY_FILE` line
+out unless the file exists. The full precedence order and the rest of the
+invariants are in `README.md` § The master key, and in
+`backend/app/core/crypto.py:resolve_master_keys`.
 
 **Regenerating `.env.example`.** The config loader is the single source of
 truth. After changing the `Settings` model, regenerate the example file:
@@ -127,13 +144,14 @@ sees a single same-origin app. Run the backend (above) at the same time.
 ### Integrated run with Compose
 
 ```bash
-mkdir -p docker/secrets
-openssl rand -base64 48 > docker/secrets/app_secret_key
 docker compose -f docker/docker-compose.yml up --build
 ```
 
 This builds the SPA, installs the backend, and serves everything from one
-container on <http://127.0.0.1:8089>.
+container on <http://127.0.0.1:8089>. The master key is generated inside the
+container on first start (`/data/app_secret_key` on the `scrye_data` volume); the
+compose file carries commented-out blocks for supplying it as a Docker secret
+instead.
 
 ### Seeding a first admin user
 

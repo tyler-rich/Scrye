@@ -4,6 +4,32 @@ set -eu
 
 cd /app/backend
 
+# Preflight: the data directory must be writable by this uid before Alembic
+# touches SQLite. Without this, the only symptom is
+# `sqlite3.OperationalError: unable to open database file`, which names neither
+# the path nor the fix. The usual cause is a bind-mounted host directory whose
+# ownership doesn't match the container uid (common on NAS platforms); a named
+# volume inherits the right ownership from the image and never hits this.
+data_dir="$(dirname "${SCRYE_DATABASE_PATH:-/data/scrye.db}")"
+uid="$(id -u)"
+gid="$(id -g)"
+if [ ! -d "$data_dir" ]; then
+  echo "Scrye: FATAL - the data directory $data_dir does not exist." >&2
+  echo "Scrye: Mount a volume there (see README 'Where persistent data lives')." >&2
+  exit 1
+fi
+if ! (: >"$data_dir/.scrye-write-probe.$$") 2>/dev/null; then
+  echo "Scrye: FATAL - the data directory $data_dir is not writable by uid $uid:$gid." >&2
+  echo "Scrye: It holds the SQLite database and, unless you supply a Docker secret," >&2
+  echo "Scrye: the generated master key. If it is a bind-mounted host directory, fix" >&2
+  echo "Scrye: its ownership on the host:" >&2
+  echo "Scrye:     chown -R $uid:$gid <host path>" >&2
+  echo "Scrye: or run the container as the directory's owner (Compose 'user:')." >&2
+  echo "Scrye: A named Docker volume inherits the correct ownership automatically." >&2
+  exit 1
+fi
+rm -f "$data_dir/.scrye-write-probe.$$"
+
 # Bring the SQLite schema up to head before serving traffic.
 echo "Scrye: applying database migrations..."
 alembic upgrade head

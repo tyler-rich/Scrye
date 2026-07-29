@@ -37,7 +37,7 @@ single findings model so Trivy and Grype render in one table.
 - [Requirements](#requirements)
 - [Deploying with Docker](#deploying-with-docker)
   - [1. Prerequisites](#1-prerequisites)
-  - [2. Create the application master key](#2-create-the-application-master-key)
+  - [2. The application master key (nothing to do)](#2-the-application-master-key-nothing-to-do)
   - [3. Create `docker-compose.yml`](#3-create-docker-composeyml)
   - [4. Start it](#4-start-it)
   - [5. First-run setup (admin bootstrap)](#5-first-run-setup-admin-bootstrap)
@@ -238,34 +238,50 @@ and a `docker-compose.yml`, and bring it up. (Prefer to build from source? See
 ### 1. Prerequisites
 
 - Docker 24+ with Compose v2 (`docker compose version`).
-- `openssl` (to generate the master key) — present on essentially every
-  Linux/macOS host.
 - A working directory for the deployment:
 
   ```bash
-  mkdir -p scrye/secrets && cd scrye
+  mkdir scrye && cd scrye
   ```
 
-### 2. Create the application master key
+### 2. The application master key (nothing to do)
 
-The **master key** encrypts all stored secrets. It is provided as a **Docker
-secret file**, never an environment variable or image layer. Generate it once:
+The **master key** encrypts all stored secrets. **You do not have to create it.**
+On first launch, if no key is supplied, Scrye generates one with a CSPRNG (the
+equivalent of `openssl rand -base64 48`) and persists it at
+**`/data/app_secret_key`** — mode `0600`, owned by the container's uid, on the
+`scrye_data` volume. It is generated exactly once: every later start reuses that
+file, and an existing key file is **never** overwritten.
+
+> **⚠️ Back that file up, separately from the container.** Every stored secret —
+> registry credentials, git tokens, the OIDC client secret, MFA seeds, scheduled
+> backup passphrases — is encrypted with a key derived from it. **If you lose it,
+> those secrets are unrecoverable**: there is no reset, no recovery path, no
+> backdoor. Scrye still starts and everything else (scan history, findings, users,
+> settings) is intact, but each stored secret has to be re-entered. See
+> [Backup & restore](#backup--restore) for how the master key relates to backup
+> bundles, and [The master key](#the-master-key) for the full details.
+
+**For production, prefer supplying it yourself as a Docker secret** so the key
+does not sit on the same volume as the database it protects:
 
 ```bash
+mkdir -p secrets
 openssl rand -base64 48 > secrets/app_secret_key
 chmod 600 secrets/app_secret_key
 ```
 
-In production Scrye **refuses to start** without a valid key file. **Back this
-file up** — losing it makes every stored secret unrecoverable. (Key rotation is
+then uncomment the `app_secret_key` blocks in the compose file below. A supplied
+secret always takes precedence and nothing is generated. Note that once
+`SCRYE_APP_SECRET_KEY_FILE` is set, the file **must** exist there — Scrye refuses
+to start rather than silently substitute a different key. (Key rotation is
 supported; see [The master key](#the-master-key).)
 
 ### 3. Create `docker-compose.yml`
 
-Save this next to the `secrets/` directory you just created. It runs the
-**published GHCR image** with the same hardened, CIS-aligned posture the project
-ships (non-root, read-only root FS, dropped capabilities, resource limits,
-loopback-only port, healthcheck):
+Save this in the working directory. It runs the **published GHCR image** with the
+same hardened, CIS-aligned posture the project ships (non-root, read-only root
+FS, dropped capabilities, resource limits, loopback-only port, healthcheck):
 
 ```yaml
 services:
@@ -283,15 +299,20 @@ services:
       - "127.0.0.1:8089:8089"
     environment:
       - SCRYE_DATABASE_PATH=/data/scrye.db
-      - SCRYE_APP_SECRET_KEY_FILE=/run/secrets/app_secret_key
+      # Master key: left unset, Scrye generates one at /data/app_secret_key on
+      # first launch (mode 0600) and reuses it forever after. To supply it as a
+      # Docker secret instead, uncomment this line and both secrets: blocks.
+      # - SCRYE_APP_SECRET_KEY_FILE=/run/secrets/app_secret_key
       # REQUIRED behind a reverse proxy: the IP/CIDR your proxy connects FROM.
       # The default below fits a proxy container on the default Docker bridge;
       # set it to match your topology (see "Reverse proxy" below). Never "*".
       - SCRYE_FORWARDED_ALLOW_IPS=172.16.0.0/12
-    secrets:
-      - app_secret_key
+    # secrets:
+    #   - app_secret_key
     volumes:
-      - scrye_data:/data # SQLite DB, raw artifacts, backups — BACK THIS UP
+      # Holds the SQLite DB, raw artifacts, backups — and, unless you supply a
+      # Docker secret, the generated master key at /data/app_secret_key.
+      - scrye_data:/data # BACK THIS UP
       - scrye_cache:/cache # scanner vuln DBs + scratch (≥10 GB; reconstructible)
     tmpfs:
       # RAM-backed, owned by uid 1000, holds only transient credential files.
@@ -317,10 +338,13 @@ services:
 volumes:
   scrye_data:
   scrye_cache:
-
-secrets:
-  app_secret_key:
-    file: ./secrets/app_secret_key # created in step 2; never commit it
+# Uncomment (with the two lines above) only if you supply the master key
+# yourself. Compose requires the file to exist when it reads this stack, so an
+# absent `secrets/app_secret_key` fails `docker compose up` before the container
+# starts — which is why it is commented out by default.
+# secrets:
+#   app_secret_key:
+#     file: ./secrets/app_secret_key # created in step 2; never commit it
 ```
 
 ### 4. Start it
@@ -367,8 +391,10 @@ Additional users are created by an admin (Settings → Users & roles, or
 Two named Docker volumes:
 
 - **`scrye_data`** → `/data` — the SQLite database (`/data/scrye.db`), raw
-  scanner artifacts (`/data/artifacts`), and backup bundles (`/data/backups`).
-  **This is the volume to back up.**
+  scanner artifacts (`/data/artifacts`), backup bundles (`/data/backups`), and —
+  unless you supplied a Docker secret — the auto-generated **master key**
+  (`/data/app_secret_key`, mode `0600`). **This is the volume to back up**, and
+  the master key is the one file in it you cannot regenerate.
 - **`scrye_cache`** → `/cache` — scanner vulnerability databases and scan-time
   scratch space. Large but reconstructible; it re-downloads if lost.
 
@@ -460,10 +486,12 @@ locally** instead of pulling:
 ```bash
 git clone https://github.com/tyler-rich/scrye.git
 cd scrye
-mkdir -p docker/secrets
-openssl rand -base64 48 > docker/secrets/app_secret_key
 docker compose -f docker/docker-compose.yml up --build -d
 ```
+
+As above, the master key is generated on first launch — see
+[step 2](#2-the-application-master-key-nothing-to-do) if you'd rather supply it
+as a Docker secret (the compose file has the blocks ready to uncomment).
 
 See [Building the image yourself](#building-the-image-yourself) for multi-arch
 builds and the dogfooding self-scan, and
@@ -472,13 +500,57 @@ overlay.
 
 ### Troubleshooting first-run issues
 
+- **Container exits immediately with `Scrye: FATAL - the data directory /data is
+  not writable by uid 1000:1000`.** This is the **bind-mount ownership** case, and
+  it is the most common first-run failure on NAS platforms (Synology, QNAP): a
+  **bind mount keeps the host directory's ownership**, whereas a **named volume
+  inherits the correct ownership from the image**. Scrye runs as uid 1000 on a
+  read-only root filesystem, so it cannot create `/data/scrye.db` — nor the
+  generated master key — in a directory it may not write. The message names the
+  path and the uid; fix it on the host with any one of:
+  - `sudo chown -R 1000:1000 /path/on/host` (the directory you bind-mounted), or
+  - set the container's `user:` to the directory's existing owner
+    (`stat -c '%u:%g' /path/on/host`), or
+  - drop the bind mount and use a named volume (as the compose above does).
+
+  The check runs **before** migrations deliberately: previously the only symptom
+  was `sqlite3.OperationalError: unable to open database file`, which named
+  neither the path nor the fix.
+- **Container exits with `Generated master key … is owned by uid N, not the
+  container uid 1000`.** The filesystem under `/data` is **synthesizing**
+  ownership — a CIFS/SMB mount with `uid=`, or an NFS export that squashes it — so
+  the key's `0600` would not actually protect it. `chown` cannot help here. Either
+  put `/data` on a filesystem that preserves POSIX ownership (strongly preferred —
+  SQLite is unreliable over CIFS/SMB regardless), run the container as the uid the
+  filesystem reports, or supply the master key as a Docker secret, which needs no
+  writable volume at all. No key file is left behind when this refusal fires.
 - **`{"status":"degraded",...,"database":"error"}` from `/healthz`.** The process
   is up but can't reach SQLite. Check that `/data` is writable by uid 1000 (the
-  container runs non-root) and that the `scrye_data` volume mounted.
-- **Container exits at start with `refusing to start: master key file …`.** The
-  `app_secret_key` secret file is missing or empty. Re-run
-  [step 2](#2-create-the-application-master-key) and confirm
-  `secrets/app_secret_key` exists and is non-empty.
+  container runs non-root) and that the `scrye_data` volume mounted. On a fresh
+  start the entrypoint preflight above catches this first; this state usually means
+  the volume went away or changed ownership *after* a successful start.
+- **Container exits at start with `Refusing to start without a valid master
+  key`.** Read the rest of the line; each case is a deliberate refusal, and none
+  of them is fixed by deleting a key file that has real data behind it:
+  - **`SCRYE_APP_SECRET_KEY_FILE is set to … but no file exists there`** — the
+    Docker secret is not mounted (a missing `secrets:` block, a wrong path, a
+    typo'd filename). Mount it, or unset the variable to let Scrye manage the key
+    itself. Scrye will not substitute a generated key here, because a key that
+    *should* be present usually means secrets were already encrypted under it.
+  - **`is empty` / `is not valid base64` / `too short` / `malformed`** — a key
+    file exists but does not load. Restore the real key content; regenerating
+    would orphan every stored secret. The one safe exception is a **zero-byte**
+    file left by a first start that was interrupted mid-generation, with nothing
+    stored yet — deleting that is fine.
+  - **`Two different master keys are present`** — a Docker secret was added to a
+    deployment that had already generated its own key at `/data/app_secret_key`.
+    Carry the generated key forward as a version in the secret file (see
+    [Key rotation](#the-master-key)), or delete it if nothing was stored under it.
+  - **`Cannot create the master key file …`** — the key's directory is missing or
+    not writable by uid 1000. The message names the directory, the container
+    uid:gid, and the `chown` to run; see the bind-mount bullet at the top of this
+    section. (If the key lives on the same volume as the database, the entrypoint
+    preflight normally reports this first.)
 - **`exec /app/entrypoint.sh: no such file or directory`** (only when building
   from source). The entrypoint was checked out with CRLF line endings (a Windows
   checkout). The repo pins shell scripts to LF via `.gitattributes` and the image
@@ -522,7 +594,9 @@ have to touch it:
 
 | Variable | Default | Need | Description |
 | -------- | ------- | ---- | ----------- |
-| `SCRYE_APP_SECRET_KEY_FILE` | `/run/secrets/app_secret_key` | **Required** | Path to the Docker secret file holding the **master key**. The file *must* exist at this path; the default matches the compose secret. |
+| `SCRYE_APP_SECRET_KEY_FILE` | `/run/secrets/app_secret_key` | Optional | Path to the Docker secret file holding the **master key**, and the highest-precedence key source. **If you set this, the file must exist there** — Scrye refuses to start rather than generate a different key. Leave it unset to use the auto-generated key below. |
+| `SCRYE_APP_SECRET_KEY_AUTOGENERATE` | `true` | Optional | Generate a master key on first launch when no key file exists at either path. An existing key file is always reused, never overwritten. Set `false` to require an operator-supplied key. |
+| `SCRYE_APP_SECRET_KEY_AUTOGEN_FILE` | `/data/app_secret_key` | Optional | Where the auto-generated key is written (mode `0600`) and read back from. Must be on a **persistent** volume. |
 | `SCRYE_FORWARDED_ALLOW_IPS` | `172.16.0.0/12` | **Required** *(behind a proxy)* | IP/CIDR your reverse proxy connects **from** — the trust boundary for `X-Forwarded-For`. Set it to match your topology (see [Reverse proxy](#reverse-proxy-tls)). Never `*`. Irrelevant only if nothing fronts Scrye. |
 | `SCRYE_SESSION_COOKIE_SECURE` | `true` | **Conditional** | Set `false` **only** for plain-HTTP local dev; keep `true` in production (behind TLS). |
 | `SCRYE_CORS_ORIGINS` | _(empty)_ | **Conditional** | Comma-separated origins for a **split dev frontend** (e.g. `http://localhost:5173`). Empty for the normal same-origin SPA. |
@@ -608,12 +682,56 @@ broken." Fix `DOCKER_GID` and restart the sidecar alone.
 
 ### The master key
 
-The application **master key** is **never** an environment variable or baked into
-an image layer. It is read at runtime from the Docker secret file pointed to by
-`SCRYE_APP_SECRET_KEY_FILE` (default `/run/secrets/app_secret_key`). Generate it
-once with `openssl rand -base64 48` and provide it as a Docker secret. Stored
-credentials are encrypted with a key derived from it (HKDF-SHA256 → AES-256-GCM).
-In production the app **refuses to start** without a valid key file.
+The application **master key** is always read from a **file** — **never** an
+environment variable and never baked into an image layer. Stored credentials are
+encrypted with a key derived from it (HKDF-SHA256 → AES-256-GCM).
+
+**Where it lives, in precedence order.** The first source that has a key file
+wins, and nothing further is consulted:
+
+1. **`SCRYE_APP_SECRET_KEY_FILE`** (default `/run/secrets/app_secret_key`) — the
+   Docker secret you supply. Recommended for production.
+2. **`SCRYE_APP_SECRET_KEY_AUTOGEN_FILE`** (default `/data/app_secret_key`) — the
+   key Scrye generated for itself on an earlier start.
+3. **A key generated now**, written to (2), used only when neither file exists and
+   `SCRYE_APP_SECRET_KEY_AUTOGENERATE` is on (it is, by default).
+
+**Auto-generation on first run.** With no key supplied, first launch mints one
+from the OS CSPRNG — 48 random bytes, base64-encoded, the exact equivalent of
+`openssl rand -base64 48` — writes it with mode `0600` owned by the container's
+uid, verifies those permissions came back correctly off disk, and logs one INFO
+line saying where it went and that it must be backed up. Concurrent starts cannot
+both generate: the file is created with `O_CREAT|O_EXCL` and whoever loses reads
+the winner's key.
+
+**An existing key file is never replaced.** If a key file exists but cannot be
+loaded — unreadable, empty, not base64, too short, malformed — Scrye **refuses to
+start** instead of generating a replacement. That refusal is the point: a second
+key would leave every already-encrypted secret undecryptable while the app looked
+perfectly healthy. For the same reason, setting `SCRYE_APP_SECRET_KEY_FILE` and
+then not mounting the file is a startup error, not a cue to generate one; and if a
+supplied secret and a previously auto-generated key are both present and differ,
+startup fails until you reconcile them (carry the old key forward as a version —
+see **Key rotation** below — or delete it if nothing was stored under it).
+
+**If you lose the key, the secrets are gone.** There is no recovery path, no
+reset, and no backdoor: the plaintext exists nowhere else. Scrye still starts and
+scan history, findings, users, and settings are all intact, but every stored
+secret (registry credentials, git tokens, the OIDC client secret, MFA seeds,
+scheduled-backup passphrases) fails to decrypt and must be re-entered — and
+existing MFA enrollments must be reset. **So back the key file up, and keep the
+copy somewhere other than the volume it lives on.** See
+[Backup & restore](#backup--restore) for how this interacts with backup bundles.
+
+**Trade-off of the generated key's location.** `/data/app_secret_key` sits on the
+same volume as the database it protects, which is what makes zero-touch first run
+possible — but it also means anyone who obtains a copy of that volume has both the
+ciphertext and the key. Field encryption then still protects against narrower
+disclosure (a leaked `.db` file, a stray artifact copy, log exposure) but not
+against whole-volume compromise. If you want the key and the data separated, supply
+the key as a Docker secret from a different mount, or point
+`SCRYE_APP_SECRET_KEY_AUTOGEN_FILE` at one — source 1 keeps its precedence, so
+adopting it later is a supported move.
 
 **High-entropy key required.** The key file must be **valid base64 that decodes to
 at least 32 bytes** — exactly what `openssl rand -base64 48` produces. A raw
@@ -896,8 +1014,15 @@ only in memory at scan time.
   older column-only tag on read, so pre-existing ciphertext keeps decrypting and
   upgrades the next time its row is written. The database never holds plaintext
   secrets.
-- **Master key via secret file.** The key comes from a Docker secret file
-  (`SCRYE_APP_SECRET_KEY_FILE`) — never an env var or image layer.
+- **Master key from a file, never the environment.** The key comes from a Docker
+  secret file (`SCRYE_APP_SECRET_KEY_FILE`) or, when none is supplied, from a
+  0600 key file Scrye generates itself on first launch
+  (`SCRYE_APP_SECRET_KEY_AUTOGEN_FILE`, default `/data/app_secret_key`) — never an
+  env var and never an image layer. An existing key file is always used and never
+  replaced: a key file that fails to load stops startup instead of being
+  regenerated, because a second key would silently orphan stored ciphertext. See
+  [The master key](#the-master-key), including the trade-off of the generated
+  key's default location.
 - **Authentication.** Local accounts use **argon2id** with revocable server-side
   sessions (opaque token, only its SHA-256 stored); generic **OIDC** (Authlib,
   PKCE + nonce, ID-token signature/claim validation, browser-bound login) runs
@@ -1041,6 +1166,23 @@ re-created by re-running a scan; their bookkeeping rows are omitted from the
 bundle and cleared on restore, so a restored database never points at missing
 files. Copy `SCRYE_ARTIFACTS_DIR` separately if you need the raw outputs preserved
 across a move.
+
+**The master key and backups.** Which backup you take decides whether you also
+need [the master key](#the-master-key):
+
+- **A Scrye backup bundle is self-sufficient.** Secrets are decrypted under the
+  host master key and **re-wrapped under your passphrase** as the bundle is built,
+  so restoring needs only the passphrase — never a master-key transplant. Restoring
+  onto a brand-new deployment therefore needs no key provisioning at all: that
+  instance generates its own key on first launch and the restore re-encrypts every
+  secret under it.
+- **A volume/file-level backup does need the key.** The rows in `scrye.db` are
+  master-key ciphertext. Copying the whole `scrye_data` volume carries the
+  generated key along (`/data/app_secret_key`) and so restores intact — but a
+  backup of *just* the database, or a deployment whose key is a Docker secret from
+  elsewhere, has to include the key file too or the secret columns are permanently
+  unreadable. And because a whole-volume copy holds the key **and** the ciphertext
+  together, protect it accordingly.
 
 **Size note.** A bundle is assembled and encrypted in memory in a single pass, so
 backing up or restoring an instance with a very large findings table (roughly

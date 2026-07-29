@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (107, newest first)
+### Index of §14 entries (109, newest first)
 
+- [2026-07-29 — Post-v1 — Master key auto-generated on first launch; the Docker secret keeps its precedence](#2026-07-29--post-v1--master-key-auto-generated-on-first-launch-the-docker-secret-keeps-its-precedence)
 - [2026-07-28 — Post-v1 — Compose `deploy:` keys retired for NAS portability; memory limits made portable, CPU limits moved to an opt-in overlay](#2026-07-28--post-v1--compose-deploy-keys-retired-for-nas-portability-memory-limits-made-portable-cpu-limits-moved-to-an-opt-in-overlay)
 - [2026-07-26 — Infra/Process — `node:22-bookworm-slim` digest refreshed; the Node 24 move and the #86 frontend tooling majors recorded in the roadmap](#2026-07-26--infraprocess--node22-bookworm-slim-digest-refreshed-the-node-24-move-and-the-86-frontend-tooling-majors-recorded-in-the-roadmap)
 - [2026-07-26 — Docs/Process — Review documents retired; §14 made contiguous and indexed; a false CVE claim removed from the CHANGELOG](#2026-07-26--docsprocess--review-documents-retired-14-made-contiguous-and-indexed-a-false-cve-claim-removed-from-the-changelog)
@@ -688,6 +689,158 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+
+### 2026-07-29 — Post-v1 — Master key auto-generated on first launch; the Docker secret keeps its precedence
+
+**What changed:** A new deployment could not start until the operator had produced a master key by
+hand (`openssl rand -base64 48 > docker/secrets/app_secret_key`). Because Compose validates a
+file-backed `secrets:` entry *before* it reads the rest of the stack, a missing file failed
+`docker compose up` outright rather than producing a startup error anyone could act on — a user hit
+this as a first-run blocker. The key is now generated on first launch when none is supplied.
+
+**The precedence order, which had exactly one entry before this change** (the file at
+`SCRYE_APP_SECRET_KEY_FILE`, default `/run/secrets/app_secret_key`), is now, first match wins:
+
+1. `SCRYE_APP_SECRET_KEY_FILE` — the Docker secret. **Unchanged, still highest.**
+2. `SCRYE_APP_SECRET_KEY_AUTOGEN_FILE` (new, default `/data/app_secret_key`) — the key a previous
+   start generated.
+3. A key generated now and written to (2) — only when neither file exists and
+   `SCRYE_APP_SECRET_KEY_AUTOGENERATE` (new, default true) is on.
+
+No key is read from an environment variable or an image layer, as before;
+`SCRYE_ALLOW_WEAK_MASTER_KEY` remains a validation opt-out, not a key source. Generation is
+`os.urandom(48)` base64-encoded — byte-for-byte the documented `openssl rand -base64 48` form — so it
+clears the SEC-3 entropy floor (valid base64 decoding to ≥ 32 bytes; see the 2026-07-13 security
+batch entry, M2/SEC-3) without the weak-key opt-out. It is written `O_CREAT|O_EXCL` + `fsync`,
+`chmod`-ed 0600 (the `O_CREAT` mode is a umask-masked ceiling, not a guarantee), then **re-stat
+verified** for mode 0600 and owner-uid before use.
+
+**The invariants are the substance of this change; the convenience is not.** A second master key
+silently orphans every field-encrypted secret in the database — registry credentials, git tokens, the
+OIDC client secret, TOTP seeds, scheduled-backup passphrases — while the app looks perfectly healthy,
+so:
+
+- **A key file that exists is used, never replaced.** If it is unreadable, empty, not base64, too
+  short, or malformed, startup **fails**. Generation follows only from a *proven absent* file, never
+  from a failed load. Absence itself must be proven: `_key_file_exists()` treats only
+  `ENOENT`/`ENOTDIR` as absence and raises on any other `stat` error, so an unreadable parent
+  directory can never read as "no key here".
+- **An explicitly configured path is an assertion.** If `SCRYE_APP_SECRET_KEY_FILE` was set by any
+  configuration source (env, `.env`, kwargs — tracked via pydantic's `model_fields_set`, exposed as
+  `Settings.app_secret_key_file_is_explicit`) and the file is missing, startup fails rather than
+  substituting a generated key: on an existing deployment that state means an unmounted secret, not a
+  fresh install. Auto-generation applies when the setting is left at its default.
+- **The two files may not disagree.** When a supplied secret is in force and a previously
+  auto-generated file also exists, every `version → material` pair in the generated file must be
+  present **under the same version** in the file in use, else startup fails. Version-aware, not
+  material-aware: stored tokens name their key version, so the same key present under a different
+  version number would still not be found at decrypt time.
+- **A generation race cannot mint two keys.** The `O_EXCL` loser reads the winner's file. This
+  surfaced a real bug the test caught: a third process that merely *saw the path exist* read the
+  winner's zero-length file and failed. `O_CREAT|O_EXCL` publishes the file before its content, so
+  the loader now retries — but only on the empty-file case, which is why the empty-file failure got
+  its own `MasterKeyFileEmptyError` subclass. An earlier attempt gated the retry on `st_size == 0`
+  *after* the failed read and had its own TOCTOU (content arriving between the two re-raised a
+  failure the retry had already resolved); retrying the load itself is race-free.
+- **A key that fails its permission check is removed by the call that created it** — nothing has read
+  it, so no ciphertext exists under it, and leaving it would have the next start silently adopt the
+  file this one refused. That is the only place in the codebase that deletes a key file.
+
+**No crypto change:** the KDF, the token format, and every existing ciphertext are untouched
+(regression-tested), and existing deployments resolve their key exactly as before.
+
+**Compose/docs:** `docker/docker-compose.yml` and the README paste-in stack no longer require the
+secret — the `secrets:` blocks and the `SCRYE_APP_SECRET_KEY_FILE` line are kept, commented out, with
+the reason. README § The master key now documents the precedence order, what auto-generation does,
+that the file must be backed up, what is lost if it isn't, and the **trade-off** that the generated
+key sits on the same volume as the database it protects (field encryption then still covers narrower
+disclosure — a leaked `.db`, a stray copy, log exposure — but not whole-volume compromise; supply a
+Docker secret, or repoint `SCRYE_APP_SECRET_KEY_AUTOGEN_FILE`, to separate them).
+
+**One documentation premise was corrected rather than repeated.** The task framing said a backup
+bundle without the master key is useless for the encrypted fields. That is not true of Scrye's
+bundles: §8's design decrypts each secret and **re-wraps it under the user's passphrase**, so a
+bundle restores on a host with a different master key — and now onto a fresh deployment that
+generated its own. The master key *is* required for a volume/file-level backup, where the rows are
+master-key ciphertext, so README § Backup & restore now draws that line explicitly instead.
+
+**Deviation from CLAUDE.md's hard security rule, stated plainly:** the rule read "the master key
+comes from a Docker secret file (`APP_SECRET_KEY_FILE`), never an env var or image layer". The
+Docker secret file is still the recommended production mechanism and still takes precedence, and the
+key is still never an env var or an image layer — but it is no longer the *only* source. CLAUDE.md's
+rule was amended in the same commit to say so, rather than leaving the file contradicting the code.
+`docker/Dockerfile` deliberately does **not** set `SCRYE_APP_SECRET_KEY_FILE` as an image `ENV`: that
+would make the path explicit for every deployment and re-break the zero-touch first run.
+
+**Tests:** `backend/tests/test_master_key_autogeneration.py` (35 cases) covers generation on a clean
+volume, the entropy floor without the opt-out, mode 0600 and owner, the one-time INFO backup notice,
+existing keys reused verbatim, every malformed/unreadable/undeterminable case failing rather than
+regenerating, the explicit-but-missing refusal, the two-key interlock (including the same key under a
+different version, and the documented carry-forward that is accepted), eight-thread concurrent
+startup producing exactly one key, the permission-check cleanup, and a generated key still decrypting
+its data across a restart. Verified end-to-end against a running instance: first boot generated the
+key at 0600 and reported `/healthz` healthy, a registry secret was stored, and after a restart the
+same key was reused and a backup bundle built successfully (which decrypts every stored secret to
+re-wrap it).
+
+**The adjacent first-run blocker was fixed in the same PR, on review.** Tracing the NAS case the
+original report came from (a bind-mounted `/data` whose ownership doesn't match the container uid)
+produced a result worth recording, because it is not the obvious one:
+
+| `/data` bind mount | `O_CREAT\|O_EXCL` | `chmod 0600` | owner re-stat | Outcome |
+| --- | --- | --- | --- | --- |
+| `0755`, foreign owner (not writable by the app uid) | EACCES | — | — | refuses, nothing left behind |
+| `0777`, foreign owner (world-writable share) | ✓ | ✓ | ✓ | **works** — key `0600`, owned by the app uid |
+| `2775` setgid, group-writable, gid matches | ✓ | ✓ | ✓ | **works** (file gid follows the dir; harmless at `0600`) |
+| ownership-synthesizing fs (CIFS `uid=`, NFS squash) | ✓ | ✓ | ✗ | refuses, file deleted |
+
+The load-bearing fact: **on Linux a newly created file always belongs to the creating process's
+euid**, so a foreign-owned *directory* never trips the owner check. The ordinary NAS bind mount
+(rows 2–3) passes. The owner check only fires where the filesystem *fakes* ownership, and there its
+`0600` is meaningless anyway — the refusal is correct, and SQLite is already unsupported over CIFS.
+
+Row 1 is **not** a new blocker introduced here: `docker/entrypoint.sh` runs `alembic upgrade head`
+before the app starts, so an unwritable `/data` already killed the container with
+`sqlite3.OperationalError: unable to open database file` — which names neither the path nor the fix.
+That pre-existing failure is the same first-run-blocker class this entry is about, so it was fixed
+here rather than deferred: the entrypoint now **preflights** the database directory (exists +
+writable) before Alembic, and fails with the path, the container `uid:gid`, a literal
+`chown -R <uid>:<gid> <host path>`, the `user:`-matching alternative, and the note that a named
+volume inherits the right ownership from the image while a bind mount keeps the host's. Kept to a
+dozen lines of `sh` — a probe file created and removed, no validation framework.
+
+The two master-key messages in the same class were made equally actionable: the unwritable-directory
+error carries the same uid/`chown` guidance, and the synthesized-ownership error now states that
+`chown` **cannot** help and offers matching `user:` or a Docker secret instead. README
+§ Troubleshooting first-run issues leads with both cases.
+
+**Testing the entrypoint.** `backend/tests/test_entrypoint_preflight.py` executes the shipped script
+with `sh` against real directory permissions, stubbing `alembic`/`uvicorn` on `PATH` (so "did the boot
+stop before migrations?" is observable as an absent marker file) and rewriting only `cd /app/backend`,
+a path that exists solely in the image. Every line under test — probe, ordering, message text — is the
+shipped one. Two cases are skipped when the suite runs as **root**, which bypasses directory
+permission bits; they were verified locally under uid 1000 and run for real in CI, which is non-root.
+This is not a substitute for booting the image; CI's image job covers that.
+
+**Also fixed in passing:** this section's index heading said "107 entries" while the index and the
+section both held 108; it now reads 109, matching the count after this entry.
+
+**Deliberately not done here:** a per-boot warning that the auto-generated key shares a volume with
+the database. It would fire on every start of the documented default for most deployments, which is
+how operators learn to skip startup logs — costing the generation-time backup warning that actually
+matters. The existing one-line per-boot source record
+(`Master key loaded from … (auto-generated, current key version v1)`) is the right size. The durable
+channel for that fact is the admin **System panel** (`core/system_info.py` → `api/settings.py`), which
+is where someone looks months later; that is a separate follow-up PR, not folded in here.
+
+**Plan section affected:** §6 secrets-at-rest — additive (a second key *source*, no format or KDF
+change); CLAUDE.md § Hard security rules (master-key sourcing) and § Required deliverables
+(`.env.example` wording); two new `Settings` fields → regenerated `.env.example`; `docker/
+entrypoint.sh` gains a data-directory preflight (startup behavior only — it fails a deployment that
+was already broken, sooner and with a usable message). No schema, job-model, or API change.
 
 ---
 

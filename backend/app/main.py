@@ -43,7 +43,7 @@ from app.api.trivy_policy import router as trivy_policy_router
 from app.api.users import router as users_router
 from app.auth.mfa import PendingMfaStore
 from app.core.config import Settings, get_settings
-from app.core.crypto import MasterKeyError, get_secret_cipher
+from app.core.crypto import MasterKeyError, get_master_key_resolution, get_secret_cipher
 from app.core.logging import configure_logging
 from app.core.ratelimit import SlidingWindowRateLimiter
 from app.core.security_headers import SecurityHeadersMiddleware
@@ -58,9 +58,12 @@ logger = logging.getLogger(__name__)
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Validate the master key and start the scan worker at startup.
 
-    In production a missing/invalid key file is a fatal misconfiguration —
-    failing fast beats discovering it on the first secret write. Development
-    setups get a warning so the API can run before a key has been generated.
+    On a first launch with no key supplied, this is where the master key is
+    generated and persisted (see :func:`app.core.crypto.resolve_master_keys`); an
+    *invalid* or unresolvable key file is a fatal misconfiguration in production —
+    failing fast beats discovering it on the first secret write, and beats
+    generating a second key that would orphan stored secrets. Development setups
+    get a warning so the API can run before a key has been provided.
 
     The in-process scan worker is created here and reconciles any scans left
     mid-flight by a previous process before accepting new work.
@@ -70,8 +73,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     reset_dashboard_cache()  # start each process with a cold dashboard cache (API-7)
     try:
+        # Resolve first: this is what generates the key on a first launch, and
+        # doing it here means the generation notice (and its back-this-up warning)
+        # lands in the startup log rather than mid-request.
+        resolution = get_master_key_resolution()
         cipher = get_secret_cipher()
-        logger.info("Master key loaded (current key version v%d).", cipher.current_version)
+        logger.info(
+            "Master key loaded from %s (%s, current key version v%d).",
+            resolution.path,
+            "configured secret file" if resolution.from_configured_path else "auto-generated",
+            cipher.current_version,
+        )
     except MasterKeyError as exc:
         if settings.is_development:
             logger.warning("Master key unavailable (dev mode, continuing): %s", exc)
