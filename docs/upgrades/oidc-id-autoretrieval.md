@@ -1,17 +1,19 @@
 # Feature scoping — OIDC identity auto-retrieval (account linking via the OAuth flow)
 
-> **Status: SCOPING (2026-07-29). No code has been written.** This document is the handoff for a
-> future implementation PR, following the pattern of the Python 3.14 upgrade scoping
-> (`docs/upgrades/python-3.14.md`, since retired). Per the cleanup decision recorded in
-> `docs/ARCHIVE.md` §14 (2026-07-26 — review documents retired): when this work lands, the durable
-> record goes into a dated §14 entry and **this file is deleted** — it is a working document, not
-> a permanent one.
+> **Status: GREEN-LIT (2026-07-29) at the minimal scope of §6 — self-link plus guarded
+> self-unlink only. No code has been written yet**; the build is a separate PR into `dev` after
+> v0.2.0 ships. This document is the handoff for that implementation PR, following the pattern of
+> the Python 3.14 upgrade scoping (`docs/upgrades/python-3.14.md`, since retired). Per the
+> cleanup decision recorded in `docs/ARCHIVE.md` §14 (2026-07-26 — review documents retired):
+> when this work lands, the durable record goes into a dated §14 entry and **this file is
+> deleted** — it is a working document, not a permanent one.
 >
-> **Cross-references:** `backend/app/api/oidc.py` (both routers), `backend/app/auth/oidc.py`
-> (protocol client), `backend/app/db/models/oidc.py` (`OidcConfig` / `OidcIdentity` /
-> `OidcLoginFlow`), and the §14 entries of 2026-07-03 (P5 OIDC), 2026-07-04 (browser binding,
-> role-sync guard, SEC-8 acceptance), and 2026-07-13 (L2/SEC-8 audit visibility). No tracking
-> issue exists yet (searched 2026-07-29); open one when this is scheduled.
+> **Cross-references:** tracking issue
+> [#114](https://github.com/tyler-rich/Scrye/issues/114), `backend/app/api/oidc.py` (both
+> routers), `backend/app/auth/oidc.py` (protocol client), `backend/app/db/models/oidc.py`
+> (`OidcConfig` / `OidcIdentity` / `OidcLoginFlow`), and the §14 entries of 2026-07-03 (P5 OIDC),
+> 2026-07-04 (browser binding, role-sync guard, SEC-8 acceptance), and 2026-07-13 (L2/SEC-8 audit
+> visibility).
 
 ## The request — and a premise correction that reshapes it
 
@@ -201,16 +203,76 @@ doc is the sign-off request for the data-model touch):
 2. Backend: link start (POST, auth + CSRF + fresh full re-auth), callback branch, unlink
    (DELETE, same gates + no-local-password guard), audit events. Estimated ~200 lines plus the
    shared fresh-re-auth helper.
-3. Frontend: linked-identity status + Link/Unlink in Settings → Authentication, the post-save
-   CTA, and callback result handling. Typed client additions in `frontend/src/api/oidc.ts`.
-4. Tests: one per abuse case A1–A12 (most are cheap variations of the existing callback tests),
-   plus the SEC-8 gate (link refused without fresh password/TOTP) and the unlink stranding guard.
-5. Docs: README § Configuring OIDC gains the link walkthrough and the per-provider claim/subject
-   table from §1; security model paragraph extended per §4; dated §14 entry; **this file
-   deleted** in the same PR.
+3. Stale-link detection at the login callback per §7: distinct `oidc_error=identity_stale` +
+   `auth.oidc_identity_stale` audit event on a claim-match with a different subject — refuse and
+   explain, never bind.
+4. Frontend: linked-identity status (including `last_login_at`) + Link/Unlink in Settings →
+   Authentication, the post-save CTA, and callback result handling. Typed client additions in
+   `frontend/src/api/oidc.ts`.
+5. Tests: one per abuse case A1–A12 (most are cheap variations of the existing callback tests),
+   plus the SEC-8 gate (link refused without fresh password/TOTP), the unlink stranding guard,
+   and the §7 stale-link detection (detected, fail-closed, no auto-rebind).
+6. Docs: README § Configuring OIDC gains the link walkthrough and the per-provider claim/subject
+   table from §1; security model paragraph extended per §4; the §7 re-link runbook; dated §14
+   entry; **this file deleted** in the same PR.
 
 Definition of done per CLAUDE.md applies unchanged (lint, tests, CI green, compose up healthy,
 identity/footer verification).
+
+## 7. IdP-side subject change — when a stored link goes stale
+
+A link row is a claim that `(issuer, sub)` will keep identifying the same person. The IdP can
+silently break that claim, and nothing in Scrye currently notices:
+
+- **Account deleted and recreated at the IdP.** The recreated account gets a fresh `sub` (a new
+  UUID on Pocket ID/Keycloak; a new pairwise value on Entra ID). Same human, same email, same
+  username — different subject.
+- **Authentik subject-mode change.** Switching the provider's subject mode (e.g. default hashed
+  mode → UUID or email) **re-keys every user at once**. This is one operator toggle, it emits no
+  warning, and it invalidates every link row simultaneously.
+
+**What the failure looks like from the operator's chair.** The stale link row still exists and
+still renders as "Linked ✓" in the UI — it *looks* healthy. But the next OIDC login presents the
+new `sub`, which matches no identity row, so the callback takes the no-identity branch: with
+`auto_provision` on it mints a **duplicate account** at `default_role`; with it off it dead-ends
+at `not_provisioned`. Either way the operator experiences exactly the duplicate-account /
+dead-end bug this feature was built to eliminate, with a settings screen actively asserting that
+everything is fine. Without a distinct signal, the plausible-but-wrong diagnosis is "the linking
+feature regressed", not "my IdP re-keyed me".
+
+**Options considered:**
+
+1. **Document only** — a README runbook: "if OIDC sign-in stops matching your account, sign in
+   locally, unlink, re-link." Cheap, but the operator has no signal distinguishing a stale link
+   from any other login failure, and with `auto_provision` on there is no failure at all — just a
+   quiet duplicate. Documentation alone fixes the recovery, not the diagnosis.
+2. **Surface state in the UI** — show the identity's existing `last_login_at` next to the linked
+   status ("Linked — last used 3 weeks ago"). Honest and nearly free, but subjects are opaque
+   blobs (that is the whole premise of this feature), so no amount of display lets an operator
+   *compare* anything; a frozen timestamp is a weak, after-the-fact hint.
+3. **Detect at the login callback** — in the no-identity branch, before provisioning or
+   dead-ending: if the verified token's claims (the configured `username_claim` and/or
+   `email_claim`) match an account that **already holds a linked identity for this issuer with a
+   different subject**, fail closed with a distinct error (`oidc_error=identity_stale`), record
+   an `auth.oidc_identity_stale` audit event naming both subjects' row ids (not raw values in the
+   login screen), and have the login-page error text point at the runbook. Critically this is a
+   **refuse-and-explain heuristic, never a bind**: the claim match must not auto-rebind
+   (email/username matching for *binding* is the account-takeover vector §5 already rejected).
+   Fail-closed is the worst an attacker can extract from it — someone at the same IdP who sets
+   their email to the admin's merely converts "get provisioned a viewer account" into "get an
+   error", which is strictly safer than today.
+
+**Recommendation: option 3, with option 2's timestamp as a freebie, and the runbook regardless.**
+Detection at the callback is one extra indexed lookup on a branch that already exists, it turns
+the single most confusing failure mode of this feature into an explicit, audited, self-diagnosing
+error, and its abuse surface is fail-closed by construction. Concretely, for the implementation
+PR (this is scoped *into* §6, not a follow-up — it is small and the failure mode it covers is the
+feature's own): the stale-link check + distinct error + audit event, `last_login_at` shown on the
+linked-status UI, and a README re-link runbook (sign in locally → unlink (fresh re-auth) →
+re-link; for the Authentik mass-re-key case, note that *every* linked user re-links the same way,
+and that subject mode should be chosen once, before rollout). Auto-rebind stays rejected — even
+gated behind an admin confirmation it would normalize exactly the claim-match binding §5 rules
+out.
 
 ## Recommendation
 
