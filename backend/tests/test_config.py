@@ -21,6 +21,27 @@ def test_master_key_default_is_a_secret_file_path() -> None:
     assert default == Path("/run/secrets/app_secret_key")
 
 
+def test_master_key_autogeneration_defaults() -> None:
+    """First launch generates a key on the persistent data volume by default."""
+    fields = Settings.model_fields
+    assert fields["app_secret_key_autogenerate"].default is True
+    assert fields["app_secret_key_autogen_file"].default == Path("/data/app_secret_key")
+
+
+def test_configured_master_key_path_explicitness_is_tracked(monkeypatch) -> None:
+    """An operator-set key path is distinguishable from the default.
+
+    The master-key resolver refuses to auto-generate around an explicitly named
+    path (a missing file there means an unmounted secret, not a fresh install), so
+    this distinction is load-bearing, not cosmetic.
+    """
+    monkeypatch.delenv("SCRYE_APP_SECRET_KEY_FILE", raising=False)
+    assert Settings().app_secret_key_file_is_explicit is False
+
+    monkeypatch.setenv("SCRYE_APP_SECRET_KEY_FILE", "/run/secrets/app_secret_key")
+    assert Settings().app_secret_key_file_is_explicit is True
+
+
 def test_env_example_excludes_master_key() -> None:
     """Generated .env.example must never include the master key content var."""
     rendered = render_env_example()

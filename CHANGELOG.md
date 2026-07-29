@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The master key is generated automatically on first launch, so a new
+  deployment starts with no pre-seeded secret.** Previously the container would
+  not start until you had run `openssl rand -base64 48` into
+  `secrets/app_secret_key` — and because Compose requires a `secrets:` file to
+  exist before it will even read the stack, that was a hard first-run blocker
+  rather than a startup error you could read. With no key supplied, Scrye now
+  mints one from the OS CSPRNG (48 random bytes base64-encoded — the exact
+  `openssl rand -base64 48` equivalent, clearing the existing entropy floor),
+  writes it to `/data/app_secret_key` with mode `0600`, verifies those
+  permissions off disk, and logs one INFO line saying where it went and that it
+  **must be backed up**. Concurrent starts cannot both generate: the file is
+  created with `O_CREAT|O_EXCL` and the loser reads the winner's key.
+
+  **Precedence is unchanged where it already existed.** A Docker secret at
+  `SCRYE_APP_SECRET_KEY_FILE` still wins over everything; generation is the last
+  resort, and only when no key file exists. Two new settings control it:
+  `SCRYE_APP_SECRET_KEY_AUTOGENERATE` (default `true`) and
+  `SCRYE_APP_SECRET_KEY_AUTOGEN_FILE` (default `/data/app_secret_key`).
+
+  **An existing key file is never replaced.** A key file that exists but cannot be
+  loaded — unreadable, empty, not base64, too short, malformed — now fails startup
+  instead of ever being regenerated, because a second key would leave every stored
+  secret undecryptable while the app looked healthy. For the same reason: a *set*
+  `SCRYE_APP_SECRET_KEY_FILE` pointing at a missing file is a startup error, not a
+  cue to generate one; and a supplied secret alongside a previously auto-generated
+  key that it does not cover stops startup until the two are reconciled.
+
+  **Existing deployments are unaffected** — their key file is found exactly as
+  before, and no stored ciphertext changed (no KDF or token-format change). **New
+  deployments must back up `/data/app_secret_key`**: lose it and every stored
+  secret is unrecoverable. See [The master key](README.md#the-master-key), which
+  now documents the precedence order, the loss consequences, and the trade-off of
+  the generated key living on the same volume as the database it protects.
+
+  `docker/docker-compose.yml` and the README paste-in stack no longer require the
+  secret; the Docker-secret blocks are kept, commented out, for deployments that
+  want the key and the data on separate mounts.
+
 ### Changed
 
 - **The Compose stack no longer uses `deploy:` keys, so it deploys on NAS

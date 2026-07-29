@@ -14,8 +14,21 @@
 # but moved to an opt-in overlay so this file stays parseable everywhere:
 #   docker compose -f docker-compose.yml -f docker-compose.cpu-limits.yml up -d
 #
-# Before first run, create the master-key secret (NEVER commit it):
+# MASTER KEY. Nothing to do before the first run: with no key supplied, Scrye
+# generates one on first launch and persists it at /data/app_secret_key (mode
+# 0600) on the scrye_data volume. BACK THAT FILE UP — every stored secret is
+# encrypted with a key derived from it, and losing it makes them unrecoverable.
+# An existing key file is always reused and never overwritten.
+#
+# For production, prefer supplying it as a Docker secret so the key does not sit
+# on the same volume as the database it protects. Create it (NEVER commit it):
 #   mkdir -p docker/secrets && openssl rand -base64 48 > docker/secrets/app_secret_key
+#   chmod 600 docker/secrets/app_secret_key
+# then uncomment the three `app_secret_key` blocks below (the service's
+# SCRYE_APP_SECRET_KEY_FILE + secrets: entries, and the top-level secrets:).
+# Note that a *set* SCRYE_APP_SECRET_KEY_FILE with no file at that path is a
+# startup error, by design: Scrye refuses to substitute a different key, which
+# would orphan every secret already stored under the real one.
 #
 # The docker-env profile additionally needs the host's docker group id, because
 # the socket proxy runs unprivileged and must be in that group to read the
@@ -45,12 +58,15 @@ services:
     stop_grace_period: 30s
     environment:
       - SCRYE_DATABASE_PATH=/data/scrye.db
-      - SCRYE_APP_SECRET_KEY_FILE=/run/secrets/app_secret_key
+      # Uncomment together with the two secrets: blocks to supply the master key
+      # as a Docker secret instead of letting Scrye generate one on the data
+      # volume (see the MASTER KEY note at the top of this file):
+      # - SCRYE_APP_SECRET_KEY_FILE=/run/secrets/app_secret_key
       # Uncomment when the matching sidecar profile is enabled:
       # - SCRYE_TRIVY_SERVER_URL=http://trivy-server:4954
       # - SCRYE_DOCKER_PROXY_URL=http://docker-socket-proxy:2375
-    secrets:
-      - app_secret_key
+    # secrets:
+    #   - app_secret_key
     volumes:
       - scrye_data:/data
       - scrye_cache:/cache
@@ -240,7 +256,11 @@ volumes:
   scrye_data:
   scrye_cache:
   trivy_cache:
-
-secrets:
-  app_secret_key:
-    file: ./secrets/app_secret_key # not committed; lives outside the image
+# Uncomment together with the scrye service's `secrets:` and
+# SCRYE_APP_SECRET_KEY_FILE lines to supply the master key as a Docker secret.
+# Compose requires the file to exist at config time, which is why this is
+# commented out by default — an absent file here fails `docker compose up`
+# before the container ever starts.
+# secrets:
+#   app_secret_key:
+#     file: ./secrets/app_secret_key # not committed; lives outside the image

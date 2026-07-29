@@ -2,8 +2,13 @@
 
 Implements the locked secrets-at-rest design (``docs/ARCHIVE.md`` §6):
 
-- The **master key** is read from the Docker secret file referenced by
-  ``SCRYE_APP_SECRET_KEY_FILE`` — never an environment variable or image layer.
+- The **master key** is read from a *file* — never an environment variable or
+  image layer. The Docker secret file referenced by
+  ``SCRYE_APP_SECRET_KEY_FILE`` takes precedence; when no secret is supplied the
+  key is **generated once on first launch** and persisted at
+  ``SCRYE_APP_SECRET_KEY_AUTOGEN_FILE`` (see :func:`resolve_master_keys` for the
+  full precedence order and the invariants that keep a second key from ever
+  orphaning stored ciphertext).
 - Each secret is encrypted with **AES-256-GCM** using a random per-secret
   96-bit nonce and a 256-bit encryption key derived from the master key via
   **HKDF-SHA256**.
@@ -24,9 +29,13 @@ from __future__ import annotations
 
 import base64
 import binascii
+import errno
 import logging
 import os
 import re
+import stat
+import time
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -35,7 +44,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +66,33 @@ _NONCE_BYTES = 12  # 96-bit GCM nonce, per NIST SP 800-38D.
 _MIN_KEY_BYTES = 32  # Require >= 256 bits of master key material.
 _HKDF_INFO = b"scrye/field-encryption"
 
+#: Random bytes in an auto-generated master key. Base64-encoded, 48 bytes is
+#: byte-for-byte the documented ``openssl rand -base64 48`` form, so a generated
+#: key clears the :data:`_MIN_KEY_BYTES` entropy floor with margin and never needs
+#: the :data:`_ALLOW_WEAK_KEY_ENV` opt-out.
+_GENERATED_KEY_BYTES = 48
+#: Required permissions for a key file this process creates: owner read/write only.
+_KEY_FILE_MODE = 0o600
+#: Bounded wait for the winner of a generation race to finish writing its file.
+#: The winner writes and fsyncs immediately after ``O_CREAT|O_EXCL``, so the window
+#: between "the file exists" and "the file has content" is sub-millisecond; this
+#: only has to outlast a descheduled writer, never a crashed one.
+_RACE_READ_ATTEMPTS = 25
+_RACE_READ_DELAY_SECONDS = 0.1
+
 
 class MasterKeyError(RuntimeError):
     """Raised when the master key file is missing, unreadable, or invalid."""
+
+
+class MasterKeyFileEmptyError(MasterKeyError):
+    """Raised when the key file exists but has no content.
+
+    Distinguished from every other :class:`MasterKeyError` because it is the one
+    failure that can be transient: ``O_CREAT|O_EXCL`` publishes the file before
+    its content, so a process starting alongside a generator can catch it empty
+    (see :func:`_load_key_file`). Every other failure is terminal.
+    """
 
 
 class SecretDecryptError(RuntimeError):
@@ -142,8 +175,11 @@ def load_master_keys(path: Path) -> dict[int, bytes]:
       the highest version is used for new encryptions and older versions remain
       available for decryption/rotation.
 
+    This is the loader only; :func:`resolve_master_keys` decides *which* file to
+    load and is the only thing that may create one.
+
     Args:
-        path: Filesystem path of the Docker secret file.
+        path: Filesystem path of the key file (Docker secret or auto-generated).
 
     Returns:
         Mapping of key version to raw master key bytes.
@@ -162,7 +198,14 @@ def load_master_keys(path: Path) -> dict[int, bytes]:
         raise MasterKeyError(f"Master key file at {path} could not be read: {exc}") from exc
 
     if not content:
-        raise MasterKeyError(f"Master key file at {path} is empty.")
+        raise MasterKeyFileEmptyError(
+            f"Master key file at {path} is empty. An empty key file is never "
+            "silently replaced: if it is a zero-byte file left behind by a first "
+            "start that was interrupted mid-generation (no secrets stored yet), "
+            "delete it and restart to generate a fresh key. Otherwise restore the "
+            "original key content — deleting a real key makes every stored secret "
+            "unrecoverable."
+        )
 
     lines = [line.strip() for line in content.splitlines() if line.strip()]
     versioned = [_KEYLINE_RE.match(line) for line in lines]
@@ -186,6 +229,319 @@ def load_master_keys(path: Path) -> dict[int, bytes]:
         f"Master key file at {path} is malformed: use a single base64 key, or one "
         "`v<version>:<base64>` entry per line."
     )
+
+
+@dataclass(frozen=True)
+class MasterKeyResolution:
+    """The master key actually in force, and where it came from."""
+
+    #: File the key material was read from.
+    path: Path
+    #: Loaded ``version -> key material`` mapping.
+    keys: dict[int, bytes]
+    #: True only when *this* call generated the file at :attr:`path`.
+    generated: bool
+    #: True when the key came from the configured (Docker secret) path rather
+    #: than the auto-generated fallback.
+    from_configured_path: bool
+
+
+def _key_file_exists(path: Path) -> bool:
+    """Return True if a key file exists at ``path``.
+
+    Absence has to be **proven**, not assumed: a key file that exists but cannot
+    be stat-ed (an unreadable parent directory, an I/O error) must never look
+    like "no key here", because the caller's next move would be to generate a
+    second key and silently orphan every secret already encrypted under the
+    first. Only ``ENOENT``/``ENOTDIR`` — the filesystem positively saying the
+    path is not there — count as absence.
+
+    Raises:
+        MasterKeyError: If presence could not be determined.
+    """
+    try:
+        os.stat(path)
+    except OSError as exc:
+        if exc.errno in (errno.ENOENT, errno.ENOTDIR):
+            return False
+        raise MasterKeyError(
+            f"Cannot determine whether a master key file exists at {path}: {exc}. "
+            "Refusing to start: generating a key here could orphan secrets already "
+            "encrypted under an existing one. Fix the path/permissions and restart."
+        ) from exc
+    return True
+
+
+def _verify_key_file_permissions(path: Path) -> None:
+    """Verify a just-created key file is 0600 and owned by this process.
+
+    A filesystem that ignores POSIX modes (some SMB/vfat mounts, a squashing NFS
+    export) would leave the master key group- or world-readable, so the write is
+    only trusted after re-reading the metadata back off disk.
+
+    Raises:
+        MasterKeyError: If the mode or owner is not what was asked for.
+    """
+    try:
+        info = os.stat(path)
+    except OSError as exc:
+        raise MasterKeyError(
+            f"Generated master key at {path} could not be stat-ed back: {exc}"
+        ) from exc
+
+    mode = stat.S_IMODE(info.st_mode)
+    if mode != _KEY_FILE_MODE:
+        raise MasterKeyError(
+            f"Generated master key at {path} has mode {mode:04o}, not "
+            f"{_KEY_FILE_MODE:04o}. The filesystem holding it does not honor the "
+            "requested permissions, so the key would be readable by other users. "
+            "Store the key on a filesystem that preserves POSIX modes, or supply it "
+            "yourself as a Docker secret (SCRYE_APP_SECRET_KEY_FILE)."
+        )
+    if info.st_uid != os.geteuid():
+        raise MasterKeyError(
+            f"Generated master key at {path} is owned by uid {info.st_uid}, not the "
+            f"container uid {os.geteuid()}. The filesystem is remapping ownership; "
+            "store the key elsewhere or supply it as a Docker secret "
+            "(SCRYE_APP_SECRET_KEY_FILE)."
+        )
+
+
+def _load_key_file(path: Path) -> dict[int, bytes]:
+    """Load a key file, tolerating one another process is mid-write.
+
+    ``O_CREAT|O_EXCL`` publishes the *file* before its *content*, so a process
+    starting at the same instant as the generator — whether it lost the O_EXCL
+    race or simply saw the path exist — can catch the key file empty. Only
+    :class:`MasterKeyFileEmptyError` is retried; every other failure (content
+    present but malformed, a key below the entropy floor) propagates immediately,
+    because waiting cannot change it. Retrying the *load* rather than re-checking
+    the file's size is deliberate: the size could change between a failed read and
+    the check, which would re-raise a failure the retry had already resolved.
+
+    Waiting out a *crashed* generator is not the goal either — after the bounded
+    wait the empty-file error surfaces, and it says how to recover.
+
+    A caller must never treat a failure here as "no key present": generating a
+    second key is what orphans stored secrets.
+
+    Raises:
+        MasterKeyError: If the file does not load (immediately, or after the wait).
+    """
+    last_error: MasterKeyFileEmptyError | None = None
+    for _ in range(_RACE_READ_ATTEMPTS):
+        try:
+            return load_master_keys(path)
+        except MasterKeyFileEmptyError as exc:
+            last_error = exc
+            time.sleep(_RACE_READ_DELAY_SECONDS)
+    raise MasterKeyError(
+        f"Master key file at {path} stayed empty while waiting for a concurrent "
+        f"start to write it: {last_error}"
+    )
+
+
+def _generate_master_key_file(path: Path) -> MasterKeyResolution:
+    """Generate a master key, persist it at ``path``, and load it back.
+
+    The key is ``os.urandom(48)`` base64-encoded — the documented
+    ``openssl rand -base64 48`` form — written with ``O_CREAT|O_EXCL`` so two
+    processes starting at once cannot both generate: the loser reads the winner's
+    file (:func:`_load_key_file`) instead of minting a second key.
+
+    Raises:
+        MasterKeyError: If the directory or file cannot be created, the
+            permissions do not come back as 0600/this-uid, or the written key
+            does not load.
+    """
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise MasterKeyError(
+            f"Cannot create the directory for the master key file {path}: {exc}. "
+            "It must be on a writable, persistent volume."
+        ) from exc
+
+    material = base64.b64encode(os.urandom(_GENERATED_KEY_BYTES)).decode("ascii")
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, _KEY_FILE_MODE)
+    except FileExistsError:
+        # Lost the race. Someone else's key is now the deployment's key.
+        logger.info("Master key file at %s was created concurrently; using that key.", path)
+        return MasterKeyResolution(
+            path=path,
+            keys=_load_key_file(path),
+            generated=False,
+            from_configured_path=False,
+        )
+    except OSError as exc:
+        raise MasterKeyError(
+            f"Cannot create the master key file {path}: {exc}. It must be on a "
+            "writable, persistent volume, or supply the key yourself as a Docker "
+            "secret (SCRYE_APP_SECRET_KEY_FILE)."
+        ) from exc
+
+    try:
+        with os.fdopen(descriptor, "w", encoding="ascii") as handle:
+            handle.write(f"{material}\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        # chmod explicitly: the O_CREAT mode above is masked by the process umask,
+        # so it is a ceiling, not a guarantee.
+        os.chmod(path, _KEY_FILE_MODE)
+        _verify_key_file_permissions(path)
+        keys = load_master_keys(path)
+    except (OSError, MasterKeyError) as exc:
+        # Remove only the file this call created moments ago: nothing has read it,
+        # so no ciphertext exists under it, and leaving a half-written or
+        # wrongly-permissioned key behind would have the next start silently adopt
+        # it. This is the one place deleting a key file is safe.
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:  # pragma: no cover - best-effort cleanup
+            logger.warning("Could not remove the failed master key file at %s.", path)
+        if isinstance(exc, MasterKeyError):
+            raise
+        raise MasterKeyError(f"Failed to write the master key file {path}: {exc}") from exc
+
+    logger.info(
+        "Generated a new application master key at %s (mode 0600, uid %d). "
+        "BACK THIS FILE UP NOW and store the copy somewhere other than the data "
+        "volume: every stored secret — registry credentials, git tokens, the OIDC "
+        "client secret, MFA seeds, scheduled-backup passphrases — is encrypted with "
+        "a key derived from it, and if this file is lost they are UNRECOVERABLE. "
+        "There is no recovery path and no backdoor.",
+        path,
+        os.geteuid(),
+    )
+    return MasterKeyResolution(path=path, keys=keys, generated=True, from_configured_path=False)
+
+
+def _assert_generated_key_is_not_orphaned(
+    in_use_path: Path,
+    in_use_keys: dict[int, bytes],
+    generated_path: Path,
+) -> None:
+    """Refuse to start if an auto-generated key file is being bypassed.
+
+    When a deployment that auto-generated a key later gains a Docker secret, the
+    configured secret wins by precedence — and every secret written under the
+    generated key would then fail to decrypt. Because stored tokens name their
+    key *version*, safety requires each ``version -> material`` pair from the
+    generated file to be present **under the same version** in the file actually
+    in use; a matching key under a different version number would not be found at
+    decrypt time.
+
+    Raises:
+        MasterKeyError: If the generated key file exists and is not covered.
+    """
+    if generated_path == in_use_path or not _key_file_exists(generated_path):
+        return
+
+    try:
+        generated_keys = load_master_keys(generated_path)
+    except MasterKeyError as exc:
+        raise MasterKeyError(
+            f"A master key file also exists at {generated_path} but could not be "
+            f"read: {exc} Refusing to start: it may hold the key that secrets in "
+            "this database were encrypted under. Repair or remove it deliberately."
+        ) from exc
+
+    uncovered = sorted(
+        version
+        for version, material in generated_keys.items()
+        if in_use_keys.get(version) != material
+    )
+    if uncovered:
+        versions = ", ".join(f"v{version}" for version in uncovered)
+        raise MasterKeyError(
+            f"Two different master keys are present: {in_use_path} (configured, takes "
+            f"precedence) and {generated_path} (previously auto-generated), whose "
+            f"{versions} key material is not in the configured file. Any secret "
+            "written under the auto-generated key would fail to decrypt, so Scrye "
+            "refuses to start. Either copy the auto-generated key line into the "
+            "configured file as its own version (keeping the version number it was "
+            f"written under) so both decrypt, or delete {generated_path} if nothing "
+            "was ever stored under it."
+        )
+
+
+def resolve_master_keys(settings: Settings | None = None) -> MasterKeyResolution:
+    """Resolve the master key in force, generating one on first launch if needed.
+
+    Precedence, highest first:
+
+    1. **The configured key file** ``SCRYE_APP_SECRET_KEY_FILE`` (default
+       ``/run/secrets/app_secret_key``) — the Docker secret. If a file exists
+       there it is used, full stop.
+    2. **The auto-generated key file** ``SCRYE_APP_SECRET_KEY_AUTOGEN_FILE``
+       (default ``/data/app_secret_key``), if it exists.
+    3. **A freshly generated key** written to (2) — only when neither file exists
+       and ``SCRYE_APP_SECRET_KEY_AUTOGENERATE`` is on.
+
+    No key is ever taken from an environment variable or an image layer.
+
+    The invariants this enforces, in order of importance:
+
+    - **A key file that exists is used, never replaced.** If it cannot be read,
+      is empty, is malformed, or fails the entropy floor, startup **fails** — a
+      second key would silently orphan every field-encrypted secret in the
+      database. Generation follows only from a *proven absent* file, never from a
+      *failed load*.
+    - **An explicitly configured path is an assertion.** If an operator set
+      ``SCRYE_APP_SECRET_KEY_FILE`` and the file is missing, that is a
+      deployment fault (an unmounted secret), so startup fails rather than
+      substituting a generated key. Auto-generation applies when the setting is
+      left at its default.
+    - **The two files may not disagree** — see
+      :func:`_assert_generated_key_is_not_orphaned`.
+
+    Raises:
+        MasterKeyError: On any of the refusals above, or when no key is found and
+            auto-generation is disabled.
+    """
+    settings = settings or get_settings()
+    configured = settings.app_secret_key_file
+    generated = settings.app_secret_key_autogen_file
+
+    if _key_file_exists(configured):
+        keys = load_master_keys(configured)
+        _assert_generated_key_is_not_orphaned(configured, keys, generated)
+        return MasterKeyResolution(
+            path=configured,
+            keys=keys,
+            generated=False,
+            from_configured_path=True,
+        )
+
+    if settings.app_secret_key_file_is_explicit and configured != generated:
+        raise MasterKeyError(
+            f"SCRYE_APP_SECRET_KEY_FILE is set to {configured}, but no file exists "
+            "there. Refusing to start: a configured key path is an assertion that "
+            "the key lives there, and generating a different key instead would "
+            "orphan every secret already stored under the real one. Mount the "
+            "secret (a Compose `secrets:` entry, or a bind mount), or unset "
+            "SCRYE_APP_SECRET_KEY_FILE to let Scrye manage a key at "
+            f"{generated} itself."
+        )
+
+    if _key_file_exists(generated):
+        return MasterKeyResolution(
+            path=generated,
+            keys=_load_key_file(generated),
+            generated=False,
+            from_configured_path=False,
+        )
+
+    if not settings.app_secret_key_autogenerate:
+        raise MasterKeyError(
+            f"No master key file at {configured} or {generated}, and "
+            "SCRYE_APP_SECRET_KEY_AUTOGENERATE is off. Provide the key as a Docker "
+            "secret (generate it with `openssl rand -base64 48`) or re-enable "
+            "auto-generation."
+        )
+
+    return _generate_master_key_file(generated)
 
 
 class SecretCipher:
@@ -302,11 +658,22 @@ class SecretCipher:
 
 
 @lru_cache
+def get_master_key_resolution() -> MasterKeyResolution:
+    """Return the process-wide master key, resolving (and generating) it once.
+
+    Cached so first-launch generation and its one-time backup warning happen
+    exactly once per process, whichever call site touches a secret first.
+    """
+    return resolve_master_keys()
+
+
+@lru_cache
 def get_secret_cipher() -> SecretCipher:
-    """Return the process-wide cipher built from the configured key file."""
-    return SecretCipher(load_master_keys(get_settings().app_secret_key_file))
+    """Return the process-wide cipher built from the resolved master key."""
+    return SecretCipher(get_master_key_resolution().keys)
 
 
 def reset_secret_cipher() -> None:
-    """Clear the cached cipher (used by tests and key-rotation flows)."""
+    """Clear the cached cipher and key resolution (tests and key-rotation flows)."""
     get_secret_cipher.cache_clear()
+    get_master_key_resolution.cache_clear()

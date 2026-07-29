@@ -64,8 +64,14 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   code, config, Compose, image layers, tests, or logs. Use the secret-file master key + env vars
   for non-sensitive config.
 - Stored secrets (registry creds, git tokens, OIDC client secret, API tokens) are **field-encrypted
-  with AES-256-GCM**; the **master key comes from a Docker secret file** (`APP_SECRET_KEY_FILE`),
-  never an env var or image layer.
+  with AES-256-GCM**; the **master key comes from a file — never an env var or image layer**. The
+  **Docker secret file** (`APP_SECRET_KEY_FILE`) is the recommended production mechanism and keeps
+  its precedence over everything else; when no secret is supplied, the key is **generated on first
+  launch** and persisted mode-0600 at `APP_SECRET_KEY_AUTOGEN_FILE` (default `/data/app_secret_key`)
+  so a fresh deployment starts without pre-seeding a secret. **An existing key file is always used
+  and never replaced:** a key file that exists but fails to load stops startup rather than being
+  regenerated, because a second key silently orphans every stored secret. See `docs/ARCHIVE.md`
+  § Deviations (2026-07-29) and README § The master key.
 - Secret API fields are **write-only**: accept on write, return a mask (`••••`) + timestamp on
   read. Never return or log plaintext secrets. Add a logging redaction filter.
 - Decrypt secrets **only at scan time**, in memory, into **tmpfs** credential files, and shred them
@@ -287,8 +293,8 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 - **`LICENSE`** — MIT unless told otherwise.
 - **`.env.example`** — generate it in Phase 0–1 **from the Pydantic `Settings` model** (the config
   loader is the single source of truth — keep the two in sync). **Non-sensitive configuration vars
-  only.** The master key is never included (it comes from the Docker secret file
-  `APP_SECRET_KEY_FILE`); stored application secrets — registry creds, git tokens, the OIDC client
+  only.** The master key content is never included (only the *paths* it is read
+  from/generated at — `APP_SECRET_KEY_FILE`, `APP_SECRET_KEY_AUTOGEN_FILE`); stored application secrets — registry creds, git tokens, the OIDC client
   secret, API tokens — are **not** environment variables at all: they are configured through the app
   and held field-encrypted in the database, so no secret placeholder appears in `.env.example`.
   `.gitignore` already ignores `.env` but allows `.env.example`.

@@ -30,7 +30,11 @@ Small, self-contained work that closes a concrete gap.
   rows* under a new version. Today an old ciphertext stays wrapped under the version it was
   written with until that record is next updated, so an operator must keep the retired key line
   in place indefinitely. A "re-encrypt all secrets" action (walking the `SECRET_COLUMNS`
-  registry) would let a rotation actually retire an old key version.
+  registry) would let a rotation actually retire an old key version. The same gap now also shows up
+  when a deployment that auto-generated its key later adopts a Docker secret: the documented move is
+  to carry the generated key forward as its own version (Scrye refuses to start if it isn't, rather
+  than orphan whatever was written under it), and only this action would let that version be dropped
+  afterwards.
 
   The same action also finishes the **row-bound AAD** migration. Row binding itself is already
   implemented — `secret_store.py`'s `row_aad()` composes `<table>.<column>:<row-id>` and
