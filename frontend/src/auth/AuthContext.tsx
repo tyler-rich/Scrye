@@ -27,6 +27,13 @@ interface AuthState {
   needsSetup: boolean;
   user: UserInfo | null;
   oidc: OidcStatus;
+  /**
+   * HTTPS enforcement is on but this page is on plain HTTP, so the browser will
+   * discard the `Secure` session cookie and no sign-in can complete. Surfaced on
+   * the login/setup screens so the operator sees a transport problem instead of
+   * what looks like a rejected password (see `InsecureTransportAlert`).
+   */
+  insecureTransport: boolean;
 }
 
 interface AuthContextValue extends AuthState {
@@ -48,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     needsSetup: false,
     user: null,
     oidc: DEFAULT_OIDC,
+    insecureTransport: false,
   });
 
   // Session-lifecycle invariant (P3-4): once the session has been invalidated —
@@ -97,11 +105,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         needsSetup: status.needs_setup,
         user: invalidated ? null : status.user,
         oidc: status.oidc,
+        insecureTransport: status.https_enforced && !status.transport_secure,
       });
     } catch {
       if (!refreshGuard.current.isCurrent(token)) return;
       // Backend unreachable: treat as logged out; the dashboard shows health.
-      setState({ loading: false, needsSetup: false, user: null, oidc: DEFAULT_OIDC });
+      setState({
+        loading: false,
+        needsSetup: false,
+        user: null,
+        oidc: DEFAULT_OIDC,
+        insecureTransport: false,
+      });
     }
   }, []);
 

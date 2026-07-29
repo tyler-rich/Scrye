@@ -52,12 +52,23 @@ class OidcStatusOut(BaseModel):
 
 
 class AuthStatusOut(BaseModel):
-    """Public bootstrap/auth state used by the SPA on load."""
+    """Public bootstrap/auth state used by the SPA on load.
+
+    ``https_enforced`` + ``transport_secure`` let the login and setup screens warn
+    that sign-in is impossible on this origin *before* the user types anything.
+    Both describe the transport only — never a credential — so the pair is safe to
+    expose unauthenticated.
+    """
 
     needs_setup: bool
     authenticated: bool
     user: UserOut | None
     oidc: OidcStatusOut
+    #: Session cookies are marked ``Secure``: sign-in requires HTTPS.
+    https_enforced: bool = True
+    #: This request reached Scrye over HTTPS (directly, or via a trusted proxy's
+    #: ``X-Forwarded-Proto``).
+    transport_secure: bool = True
 
 
 class LoginOut(BaseModel):

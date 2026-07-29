@@ -47,6 +47,8 @@ const AUTHENTICATED_STATUS: AuthStatus = {
   authenticated: true,
   user: USER,
   oidc: { enabled: false, display_name: 'OIDC' },
+  https_enforced: true,
+  transport_secure: true,
 };
 
 /** What the backend answers for a request made before the credential existed. */
@@ -55,6 +57,8 @@ const ANONYMOUS_STATUS: AuthStatus = {
   authenticated: false,
   user: null,
   oidc: { enabled: false, display_name: 'OIDC' },
+  https_enforced: true,
+  transport_secure: true,
 };
 
 const LOGIN_RESULT: LoginResponse = {

@@ -23,6 +23,8 @@ from typing import Annotated
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from app.core.forwarded import TrustedProxies, parse_trusted_proxies
+
 
 class Settings(BaseSettings):
     """Typed application settings, loaded from environment variables / ``.env``.
@@ -66,9 +68,11 @@ class Settings(BaseSettings):
         description=(
             "REQUIRED per-deployment: the IP/CIDR your reverse proxy actually "
             "connects to Scrye from (uvicorn --forwarded-allow-ips, consumed by "
-            "docker/entrypoint.sh). Only X-Forwarded-For from these addresses is "
-            "trusted, so the real client IP drives the auth rate limiter and audit "
-            "log. Works with any proxy that sets X-Forwarded-For (Caddy, nginx, "
+            "docker/entrypoint.sh). Only X-Forwarded-For and X-Forwarded-Proto "
+            "from these addresses are trusted, so the real client IP drives the "
+            "auth rate limiter and audit log, and a TLS-terminating proxy's "
+            "X-Forwarded-Proto: https satisfies the HTTPS check that guards the "
+            "Secure session cookie. Works with any proxy that sets them (Caddy, nginx, "
             "Traefik, ...) — the logic is proxy-agnostic; only this value is "
             "deployment-specific. The default 172.16.0.0/12 assumes Caddy as a "
             "Docker container on the default bridge network; set it to your proxy's "
@@ -137,8 +141,18 @@ class Settings(BaseSettings):
     session_cookie_secure: bool = Field(
         default=True,
         description=(
-            "Set the Secure flag on session cookies. Keep true in production "
-            "(behind TLS-terminating Caddy); set false only for plain-HTTP local dev."
+            "HTTPS enforcement for sign-in: set the Secure flag on the session and "
+            "CSRF cookies. Browsers refuse to store a Secure cookie on an http:// "
+            "page, so with this true a login over PLAIN HTTP cannot take effect - "
+            "the credentials are accepted and every following request still looks "
+            "unauthenticated. Scrye therefore refuses such a sign-in outright and "
+            "says so, rather than appearing to work. Keep true in production. "
+            "Behind a TLS-terminating reverse proxy keep it true as well: have the "
+            "proxy send X-Forwarded-Proto: https and point "
+            "SCRYE_FORWARDED_ALLOW_IPS at the proxy. Set false ONLY to opt out "
+            "deliberately on a plain-HTTP LAN/evaluation deployment - the session "
+            "cookie then travels in cleartext and anyone on the network path can "
+            "steal it."
         ),
     )
     auth_rate_limit_attempts: int = Field(
@@ -267,6 +281,16 @@ class Settings(BaseSettings):
         to auto-generate around it — see :func:`app.core.crypto.resolve_master_keys`.
         """
         return "app_secret_key_file" in self.model_fields_set
+
+    @property
+    def trusted_proxies(self) -> TrustedProxies:
+        """Return :attr:`forwarded_allow_ips` parsed into a trust boundary.
+
+        The same value uvicorn is given for ``--forwarded-allow-ips``; the app
+        re-parses it so ``X-Forwarded-Proto`` is honoured from exactly the peers
+        the operator named, and from nobody else (see :mod:`app.core.forwarded`).
+        """
+        return parse_trusted_proxies(self.forwarded_allow_ips)
 
     @property
     def database_url(self) -> str:

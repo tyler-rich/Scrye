@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (110, newest first)
+### Index of §14 entries (111, newest first)
 
+- [2026-07-29 — Post-v1 — HTTPS enforcement made legible; `X-Forwarded-Proto` honored from configured proxies only](#2026-07-29--post-v1--https-enforcement-made-legible-x-forwarded-proto-honored-from-configured-proxies-only)
 - [2026-07-29 — Post-v1 — Master-key source surfaced on the About tab (the durable channel chosen over a per-boot log line)](#2026-07-29--post-v1--master-key-source-surfaced-on-the-about-tab-the-durable-channel-chosen-over-a-per-boot-log-line)
 - [2026-07-29 — Post-v1 — Master key auto-generated on first launch; the Docker secret keeps its precedence](#2026-07-29--post-v1--master-key-auto-generated-on-first-launch-the-docker-secret-keeps-its-precedence)
 - [2026-07-28 — Post-v1 — Compose `deploy:` keys retired for NAS portability; memory limits made portable, CPU limits moved to an opt-in overlay](#2026-07-28--post-v1--compose-deploy-keys-retired-for-nas-portability-memory-limits-made-portable-cpu-limits-moved-to-an-opt-in-overlay)
@@ -693,6 +694,96 @@ entry, and the anchors jump straight to it.
 
 ---
 
+
+### 2026-07-29 — Post-v1 — HTTPS enforcement made legible; `X-Forwarded-Proto` honored from configured proxies only
+
+**What changed:** A real onboarding failure: a user deployed over plain HTTP and got 401s with valid
+credentials, with nothing in the logs or the UI explaining why. The app was behaving correctly — the
+session cookie is `Secure`, and a browser silently discards a `Secure` cookie set on an `http://`
+page, so the login response was a `200` whose cookie never landed and every request after it was
+unauthenticated. Nothing observable said so from either end. **The cookie posture is unchanged; the
+failure is now legible**, in five parts:
+
+- **Startup line** (`app.main.log_https_enforcement`). One INFO line states that HTTPS enforcement
+  is ON, that **logins over plain HTTP will fail**, which peers forwarded headers are trusted from,
+  and the exact opt-out — variable *and* value (`SCRYE_SESSION_COOKIE_SECURE=false`). With
+  enforcement off it is a WARNING that session cookies now travel in cleartext. `*` in
+  `SCRYE_FORWARDED_ALLOW_IPS`, unparseable entries, and an empty value each get their own warning.
+- **Refusal at every session-minting path** rather than a session the browser will throw away.
+  `POST /auth/login`, `/auth/setup`, `/auth/mfa/verify`, and the OIDC login start now check
+  `session_cookie_would_be_dropped()` and return **503** with a transport-specific `detail` (OIDC
+  redirects with `oidc_error=insecure_transport`). Setup is refused **before** the admin is created:
+  creating it and then failing to log in would leave bootstrap permanently 409ing with nobody able
+  to sign in.
+- **A distinct log and audit path.** `app.api.auth._refuse_insecure_transport` logs at ERROR and, on
+  the password-login flow, states which way the credentials came out — a valid-credential rejection
+  says `THE SUBMITTED CREDENTIALS WERE VALID` and `This is NOT a bad-password rejection`. A new
+  audit action `auth.login_blocked_insecure_transport` carries `{flow, scheme, credentials_valid}`.
+  Bad credentials on this path still also record `auth.login_failed`, so failed-login accounting is
+  not lost.
+- **A login/setup banner** (`InsecureTransportAlert`), driven by two new **transport-only** fields on
+  `GET /auth/status` — `https_enforced` and `transport_secure`. It states that this is an HTTPS
+  configuration issue and not wrong credentials, and names all three remedies.
+- **`X-Forwarded-Proto` support** (`app/core/forwarded.py`): a new `ForwardedProtoMiddleware` plus a
+  `TrustedProxies` parser, wired as the outermost middleware in `create_app` and fed from a new
+  `Settings.trusted_proxies` property.
+
+**Non-disclosure (deliberate design, not incidental).** The credential check still runs on
+`/auth/login` before the refusal — that is what lets the log distinguish a valid from an invalid
+login — but the **client-visible** result is byte-identical for valid, invalid, and unknown accounts:
+same status, same `detail`, and the same work performed, since `service.authenticate` already burns
+an argon2 verification for an unknown user. The banner is rendered from `/auth/status` before
+anything is submitted, so it cannot reflect credential state either. Only the server-side log and the
+admin-only audit log carry the distinction. `tests/test_https_enforcement.py` asserts the identical-
+response property directly.
+
+**Why auto-detection was rejected.** The obvious "fix" — drop `Secure` when the request looks like
+plain HTTP — is a silent security downgrade: a reverse proxy terminating TLS makes the app see HTTP,
+so auto-detection would strip `Secure` on genuinely-HTTPS deployments, putting the session cookie of
+a correctly-configured production install on the wire in cleartext. `Secure` is therefore never
+dropped from an observed scheme; the scheme is used **only** to detect and explain a sign-in that
+cannot succeed, and turning enforcement off stays an explicit operator decision.
+
+**Trusted-proxy design.** Shape 2 (behind a TLS-terminating proxy) is the case most affected users
+are actually in, and the real fix for them. uvicorn was already started with `--proxy-headers
+--forwarded-allow-ips` by `docker/entrypoint.sh`, so `X-Forwarded-Proto` was in fact honored in the
+shipped image — but only there: it was untested, invisible to the app-level code, absent under
+`TestClient`, and absent in a dev server started without those flags. The new middleware makes it
+explicit and testable, reusing `SCRYE_FORWARDED_ALLOW_IPS` (the boundary the deployment already
+configures for `X-Forwarded-For`) rather than adding a second, divergable setting. Two properties are
+load-bearing:
+
+- **Upgrade-only.** The middleware may change the scheme `http` → `https`, never the reverse. This is
+  what makes it compose with uvicorn's own `ProxyHeadersMiddleware`: uvicorn rewrites
+  `scope["client"]` to the *forwarded client* once it trusts a hop, so by the time this middleware
+  runs the peer is no longer the proxy's address and a downgrade decided from it would be wrong.
+  Real TLS at Scrye's own listener also always wins.
+- **Never blanket.** A peer that is not a parseable IP inside a configured network — including the
+  `"testclient"` placeholder and any hostname — is untrusted, so an arbitrary client cannot claim an
+  HTTPS transport. `*` is accepted for parity with uvicorn's flag (diverging would confuse more than
+  it protects) but draws a loud startup warning; unparseable entries are reported and ignored rather
+  than silently widening or narrowing the boundary.
+
+**Status code.** `503 Service Unavailable`, not `401`: the credentials are not what is being
+rejected, and the whole point is that this must not read as a bad password. `421 Misdirected Request`
+is the closer semantic match for a scheme mismatch but was rejected — browsers give `421` special
+retry handling on HTTP/2 connection coalescing, which would make a refused login retry oddly.
+
+**Tests:** `backend/tests/test_https_enforcement.py` (29 tests) covers cookie attributes under all
+three deployment shapes (direct HTTPS, behind a TLS-terminating proxy, plain HTTP with and without
+the opt-out), the distinct valid- vs. invalid-credential log path and its audit record, the
+identical-response property, `X-Forwarded-Proto` honored only from trusted sources (bare IP, CIDR,
+untrusted peer, non-IP peer, proxy chain, upgrade-only), and the startup log's contents.
+`frontend/src/pages/LoginPage.httpsAlert.test.tsx` covers the banner.
+
+**Why:** The app was working correctly and appeared broken — the worst kind of onboarding failure,
+and one no amount of correct behaviour fixes on its own.
+
+**Plan section affected:** § Hard security rules (additive: the cookie posture and CSRF model are
+unchanged; this adds a refusal + explanation path and an explicitly-bounded forwarded-header trust).
+No schema, data-model, job-model, or locked-decision change. README § Reverse proxy (TLS) gains
+"If you're not using HTTPS"; § Security model, § Configuration, and § Troubleshooting first-run
+issues updated; `.env.example` regenerated from the amended `Settings` descriptions.
 
 ### 2026-07-29 — Post-v1 — Master-key source surfaced on the About tab (the durable channel chosen over a per-boot log line)
 

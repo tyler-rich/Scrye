@@ -48,6 +48,7 @@ single findings model so Trivy and Grype render in one table.
   - [Troubleshooting first-run issues](#troubleshooting-first-run-issues)
 - [Configuration](#configuration)
 - [Reverse proxy (TLS)](#reverse-proxy-tls)
+  - [If you're not using HTTPS](#if-youre-not-using-https)
 - [Optional sidecars](#optional-sidecars)
 - [Configuring OIDC](#configuring-oidc)
 - [Usage](#usage)
@@ -568,6 +569,17 @@ overlay.
   are present and that `/cache` has ≥ 10 GB free, and that you're on a **current
   image** (`docker pull …:latest`). Do **not** try to fix it by enlarging the
   `/tmp` tmpfs; that trades a disk error for an OOM (tmpfs is RAM-backed).
+- **Sign-in is refused with "Sign-in is unavailable over plain HTTP", or you get
+  401s with credentials you know are correct.** Scrye's session cookie is marked
+  `Secure` by default, and browsers refuse to store a `Secure` cookie on an
+  `http://` page — so the login can't stick. This is a transport problem, not a
+  password problem, and the login screen, the startup log, and an
+  `auth.login_blocked_insecure_transport` audit entry all say so. Either reach
+  Scrye over HTTPS, or make your TLS-terminating proxy send `X-Forwarded-Proto:
+  https` with `SCRYE_FORWARDED_ALLOW_IPS` pointed at it, or — for a deliberate
+  plain-HTTP deployment — set `SCRYE_SESSION_COOKIE_SECURE=false`. Read
+  [If you're not using HTTPS](#if-youre-not-using-https) first: the opt-out puts
+  the session cookie on the wire in cleartext.
 - **Filesystem scans are rejected.** Filesystem (Grype `dir:`) scanning is
   **disabled by default**. An admin must set `SCRYE_FILESYSTEM_SCAN_ROOTS` to one
   or more absolute paths and mount them into the container; targets outside those
@@ -597,8 +609,8 @@ have to touch it:
 | `SCRYE_APP_SECRET_KEY_FILE` | `/run/secrets/app_secret_key` | Optional | Path to the Docker secret file holding the **master key**, and the highest-precedence key source. **If you set this, the file must exist there** — Scrye refuses to start rather than generate a different key. Leave it unset to use the auto-generated key below. |
 | `SCRYE_APP_SECRET_KEY_AUTOGENERATE` | `true` | Optional | Generate a master key on first launch when no key file exists at either path. An existing key file is always reused, never overwritten. Set `false` to require an operator-supplied key. |
 | `SCRYE_APP_SECRET_KEY_AUTOGEN_FILE` | `/data/app_secret_key` | Optional | Where the auto-generated key is written (mode `0600`) and read back from. Must be on a **persistent** volume. |
-| `SCRYE_FORWARDED_ALLOW_IPS` | `172.16.0.0/12` | **Required** *(behind a proxy)* | IP/CIDR your reverse proxy connects **from** — the trust boundary for `X-Forwarded-For`. Set it to match your topology (see [Reverse proxy](#reverse-proxy-tls)). Never `*`. Irrelevant only if nothing fronts Scrye. |
-| `SCRYE_SESSION_COOKIE_SECURE` | `true` | **Conditional** | Set `false` **only** for plain-HTTP local dev; keep `true` in production (behind TLS). |
+| `SCRYE_FORWARDED_ALLOW_IPS` | `172.16.0.0/12` | **Required** *(behind a proxy)* | IP/CIDR your reverse proxy connects **from** — the trust boundary for `X-Forwarded-For` **and `X-Forwarded-Proto`** (the latter is what tells Scrye a TLS-terminating proxy's client is on HTTPS). Set it to match your topology (see [Reverse proxy](#reverse-proxy-tls)). Never `*`. Irrelevant only if nothing fronts Scrye. |
+| `SCRYE_SESSION_COOKIE_SECURE` | `true` | **Conditional** | **HTTPS enforcement for sign-in.** Marks the session/CSRF cookies `Secure`, which browsers store only on `https://` pages — so with this `true`, **login over plain HTTP cannot work** and Scrye refuses it explicitly. Keep `true` in production, including behind a TLS-terminating proxy. Set `false` **only** to opt out deliberately on a plain-HTTP LAN/evaluation deployment. See [If you're not using HTTPS](#if-youre-not-using-https). |
 | `SCRYE_CORS_ORIGINS` | _(empty)_ | **Conditional** | Comma-separated origins for a **split dev frontend** (e.g. `http://localhost:5173`). Empty for the normal same-origin SPA. |
 | `SCRYE_TRIVY_SERVER_URL` | _(unset)_ | **Conditional** | Only when the [`trivy-server` sidecar](#optional-sidecars) is enabled (e.g. `http://trivy-server:4954`). |
 | `SCRYE_DOCKER_PROXY_URL` | _(unset)_ | **Conditional** | Only for ["scan running images"](#optional-sidecars) via the read-only docker-socket-proxy (e.g. `http://docker-socket-proxy:2375`). |
@@ -765,11 +777,20 @@ Any proxy that sets `X-Forwarded-For` works — the client-IP logic is
 proxy-agnostic.
 
 **One setting is required:** `SCRYE_FORWARDED_ALLOW_IPS` must be the IP/CIDR the
-proxy connects to Scrye **from**, so Scrye trusts the forwarded client IP (used
-by the auth rate limiter and audit log). If it doesn't match, Scrye **fails safe**
-— it ignores `X-Forwarded-For` and uses the raw peer IP (no spoofing, but
-per-client rate-limiting/audit IPs won't apply until you set it right). **Never
-set it to `*`.** See [Security model](#security-model) for the full rationale.
+proxy connects to Scrye **from**, so Scrye trusts that proxy's `X-Forwarded-For`
+(the client IP used by the auth rate limiter and audit log) **and** its
+`X-Forwarded-Proto` (which tells Scrye the client is really on HTTPS even though
+Scrye itself sees HTTP — see [If you're not using HTTPS](#if-youre-not-using-https)).
+Both headers are honoured **only** from the addresses you list here; from anyone
+else they are ignored, so no client can forge its source IP or claim an HTTPS
+transport. If the value doesn't match your proxy, Scrye **fails safe** — it
+ignores both headers and uses the raw peer IP and the real (plain-HTTP) scheme.
+**Never set it to `*`.** See [Security model](#security-model) for the full
+rationale.
+
+Make sure your proxy actually sends `X-Forwarded-Proto`. Caddy and Traefik do by
+default; for nginx, the `proxy_set_header X-Forwarded-Proto $scheme;` line in the
+example below is required, not optional.
 
 There are two common topologies:
 
@@ -837,9 +858,77 @@ labels:
   - "traefik.http.services.scrye.loadbalancer.server.port=8089"
 ```
 
-Traefik forwards `X-Forwarded-For` by default. Set `SCRYE_FORWARDED_ALLOW_IPS`
-to Traefik's Docker network subnet (e.g. `10.89.0.0/24`) or its exact container
-IP.
+Traefik forwards `X-Forwarded-For` and `X-Forwarded-Proto` by default. Set
+`SCRYE_FORWARDED_ALLOW_IPS` to Traefik's Docker network subnet (e.g.
+`10.89.0.0/24`) or its exact container IP.
+
+### If you're not using HTTPS
+
+By default Scrye marks its session and CSRF cookies **`Secure`**. Browsers store
+a `Secure` cookie only on an `https://` page, so **over plain HTTP a login can
+never take effect**: the credentials are accepted, the cookie is silently
+discarded by the browser, and every request after that is unauthenticated. What
+you see is repeated **401s with a password you know is correct**.
+
+Scrye does not let that happen quietly. It refuses such a sign-in outright with
+an explicit message on the login screen, logs the reason at `ERROR` — including
+whether the credentials were valid — and records a distinct
+`auth.login_blocked_insecure_transport` audit entry. It also states the situation
+at startup:
+
+```text
+HTTPS enforcement is ON (SCRYE_SESSION_COOKIE_SECURE=true): ... LOGINS OVER
+PLAIN HTTP WILL FAIL ... If this deployment is intentionally plain HTTP (LAN or
+evaluation), opt out with SCRYE_SESSION_COOKIE_SECURE=false and restart.
+```
+
+There are three shapes you can be in.
+
+**1. Scrye is reached over HTTPS directly.** Nothing to do.
+
+**2. A reverse proxy terminates TLS** (the normal production setup, and the case
+most people who hit this are actually in). Scrye's own listener speaks plain HTTP
+here, so it cannot see that the *client* is on HTTPS — the proxy has to tell it.
+Keep `SCRYE_SESSION_COOKIE_SECURE=true` and:
+
+- have the proxy send **`X-Forwarded-Proto: https`** (Caddy and Traefik do this
+  by default; for nginx add `proxy_set_header X-Forwarded-Proto $scheme;`), and
+- set **`SCRYE_FORWARDED_ALLOW_IPS`** to the address the proxy connects from.
+
+Both are needed. The header is honoured **only** from the addresses listed in
+`SCRYE_FORWARDED_ALLOW_IPS` — never from an arbitrary client, which could
+otherwise just claim HTTPS — so if that setting is wrong or unset, a correctly
+configured HTTPS deployment still looks like plain HTTP to Scrye and sign-in is
+refused. The scheme is only ever *upgraded* by the header, never downgraded: real
+TLS at Scrye's own listener always wins.
+
+**3. Plain HTTP on purpose** (a trusted LAN, or a quick evaluation). This
+requires an explicit opt-out — Scrye will not guess:
+
+```yaml
+environment:
+  SCRYE_SESSION_COOKIE_SECURE: "false"
+```
+
+Restart the container after changing it.
+
+> **Security caveat — read before setting this.** With `Secure` off, the session
+> cookie is transmitted **in cleartext on every request**. Anyone able to observe
+> the network path — another host on the LAN, a compromised switch or Wi-Fi AP, a
+> router in between — can copy it and use it to act as that user, including an
+> admin, for the cookie's full lifetime (`SCRYE_SESSION_LIFETIME_HOURS`, 7 days by
+> default). An active attacker can also inject content over plain HTTP to steal
+> it. No password is needed for any of that, and MFA does not help — the stolen
+> cookie is already past authentication. Scrye scans for vulnerabilities and its
+> database holds registry credentials and git tokens, so treat this as a
+> deliberate, temporary trade-off on a network you control — not a default to
+> leave in place. Everything else about the cookies is unchanged: they stay
+> `HttpOnly` and `SameSite=Lax`, and CSRF protection still applies.
+
+Scrye **never** drops `Secure` automatically based on the scheme it happens to
+observe. That would look convenient and would silently downgrade every deployment
+in shape 2 — where the app legitimately sees HTTP while the user is on HTTPS — so
+turning it off is always the operator's explicit decision.
 
 ---
 
@@ -1037,6 +1126,18 @@ only in memory at scan time.
   hash, scoped to a role no higher than their owner's. Cookie sessions require a
   CSRF token (`X-CSRF-Token`) on every state-changing request; bearer tokens are
   CSRF-exempt (not sent cross-site). Auth endpoints are rate-limited per client IP.
+- **HTTPS enforcement on sign-in.** Session cookies are `HttpOnly`,
+  `SameSite=Lax`, and `Secure` by default. Because a browser silently discards a
+  `Secure` cookie on an `http://` page, Scrye **refuses** a sign-in it can see
+  would not stick, rather than returning a success the browser throws away: the
+  login screen explains it as a transport problem, the log says explicitly whether
+  the credentials were valid, and a distinct
+  `auth.login_blocked_insecure_transport` audit entry is recorded. The refusal
+  itself — status, message, and timing — is identical for valid, invalid, and
+  unknown accounts, so it reveals nothing about credentials. `Secure` is **never**
+  dropped automatically from an observed scheme (that would downgrade every
+  deployment behind a TLS-terminating proxy); turning it off is an explicit
+  operator decision. See [If you're not using HTTPS](#if-youre-not-using-https).
 - **Write-only secret API + log redaction.** Secret fields accept values on write
   and return a mask + timestamp on read. A logging filter redacts secret fields,
   bearer/basic tokens, and URL userinfo across messages and tracebacks (and is
@@ -1120,6 +1221,13 @@ only in memory at scan time.
   don't take effect until you set it correctly. **Never set it to `*`** and never
   include the client LAN range — that trusts every hop and re-opens the spoofing
   hole. See [Reverse proxy](#reverse-proxy-tls) for per-topology values.
+
+  The same boundary governs **`X-Forwarded-Proto`**, which is how a
+  TLS-terminating proxy tells Scrye the client is on HTTPS even though Scrye's own
+  listener sees HTTP. It is honored only from these peers — an arbitrary client
+  cannot claim an HTTPS transport to satisfy the sign-in check — and it only ever
+  *upgrades* the observed scheme `http` → `https`, never downgrades it, so real
+  TLS at Scrye's listener always wins.
 - **MFA scope for OIDC (accepted limitation).** The mandatory-MFA policy
   (`required_all` / `required_admin`) is enforced on **local** password login.
   OIDC logins delegate the second factor to the identity provider — Scrye has no

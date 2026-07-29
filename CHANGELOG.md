@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A plain-HTTP deployment now explains itself instead of looking broken.**
+  Scrye marks its session cookie `Secure`, and browsers refuse to store a `Secure`
+  cookie on an `http://` page — so deploying over plain HTTP produced repeated
+  401s with correct credentials, with nothing in the logs or the UI to say why.
+  Nothing about the cookie posture changes; the failure is now legible:
+
+  - **Startup** logs whether HTTPS enforcement is on and, when it is, that logins
+    over plain HTTP will fail unless the operator opts out — naming
+    `SCRYE_SESSION_COOKIE_SECURE=false` explicitly. With it off, a warning states
+    that session cookies now travel in cleartext.
+  - **Sign-in** (password login, first-admin setup, MFA verification and the OIDC
+    handshake) is **refused** with `503` and a transport-specific message rather
+    than returning a session the browser will discard. The log says plainly
+    whether the submitted credentials were valid — a valid-credential rejection
+    for this reason never reads as a bad-password 401 — and a distinct
+    `auth.login_blocked_insecure_transport` audit entry is recorded. The
+    client-visible refusal is byte-identical for valid, invalid, and unknown
+    accounts, so it discloses nothing. First-admin setup is refused **before** the
+    account is created, so bootstrap stays re-runnable.
+  - **The login and setup screens** show a banner explaining that this is an HTTPS
+    configuration issue and not wrong credentials, with the three fixes. It is
+    driven by `/auth/status` and appears before anything is typed, so it never
+    reflects credential state.
+
+- **`X-Forwarded-Proto` is honored from configured reverse proxies.** A
+  TLS-terminating proxy can now tell Scrye the client is on HTTPS even though
+  Scrye's own listener sees plain HTTP, so shape-2 deployments satisfy the
+  sign-in check. Trust is limited to the peers already named in
+  `SCRYE_FORWARDED_ALLOW_IPS` (never blanket), and the header can only *upgrade*
+  the scheme `http` → `https`, never downgrade it. Scrye still **never** drops
+  `Secure` from an auto-detected scheme: that would silently downgrade every
+  deployment behind a TLS-terminating proxy. See README
+  § "If you're not using HTTPS".
+
 - **Settings → About now shows which master key the instance is using.** Admins
   see the source and the path — "auto-generated at `/data/app_secret_key` — back
   this up; a Docker secret gives stronger at-rest separation", or "supplied as a

@@ -15,13 +15,14 @@ import { IconAlertCircle } from '@tabler/icons-react';
 
 import { ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { InsecureTransportAlert } from '../components/InsecureTransportAlert';
 
 const USERNAME_RE = /^[a-zA-Z0-9._-]{3,64}$/;
 const PASSWORD_MIN = 12;
 
 /** First-run bootstrap: create the initial admin account. */
 export function SetupPage() {
-  const { setup } = useAuth();
+  const { setup, insecureTransport } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -50,7 +51,7 @@ export function SetupPage() {
 
   return (
     <Center mih="100vh" p="md">
-      <Paper withBorder radius="md" p="xl" w={420}>
+      <Paper withBorder radius="md" p="xl" w={insecureTransport ? 480 : 420}>
         <form onSubmit={submit}>
           <Stack gap="md">
             <div>
@@ -62,6 +63,7 @@ export function SetupPage() {
                 accounts exist.
               </Text>
             </div>
+            {insecureTransport && <InsecureTransportAlert />}
             {error && (
               <Alert color="red" icon={<IconAlertCircle size={16} />} variant="light">
                 {error}

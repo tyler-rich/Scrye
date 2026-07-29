@@ -51,7 +51,9 @@ pip install -e ".[dev]"
 export SCRYE_DATABASE_PATH="$PWD/scrye.dev.db"
 export SCRYE_ENVIRONMENT=development
 export SCRYE_CORS_ORIGINS=http://localhost:5173
-# Local dev runs over plain HTTP, so cookies can't carry the Secure flag:
+# Local dev runs over plain HTTP. Cookies can't carry the Secure flag there —
+# browsers discard a Secure cookie on an http:// page — so the app refuses to
+# sign you in until you opt out of HTTPS enforcement explicitly:
 export SCRYE_SESSION_COOKIE_SECURE=false
 
 # Apply migrations
