@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app import __version__
 from app.core import system_info
 from app.core.config import get_settings
 from app.core.crypto import MasterKeyError, reset_secret_cipher
@@ -100,7 +101,10 @@ class TestAbout:
     def test_about_reports_version_and_counts(self, client: TestClient) -> None:
         setup_admin(client)
         body = client.get("/api/settings/about").json()
-        assert body["version"]
+        # The About tab's "Version" stat is this field, so it must be the real
+        # package version and not merely non-empty — a stale literal here is
+        # what lets the UI keep advertising the previous release.
+        assert body["version"] == __version__
         assert body["user_count"] == 1
         assert body["oidc_enabled"] is False
         assert isinstance(body["scanners"], list) and len(body["scanners"]) == 3

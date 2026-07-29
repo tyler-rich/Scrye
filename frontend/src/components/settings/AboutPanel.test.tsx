@@ -14,7 +14,7 @@ const mockedGetAbout = vi.mocked(getAbout);
 
 const BASE_ABOUT: AboutInfo = {
   app_name: 'Scrye',
-  version: '0.1.0',
+  version: '0.2.0',
   status: 'healthy',
   database: 'ok',
   python_version: '3.14.6',
@@ -36,6 +36,25 @@ async function renderLoaded(about: AboutInfo) {
   renderWithProviders(<AboutPanel />);
   await waitFor(() => expect(screen.getByText('Scanners')).toBeInTheDocument());
 }
+
+describe('AboutPanel — version stat', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders the version the API reports', async () => {
+    // The number itself is the backend's (`app.__version__`, kept in step with
+    // pyproject/package.json by backend/tests/test_version.py). What this pins
+    // is the wiring: the tab shows the served value, not a frontend literal
+    // that can drift a release behind.
+    await renderLoaded(BASE_ABOUT);
+
+    // Bound to its own stat card: the Scanners table has a "Version" column
+    // header too, so the label alone does not identify the app-version stat.
+    const value = screen.getByText('0.2.0');
+    expect(value.previousElementSibling).toHaveTextContent('Version');
+  });
+});
 
 /**
  * The master-key row is the only conditional logic on this tab, and inverting it

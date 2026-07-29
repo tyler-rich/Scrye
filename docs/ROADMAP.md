@@ -138,6 +138,17 @@ Features and developer-experience investments with a larger surface.
 - **Generated API client.** The frontend API layer is a thin, hand-written `fetch` wrapper
   (`frontend/src/api/*`). Generating a typed client from the FastAPI OpenAPI schema (e.g.
   openapi-typescript) over that wrapper would keep the client and server contracts in lockstep.
+- **Single-source the version string.** The app version is declared independently in
+  `backend/app/__init__.py`, `backend/pyproject.toml` and `frontend/package.json` (+ the
+  lockfile's root fields), and nothing derives one from another or from the git tag — so a
+  release has to touch several files in lockstep. `backend/tests/test_version.py` now fails on
+  drift, which makes the duplication safe but not gone. Collapse it to `app.__version__` as the
+  single source: `pyproject.toml` can pick it up via setuptools' dynamic version
+  (`dynamic = ["version"]` + `[tool.setuptools.dynamic] version = {attr = "app.__version__"}`),
+  and `frontend/package.json`'s copy — which is never bundled and never published (`private:
+  true`), since the SPA reads the version from the About/health API at runtime — can be dropped
+  to a fixed placeholder. Wants its own PR and CI run rather than riding on a release bump; see
+  `docs/ARCHIVE.md` § Deviations, 2026-07-29.
 - **Type-checking in CI.** Add a Python type checker (mypy or pyright) to the CI gate. This
   first needs the existing annotation gaps resolved so the gate lands green rather than red.
 - **Backend structural cleanup.** The four near-identical secret-CRUD routers (registries, git

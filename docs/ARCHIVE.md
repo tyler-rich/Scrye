@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (111, newest first)
+### Index of §14 entries (112, newest first)
 
+- [2026-07-29 — Post-v1 — App version bumped 0.1.0 → 0.2.0; the three independent declarations put under a drift guard](#2026-07-29--post-v1--app-version-bumped-010--020-the-three-independent-declarations-put-under-a-drift-guard)
 - [2026-07-29 — Post-v1 — HTTPS enforcement made legible; `X-Forwarded-Proto` honored from configured proxies only](#2026-07-29--post-v1--https-enforcement-made-legible-x-forwarded-proto-honored-from-configured-proxies-only)
 - [2026-07-29 — Post-v1 — Master-key source surfaced on the About tab (the durable channel chosen over a per-boot log line)](#2026-07-29--post-v1--master-key-source-surfaced-on-the-about-tab-the-durable-channel-chosen-over-a-per-boot-log-line)
 - [2026-07-29 — Post-v1 — Master key auto-generated on first launch; the Docker secret keeps its precedence](#2026-07-29--post-v1--master-key-auto-generated-on-first-launch-the-docker-secret-keeps-its-precedence)
@@ -694,6 +695,67 @@ entry, and the anchors jump straight to it.
 
 ---
 
+
+### 2026-07-29 — Post-v1 — App version bumped 0.1.0 → 0.2.0; the three independent declarations put under a drift guard
+
+**What changed:** ahead of tagging `v0.2.0`, the app version moved `0.1.0` → `0.2.0` in the three
+places that declare it — `backend/app/__init__.py` (`__version__`), `backend/pyproject.toml`, and
+`frontend/package.json` (plus `package-lock.json`'s two root `version` fields, written by
+`npm version --no-git-tag-version`). Four documentation/Compose references to the example image tag
+`scrye:0.1.0` and the `/healthz` sample output were updated alongside them
+(`docker/docker-compose.yml`, `docker/Dockerfile`'s build-command comment, `README.md` ×3).
+
+New tests pin this so the next release cannot half-land:
+
+- `backend/tests/test_version.py` (new) asserts `pyproject.toml`, `frontend/package.json` and
+  `package-lock.json` all agree with `app.__version__`. Verified non-vacuous: reverting
+  `pyproject.toml` to `0.1.0` fails the suite.
+- `tests/test_settings_api.py::TestAbout::test_about_reports_version_and_counts` was asserting only
+  that `body["version"]` was **truthy**. It now asserts `== __version__`, which is the property the
+  About tab actually depends on.
+- `frontend/src/components/settings/AboutPanel.test.tsx` gained a version-stat test binding the
+  rendered value to its own card (`previousElementSibling` is the `Version` label) — the Scanners
+  table has a `Version` column header, so the label alone does not identify the stat.
+
+**Why:** the three declarations are **independent hardcoded literals** — nothing derives one from
+another, and nothing derives any of them from the git tag. `publish.yml` computes the *image* tag
+from the pushed ref (`${GITHUB_REF_NAME#v}`) but never stamps a version into the image: no
+`--build-arg`, no `LABEL org.opencontainers.image.version`. So tagging `v0.2.0` would have published
+`ghcr.io/tyler-rich/scrye:0.2.0` running an app that reported `0.1.0` on the About tab, `/healthz`,
+the OpenAPI document, every backup bundle's `app_version`, and the `scrye_build_info` metric. That
+is the exact drift this bump closes, and the drift guard is what stops it recurring silently.
+
+Only `backend/app/__init__.py` is load-bearing at runtime — `pyproject.toml`'s is packaging metadata
+and `frontend/package.json`'s is never bundled (no `define` in `vite.config.ts`, no import of it in
+`src/`). They are still bumped together because a lockstep set with a test is honest, whereas two
+stale copies are a trap for whoever greps for the version next.
+
+**Deliberately not changed.** Historical `0.1.0` references in `CHANGELOG.md` (the `## [0.1.0]`
+release section and its compare/tag links) and in this file's own prior entries are **release
+history**, not the current version, and rewriting them would falsify the record. The backup-record
+fixtures `backend/tests/test_backup.py:317` and
+`frontend/src/components/settings/BackupsPanel.test.tsx:47` carry `app_version: '0.1.0'` as the
+version stamped on a *previously stored* backup — arbitrary historical data, and arguably more
+realistic left as an older version than the running one. `CHANGELOG.md`'s `## [Unreleased]` heading
+is **not** converted to `## [0.2.0]` here: per `CONTRIBUTING.md` § Releasing that is a tag-time
+maintainer step carrying the release date, and doing it in a pre-tag PR would date the release
+wrongly.
+
+**Recommendation recorded, not implemented (single-sourcing).** The duplication should collapse to
+one source, and that source should be `backend/app/__init__.py` — it is the only copy with runtime
+consumers, it needs no build step to be readable, and it is importable by everything backend-side
+that already uses it. `backend/pyproject.toml` can stop restating it via setuptools' dynamic
+version (`[project] dynamic = ["version"]` +
+`[tool.setuptools.dynamic] version = {attr = "app.__version__"}`), which removes one copy outright.
+`frontend/package.json` cannot read Python, and the SPA already gets the version from the About/
+health API at runtime rather than from the bundle — so the honest options there are to drop the
+field to a fixed placeholder (it is `private: true`, so npm never publishes it and the number is
+decorative) or to leave it and let `test_version.py` keep it honest. Deferred rather than done
+because it is a build-configuration change that wants its own PR and its own green CI run, not a
+rider on a release-prep bump; see `docs/ROADMAP.md`.
+
+**Plan section affected:** §10.1 (README), CLAUDE.md § Definition of done (docs updated),
+`CONTRIBUTING.md` § Releasing (pre-tag checklist).
 
 ### 2026-07-29 — Post-v1 — HTTPS enforcement made legible; `X-Forwarded-Proto` honored from configured proxies only
 

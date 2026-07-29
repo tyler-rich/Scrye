@@ -10,7 +10,7 @@
 #   - Final image runs as a non-root user, COPY (never ADD), no secrets baked in.
 #   - HEALTHCHECK probes /healthz.
 # Build context is the repository root:
-#   docker build -f docker/Dockerfile -t scrye:0.1.0 .
+#   docker build -f docker/Dockerfile -t scrye:0.2.0 .
 # ─────────────────────────────────────────────────────────────────────────────
 
 # --- Stage 1: build the React/Vite SPA ---------------------------------------
