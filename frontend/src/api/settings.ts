@@ -30,6 +30,15 @@ export interface ScannerInfo {
   detail: string | null;
 }
 
+/**
+ * Which master key the instance is using. Never key material — only the source
+ * and the path. Admin-only: the API omits it for other roles.
+ */
+export interface MasterKeyInfo {
+  source: 'auto_generated' | 'secret_file';
+  path: string;
+}
+
 export interface AboutInfo {
   app_name: string;
   version: string;
@@ -41,6 +50,8 @@ export interface AboutInfo {
   scan_count: number;
   oidc_enabled: boolean;
   scanners: ScannerInfo[];
+  /** Admin-only; null for other roles and when no key is resolvable. */
+  master_key: MasterKeyInfo | null;
 }
 
 export const getGeneralSettings = () => api<GeneralSettings>('/api/settings/general');

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Settings → About now shows which master key the instance is using.** Admins
+  see the source and the path — "auto-generated at `/data/app_secret_key` — back
+  this up; a Docker secret gives stronger at-rest separation", or "supplied as a
+  secret file at `<path>`" for a Docker secret. The row carries **no key material**
+  (and no key version), is **admin-only** — the About tab itself is readable by any
+  role, and an admin's role-capped API token doesn't see it either — and is omitted
+  entirely when no key resolves. This is the durable place to find the "back it up"
+  fact months after deploying, which a one-time startup log line is not.
+
 - **The master key is generated automatically on first launch, so a new
   deployment starts with no pre-seeded secret.** Previously the container would
   not start until you had run `openssl rand -base64 48` into
