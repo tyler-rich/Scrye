@@ -28,7 +28,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth import oidc, service
-from app.auth.cookies import set_session_cookies
+from app.auth.cookies import session_cookie_would_be_dropped, set_session_cookies
 from app.auth.deps import AuthContext, client_ip, require_csrf, require_role
 from app.auth.passwords import hash_password
 from app.core.app_settings import MfaPolicy, SettingsService
@@ -219,6 +219,21 @@ def _purge_stale_flows(db: Session) -> None:
 @login_router.get("/login")
 async def oidc_login(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
     """Start the OIDC login: create a flow and redirect to the provider."""
+    if session_cookie_would_be_dropped(request):
+        # Both the flow-binding cookie and the session cookie this handshake ends
+        # in are Secure; over plain HTTP the browser drops them and the round trip
+        # fails at the callback with a misleading "expired" error. Refuse up front.
+        logger.error(
+            "OIDC sign-in refused because HTTPS enforcement cannot be satisfied: this "
+            "request arrived over %s and the flow-binding and session cookies are marked "
+            "Secure, so the browser would discard them. This is NOT an identity-provider "
+            "or credential problem. Serve Scrye over HTTPS, or have your TLS-terminating "
+            "proxy send X-Forwarded-Proto: https with SCRYE_FORWARDED_ALLOW_IPS set to the "
+            "address it connects from, or opt out with SCRYE_SESSION_COOKIE_SECURE=false.",
+            request.url.scheme,
+        )
+        return _fail("insecure_transport")
+
     config = db.get(OidcConfig, OIDC_CONFIG_ID)
     if config is None or not config.enabled or not config.issuer or not config.client_id:
         return _fail("disabled")

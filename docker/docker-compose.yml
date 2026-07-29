@@ -65,6 +65,18 @@ services:
       # Uncomment when the matching sidecar profile is enabled:
       # - SCRYE_TRIVY_SERVER_URL=http://trivy-server:4954
       # - SCRYE_DOCKER_PROXY_URL=http://docker-socket-proxy:2375
+      #
+      # HTTPS enforcement. Session cookies are Secure by default, and a browser
+      # discards a Secure cookie on an http:// page — so over plain HTTP the
+      # sign-in cannot take effect and Scrye refuses it with an explanation
+      # rather than pretending to work. Behind a TLS-terminating reverse proxy
+      # (the normal setup) leave this alone: have the proxy send
+      # "X-Forwarded-Proto: https" and set SCRYE_FORWARDED_ALLOW_IPS to the
+      # address it connects from. Uncomment ONLY for a deliberate plain-HTTP
+      # LAN/evaluation deployment — the session cookie then travels in cleartext
+      # and anyone on the network path can steal it (README "If you're not using
+      # HTTPS"):
+      # - SCRYE_SESSION_COOKIE_SECURE=false
     # secrets:
     #   - app_secret_key
     volumes:

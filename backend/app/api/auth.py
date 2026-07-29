@@ -9,6 +9,9 @@ Security posture (docs/ARCHIVE.md §5):
 - Failure responses never reveal whether a username exists, and unknown-user
   logins burn an argon2 verification so timing doesn't reveal it either.
 - Every security-relevant event lands in the audit log.
+- Every session-minting path first checks that the browser could actually keep
+  the cookie it is about to be sent (HTTPS enforcement); see
+  :func:`_refuse_insecure_transport`.
 """
 
 from __future__ import annotations
@@ -36,11 +39,18 @@ from app.api.schemas import (
     UserOut,
 )
 from app.auth import mfa, service
-from app.auth.cookies import clear_session_cookies, set_session_cookies
+from app.auth.cookies import (
+    HTTPS_REQUIRED_DETAIL,
+    clear_session_cookies,
+    https_enforcement_enabled,
+    session_cookie_would_be_dropped,
+    set_session_cookies,
+)
 from app.auth.deps import AuthContext, client_ip, get_optional_auth, require_auth, require_csrf
 from app.auth.passwords import hash_password, verify_password
 from app.core.app_settings import MfaPolicy, SettingsService
 from app.core.audit import record_audit
+from app.core.forwarded import request_is_secure
 from app.db.models import OIDC_CONFIG_ID, AuthSession, OidcConfig, Role, User
 from app.db.session import get_db
 
@@ -60,6 +70,84 @@ def _enforce_rate_limit(request: Request) -> None:
         )
 
 
+#: Audit action recorded when HTTPS enforcement blocks a sign-in. Deliberately
+#: distinct from ``auth.login_failed`` so an operator reviewing the audit log
+#: sees a configuration problem, not a wave of bad passwords.
+AUDIT_BLOCKED_INSECURE = "auth.login_blocked_insecure_transport"
+
+
+def _refuse_insecure_transport(
+    db: Session,
+    request: Request,
+    *,
+    ip: str,
+    flow: str,
+    user: User | None = None,
+    credentials_valid: bool | None = None,
+) -> None:
+    """Refuse a sign-in whose session cookie the browser would silently discard.
+
+    Called only when :func:`session_cookie_would_be_dropped` is true, i.e. HTTPS
+    enforcement is on and the request did not reach Scrye over HTTPS. Setting the
+    cookies anyway would produce the failure this exists to prevent: a ``200`` on
+    ``/auth/login`` followed by ``401`` on everything after it, with nothing in
+    the logs or the UI to explain it.
+
+    **Logging.** The message is explicit that the transport, not the password, is
+    the reason, and when the credentials were verified it says which way they
+    came out — a valid-credential rejection here must never be mistaken for a
+    bad-password 401. ``credentials_valid`` is ``None`` on flows that mint a
+    session without a password check at this step (first-admin setup).
+
+    **Non-disclosure.** The refusal (status code, ``detail``, timing) is identical
+    whether or not the credentials were right; only the server-side log and audit
+    record — visible to operators, not to the caller — carry that distinction.
+    """
+    scheme = request.url.scheme
+    if credentials_valid is True:
+        logger.error(
+            "Sign-in refused on the %s flow because HTTPS enforcement cannot be satisfied: "
+            "THE SUBMITTED CREDENTIALS WERE VALID, but this request arrived over %s and the "
+            "session cookie is marked Secure, so the browser would discard it and every "
+            "request after the login would look unauthenticated. This is NOT a bad-password "
+            "rejection. Serve Scrye over HTTPS, or have your TLS-terminating proxy send "
+            "X-Forwarded-Proto: https with SCRYE_FORWARDED_ALLOW_IPS set to the address it "
+            "connects from, or opt out deliberately with SCRYE_SESSION_COOKIE_SECURE=false.",
+            flow,
+            scheme,
+        )
+    else:
+        outcome = (
+            "the submitted credentials were also rejected"
+            if credentials_valid is False
+            else "no credential check was reached"
+        )
+        logger.error(
+            "Sign-in refused on the %s flow because HTTPS enforcement cannot be satisfied: "
+            "this request arrived over %s and the session cookie is marked Secure, so the "
+            "browser would discard it (%s). Correct credentials would be refused here too. "
+            "Serve Scrye over HTTPS, or have your TLS-terminating proxy send "
+            "X-Forwarded-Proto: https with SCRYE_FORWARDED_ALLOW_IPS set to the address it "
+            "connects from, or opt out deliberately with SCRYE_SESSION_COOKIE_SECURE=false.",
+            flow,
+            scheme,
+            outcome,
+        )
+
+    record_audit(
+        db,
+        action=AUDIT_BLOCKED_INSECURE,
+        actor=user,
+        ip=ip,
+        details={"flow": flow, "scheme": scheme, "credentials_valid": credentials_valid},
+    )
+    db.commit()
+    raise HTTPException(
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=HTTPS_REQUIRED_DETAIL,
+    )
+
+
 def _complete_login(
     db: Session, user: User, request: Request, response: Response, *, action: str
 ) -> LoginOut:
@@ -76,10 +164,18 @@ def _complete_login(
 
 @router.get("/status", response_model=AuthStatusOut)
 def auth_status(
+    request: Request,
     db: Session = Depends(get_db),
     auth: AuthContext | None = Depends(get_optional_auth),
 ) -> AuthStatusOut:
-    """Report bootstrap and login state for the SPA (public)."""
+    """Report bootstrap and login state for the SPA (public).
+
+    Also reports the transport facts the login/setup screens need to warn *before*
+    a doomed sign-in attempt: whether cookies are ``Secure`` and whether this
+    request reached Scrye over HTTPS. Neither depends on any credential, so this
+    discloses nothing an unauthenticated caller does not already know about its
+    own connection.
+    """
     oidc = db.get(OidcConfig, OIDC_CONFIG_ID)
     return AuthStatusOut(
         needs_setup=service.count_users(db) == 0,
@@ -89,6 +185,8 @@ def auth_status(
             enabled=bool(oidc and oidc.enabled),
             display_name=oidc.display_name if oidc else "OIDC",
         ),
+        https_enforced=https_enforcement_enabled(),
+        transport_secure=request_is_secure(request),
     )
 
 
@@ -102,12 +200,18 @@ def setup_first_admin(
     """Create the first account as ``admin`` and log it in (bootstrap).
 
     Only works while the users table is empty; afterwards it always 409s.
+
+    The HTTPS check runs **before** the account is created, deliberately: creating
+    the admin and then failing to log it in would leave the deployment in the
+    worst possible state — bootstrap permanently 409s, yet nobody can sign in.
     """
     _enforce_rate_limit(request)
+    ip = client_ip(request)
+    if session_cookie_would_be_dropped(request):
+        _refuse_insecure_transport(db, request, ip=ip, flow="first-admin setup")
     if service.count_users(db) > 0:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Setup has already been completed.")
 
-    ip = client_ip(request)
     user = service.create_user(
         db, username=payload.username, password=payload.password, role=Role.ADMIN
     )
@@ -131,6 +235,11 @@ def login(
     When local login is disabled by policy, password auth is refused (OIDC only).
     When the account has MFA enabled, a challenge is returned instead of a
     session and the caller must complete it via ``/auth/mfa/verify``.
+
+    When HTTPS enforcement cannot be satisfied the credentials are still verified
+    first — so the log can state plainly that a *valid* login was refused for a
+    transport reason — but the response is identical either way, and identical to
+    the one an unknown account gets, so it leaks nothing.
     """
     _enforce_rate_limit(request)
     ip = client_ip(request)
@@ -140,7 +249,22 @@ def login(
             status.HTTP_403_FORBIDDEN, detail="Local login is disabled on this instance."
         )
 
+    cookie_dropped = session_cookie_would_be_dropped(request)
     user = service.authenticate(db, payload.username, payload.password)
+    if cookie_dropped:
+        # ``authenticate`` burns an argon2 verification for an unknown account, so
+        # both branches took the same work before reaching this identical refusal.
+        if user is None:
+            record_audit(
+                db,
+                action="auth.login_failed",
+                ip=ip,
+                details={"username": payload.username.lower()},
+            )
+        _refuse_insecure_transport(
+            db, request, ip=ip, flow="password login", user=user, credentials_valid=user is not None
+        )
+
     if user is None:
         record_audit(
             db,
@@ -196,9 +320,16 @@ def verify_mfa(
     Handles both a normal ``verify`` challenge (existing enrolled account) and an
     ``enroll`` challenge (policy-forced first enrollment): the latter activates
     MFA once the code proves the newly-issued secret, then completes the login.
+
+    The HTTPS check runs before the challenge is consumed, so a refusal here does
+    not burn the caller's one-shot MFA token.
     """
     _enforce_rate_limit(request)
     ip = client_ip(request)
+    if session_cookie_would_be_dropped(request):
+        # Unreachable through the UI (``/auth/login`` refuses first and never
+        # issues a challenge), but every session-minting path holds the same line.
+        _refuse_insecure_transport(db, request, ip=ip, flow="MFA verification")
     resolved = request.app.state.pending_mfa.consume(payload.mfa_token)
     if resolved is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="MFA challenge is invalid.")
