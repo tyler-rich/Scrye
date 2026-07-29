@@ -10,6 +10,10 @@ the next time the Compose file is edited.
 The second half of this module guards the ``docker-env`` socket proxy, the only
 container in the stack that mounts ``/var/run/docker.sock``: its request
 allowlist must stay pinned to exactly the one endpoint the app calls.
+
+A third group pins the resource-limit split: memory limits stay inline in
+portable form, CPU limits stay in the opt-in overlay, and no ``deploy:`` key
+comes back to the base file (NAS platforms reject it).
 """
 
 from __future__ import annotations
@@ -22,7 +26,9 @@ import pytest
 
 from app.core.docker_proxy import list_images
 
-COMPOSE = Path(__file__).resolve().parents[2] / "docker" / "docker-compose.yml"
+DOCKER_DIR = Path(__file__).resolve().parents[2] / "docker"
+COMPOSE = DOCKER_DIR / "docker-compose.yml"
+CPU_LIMITS_OVERLAY = DOCKER_DIR / "docker-compose.cpu-limits.yml"
 
 
 def _scrye_tmp_mount() -> str:
@@ -216,6 +222,136 @@ def test_socket_proxy_needs_no_writable_filesystem() -> None:
     assert "/run:size=" not in text, (
         "the socket proxy no longer needs a writable /run tmpfs; a from-scratch "
         "Go binary writes nothing (INF-5 retired)"
+    )
+
+
+# --------------------------------------------------------------------------
+# Resource limits: memory inline and portable, CPU in the opt-in overlay
+#
+# The stack used to cap CPU and memory through `deploy.resources`. Compose v2
+# honours that block standalone, but it is Swarm-oriented and several NAS
+# container platforms (Synology Container Manager, QNAP Container Station)
+# reject or mishandle `deploy:` keys outright, so the base file would not deploy
+# there at all. Memory limits — the ones that bound an OOM blast radius, and that
+# bound the RAM-backed /tmp tmpfs — moved to the portable `mem_limit` /
+# `mem_reservation` keys and stayed on by default; the CPU caps moved to
+# docker-compose.cpu-limits.yml, applied with a second `-f`.
+#
+# These guard both halves of that split: the base file must stay `deploy:`-free
+# and keep its memory caps, and the overlay must keep a CPU cap for every service
+# rather than quietly losing one.
+# --------------------------------------------------------------------------
+
+#: Memory cap every service must carry inline in the base Compose file.
+EXPECTED_MEM_LIMITS = {"scrye": "2g", "trivy-server": "1g", "docker-socket-proxy": "64m"}
+
+#: CPU cap the opt-in overlay must keep for each of those services.
+EXPECTED_CPU_LIMITS = {"scrye": "2.0", "trivy-server": "1.0", "docker-socket-proxy": "0.5"}
+
+
+def _service_blocks(path: Path) -> dict[str, str]:
+    """Split a Compose file's ``services:`` mapping into per-service text blocks.
+
+    Deliberately string-level, like the rest of this module: these tests exist to
+    catch an edit to the checked-in YAML, and a hand-rolled split keeps them free
+    of a YAML parser the backend does not otherwise depend on. Full-line comments
+    are dropped so prose about a limit can't stand in for the limit itself.
+    """
+    blocks: dict[str, list[str]] = {}
+    current: str | None = None
+    in_services = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.rstrip() == "services:":
+            in_services = True
+            continue
+        if not in_services or not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line.startswith(" "):
+            break  # a new top-level key (networks:, volumes:, secrets:) ends services
+        service = re.match(r"^  ([A-Za-z0-9_.-]+):\s*$", line)
+        if service:
+            current = service.group(1)
+            blocks[current] = []
+        elif current is not None:
+            blocks[current].append(line)
+    return {name: "\n".join(body) for name, body in blocks.items()}
+
+
+def _overlay_text() -> str:
+    """Return the CPU-limit overlay's text, failing clearly if it was deleted."""
+    assert CPU_LIMITS_OVERLAY.is_file(), (
+        f"{CPU_LIMITS_OVERLAY.name} is missing. CPU limits were moved into this "
+        "opt-in overlay rather than deleted; removing the file drops the caps"
+    )
+    return CPU_LIMITS_OVERLAY.read_text(encoding="utf-8")
+
+
+def test_base_compose_declares_no_deploy_key() -> None:
+    # `deploy:` in the base file is what breaks deployment on the NAS container
+    # platforms; the whole point of the split is that this file parses anywhere.
+    offenders = [
+        line
+        for line in COMPOSE.read_text(encoding="utf-8").splitlines()
+        if re.match(r"^\s*deploy:\s*$", line)
+    ]
+    assert not offenders, (
+        "docker-compose.yml declares a `deploy:` block again. Swarm-oriented "
+        "`deploy:` keys are rejected or mishandled by Synology Container Manager "
+        "and QNAP Container Station; use `mem_limit`/`mem_reservation` here and "
+        "put CPU caps in docker-compose.cpu-limits.yml"
+    )
+
+
+def test_base_compose_pins_a_portable_memory_limit_for_every_service() -> None:
+    blocks = _service_blocks(COMPOSE)
+    assert set(blocks) == set(EXPECTED_MEM_LIMITS), (
+        "the services in docker-compose.yml no longer match the ones with a pinned "
+        f"memory cap: {sorted(blocks)} vs {sorted(EXPECTED_MEM_LIMITS)}. A new "
+        "service needs a mem_limit (and a cpus entry in the overlay), not an exemption"
+    )
+    for service, expected in EXPECTED_MEM_LIMITS.items():
+        assert f"mem_limit: {expected}" in blocks[service], (
+            f"the {service} service must keep `mem_limit: {expected}`. Memory is the "
+            "containment control that stays on by default — it bounds the OOM blast "
+            "radius, and the RAM-backed /tmp tmpfs counts against it"
+        )
+
+
+def test_scrye_service_keeps_its_memory_reservation() -> None:
+    assert "mem_reservation: 256m" in _service_blocks(COMPOSE)["scrye"], (
+        "the scrye service must keep its memory reservation; it moved out of "
+        "`deploy.resources.reservations` and must not have been dropped on the way"
+    )
+
+
+def test_cpu_limit_overlay_caps_every_service_the_base_file_defines() -> None:
+    _overlay_text()  # fail with the "overlay is missing" message, not a parse error
+    overlay = _service_blocks(CPU_LIMITS_OVERLAY)
+    assert set(overlay) == set(EXPECTED_CPU_LIMITS) == set(_service_blocks(COMPOSE)), (
+        "the CPU overlay and the base Compose file describe different services: "
+        f"{sorted(overlay)} vs {sorted(_service_blocks(COMPOSE))}. Every service "
+        "must be capped, so a service added to one file must be added to both"
+    )
+    for service, expected in EXPECTED_CPU_LIMITS.items():
+        assert (
+            f"cpus: {expected}" in overlay[service]
+        ), f"the {service} entry in {CPU_LIMITS_OVERLAY.name} must keep `cpus: {expected}`"
+
+
+def test_cpu_limit_overlay_uses_the_portable_cpus_key() -> None:
+    # Two reasons this must not become a `deploy.resources.limits.cpus` block:
+    # more Compose implementations accept the bare `cpus:` key, and Compose
+    # *rejects* the merged project outright when an overlay's
+    # `deploy.resources.limits` meets the base file's `mem_limit`
+    # ("can't set distinct values on 'mem_limit' and
+    # 'deploy.resources.limits.memory'"), so the overlay would not apply at all.
+    offenders = [
+        line for line in _overlay_text().splitlines() if re.match(r"^\s*deploy:\s*$", line)
+    ]
+    assert not offenders, (
+        f"{CPU_LIMITS_OVERLAY.name} must express CPU caps with the portable `cpus:` "
+        "key; a `deploy.resources.limits` block collides with the base file's "
+        "`mem_limit` and makes the merged project invalid"
     )
 
 

@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Compose stack no longer uses `deploy:` keys, so it deploys on NAS
+  container platforms.** Synology Container Manager and QNAP Container Station
+  reject or mishandle the Swarm-oriented `deploy:` block, which
+  `docker/docker-compose.yml` used to carry on all three services — the stack
+  simply would not deploy there, even though Compose v2 honours `deploy:`
+  standalone.
+
+  **Memory limits are unchanged in effect and still on by default**, now written
+  with the portable `mem_limit` / `mem_reservation` keys: `scrye` 2g (256m
+  reserved), `trivy-server` 1g, `docker-socket-proxy` 64m. Compose treats these
+  and `deploy.resources.limits.memory` as the same field.
+
+  **CPU limits moved to a new opt-in overlay,
+  `docker/docker-compose.cpu-limits.yml`**, rather than being deleted — the caps
+  (`scrye` 2.0, `trivy-server` 1.0, `docker-socket-proxy` 0.5) are a hardening
+  measure and the 0.5 cap on the socket proxy in particular is deliberate. Apply
+  it with a second `-f`:
+
+  ```bash
+  docker compose -f docker/docker-compose.yml \
+                 -f docker/docker-compose.cpu-limits.yml up -d
+  ```
+
+  **Action required only if you want CPU caps back:** add that second `-f` (on
+  every command for the stack, not just `up`), or set `COMPOSE_FILE` once. A
+  plain `docker compose up` now starts without CPU limits; memory limits apply
+  either way. If you deploy with your own Compose file, the paste-in stack in the
+  README changed the same way. See
+  [Resource limits](README.md#resource-limits-and-nas-platforms).
+
 - **The backend runtime moved from Python 3.13 to Python 3.14.** The image is
   built on `python:3.14-slim-bookworm`, digest-pinned to **3.14.6**. The floor is
   3.14.6 and not lower: 3.14.0–3.14.4 shipped an incremental garbage collector
