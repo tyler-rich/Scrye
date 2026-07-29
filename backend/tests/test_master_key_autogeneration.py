@@ -456,6 +456,62 @@ class TestPermissionVerification:
         key_file.chmod(0o600)
         crypto._verify_key_file_permissions(key_file)  # must not raise
 
+    def test_synthesized_ownership_is_rejected_with_an_actionable_message(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        # A filesystem that reports a foreign owner for a file this process just
+        # created (CIFS/SMB `uid=`, NFS squashing) is faking POSIX ownership, so the
+        # key's 0600 does not actually protect it. On a normal filesystem this can't
+        # happen — a new file always belongs to the creating euid — so the reported
+        # owner is stubbed here.
+        key_file = tmp_path / "app_secret_key"
+        key_file.write_text(_random_b64_key(), encoding="utf-8")
+        key_file.chmod(0o600)
+        real_stat = crypto.os.stat
+        foreign_uid = os.geteuid() + 26
+
+        def _stat(path: object, *args: object, **kwargs: object) -> os.stat_result:
+            info = real_stat(path, *args, **kwargs)
+            if str(path) == str(key_file):
+                fields = list(info)
+                fields[4] = foreign_uid  # st_uid
+                return os.stat_result(fields)
+            return info
+
+        monkeypatch.setattr(crypto.os, "stat", _stat)
+        with pytest.raises(MasterKeyError) as excinfo:
+            crypto._verify_key_file_permissions(key_file)
+
+        message = str(excinfo.value)
+        assert f"owned by uid {foreign_uid}" in message
+        assert f"container uid {os.geteuid()}" in message
+        # The fix differs from the unwritable-directory case, and saying so matters:
+        # chown cannot help when the filesystem synthesizes the owner.
+        assert "chown` on the host will not help" in message
+        assert f"run the container as uid {foreign_uid}" in message
+
+    def test_unwritable_data_directory_names_the_uid_and_the_fix(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        # The common NAS misconfiguration (a bind mount whose ownership doesn't match
+        # the container uid). The message is all the operator gets, so it must carry
+        # the directory, the uid:gid, and a literal chown.
+        autogen = tmp_path / "data" / "app_secret_key"
+
+        def _refuse(*args: object, **kwargs: object) -> None:
+            raise PermissionError(13, "Permission denied")
+
+        monkeypatch.setattr(crypto.os, "open", _refuse)
+        with pytest.raises(MasterKeyError) as excinfo:
+            resolve_master_keys(_settings(configured=tmp_path / "secret", autogen=autogen))
+
+        message = str(excinfo.value)
+        assert str(autogen.parent) in message
+        assert f"({os.geteuid()}:{os.getegid()})" in message
+        assert f"chown -R {os.geteuid()}:{os.getegid()} <host path>" in message
+        assert "user:" in message
+        assert "SCRYE_APP_SECRET_KEY_FILE" in message
+
     def test_a_key_that_fails_verification_is_not_left_behind(
         self, tmp_path: Path, monkeypatch
     ) -> None:

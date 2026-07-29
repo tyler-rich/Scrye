@@ -47,6 +47,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secret; the Docker-secret blocks are kept, commented out, for deployments that
   want the key and the data on separate mounts.
 
+### Fixed
+
+- **An unwritable data directory now reports what is wrong and how to fix it,
+  instead of a SQLite stack trace.** The container entrypoint checks that the
+  database directory exists and is writable **before** running migrations. The
+  previous symptom was `sqlite3.OperationalError: unable to open database file`
+  from Alembic, which named neither the path nor the cause; the preflight now names
+  the directory, the container `uid:gid`, and the concrete fix. This is the most
+  common first-run failure on NAS platforms (Synology, QNAP), where a **bind mount
+  keeps the host directory's ownership** while a named volume inherits the correct
+  ownership from the image — so `chown -R 1000:1000 /path/on/host`, a matching
+  `user:`, or a named volume all resolve it.
+
+  The master-key errors in the same class were made equally actionable: an
+  unwritable key directory now names the directory, the uid:gid and the `chown`,
+  and a filesystem that *synthesizes* ownership (a CIFS/SMB mount with `uid=`, NFS
+  squashing) says so explicitly — `chown` cannot help there, so it points at
+  matching the container `user:` or supplying a Docker secret instead. README
+  § Troubleshooting first-run issues covers both.
+
 ### Changed
 
 - **The Compose stack no longer uses `deploy:` keys, so it deploys on NAS

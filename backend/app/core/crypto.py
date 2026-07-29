@@ -272,6 +272,25 @@ def _key_file_exists(path: Path) -> bool:
     return True
 
 
+def _ownership_hint() -> str:
+    """Return the remediation hint for a data directory this uid cannot write to.
+
+    Spelled out with the real uid:gid and a literal ``chown`` because this is the
+    common NAS misconfiguration — a Synology/QNAP **bind mount** keeps the *host*
+    directory's ownership, unlike a named volume, which inherits the image's — and
+    an operator hitting it on first run has nothing else to go on. The host path is
+    a placeholder: the container cannot know where its mount comes from.
+    """
+    return (
+        "If it is a bind-mounted host directory, fix its ownership on the host "
+        f"(`chown -R {os.geteuid()}:{os.getegid()} <host path>`) or run the container "
+        "as the directory's owner (Compose `user:`); a named Docker volume inherits "
+        "the correct ownership from the image automatically. Alternatively, supply the "
+        "key yourself as a Docker secret (SCRYE_APP_SECRET_KEY_FILE), which needs no "
+        "writable volume at all."
+    )
+
+
 def _verify_key_file_permissions(path: Path) -> None:
     """Verify a just-created key file is 0600 and owned by this process.
 
@@ -294,16 +313,21 @@ def _verify_key_file_permissions(path: Path) -> None:
         raise MasterKeyError(
             f"Generated master key at {path} has mode {mode:04o}, not "
             f"{_KEY_FILE_MODE:04o}. The filesystem holding it does not honor the "
-            "requested permissions, so the key would be readable by other users. "
-            "Store the key on a filesystem that preserves POSIX modes, or supply it "
-            "yourself as a Docker secret (SCRYE_APP_SECRET_KEY_FILE)."
+            "requested permissions (a CIFS/SMB mount forcing `file_mode=`, or vfat/"
+            "exfat, which has no POSIX modes at all), so the key would be readable by "
+            "other users. Store the key on a filesystem that preserves POSIX modes, or "
+            "supply it yourself as a Docker secret (SCRYE_APP_SECRET_KEY_FILE)."
         )
     if info.st_uid != os.geteuid():
         raise MasterKeyError(
             f"Generated master key at {path} is owned by uid {info.st_uid}, not the "
-            f"container uid {os.geteuid()}. The filesystem is remapping ownership; "
-            "store the key elsewhere or supply it as a Docker secret "
-            "(SCRYE_APP_SECRET_KEY_FILE)."
+            f"container uid {os.geteuid()} that created it. The filesystem is "
+            "synthesizing ownership — a CIFS/SMB mount with `uid=`, or an NFS export "
+            "that squashes it — so its POSIX permissions do not actually protect the "
+            "key. Note that `chown` on the host will not help here. Either store the "
+            f"key on a filesystem that preserves ownership, run the container as uid "
+            f"{info.st_uid} to match what this one reports, or supply the key as a "
+            "Docker secret (SCRYE_APP_SECRET_KEY_FILE)."
         )
 
 
@@ -358,8 +382,9 @@ def _generate_master_key_file(path: Path) -> MasterKeyResolution:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         raise MasterKeyError(
-            f"Cannot create the directory for the master key file {path}: {exc}. "
-            "It must be on a writable, persistent volume."
+            f"Cannot create the directory {path.parent} for the master key file: "
+            f"{exc}. It must be on a writable, persistent volume owned by the "
+            f"container uid ({os.geteuid()}:{os.getegid()}). {_ownership_hint()}"
         ) from exc
 
     material = base64.b64encode(os.urandom(_GENERATED_KEY_BYTES)).decode("ascii")
@@ -376,9 +401,9 @@ def _generate_master_key_file(path: Path) -> MasterKeyResolution:
         )
     except OSError as exc:
         raise MasterKeyError(
-            f"Cannot create the master key file {path}: {exc}. It must be on a "
-            "writable, persistent volume, or supply the key yourself as a Docker "
-            "secret (SCRYE_APP_SECRET_KEY_FILE)."
+            f"Cannot create the master key file {path}: {exc}. The directory "
+            f"{path.parent} must be writable by the container uid "
+            f"({os.geteuid()}:{os.getegid()}). {_ownership_hint()}"
         ) from exc
 
     try:

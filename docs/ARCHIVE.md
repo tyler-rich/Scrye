@@ -786,13 +786,61 @@ key at 0600 and reported `/healthz` healthy, a registry secret was stored, and a
 same key was reused and a backup bundle built successfully (which decrypts every stored secret to
 re-wrap it).
 
+**The adjacent first-run blocker was fixed in the same PR, on review.** Tracing the NAS case the
+original report came from (a bind-mounted `/data` whose ownership doesn't match the container uid)
+produced a result worth recording, because it is not the obvious one:
+
+| `/data` bind mount | `O_CREAT\|O_EXCL` | `chmod 0600` | owner re-stat | Outcome |
+| --- | --- | --- | --- | --- |
+| `0755`, foreign owner (not writable by the app uid) | EACCES | — | — | refuses, nothing left behind |
+| `0777`, foreign owner (world-writable share) | ✓ | ✓ | ✓ | **works** — key `0600`, owned by the app uid |
+| `2775` setgid, group-writable, gid matches | ✓ | ✓ | ✓ | **works** (file gid follows the dir; harmless at `0600`) |
+| ownership-synthesizing fs (CIFS `uid=`, NFS squash) | ✓ | ✓ | ✗ | refuses, file deleted |
+
+The load-bearing fact: **on Linux a newly created file always belongs to the creating process's
+euid**, so a foreign-owned *directory* never trips the owner check. The ordinary NAS bind mount
+(rows 2–3) passes. The owner check only fires where the filesystem *fakes* ownership, and there its
+`0600` is meaningless anyway — the refusal is correct, and SQLite is already unsupported over CIFS.
+
+Row 1 is **not** a new blocker introduced here: `docker/entrypoint.sh` runs `alembic upgrade head`
+before the app starts, so an unwritable `/data` already killed the container with
+`sqlite3.OperationalError: unable to open database file` — which names neither the path nor the fix.
+That pre-existing failure is the same first-run-blocker class this entry is about, so it was fixed
+here rather than deferred: the entrypoint now **preflights** the database directory (exists +
+writable) before Alembic, and fails with the path, the container `uid:gid`, a literal
+`chown -R <uid>:<gid> <host path>`, the `user:`-matching alternative, and the note that a named
+volume inherits the right ownership from the image while a bind mount keeps the host's. Kept to a
+dozen lines of `sh` — a probe file created and removed, no validation framework.
+
+The two master-key messages in the same class were made equally actionable: the unwritable-directory
+error carries the same uid/`chown` guidance, and the synthesized-ownership error now states that
+`chown` **cannot** help and offers matching `user:` or a Docker secret instead. README
+§ Troubleshooting first-run issues leads with both cases.
+
+**Testing the entrypoint.** `backend/tests/test_entrypoint_preflight.py` executes the shipped script
+with `sh` against real directory permissions, stubbing `alembic`/`uvicorn` on `PATH` (so "did the boot
+stop before migrations?" is observable as an absent marker file) and rewriting only `cd /app/backend`,
+a path that exists solely in the image. Every line under test — probe, ordering, message text — is the
+shipped one. Two cases are skipped when the suite runs as **root**, which bypasses directory
+permission bits; they were verified locally under uid 1000 and run for real in CI, which is non-root.
+This is not a substitute for booting the image; CI's image job covers that.
+
 **Also fixed in passing:** this section's index heading said "107 entries" while the index and the
 section both held 108; it now reads 109, matching the count after this entry.
 
+**Deliberately not done here:** a per-boot warning that the auto-generated key shares a volume with
+the database. It would fire on every start of the documented default for most deployments, which is
+how operators learn to skip startup logs — costing the generation-time backup warning that actually
+matters. The existing one-line per-boot source record
+(`Master key loaded from … (auto-generated, current key version v1)`) is the right size. The durable
+channel for that fact is the admin **System panel** (`core/system_info.py` → `api/settings.py`), which
+is where someone looks months later; that is a separate follow-up PR, not folded in here.
+
 **Plan section affected:** §6 secrets-at-rest — additive (a second key *source*, no format or KDF
 change); CLAUDE.md § Hard security rules (master-key sourcing) and § Required deliverables
-(`.env.example` wording); two new `Settings` fields → regenerated `.env.example`. No schema,
-job-model, or API change.
+(`.env.example` wording); two new `Settings` fields → regenerated `.env.example`; `docker/
+entrypoint.sh` gains a data-directory preflight (startup behavior only — it fails a deployment that
+was already broken, sooner and with a usable message). No schema, job-model, or API change.
 
 ---
 

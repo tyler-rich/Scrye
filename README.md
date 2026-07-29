@@ -500,9 +500,35 @@ overlay.
 
 ### Troubleshooting first-run issues
 
+- **Container exits immediately with `Scrye: FATAL - the data directory /data is
+  not writable by uid 1000:1000`.** This is the **bind-mount ownership** case, and
+  it is the most common first-run failure on NAS platforms (Synology, QNAP): a
+  **bind mount keeps the host directory's ownership**, whereas a **named volume
+  inherits the correct ownership from the image**. Scrye runs as uid 1000 on a
+  read-only root filesystem, so it cannot create `/data/scrye.db` — nor the
+  generated master key — in a directory it may not write. The message names the
+  path and the uid; fix it on the host with any one of:
+  - `sudo chown -R 1000:1000 /path/on/host` (the directory you bind-mounted), or
+  - set the container's `user:` to the directory's existing owner
+    (`stat -c '%u:%g' /path/on/host`), or
+  - drop the bind mount and use a named volume (as the compose above does).
+
+  The check runs **before** migrations deliberately: previously the only symptom
+  was `sqlite3.OperationalError: unable to open database file`, which named
+  neither the path nor the fix.
+- **Container exits with `Generated master key … is owned by uid N, not the
+  container uid 1000`.** The filesystem under `/data` is **synthesizing**
+  ownership — a CIFS/SMB mount with `uid=`, or an NFS export that squashes it — so
+  the key's `0600` would not actually protect it. `chown` cannot help here. Either
+  put `/data` on a filesystem that preserves POSIX ownership (strongly preferred —
+  SQLite is unreliable over CIFS/SMB regardless), run the container as the uid the
+  filesystem reports, or supply the master key as a Docker secret, which needs no
+  writable volume at all. No key file is left behind when this refusal fires.
 - **`{"status":"degraded",...,"database":"error"}` from `/healthz`.** The process
   is up but can't reach SQLite. Check that `/data` is writable by uid 1000 (the
-  container runs non-root) and that the `scrye_data` volume mounted.
+  container runs non-root) and that the `scrye_data` volume mounted. On a fresh
+  start the entrypoint preflight above catches this first; this state usually means
+  the volume went away or changed ownership *after* a successful start.
 - **Container exits at start with `Refusing to start without a valid master
   key`.** Read the rest of the line; each case is a deliberate refusal, and none
   of them is fixed by deleting a key file that has real data behind it:
@@ -520,8 +546,11 @@ overlay.
     deployment that had already generated its own key at `/data/app_secret_key`.
     Carry the generated key forward as a version in the secret file (see
     [Key rotation](#the-master-key)), or delete it if nothing was stored under it.
-  - **`Cannot create the master key file …`** — the `/data` volume is missing or
-    not writable by uid 1000. Check the volume mount and its ownership.
+  - **`Cannot create the master key file …`** — the key's directory is missing or
+    not writable by uid 1000. The message names the directory, the container
+    uid:gid, and the `chown` to run; see the bind-mount bullet at the top of this
+    section. (If the key lives on the same volume as the database, the entrypoint
+    preflight normally reports this first.)
 - **`exec /app/entrypoint.sh: no such file or directory`** (only when building
   from source). The entrypoint was checked out with CRLF line endings (a Windows
   checkout). The repo pins shell scripts to LF via `.gitattributes` and the image
