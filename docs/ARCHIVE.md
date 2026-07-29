@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (109, newest first)
+### Index of §14 entries (110, newest first)
 
+- [2026-07-29 — Post-v1 — Master-key source surfaced on the About tab (the durable channel chosen over a per-boot log line)](#2026-07-29--post-v1--master-key-source-surfaced-on-the-about-tab-the-durable-channel-chosen-over-a-per-boot-log-line)
 - [2026-07-29 — Post-v1 — Master key auto-generated on first launch; the Docker secret keeps its precedence](#2026-07-29--post-v1--master-key-auto-generated-on-first-launch-the-docker-secret-keeps-its-precedence)
 - [2026-07-28 — Post-v1 — Compose `deploy:` keys retired for NAS portability; memory limits made portable, CPU limits moved to an opt-in overlay](#2026-07-28--post-v1--compose-deploy-keys-retired-for-nas-portability-memory-limits-made-portable-cpu-limits-moved-to-an-opt-in-overlay)
 - [2026-07-26 — Infra/Process — `node:22-bookworm-slim` digest refreshed; the Node 24 move and the #86 frontend tooling majors recorded in the roadmap](#2026-07-26--infraprocess--node22-bookworm-slim-digest-refreshed-the-node-24-move-and-the-86-frontend-tooling-majors-recorded-in-the-roadmap)
@@ -689,6 +690,53 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+
+### 2026-07-29 — Post-v1 — Master-key source surfaced on the About tab (the durable channel chosen over a per-boot log line)
+
+**What changed:** Settings → About gained one row reporting which master key is in force — its
+**source** (`auto_generated` / `secret_file`) and its **path**, rendered as either "Auto-generated at
+`<path>` — back this up; a Docker secret gives stronger at-rest separation" or "Supplied as a secret
+file at `<path>` — keep your copy backed up". `core/system_info.py` gains `master_key_info()`
+alongside `host_info()`, and `api/settings.py` adds `AboutOut.master_key`; the frontend renders it in
+`AboutPanel.tsx`. No new endpoint, no new setting, no schema change.
+
+**Why here rather than in the log:** the entry above (auto-generated master key) logs the
+back-this-up warning once, at generation. The reviewer's question was what an operator who deploys
+and returns six months later sees — nothing, in that design. The rejected alternative was a per-boot
+warning that the generated key shares a volume with the database: it would fire on every start of the
+**documented default** for most deployments, which is how operators learn to skip startup logs, and it
+would cost the generation-time warning that actually matters. It also wouldn't work — nobody reads
+startup logs at month six. The About tab is where an admin actually looks, so the fact lives there and
+the per-boot log line stays as it was (a single-line source record, unchanged by this entry).
+
+**Constraints the row is built to:**
+
+- **No key material, and nothing else new.** Source and path only — deliberately *not* the key
+  version, which is visible nowhere else and would be a new disclosure rather than a relocation of an
+  existing one. A test asserts the response body does not contain the key file's contents and that the
+  object's keys are exactly `{source, path}`.
+- **Admin-only, on an endpoint that is not.** `GET /settings/about` is readable by every role (the SPA
+  needs the instance name and health), so the row is populated per-request for admins and omitted
+  otherwise; the path is deployment layout a viewer has no need for. The gate is
+  `AuthContext.effective_role`, not `user.role`, so an **admin's role-capped API token** sees exactly
+  what its role sees — the same capping rule as everywhere else.
+- **Accurate for both sources, not autogen text shown unconditionally.** A deployment using a Docker
+  secret gets the secret-file wording. Both variants say to back the key up, because losing it is
+  equally fatal either way; only the separation advice is specific to the generated case.
+- **Never the reason a page fails.** `master_key_info()` reads the *cached* startup resolution, so it
+  does no filesystem work and cannot generate a key from a request; if the key does not resolve at all
+  (a development instance, where the lifespan warns instead of failing) it returns `None` and the row
+  is omitted rather than erroring the whole About response.
+
+**Testing** matches how the other About rows are covered — through the API, since `host_info()` has no
+unit test of its own either: both sources, the no-key-material/no-extra-fields assertions, omission for
+a viewer, omission for a role-capped admin token, and omission when the resolution raises.
+
+**Plan section affected:** §4.5 About/health tab — additive (one response field, admin-gated). No
+schema, security-model, or job-model change; the key handling from the entry below is untouched.
 
 ---
 

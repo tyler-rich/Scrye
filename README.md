@@ -733,6 +733,12 @@ the key as a Docker secret from a different mount, or point
 `SCRYE_APP_SECRET_KEY_AUTOGEN_FILE` at one — source 1 keeps its precedence, so
 adopting it later is a supported move.
 
+**Checking which key is in force.** **Settings → About** shows the master key's
+source and path (admin-only, and never any key material): either "auto-generated
+at `<path>`", with the reminder to back it up, or "supplied as a secret file at
+`<path>`". The same fact appears once per start in the container log
+(`Master key loaded from … (auto-generated|configured secret file)`).
+
 **High-entropy key required.** The key file must be **valid base64 that decodes to
 at least 32 bytes** — exactly what `openssl rand -base64 48` produces. A raw
 passphrase (anything that isn't valid base64) is **rejected** on startup, because a

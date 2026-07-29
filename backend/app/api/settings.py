@@ -9,6 +9,8 @@ without exposing any secret configuration.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -25,7 +27,7 @@ from app.core.app_settings import (
     SettingsService,
 )
 from app.core.audit import record_audit
-from app.core.system_info import host_info, scanner_versions
+from app.core.system_info import host_info, master_key_info, scanner_versions
 from app.db.models import OIDC_CONFIG_ID, OidcConfig, Role, Scan, User
 from app.db.session import get_db
 
@@ -44,6 +46,17 @@ class ScannerInfoOut(BaseModel):
     detail: str | None = None
 
 
+class MasterKeyInfoOut(BaseModel):
+    """Which master key is in force. **Never** key material.
+
+    Admin-only: the About endpoint is readable by any role, so this is populated
+    for admins and omitted for everyone else (the path exposes deployment layout).
+    """
+
+    source: Literal["auto_generated", "secret_file"]
+    path: str
+
+
 class AboutOut(BaseModel):
     """About/health summary shown on the settings About tab."""
 
@@ -57,6 +70,8 @@ class AboutOut(BaseModel):
     scan_count: int
     oidc_enabled: bool
     scanners: list[ScannerInfoOut]
+    #: Admin-only, and null when no usable key is resolvable (dev instances).
+    master_key: MasterKeyInfoOut | None = None
 
 
 @router.get("/general", response_model=GeneralSettings)
@@ -188,10 +203,15 @@ def update_retention(
 
 @router.get("/about", response_model=AboutOut)
 async def get_about(
-    _: AuthContext = Depends(_any_user),
+    auth: AuthContext = Depends(_any_user),
     db: Session = Depends(get_db),
 ) -> AboutOut:
-    """Return the About/health summary (app + scanner versions, basic counts)."""
+    """Return the About/health summary (app + scanner versions, basic counts).
+
+    Readable by any role; the master-key row is added for admins only (and uses
+    ``effective_role``, so an operator-scoped API token held by an admin does not
+    see it).
+    """
     health = healthz(db)
     general = SettingsService(db).general()
     oidc = db.get(OidcConfig, OIDC_CONFIG_ID)
@@ -199,6 +219,11 @@ async def get_about(
     scan_count = db.scalar(select(func.count()).select_from(Scan)) or 0
     scanners = [ScannerInfoOut(**info.__dict__) for info in await scanner_versions()]
     host = host_info()
+    master_key = None
+    if auth.effective_role is Role.ADMIN:
+        info = master_key_info()
+        if info is not None:
+            master_key = MasterKeyInfoOut(source=info.source, path=info.path)
     return AboutOut(
         app_name=general.instance_name,
         version=__version__,
@@ -210,4 +235,5 @@ async def get_about(
         scan_count=scan_count,
         oidc_enabled=bool(oidc and oidc.enabled),
         scanners=scanners,
+        master_key=master_key,
     )

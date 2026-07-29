@@ -1,9 +1,10 @@
 """Runtime system/scanner information for the About & health settings tab.
 
 Reports the bundled scanner versions by invoking each binary's version command
-with a short timeout, plus basic host facts. Everything here is read-only and
-carries no secrets; a missing binary degrades to ``available=False`` rather than
-raising, so the About tab still renders on a partial install.
+with a short timeout, plus basic host facts and which master key is in force.
+Everything here is read-only and carries no secrets; a missing binary degrades to
+``available=False`` rather than raising, so the About tab still renders on a
+partial install.
 """
 
 from __future__ import annotations
@@ -13,9 +14,10 @@ import json
 import platform
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from app.core.config import get_settings
+from app.core.crypto import MasterKeyError, get_master_key_resolution
 from app.scanners.base import (
     ScannerError,
     build_env,
@@ -99,6 +101,43 @@ def host_info() -> dict[str, str]:
         "python_version": platform.python_version(),
         "platform": platform.platform(terse=True),
     }
+
+
+@dataclass(frozen=True)
+class MasterKeyInfo:
+    """Which master key is in force, for the admin-only About row.
+
+    Carries **no key material** — and no key version either, so this adds nothing
+    to what an operator can already see. Just the source and the path, because the
+    one thing an admin needs to know months after deploying is whether the key is
+    one Scrye generated (and must therefore be backed up off the data volume) or
+    one they supplied themselves.
+    """
+
+    #: ``"auto_generated"`` (Scrye minted it on first launch) or ``"secret_file"``
+    #: (supplied via ``SCRYE_APP_SECRET_KEY_FILE``).
+    source: Literal["auto_generated", "secret_file"]
+    #: Path the key is read from.
+    path: str
+
+
+def master_key_info() -> MasterKeyInfo | None:
+    """Return the resolved master-key source, or None if there is no usable key.
+
+    Reads the process-wide resolution the app already performed at startup (it is
+    cached), so this does no filesystem work and cannot generate a key here.
+    Returns ``None`` when the key cannot be resolved — a development instance runs
+    without one (``main``'s lifespan warns rather than failing), and the About tab
+    should omit the row instead of failing the whole response.
+    """
+    try:
+        resolution = get_master_key_resolution()
+    except MasterKeyError:
+        return None
+    return MasterKeyInfo(
+        source="secret_file" if resolution.from_configured_path else "auto_generated",
+        path=str(resolution.path),
+    )
 
 
 @dataclass(frozen=True)
