@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (112, newest first)
+### Index of §14 entries (113, newest first)
 
+- [2026-07-30 — Infra/Process — Three `tarfile` interpreter CVEs waived as Group A-2 (issue #116); the grype.yaml blocks made self-describing](#2026-07-30--infraprocess--three-tarfile-interpreter-cves-waived-as-group-a-2-issue-116-the-grypeyaml-blocks-made-self-describing)
 - [2026-07-29 — Post-v1 — App version bumped 0.1.0 → 0.2.0; the three independent declarations put under a drift guard](#2026-07-29--post-v1--app-version-bumped-010--020-the-three-independent-declarations-put-under-a-drift-guard)
 - [2026-07-29 — Post-v1 — HTTPS enforcement made legible; `X-Forwarded-Proto` honored from configured proxies only](#2026-07-29--post-v1--https-enforcement-made-legible-x-forwarded-proto-honored-from-configured-proxies-only)
 - [2026-07-29 — Post-v1 — Master-key source surfaced on the About tab (the durable channel chosen over a per-boot log line)](#2026-07-29--post-v1--master-key-source-surfaced-on-the-about-tab-the-durable-channel-chosen-over-a-per-boot-log-line)
@@ -695,6 +696,71 @@ entry, and the anchors jump straight to it.
 
 ---
 
+### 2026-07-30 — Infra/Process — Three `tarfile` interpreter CVEs waived as Group A-2 (issue #116); the grype.yaml blocks made self-describing
+
+**What changed:** `ci/grype.yaml` gained a second Group A block waiving three CPython
+interpreter-binary CVEs in the **`tarfile`** stdlib module, tracked in new issue **#116**. The
+existing blocks were relabelled `Group A-1` (#98) / `Group A-2` (#116) / `Group B` (#52), and a
+**"WHICH BLOCK IS TRACKED WHERE"** index was added at the top of the interpreter section so the
+block → issue mapping is legible from the file without opening GitHub.
+
+| CVE | Sev | Gates? | Defect |
+| --- | --- | --- | --- |
+| CVE-2026-11940 | HIGH | yes | Hardlink referencing a symlink stored deeper than itself makes the extraction fallback recreate the symlink at the shallower path, escaping the destination dir. Incomplete fix of CVE-2025-4330. |
+| CVE-2026-11972 | HIGH | yes | Streaming mode (`mode="r\|"`) mishandles EOF: `_Stream.seek()` discarded `read()`'s result, so a truncated archive parses in an infinite loop. CWE-252. |
+| CVE-2026-0864 | MEDIUM | no | Oversized extended-header (GNU long name/link, pax) size field caused a single huge pre-allocating read. |
+
+**Why now:** the two HIGHs turned CI red on 2026-07-30, on a **docs-only commit** in the v0.2.0
+version-bump PR (#115). Nothing in that diff touched a build input — the only `docker/Dockerfile`
+change was a comment, no dependency or base-image digest moved — and the same job had passed on the
+prior commit a day earlier. These are new advisories reaching Grype's DB, not a regression.
+
+**Verification (2026-07-30), per CLAUDE.md § Dependency hygiene.** All three fixes are merged to the
+`3.14` maintenance branch and absent from released `v3.14.6`, so all three close on **3.14.7** —
+the same trigger as the #98 trio. Method: shallow blobless clone of `python/cpython`,
+`git log -- Lib/tarfile.py` for the commits, `git merge-base --is-ancestor <commit> v3.14.6` for
+release membership, plus a direct `3.14`-vs-`v3.14.6` file diff. **`v3.14.6` = commit `c63aec6`,
+released 2026-06-10.**
+
+| CVE | Upstream | 3.14 backport commit | Merged | vs. 3.14.6 cut | Ancestor of `v3.14.6`? |
+| --- | --- | --- | --- | --- | --- |
+| CVE-2026-11972 | gh-151981 / GH-151982 | `e86666c` (#151992) | 2026-06-23 | +13 days | no |
+| CVE-2026-11940 | gh-151558 | `79c06bd` (GH-151559) | 2026-06-23 | +13 days | no |
+| CVE-2026-11940 (companion) | gh-151987 / GH-151988 | `5e0ef3f` (#152609) | 2026-06-29 | +19 days | no |
+| CVE-2026-0864 | gh-151497 / GH-151498 | `2cf26d0` (GH-151979) | 2026-06-24 | +14 days | no |
+
+Code-level: `3.14`'s `_Stream.seek()` has `if not data: break` where `v3.14.6` discards the read;
+`makelink_with_filter()` re-filters against the hardlink's own name before the fallback and
+`_extract()` threads `filter_function` into `_extract_one()`, neither present in `v3.14.6`;
+`_safe_read()` + `_EXTHEADER_READ_CHUNK` bound the extended-header read, with an in-tree comment
+citing `gh-151497`. Release state: `3.14` patchlevel reads `"3.14.6+"` and no `v3.14.7` tag exists.
+
+**Does Scrye use the module?** **No** — `tarfile` appears nowhere in the repository; backup bundles
+are a JSON envelope (`app/backup/bundle.py`), not tar. So the residual risk is unreachable stdlib
+code present in the image, the same rationale the `poplib` acceptance (#52) rests on. Recorded per
+CVE because the poplib precedent showed module reachability materially changes the acceptance.
+
+**Grype was wrong in the pessimistic direction, again.** It reports `FIXED IN 3.15.0b4` for all
+three. Read literally that means "unfixable below 3.15" and argues for a runtime bump — the precise
+mistake CLAUDE.md's source-verification rule was written to prevent, and the third time this
+column has misreported the 3.14 line (see 2026-07-25 and the two 2026-07-26 entries). **No 3.15
+move is warranted and none should be scoped off the back of this.**
+
+**Why a new issue rather than extending #98.** #98 carries its own source-verification evidence
+dated 2026-07-26 and a review date scoped to its specific trio. Appending CVEs verified on a
+different date against different files would leave that issue's evidence section not covering half
+its own contents — which defeats the point of recording the evidence at all. Both are Group A with
+the same 3.14.7 trigger and the same **2026-10-25** review date (deliberately aligned so one review
+covers both), and each issue cross-references the other so the split reads as intentional rather
+than as duplicate trackers to be merged later. The in-file index exists for the same reason: a
+single shared "tracked in #NN" header is exactly what previously made two unrelated decisions look
+like one (2026-07-26).
+
+**Not changed:** #115 (the v0.2.0 version bump) is untouched — it stays clean release prep and goes
+green on a re-run once this lands.
+
+**Plan section affected:** CLAUDE.md § Dependency hygiene (dogfood gate, interpreter-CVE
+source verification), `ci/` triage allowlists.
 
 ### 2026-07-29 — Post-v1 — App version bumped 0.1.0 → 0.2.0; the three independent declarations put under a drift guard
 
