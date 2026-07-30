@@ -754,6 +754,13 @@ decorative) or to leave it and let `test_version.py` keep it honest. Deferred ra
 because it is a build-configuration change that wants its own PR and its own green CI run, not a
 rider on a release-prep bump; see `docs/ROADMAP.md`.
 
+The roadmap item pairs this with a second, related half: **stamping the version into the image**.
+No `LABEL` exists in `docker/Dockerfile` and no `labels:`/`build-args:` in `publish.yml`,
+`dev-nightly.yml` or `ci.yml` (none uses `docker/metadata-action`), so `docker inspect` on a
+published image says nothing about what is inside it. That is metadata hygiene rather than a
+defect — the running app reports its version correctly because `app/__init__.py` is baked in — but
+it is the same problem seen from the outside, so the two belong together.
+
 **Plan section affected:** §10.1 (README), CLAUDE.md § Definition of done (docs updated),
 `CONTRIBUTING.md` § Releasing (pre-tag checklist).
 
