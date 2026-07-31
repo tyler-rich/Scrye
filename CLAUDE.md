@@ -251,6 +251,20 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   with `pip --require-hashes`). **Whenever `pyproject.toml` dependencies change, regenerate the lock
   with the pinned `uv pip compile --generate-hashes` command** — uv is build/dev-time only, never in
   the runtime image — and CI fails on lock drift. See `CONTRIBUTING.md` § Backend dependency lock.
+- **Dependabot *security* updates open against `main`, not `dev` — check `baseRefName` before
+  touching one.** `.github/dependabot.yml` sets `target-branch: dev` on every ecosystem, but that
+  key governs **version updates only**. Security updates ignore it and always open against the
+  repository's **default branch** (`main`). This is a documented GitHub limitation, not a
+  misconfiguration in this repo, and there is no config that changes it. So the first thing to
+  check on any Dependabot PR is its base branch, and there are exactly two correct responses:
+  **(a)** merge it into `main` and immediately back-merge `main` into `dev` (§ Git & PR
+  conventions), or **(b)** close it and apply the same bump on `dev` directly, regenerating the
+  lockfile with the real package manager rather than hand-editing version strings.
+  **Retargeting the PR's base to `dev` is not a third option and does not work** — the diff stays
+  computed against the branch point it was opened from, so it goes stale the moment `dev` moves
+  ahead, and merging it can resolve *away* from the security fix. This is what happened to
+  **#120** (brace-expansion) on 2026-07-31; it was closed and the bump reapplied on `dev`. See
+  `docs/ARCHIVE.md` §14 (2026-07-31) and `CONTRIBUTING.md` § Releasing.
 - **Interpreter CVEs: verify against the target version's source before a bump is justified on
   security grounds.** Scanner output, advisory "fixed in" fields, and this repo's own issue
   summaries are **evidence, not proof** — none of them is sufficient on its own to claim that

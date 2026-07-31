@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-31
+
 ### Added
 
 - **A plain-HTTP deployment now explains itself instead of looking broken.**
@@ -164,7 +166,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and it is a standing accepted risk with an annual re-confirmation, tracked in
   **issue #52**. An earlier version of this entry said all four were unfixable until
   3.15 and pointed at #52 for all of them; both statements were wrong, and the
-  imaplib backport had in fact merged before this entry was first written.
+  imaplib backport had in fact merged before this entry was first written. (Three
+  further interpreter CVEs — the `tarfile` set — were waived later in this cycle
+  and are not part of these four; see **Security** below for the full waived set.)
 
   Dependencies bumped for 3.14: `pydantic` 2.10.4 → 2.13.4, `uvicorn[standard]`
   0.34.0 → 0.51.0, `sqlalchemy` 2.0.36 → 2.0.51, and a new explicit
@@ -238,6 +242,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does not affect the rest of Scrye. No Scrye configuration changes;
   `SCRYE_DOCKER_PROXY_URL` and port 2375 are unchanged.
 
+### Security
+
+- **A current image.** `ghcr.io/tyler-rich/scrye:latest` has been the v0.1.0
+  build from 2026-07-09 for this whole cycle, and the weekly re-scan has been
+  reporting **fixable HIGH/CRITICAL** CVEs against it since 2026-07-20
+  ([#75](https://github.com/tyler-rich/Scrye/issues/75)). None of those are
+  defects in Scrye's own code — they are advisories disclosed against the base
+  image and the dependency tree *after* that image was built, so the fix is a
+  rebuild on current bases and dependencies rather than a code change. This
+  release is that rebuild. Since v0.1.0:
+
+  - **Base images.** Both Python stages moved from `python:3.13-slim-bookworm`
+    to `python:3.14-slim-bookworm` (3.14.6). The `debian:bookworm-slim`
+    scanners stage ([#104](https://github.com/tyler-rich/Scrye/pull/104)) and
+    the `node:22-bookworm-slim` frontend-builder stage
+    ([#107](https://github.com/tyler-rich/Scrye/pull/107)) had their pinned
+    digests refreshed. The runtime stage's `curl`/`libcurl` are explicitly
+    version-pinned for CVE-2026-5773. Every base is still digest-pinned.
+  - **Backend dependencies.** `fastapi` 0.139.0 → 0.140.0, `uvicorn[standard]`
+    0.34.0 → 0.51.0, `pydantic` 2.10.4 → 2.13.4, `pydantic-settings` 2.7.1 →
+    2.14.2, `sqlalchemy` 2.0.36 → 2.0.51, `alembic` 1.14.0 → 1.18.5, plus a new
+    explicit `greenlet` 3.5.4 pin
+    ([#105](https://github.com/tyler-rich/Scrye/pull/105) and the 3.14 move).
+    The `setuptools` build backend is now pinned exactly and hash-locked in
+    `backend/requirements.lock` instead of floating at `>=75`, so no build-time
+    dependency resolves unpinned.
+  - **Frontend.** `brace-expansion` 1.1.16 → 1.1.18, and the nested
+    `@typescript-eslint/typescript-estree` copy 2.1.3 → 2.1.4. Both are
+    build-time-only dependencies — neither ships in the image or in the browser
+    bundle.
+
+  CI's dogfood gate (Trivy + Grype, failing on **fixable** HIGH/CRITICAL) passes
+  on this build.
+
+  **What this deliberately does not clear.** Seven CPython interpreter CVEs are
+  *waived* in the dogfood gate rather than fixed, each with a dated
+  source-verification and a review date in `ci/grype.yaml`. Six close on the
+  next CPython point release, 3.14.7 — `html.parser`, `getpath` and `imaplib`
+  ([#98](https://github.com/tyler-rich/Scrye/issues/98)) and three `tarfile`
+  CVEs ([#116](https://github.com/tyler-rich/Scrye/issues/116)). The seventh,
+  CVE-2025-15367 (`poplib`), has no fix on any branch below 3.15 and is a
+  standing accepted risk ([#52](https://github.com/tyler-rich/Scrye/issues/52)).
+  Unfixable Debian base-image CVEs are unchanged in kind from v0.1.0 and remain
+  noted in the README.
+
 ## [0.1.0] - 2026-07-09
 
 First release. A self-hosted, browser-based web UI that unifies the
@@ -300,5 +349,6 @@ model, in a single hardened container.
   + tmpfs, resource limits, healthcheck, loopback-only port binding); CSRF
   protection, rate-limited auth, and an audit log.
 
-[Unreleased]: https://github.com/tyler-rich/Scrye/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/tyler-rich/Scrye/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/tyler-rich/Scrye/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tyler-rich/Scrye/releases/tag/v0.1.0
