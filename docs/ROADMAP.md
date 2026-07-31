@@ -79,6 +79,27 @@ Small, self-contained work that closes a concrete gap.
   online DB refreshes (`trivy image --download-db-only`, `grype db update`). Add an import path
   for environments with no outbound access to `mirror.gcr.io` / `grype.anchore.io`, so the Trivy
   and Grype vulnerability databases can be side-loaded from a file.
+- **De-flake `test_cancel_queued_scan` (make slot acquisition observable).**
+  `backend/tests/test_scans_api.py::test_cancel_queued_scan` is timing-dependent **by
+  construction**: it monkeypatches a scanner whose `scan_image` does `await asyncio.sleep(0.2)`,
+  forces the worker semaphore to a single slot, queues two scans, and cancels the second — which
+  only works while that second scan is still `queued`. On a loaded CI runner the 0.2 s window
+  closes before the cancel POST is processed, the scan has left `queued`, and the endpoint
+  correctly returns **409**. So the failure is the *test* being wrong, not the code: queued-only
+  cancellation is a deliberate design decision (`docs/ARCHIVE.md` §14, 2026-07-03 — the in-process
+  worker has no channel to interrupt a live scanner subprocess; lifting that limit is the separate
+  "Cancel a running scan" item under Medium-term).
+
+  **Fix by making the worker's slot acquisition observable to the test** — e.g. an event/future the
+  test can await to know the first scan actually holds the only slot, so the cancel is issued at a
+  known state instead of inside a sleep window. **Do not just widen the sleep**: a longer sleep only
+  lengthens the odds, leaves the race in place, and slows the suite on every run.
+
+  **Why it matters more than one red check:** a test that reddens CI intermittently trains everyone
+  to re-run without reading the failure. That habit is exactly how a real regression gets waved
+  through — and it costs the most on a security tool, where the dogfood gate's output is the thing
+  nobody should learn to skim. Observed 2026-07-31 on a docs-and-workflow-only PR (#118), where it
+  failed once and passed on re-run of the identical commit.
 - **Finish the public-repo governance setup (repository settings).** Going public added the
   in-repo pieces — a `.github/CODEOWNERS` (owner-review requests) and a `SECURITY.md` (private
   vulnerability reporting). The remaining pieces are GitHub **settings**, not files, so they live
