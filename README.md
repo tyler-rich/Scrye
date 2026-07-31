@@ -465,7 +465,7 @@ Everything publishes to GHCR (`ghcr.io/tyler-rich/scrye`):
 | Tag | What it is | Use it for |
 | --- | ---------- | ---------- |
 | `:latest` | The most recent tagged release (built from `main`). | **Production.** Tracks the newest release. |
-| `:<version>` (e.g. `:1.4.0`) | A specific tagged release. | **Production, pinned** — reproducible, no surprise upgrades. |
+| `:<version>` (e.g. `:0.2.0`) | A specific tagged release. | **Production, pinned** — reproducible, no surprise upgrades. |
 | `:dev` | A **moving** tag rebuilt nightly from the `dev` branch. | **Testing HEAD-of-dev only.** Not a release; may be unstable. Do not run in production. |
 
 Pin `:<version>` for anything you care about; use `:latest` if you want to track
@@ -474,8 +474,8 @@ releases and re-`pull` on your own cadence. All tags are multi-arch
 
 ```bash
 docker pull ghcr.io/tyler-rich/scrye:latest
-# docker pull ghcr.io/tyler-rich/scrye:1.4.0   # pin a release
-# docker pull ghcr.io/tyler-rich/scrye:dev      # test the dev branch
+# docker pull ghcr.io/tyler-rich/scrye:0.2.0   # pin a release
+# docker pull ghcr.io/tyler-rich/scrye:dev     # test the dev branch
 ```
 
 ### Build from source instead
