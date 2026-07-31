@@ -475,7 +475,8 @@ the tag exists.
 - [ ] **Open Dependabot PRs triaged.** Land, close, or consciously defer each one; don't tag on
       top of an unreviewed queue. Check any bump against the locked decisions in `CLAUDE.md` §
       Locked decisions before merging — a grouped PR can quietly propose a major that a locked
-      decision forbids.
+      decision forbids. **Check each PR's base branch too**: security updates open against `main`,
+      not `dev` — see § Dependabot security updates target `main` below.
 - [ ] **`backend/requirements.lock` regenerated if backend deps moved.** Any change to
       `pyproject.toml`'s dependencies needs the pinned `uv pip compile --generate-hashes` rerun
       (see § Backend dependency lock); CI fails on lock drift, so catch it before the tag.
@@ -503,8 +504,34 @@ And immediately after the tag:
    only content the back-merge should actually bring into `dev` is anything that landed on `main`
    independently of the promotion (e.g. a Dependabot or hotfix PR targeted at `main`); verify the
    net diff against `dev`'s pre-merge tip is exactly that. Skipping this is what leaves `dev`
-   accumulating phantom "behind" commits after each release. (Dependabot targets `dev`, so
-   promotion squashes are normally the only thing the back-merge has to reconcile.)
+   accumulating phantom "behind" commits after each release. (Dependabot *version* updates target
+   `dev`, so promotion squashes plus the occasional Dependabot **security** update — which lands on
+   `main`; see below — are what the back-merge has to reconcile.)
+
+### Dependabot security updates target `main`
+
+`.github/dependabot.yml` sets `target-branch: dev` for every ecosystem, and that is honoured for
+routine **version** updates. It is **not** honoured for **security** updates: those always open
+against the repository's **default branch**, which here is `main`. That is a GitHub limitation —
+the `target-branch` key is documented as applying to version updates only — not a mistake in this
+repo's configuration, and no setting changes it.
+
+The practical consequence is that a Dependabot PR's base branch is not predictable from the config,
+so **read `baseRefName` before doing anything with one**. Two responses are correct:
+
+- **Merge it into `main`**, then immediately back-merge `main` into `dev` (step 3 above). Note this
+  puts a commit on `main` outside a release, which is allowed for security fixes but means `main`
+  now carries something `dev` does not until the back-merge lands.
+- **Close it and apply the bump on `dev` directly**, in a normal PR. Regenerate the lockfile with
+  the real package manager (`npm update <pkg>`, `uv pip compile --generate-hashes`) rather than
+  editing version strings by hand, so integrity hashes and the resolved tree stay consistent.
+
+**Retargeting the PR to `dev` is not a third option.** Changing the base does not recompute the
+diff against the new base, so the PR keeps the file contents it was opened with; once `dev` has
+moved ahead of that snapshot, merging it can revert newer work — including, in the worst case, the
+very fix the PR exists to deliver. It also does not re-run CI (`on: pull_request` does not fire on
+`edited`), so the green check shown after a retarget is from the old base. PR #120 on 2026-07-31 is
+the worked example: retargeted, went stale, closed, and the bump was reapplied on `dev` instead.
 
 ### What gets published
 
