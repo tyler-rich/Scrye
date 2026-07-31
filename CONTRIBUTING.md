@@ -493,20 +493,31 @@ And immediately after the tag:
 1. When `dev` is in a releasable state, the maintainer opens a **promotion PR** from `dev` into
    `main`. This PR must pass the same CI gate as any other before it can merge. A promotion PR
    is the one **exception** to the Conventional Commits rule above: title it plainly as
-   `Promote dev to main: <what the release contains>`, not `feat:`/`fix:` — the squash-merge
-   subject names a release action, not a code change. Promotions are **squash**-merged.
+   `Promote dev to main: <what the release contains>`, not `feat:`/`fix:` — the merge subject names
+   a release action, not a code change. Promotions are merged with a **regular merge commit** —
+   *"Create a merge commit"*, never *"Squash and merge"* — so `main` keeps the individual commits
+   and `dev`'s history stays an ancestor of `main`'s. Contribution PRs into `dev` are still
+   squash-merged; this applies only to promotions. (Changed 2026-07-31 — see `docs/ARCHIVE.md` §14.)
 2. Once the promotion PR merges, `main` is **tagged** (e.g. `v0.x.0`) to mark the release. The tag
    is what triggers publishing (below).
 3. **Immediately back-merge `main` into `dev`** (`git fetch origin main dev && git checkout dev &&
-   git merge origin/main && git push`) so `dev` shows 0 commits behind `main` again. Because
-   promotions are squash-merged, `main`'s squashed copy of the just-promoted work conflicts with
-   `dev`'s newer versions of those files — resolve every such conflict in favour of `dev`. The
-   only content the back-merge should actually bring into `dev` is anything that landed on `main`
-   independently of the promotion (e.g. a Dependabot or hotfix PR targeted at `main`); verify the
-   net diff against `dev`'s pre-merge tip is exactly that. Skipping this is what leaves `dev`
-   accumulating phantom "behind" commits after each release. (Dependabot *version* updates target
-   `dev`, so promotion squashes plus the occasional Dependabot **security** update — which lands on
-   `main`; see below — are what the back-merge has to reconcile.)
+   git merge origin/main && git push`) so `dev` shows 0 commits behind `main` again. With a
+   merge-commit promotion `dev`'s tip is already an ancestor of `main`'s, so the back-merge of a
+   promotion alone is a **fast-forward with nothing to resolve** — the whole point of the merge
+   method. The only content it should actually bring into `dev` is anything that landed on `main`
+   **independently** of the promotion (a Dependabot security update or a hotfix targeted at `main`).
+   If that independent commit touched a file `dev` has also changed, resolve in favour of `dev` —
+   but first confirm `dev` is genuinely ahead: check that no package or change is present on `main`
+   and absent from `dev`, so the resolution cannot revert a fix that only `main` carries. Verify
+   before committing that the net diff against `dev`'s pre-merge tip is exactly those independent
+   changes and nothing else (`git diff <dev-before> HEAD`). Skipping this is what leaves `dev`
+   accumulating phantom "behind" commits after each release.
+
+   **This is also a pre-promotion check.** If something landed on `main` since the last promotion
+   and was *replicated* on `dev` rather than merged, `main` is not an ancestor of `dev` and the
+   promotion PR will open as `dirty`. Reconcile with the same merge before opening it — or if it is
+   already open, push the reconciliation to `dev` and the PR updates itself. Do not close and reopen
+   the PR.
 
 ### Dependabot security updates target `main`
 

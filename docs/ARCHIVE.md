@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (115, newest first)
+### Index of §14 entries (116, newest first)
 
+- [2026-07-31 — Process — `dev` → `main` promotions merge with a merge commit, not a squash](#2026-07-31--process--dev--main-promotions-merge-with-a-merge-commit-not-a-squash)
 - [2026-07-31 — Release/Process — v0.2.0 release prep: CHANGELOG cut, brace-expansion reapplied on `dev`, Dependabot security-PR routing documented](#2026-07-31--releaseprocess--v020-release-prep-changelog-cut-brace-expansion-reapplied-on-dev-dependabot-security-pr-routing-documented)
 - [2026-07-31 — Infra/Process — Grype gate keeps its verdict *and* lists its waivers, from one scan](#2026-07-31--infraprocess--grype-gate-keeps-its-verdict-and-lists-its-waivers-from-one-scan)
 - [2026-07-30 — Infra/Process — Three `tarfile` interpreter CVEs waived as Group A-2 (issue #116); the grype.yaml blocks made self-describing](#2026-07-30--infraprocess--three-tarfile-interpreter-cves-waived-as-group-a-2-issue-116-the-grypeyaml-blocks-made-self-describing)
@@ -698,6 +699,63 @@ entry, and the anchors jump straight to it.
 
 ---
 
+### 2026-07-31 — Process — `dev` → `main` promotions merge with a merge commit, not a squash
+
+**What changed:** `CONTRIBUTING.md` § Releasing step 1 and `CLAUDE.md` § Git & PR conventions now
+require promotions to be merged with GitHub's **"Create a merge commit"**, where they previously
+said promotions are **squash**-merged (the rule adopted 2026-07-04 with the branching model, and
+restated in the 2026-07-13 promotion-title entry). Feature and contribution PRs into `dev` are
+**unchanged** — those are still squash-merged. Documentation and process only; no code, schema, API
+contract, security model, job model, auth, or CI behavior is affected.
+
+Three dependent passages were corrected in the same pass rather than left to contradict the new
+rule:
+- `CONTRIBUTING.md` § Releasing step 3 and the matching `CLAUDE.md` back-merge bullet both described
+  the post-promotion back-merge as an exercise in resolving `main`'s squashed copy of already-
+  promoted work against `dev`'s newer versions. Under a merge commit that conflict does not exist —
+  `dev`'s tip is already an ancestor of `main`'s, so the back-merge of a promotion **fast-forwards**.
+  Both now say so, and both keep the "resolve in favour of `dev`" rule for the one case that still
+  produces conflicts: a commit that landed on `main` independently of a promotion.
+- The `CLAUDE.md` git-identity note said a **squash-merge** authors its commit as the merging
+  account's GitHub *profile display name*. That is equally true of a merge commit, so the note was
+  generalized to anything merged through the web UI, with the clarification that a merge commit
+  leaves the individual promoted commits' own authorship intact.
+
+**Why:** the argument is the divergence this session had to reconcile, not a preference. Squashing a
+promotion replaces `dev`'s commits with one new commit on `main` that has **no ancestry link** to
+them, so `main` and `dev` diverge the instant the promotion lands. Every subsequent back-merge is
+then a conflict-resolution exercise against a squashed copy of work `dev` already has — which is
+precisely the failure the 2026-07-07 entry documented and tried to manage procedurally rather than
+remove.
+
+It got worse than "manage procedurally." Because `main` was not an ancestor of `dev`, **#110** (a
+Dependabot security update, which lands on `main` — see the entry below) could not be back-merged
+cheaply, so **#119** *replicated* its change on `dev` as a separate commit instead of merging
+`main`. Both branches had then independently edited `frontend/package-lock.json`, and the v0.2.0
+promotion PR (#122) opened `dirty`. Resolving it required merging `origin/main` into `dev` and
+hand-picking a side of the lockfile — on a file where picking wrong silently reverts a security
+fix. That is a bad place to be for a purely mechanical reason.
+
+A merge commit removes the cause: `main` keeps the individual commits a release is supposed to
+preserve, `dev` stays an ancestor of `main`, the back-merge becomes a fast-forward, and a later
+promotion cannot open `dirty` merely because the previous one squashed. The cost — a busier
+first-parent history on `main` — is the thing a release branch actually wants to record.
+
+**What this does not change.** Squash-merging remains correct for PRs into `dev`: those are the
+PRs whose intermediate commits are noise, and `dev`'s one-commit-per-PR history is what makes a
+promotion's commit list readable in the first place. The rule is asymmetric on purpose. The
+existing § Git & PR conventions rule about **retargeting a stacked child PR after its parent was
+squash-merged** is likewise untouched — it is about feature PRs into `dev`, where squashing still
+applies.
+
+**Plan section affected:** `CLAUDE.md` § Git & PR conventions (new promotion merge-method rule,
+back-merge bullet rewritten, git-identity note generalized); `CONTRIBUTING.md` § Releasing (step 1
+merge method, step 3 back-merge guidance plus a new pre-promotion reconciliation check). Supersedes
+the squash-merge half of the 2026-07-04 branching-model entry and the 2026-07-07 back-merge entry;
+both are left in place as the record of what was believed then.
+
+---
+
 ### 2026-07-31 — Release/Process — v0.2.0 release prep: CHANGELOG cut, brace-expansion reapplied on `dev`, Dependabot security-PR routing documented
 
 **What changed:** the `CONTRIBUTING.md` § Releasing "Before you tag" checklist run for **v0.2.0**,
@@ -760,7 +818,11 @@ so 1.1.18 and 2.1.4 are still inside the affected range — there is no fixed re
 2.x lines, and `npm audit fix --force` would resolve it by installing `eslint@10`. The bump is
 therefore currency, not a clearance, and the CHANGELOG entry does not claim otherwise (CLAUDE.md
 § Dependency hygiene — advisory metadata is evidence, not proof). Both copies are `devDependencies`
-reached only through the ESLint tree; neither ships in the image or the browser bundle.
+reached only through the ESLint tree; neither ships in the image or the browser bundle. Tracked in
+**#125**, which exists specifically because this invites one wrong conclusion: a bot proposed the
+bump as a *security* update, the bump was taken, and the advisory is still open afterwards — without
+a written record the next person reads that as dropped work rather than an accepted, unfixable-at-
+this-major finding.
 
 **4. Dependabot security-PR routing documented** — the actual lesson from #120, in `CLAUDE.md`
 § Dependency hygiene and a new `CONTRIBUTING.md` § Releasing subsection. `.github/dependabot.yml`
@@ -776,6 +838,58 @@ conventions, and the same failure mode from the other direction). The stale pare
 `CONTRIBUTING.md` § Releasing step 3 — "Dependabot targets `dev`, so promotion squashes are
 normally the only thing the back-merge has to reconcile" — was corrected in the same pass; it is
 exactly the belief that made #120 surprising.
+
+**5. The `[0.2.0]` section was missing everything between v0.1.0 and the 2026-07-24 work.** The
+first draft of the cut carried only what had been written into `[Unreleased]` since roughly
+2026-07-24 — the socket proxy, the list envelope, the 3.14 move, the Compose and master-key work.
+Everything promoted in **#70** (2026-07-13, i.e. #53–#67) and the #77–#88 batch that followed it had
+never been changelogged at all, because v0.1.0 was tagged 2026-07-09 and #70 landed four days later.
+That is roughly two dozen PRs of security and correctness work that genuinely ships in 0.2.0.
+
+This was caught because the release notes drafted from the **commit range** described work the
+CHANGELOG did not contain, so the notes' "full details" link pointed at a document missing half of
+what a reader had just read. Backfilled from the #70 commit range and the §14 entries for that
+batch — not from the release-notes draft, which is downstream of the same reading and would have
+laundered any error in it.
+
+Merged into the existing `Added`/`Fixed`/`Changed`/`Security` sections rather than added as a
+separate "previously unreleased" block: 0.2.0 is one release, and a changelog-within-a-changelog
+would make a reader track which half of it applies to them. Where an item was already covered —
+the `setuptools` pin and `requirements.lock`, both already named in § Security — the existing bullet
+was left and the new one written to complement rather than restate it.
+
+Three of the six upgrade-affecting items in the release live in this backfill and were invisible
+before it: the **SSRF egress guard** (`SCRYE_ALLOW_INTERNAL_EGRESS`, default off — likely to bite a
+self-hosted deployment whose SMTP relay or registry is on the LAN), the **remote-clone-URL
+requirement** for repository targets, and the **master-key entropy floor**, which will refuse to
+start a v0.1.0 deployment whose key file holds a raw passphrase. The last is the sharpest: the
+CHANGELOG now spells out that the fix is the `SCRYE_ALLOW_WEAK_MASTER_KEY` boot-and-rotate escape
+hatch followed by a backup/restore cycle, **not** generating a fresh key, which would leave every
+stored secret undecryptable.
+
+Also recorded from that range: three API response changes narrower than the envelope but still
+contract-visible — timestamps now serialize with an explicit `Z` (APIR-5), `/api/audit` renamed its
+envelope key `entries` → `items` (APIR-8), and scan rows in list/history/dashboard responses dropped
+`options`/`error` in favour of `has_error` (APIR-9).
+
+**6. `README.md` stopped advertising a release that does not exist.** The image-tag table and the
+`docker pull` block both used `:1.4.0` as the "pin a release" example, for a project whose only
+release is v0.1.0. Corrected to `:0.2.0`. Cosmetic, but it is in the *Quick start* path on the page
+a reader lands on the day the release goes out.
+
+**7. Three dependency findings given live tracking issues.** All three are non-blocking and all
+three would otherwise have been visible only in an `npm audit` run nobody makes a habit of:
+- **#123** — GHSA-qwww-vcr4-c8h2, `react-router` 7.18.1. The only one on a **runtime** dependency.
+  Not reachable: the advisory is specific to RSC mode, and Scrye is a declarative SPA
+  (`<BrowserRouter>` in `main.tsx`, no data-mode router, no `@react-router/*` server package, no
+  `react-router.config.ts`, no server actions, no react-router server process in the image). The fix
+  is 8.3.0, a major; `npm audit fix --force` would "fix" it by **downgrading** to 7.11.0, below the
+  vulnerable range, giving up sixteen patch releases to close an unreachable path. The reachability
+  assessment is stated explicitly in the issue, in the shape #52 uses for the poplib acceptance.
+- **#124** — GHSA-r28c-9q8g-f849, `postcss` 8.5.16, dev-only. Unlike the other two the fix is a
+  patch-level bump (8.5.25) inside the pinned major, so there is no policy obstacle — just a routine
+  bump.
+- **#125** — the brace-expansion finding above.
 
 **Also observed, not changed here.** `main`'s push CI is **red** at `086fb1e`: its image job still
 builds on Python **3.13.14** and trips the Grype gate on CVE-2026-11940 (`tarfile`) and
@@ -794,8 +908,10 @@ gets silently reverted. Items 1, 3 and 4 land on `dev` **before** the promotion 
 
 **Plan section affected:** `CLAUDE.md` § Dependency hygiene (new Dependabot security-update rule);
 `CONTRIBUTING.md` § Releasing (checklist bullet, new § Dependabot security updates target `main`,
-step-3 parenthetical corrected); `CHANGELOG.md` (`[0.2.0]` cut, new § Security);
-`frontend/package-lock.json`. No plan-level decision changed.
+step-3 parenthetical corrected); `CHANGELOG.md` (`[0.2.0]` cut, new § Security, and the v0.1.0 →
+2026-07-24 backfill across all four sections); `README.md` § image tags;
+`frontend/package-lock.json`. No plan-level decision changed by this entry — the promotion
+merge-method change is a separate decision, recorded in the entry above.
 
 ---
 
