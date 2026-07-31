@@ -580,7 +580,7 @@ entry, and the anchors jump straight to it.
 
 ### Index of §14 entries (114, newest first)
 
-- [2026-07-31 — Infra/Process — Grype gate prints its waivers: `--show-suppressed` added so "No vulnerabilities found" stops being ambiguous](#2026-07-31--infraprocess--grype-gate-prints-its-waivers---show-suppressed-added-so-no-vulnerabilities-found-stops-being-ambiguous)
+- [2026-07-31 — Infra/Process — Grype gate keeps its verdict *and* lists its waivers, from one scan](#2026-07-31--infraprocess--grype-gate-keeps-its-verdict-and-lists-its-waivers-from-one-scan)
 - [2026-07-30 — Infra/Process — Three `tarfile` interpreter CVEs waived as Group A-2 (issue #116); the grype.yaml blocks made self-describing](#2026-07-30--infraprocess--three-tarfile-interpreter-cves-waived-as-group-a-2-issue-116-the-grypeyaml-blocks-made-self-describing)
 - [2026-07-29 — Post-v1 — App version bumped 0.1.0 → 0.2.0; the three independent declarations put under a drift guard](#2026-07-29--post-v1--app-version-bumped-010--020-the-three-independent-declarations-put-under-a-drift-guard)
 - [2026-07-29 — Post-v1 — HTTPS enforcement made legible; `X-Forwarded-Proto` honored from configured proxies only](#2026-07-29--post-v1--https-enforcement-made-legible-x-forwarded-proto-honored-from-configured-proxies-only)
@@ -697,38 +697,55 @@ entry, and the anchors jump straight to it.
 
 ---
 
-### 2026-07-31 — Infra/Process — Grype gate prints its waivers: `--show-suppressed` added so "No vulnerabilities found" stops being ambiguous
+### 2026-07-31 — Infra/Process — Grype gate keeps its verdict *and* lists its waivers, from one scan
 
-**What changed:** one flag on the Grype gate step in `.github/workflows/ci.yml` —
-`--only-fixed --fail-on high` becomes `--only-fixed --fail-on high --show-suppressed`. No other
-step, workflow, or file changed; `ci/grype.yaml`'s entries and `ci/trivyignore` are untouched.
+**What changed:** two edits to the Grype gate in `.github/workflows/ci.yml`, no change to
+`ci/grype.yaml`'s entries or to `ci/trivyignore`:
 
-**Why:** the gate's output was `No vulnerabilities found`, which is **ambiguous between "nothing
-matched" and "everything that matched was waived."** Grype's `ignore:` rules drop matched findings
-from the report before it prints, so a clean-looking line is exactly what a large waiver list also
-produces. Confirming that a waiver had actually taken effect therefore required a controlled
-comparison against a prior run — diffing today's log against a run from before the waiver landed —
-rather than simply reading the log in front of you. That is a bad property for the gate on a
-security product to have: the reassuring output and the suppressed-into-silence output were the
-same string.
+1. The gate invocation gains `-o table -o json=/out/grype-gate.json` — **two outputs from one
+   `docker run`**. `table` keeps the human verdict on stdout; the JSON is written to a mounted
+   `/tmp/grype-out` for the next step.
+2. A new **non-gating** step, *"Waived by ci/grype.yaml (informational)"*, `jq`-filters that JSON
+   and prints exactly the CVEs waived by `vulnerability:` rules, labelled as deliberate exceptions
+   rather than findings. It runs `if: always()`, so the waiver list still prints when the gate
+   fails — precisely when you want to know what was already excused.
 
-With the flag, every run prints the waived matches as `(suppressed)` rows alongside the verdict, so
-the log states which CVEs were let through and why the run is green. Same legibility principle as
-the `A-1`/`A-2`/`B` block-to-issue index added to `ci/grype.yaml` on 2026-07-30 — make the
-allowlist's effect readable at the point of use instead of reconstructable from elsewhere.
+The gate's flags (`--only-fixed --fail-on high -c /.grype.yaml`, the three `--exclude`s) are
+otherwise unchanged, so pass/fail behaviour is identical to before.
 
-**Display-only — the exit code is unaffected.** Grype separates ignored matches from real ones and
-`--fail-on` is evaluated against the latter, so listing the ignored set cannot change pass/fail.
-This was confirmed empirically rather than assumed: three of the seven waived IDs are HIGH
-(CVE-2026-15308, plus the tarfile pair CVE-2026-11940 / CVE-2026-11972), and this change's own CI
-run printed them as `(suppressed)` while still exiting green. Had `--show-suppressed` folded the
-suppressed set back into the `--fail-on high` evaluation, that same run would have failed — so the
-green run is the evidence, not the assumption.
+**Why:** the gate's output was `No vulnerabilities found`, **ambiguous between "nothing matched"
+and "everything that matched was waived."** Grype's `ignore:` rules drop matched findings from the
+report before it prints, so a clean-looking line is exactly what a seven-entry waiver list also
+produces. Confirming a waiver had taken effect therefore required a controlled comparison against a
+run from before it landed, rather than reading the log in front of you — a bad property for the
+gate on a security product, where the reassuring output and the suppressed-into-silence output were
+the same string.
 
-**Not changed:** the waiver list itself. This entry adds no CVE, removes none, and alters no
-severity or exclusion — it only makes the existing seven visible. The two informational scans
-(`if: github.event_name == 'push'`) are also untouched; they still run only on pushes to `main`,
-which is why no PR run had ever printed the unsuppressed view.
+**The naive fix does not work, and the reason is worth knowing: `--only-fixed` is itself
+implemented as an ignore rule.** Simply adding `--show-suppressed` to the gate was tried first and
+rejected on the evidence. Because `--only-fixed` is an ignore rule like any other, its matches land
+in the same `ignoredMatches` bucket as the by-ID waivers, so `--show-suppressed` printed **every
+won't-fix / unfixed package** as well: roughly **250 rows** (`curl`, `perl`, `libexpat1`,
+`libssh2-1`, `libc6` …) against the 7 that were wanted. Worse, having rows to print, Grype emits the
+table *instead of* the `No vulnerabilities found` line — so the verdict disappeared and confirming
+"nothing real matched" meant checking that no row among ~250 lacked `(suppressed)`. That trades one
+legibility problem for a bigger one. Filtering `appliedIgnoreRules` for entries carrying a
+`vulnerability` key is what separates the deliberate by-ID waivers from the `--only-fixed` set and
+from the location-based bundled-binary rules.
+
+**One invocation, not two.** The JSON is a second output of the *existing* scan rather than a second
+`grype` run. A second invocation would repeat the vulnerability-DB download and the full image scan,
+and the image job is already the slowest in CI — paying that twice for log legibility would not be a
+trade worth making.
+
+**Exit code unaffected.** The gate's flags are unchanged and the new step is non-gating, so nothing
+about pass/fail moved. Verified on this change's own run: three of the seven waivers are HIGH
+(CVE-2026-15308, plus the tarfile pair CVE-2026-11940 / CVE-2026-11972) against a `--fail-on high`
+gate, and the job passed while the follow-on step listed all seven.
+
+**Not changed:** the waiver list itself — no CVE added, removed, or re-severitied; this only makes
+the existing seven legible. The two informational scans (`if: github.event_name == 'push'`) are
+untouched and still run only on pushes to `main`.
 
 **Plan section affected:** CLAUDE.md § Dependency hygiene (dogfood gate), `.github/workflows/ci.yml`.
 
