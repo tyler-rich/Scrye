@@ -234,13 +234,23 @@ jobs:
       # waived by ID in ci/grype.yaml rather than the binary being excluded
       # wholesale. Trivy's OS-aware scan also gates the base image. See
       # docs/ARCHIVE.md § Deviations.
+      #
+      # --show-suppressed is DISPLAY-ONLY: it lists the ci/grype.yaml waivers as
+      # "(suppressed)" rows next to the verdict. Ignored matches are not counted
+      # by --fail-on, so this cannot change the exit code — a run whose only
+      # High+ findings are waived still passes. Without it the gate prints a bare
+      # "No vulnerabilities found", which is ambiguous between "nothing matched"
+      # and "everything that matched was waived": confirming a waiver actually
+      # took effect meant diffing against a prior run instead of reading the log.
+      # Same legibility principle as the A-1/A-2/B block-to-issue index in
+      # ci/grype.yaml. See docs/ARCHIVE.md § Deviations (2026-07-31).
       - name: Grype — gate on fixable High+ (excl. bundled scanners)
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
             -v "${{ github.workspace }}/ci/grype.yaml:/.grype.yaml:ro" \
             anchore/grype:v0.115.0@sha256:decd87500a90c1e4faa1706f77b0b2cbc1d2f9364e976f1898ce9037de09cc3a docker-archive:/image.tar \
-            --only-fixed --fail-on high -c /.grype.yaml \
+            --only-fixed --fail-on high --show-suppressed -c /.grype.yaml \
             --exclude '/usr/local/bin/trivy' \
             --exclude '/usr/local/bin/grype' \
             --exclude '/usr/local/bin/syft'

@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (113, newest first)
+### Index of §14 entries (114, newest first)
 
+- [2026-07-31 — Infra/Process — Grype gate prints its waivers: `--show-suppressed` added so "No vulnerabilities found" stops being ambiguous](#2026-07-31--infraprocess--grype-gate-prints-its-waivers---show-suppressed-added-so-no-vulnerabilities-found-stops-being-ambiguous)
 - [2026-07-30 — Infra/Process — Three `tarfile` interpreter CVEs waived as Group A-2 (issue #116); the grype.yaml blocks made self-describing](#2026-07-30--infraprocess--three-tarfile-interpreter-cves-waived-as-group-a-2-issue-116-the-grypeyaml-blocks-made-self-describing)
 - [2026-07-29 — Post-v1 — App version bumped 0.1.0 → 0.2.0; the three independent declarations put under a drift guard](#2026-07-29--post-v1--app-version-bumped-010--020-the-three-independent-declarations-put-under-a-drift-guard)
 - [2026-07-29 — Post-v1 — HTTPS enforcement made legible; `X-Forwarded-Proto` honored from configured proxies only](#2026-07-29--post-v1--https-enforcement-made-legible-x-forwarded-proto-honored-from-configured-proxies-only)
@@ -695,6 +696,41 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
 
 ---
+
+### 2026-07-31 — Infra/Process — Grype gate prints its waivers: `--show-suppressed` added so "No vulnerabilities found" stops being ambiguous
+
+**What changed:** one flag on the Grype gate step in `.github/workflows/ci.yml` —
+`--only-fixed --fail-on high` becomes `--only-fixed --fail-on high --show-suppressed`. No other
+step, workflow, or file changed; `ci/grype.yaml`'s entries and `ci/trivyignore` are untouched.
+
+**Why:** the gate's output was `No vulnerabilities found`, which is **ambiguous between "nothing
+matched" and "everything that matched was waived."** Grype's `ignore:` rules drop matched findings
+from the report before it prints, so a clean-looking line is exactly what a large waiver list also
+produces. Confirming that a waiver had actually taken effect therefore required a controlled
+comparison against a prior run — diffing today's log against a run from before the waiver landed —
+rather than simply reading the log in front of you. That is a bad property for the gate on a
+security product to have: the reassuring output and the suppressed-into-silence output were the
+same string.
+
+With the flag, every run prints the waived matches as `(suppressed)` rows alongside the verdict, so
+the log states which CVEs were let through and why the run is green. Same legibility principle as
+the `A-1`/`A-2`/`B` block-to-issue index added to `ci/grype.yaml` on 2026-07-30 — make the
+allowlist's effect readable at the point of use instead of reconstructable from elsewhere.
+
+**Display-only — the exit code is unaffected.** Grype separates ignored matches from real ones and
+`--fail-on` is evaluated against the latter, so listing the ignored set cannot change pass/fail.
+This was confirmed empirically rather than assumed: three of the seven waived IDs are HIGH
+(CVE-2026-15308, plus the tarfile pair CVE-2026-11940 / CVE-2026-11972), and this change's own CI
+run printed them as `(suppressed)` while still exiting green. Had `--show-suppressed` folded the
+suppressed set back into the `--fail-on high` evaluation, that same run would have failed — so the
+green run is the evidence, not the assumption.
+
+**Not changed:** the waiver list itself. This entry adds no CVE, removes none, and alters no
+severity or exclusion — it only makes the existing seven visible. The two informational scans
+(`if: github.event_name == 'push'`) are also untouched; they still run only on pushes to `main`,
+which is why no PR run had ever printed the unsuppressed view.
+
+**Plan section affected:** CLAUDE.md § Dependency hygiene (dogfood gate), `.github/workflows/ci.yml`.
 
 ### 2026-07-30 — Infra/Process — Three `tarfile` interpreter CVEs waived as Group A-2 (issue #116); the grype.yaml blocks made self-describing
 
