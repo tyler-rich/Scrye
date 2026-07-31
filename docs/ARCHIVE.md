@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (114, newest first)
+### Index of §14 entries (115, newest first)
 
+- [2026-07-31 — Release/Process — v0.2.0 release prep: CHANGELOG cut, brace-expansion reapplied on `dev`, Dependabot security-PR routing documented](#2026-07-31--releaseprocess--v020-release-prep-changelog-cut-brace-expansion-reapplied-on-dev-dependabot-security-pr-routing-documented)
 - [2026-07-31 — Infra/Process — Grype gate keeps its verdict *and* lists its waivers, from one scan](#2026-07-31--infraprocess--grype-gate-keeps-its-verdict-and-lists-its-waivers-from-one-scan)
 - [2026-07-30 — Infra/Process — Three `tarfile` interpreter CVEs waived as Group A-2 (issue #116); the grype.yaml blocks made self-describing](#2026-07-30--infraprocess--three-tarfile-interpreter-cves-waived-as-group-a-2-issue-116-the-grypeyaml-blocks-made-self-describing)
 - [2026-07-29 — Post-v1 — App version bumped 0.1.0 → 0.2.0; the three independent declarations put under a drift guard](#2026-07-29--post-v1--app-version-bumped-010--020-the-three-independent-declarations-put-under-a-drift-guard)
@@ -694,6 +695,107 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-07-31 — Release/Process — v0.2.0 release prep: CHANGELOG cut, brace-expansion reapplied on `dev`, Dependabot security-PR routing documented
+
+**What changed:** the `CONTRIBUTING.md` § Releasing "Before you tag" checklist run for **v0.2.0**,
+plus the three items it turned up that had to land on `dev` before the promotion PR was opened. No
+application code, schema, API-contract, security-model, job-model, auth, or CI-behavior change.
+
+**1. `CHANGELOG.md` `[Unreleased]` cut to `[0.2.0] - 2026-07-31`.** A fresh empty `[Unreleased]`
+sits above it and the reference-link block gained
+`[0.2.0]: …/compare/v0.1.0...v0.2.0` with `[Unreleased]` re-pointed at `…/compare/v0.2.0...HEAD`.
+`CONTRIBUTING.md` § Releasing describes this as a tag-time maintainer step; doing it **before** the
+promotion means `main` receives an already-correct CHANGELOG rather than a commit landing on `main`
+after the fact, outside a release.
+
+A new **`### Security`** entry was added to the 0.2.0 section, because nothing in the section
+answered the question the release actually exists to answer. Issue **#75** — the weekly
+`rescan.yml` tracking issue — has been reporting fixable HIGH/CRITICAL CVEs against the published
+`:latest` since 2026-07-20, and `:latest` has been the **v0.1.0 image from 2026-07-09** the whole
+time. None of those findings is a defect in Scrye; they are advisories disclosed against the base
+image and dependency tree after that image was built, and only a rebuild clears them. The entry
+enumerates what actually moved since v0.1.0 (both Python stages 3.13 → 3.14.6; refreshed
+`debian:bookworm-slim` and `node:22-bookworm-slim` digests; `fastapi`, `uvicorn`, `pydantic`,
+`pydantic-settings`, `sqlalchemy`, `alembic`, new `greenlet`; `setuptools` pinned exactly and
+hash-locked; the frontend `brace-expansion` bumps below) and — deliberately — what it does **not**
+clear: the seven waived CPython interpreter CVEs, split across #98, #116 and #52.
+
+The rest of `[Unreleased]` was re-verified claim by claim against the tree rather than trusted, per
+the checklist's first item. It held up: the false-CVE correction from the 2026-07-26 entry is
+present and accurate; the four waived CVEs it names, the `SCRYE_APP_SECRET_KEY_*` setting names,
+the `mem_limit`/`mem_reservation` values and the CPU-limits overlay, the wollomatic uid 65534 /
+`GET /images/json` allowlist / `DOCKER_GID` fallback of 999, the thirteen enveloped endpoints
+(exactly thirteen `full_page(` call sites across `backend/app/api/`), the 3.14 dependency versions,
+and all six cross-document references (four README anchors, `CONTRIBUTING.md` § API conventions,
+`docs/ARCHIVE.md` §15) were each checked at the file. One sentence
+was amended: "All four stay waived in the dogfood scan" was true but read as a total, and three
+further `tarfile` CVEs had been waived after it was written (2026-07-30 entry), so it now says so
+and points at § Security.
+
+**2. `THIRD_PARTY_LICENSES/` re-verified.** The version table (Trivy 0.72.0, Grype 0.115.0, Syft
+1.46.0) still matches the `TRIVY_VERSION`/`GRYPE_VERSION`/`SYFT_VERSION` args in
+`docker/Dockerfile`, and all four bundled files were re-fetched from upstream at those tags and
+compared byte-for-byte — `trivy/LICENSE`, `trivy/NOTICE`, `grype/LICENSE`, `syft/LICENSE` are
+identical; Grype and Syft still 404 on `NOTICE`. No change was needed. This repeats the 2026-07-26
+verification rather than inheriting it, which is the point of the checklist item.
+
+**3. `brace-expansion` bumped on `dev` — 1.1.16 → 1.1.18, and the nested
+`@typescript-eslint/typescript-estree` copy 2.1.3 → 2.1.4.** Dependabot proposed exactly this as
+**#120**, but opened it against **`main`**, and retargeting left the diff stale, so #120 was closed
+and the bump reapplied here. Regenerated with `npm update brace-expansion --package-lock-only` —
+not by editing version strings — so `resolved` URLs and `integrity` hashes moved with the versions;
+the resulting diff is 6 lines in each of the two entries and nothing else. `npm ci` installs
+1.1.18 and 2.1.4, `npm run build` and the 20-file / 69-test Vitest suite both pass.
+
+`dev` and `main` were confirmed to agree on `brace-expansion` **before** the promotion: #110
+(1.1.15 → 1.1.16) was merged directly into `main` and back-merged to `dev` in #119, so both
+branches read 1.1.16/2.1.3 at the promotion's merge base and the promotion cannot resolve away from
+the earlier security fix.
+
+**Known and deliberately not acted on:** GHSA-mh99-v99m-4gvg covers `brace-expansion` **`<=5.0.7`**,
+so 1.1.18 and 2.1.4 are still inside the affected range — there is no fixed release on the 1.x or
+2.x lines, and `npm audit fix --force` would resolve it by installing `eslint@10`. The bump is
+therefore currency, not a clearance, and the CHANGELOG entry does not claim otherwise (CLAUDE.md
+§ Dependency hygiene — advisory metadata is evidence, not proof). Both copies are `devDependencies`
+reached only through the ESLint tree; neither ships in the image or the browser bundle.
+
+**4. Dependabot security-PR routing documented** — the actual lesson from #120, in `CLAUDE.md`
+§ Dependency hygiene and a new `CONTRIBUTING.md` § Releasing subsection. `.github/dependabot.yml`
+sets `target-branch: dev` on all six ecosystems, and that key is honoured for **version** updates
+only; **security** updates ignore it and always open against the repository's **default branch**,
+`main`. That is a GitHub limitation with no config-level workaround, so a Dependabot PR's base is
+not predictable from the config and must be read off the PR. Two responses are correct — merge to
+`main` and back-merge, or close and reapply on `dev` — and **retargeting is not a third one**: the
+diff is not recomputed against the new base, so it goes stale as `dev` moves ahead and merging it
+can revert newer work, up to and including the fix the PR exists to deliver. Retargeting also does
+not re-run CI, since `on: pull_request` never fires on `edited` (already recorded in § Git & PR
+conventions, and the same failure mode from the other direction). The stale parenthetical at
+`CONTRIBUTING.md` § Releasing step 3 — "Dependabot targets `dev`, so promotion squashes are
+normally the only thing the back-merge has to reconcile" — was corrected in the same pass; it is
+exactly the belief that made #120 surprising.
+
+**Also observed, not changed here.** `main`'s push CI is **red** at `086fb1e`: its image job still
+builds on Python **3.13.14** and trips the Grype gate on CVE-2026-11940 (`tarfile`) and
+CVE-2026-15308 (`html.parser`), both HIGH. `dev` waived them in #117 and moved to 3.14.6 in #91, so
+the promotion is what fixes `main`'s CI — not a regression introduced by it. Relatedly, `main` also
+carries the default-branch copies of `dev-nightly.yml` and `rescan.yml`, which is the copy scheduled
+and tag-triggered runs execute, so both have been running versions of themselves that predate every
+workflow change on `dev`; the promotion is what lands those too.
+
+**Why:** every item is one the "Before you tag" checklist exists to catch, and all four are
+permanent or expensive to undo once the tag exists — a CHANGELOG ships verbatim as published
+history, a mis-verified `THIRD_PARTY_LICENSES/` is an Apache-2.0 §4 compliance defect in a
+distributed image, and an un-triaged security PR left pointing at the wrong branch is how a fix
+gets silently reverted. Items 1, 3 and 4 land on `dev` **before** the promotion PR so they flow to
+`main` through it rather than as follow-up commits on a protected branch.
+
+**Plan section affected:** `CLAUDE.md` § Dependency hygiene (new Dependabot security-update rule);
+`CONTRIBUTING.md` § Releasing (checklist bullet, new § Dependabot security updates target `main`,
+step-3 parenthetical corrected); `CHANGELOG.md` (`[0.2.0]` cut, new § Security);
+`frontend/package-lock.json`. No plan-level decision changed.
 
 ---
 
