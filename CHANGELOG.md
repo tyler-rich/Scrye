@@ -92,6 +92,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secret; the Docker-secret blocks are kept, commented out, for deployments that
   want the key and the data on separate mounts.
 
+- **Scan history is deep-linkable.** Filters, date range, sort and page are read
+  from the URL on mount and mirrored back into the query string, so Back,
+  bookmarking and sharing a filtered view all work. Defaults are omitted from the
+  URL, so an unfiltered history page still has a clean address.
+
+- **A filtered-history export says when it was truncated.** Exports are capped at
+  5 000 rows; hitting the cap is now reported in the JSON metadata, as a note in
+  the Markdown and CSV output, and in `X-Scrye-Truncated` / `X-Scrye-Total`
+  response headers, rather than silently returning a short file.
+
+- **Accessibility.** The history table is keyboard-navigable with sortable column
+  headers exposing `aria-sort` and rows as real links; loading spinners announce
+  themselves through a polite live region instead of being silent; the dashboard's
+  chart bars are exposed as images with their existing labels; the New scan,
+  scan-detail and MFA controls gained accessible names; and a Burger + Drawer
+  navigation fallback appears below the `sm` breakpoint.
+
 ### Fixed
 
 - **An unwritable data directory now reports what is wrong and how to fix it,
@@ -111,6 +128,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   squashing) says so explicitly — `chown` cannot help there, so it points at
   matching the container `user:` or supplying a Docker secret instead. README
   § Troubleshooting first-run issues covers both.
+
+- **Scans no longer get stuck `queued` or `running` until a restart.** Three
+  failures compounded into one symptom. The worker's database commits now retry
+  with backoff on SQLite lock contention instead of giving up under a large
+  findings flush; a successful scan's artifacts are unlinked only after the final
+  commit attempt fails, not the first; and a watchdog on every maintenance tick
+  re-submits `queued` scans that have no live task and fails task-less `running`
+  ones, so both families self-heal within a tick rather than needing a restart.
+
+- **A cancelled or timed-out scan no longer leaves orphaned processes behind.**
+  Scanner and git subprocesses are spawned as their own process group and the
+  whole group is killed on every abort path — output-cap overflow, timeout, and
+  shutdown. Previously only the direct child was signalled, so `git clone`'s
+  `git-remote-https` and any Trivy/Grype helpers survived the kill.
+
+- **A large scan result no longer stalls the whole app while it is parsed.**
+  Scanner JSON parsing and normalization run in a worker thread. On a result
+  large enough to matter, the event loop stayed blocked for the duration, so
+  every other request — including `/healthz` — waited behind it.
+
+- **A minutes-long scan no longer holds a database connection for its duration.**
+  The worker resolves its inputs up front, returns its pooled connection, runs the
+  scanner holding none, and re-acquires only to persist. The pool is also sized
+  from `max_concurrent_scans`, which is now bounded to 1–32.
+
+- **Shutdown is bounded and can no longer be skipped.** Lifespan teardown is
+  shielded and each component shuts down under its own error handling, so one
+  failure or a second cancellation cannot abandon live scanner subprocesses; each
+  scheduler's shutdown is time-bounded so a wedged task is abandoned rather than
+  running past `SIGKILL`; and the Compose stack allows a 30s stop grace period.
+
+- **A backup taken while a scan was running could tear.** `build_bundle` now reads
+  every table inside a single read snapshot, and a scheduled backup defers (and
+  retries next tick) while any scan is queued or running — mirroring the guard
+  manual restore already had.
+
+- **A failed credential or filter list no longer looks like "none configured".**
+  Both were swallowed by empty `catch` blocks, so a fetch failure was
+  indistinguishable from an empty list — an operator could launch a private-image
+  or private-repository scan **anonymously**, believing no credential was saved,
+  and only find out minutes later from an opaque auth error. New Scan now shows a
+  warning with a Retry action above the credential picker, and Scan history shows
+  an inline warning that its lists may be incomplete.
+
+- **Sign-in and sign-out races.** A status refresh already in flight could
+  overwrite a completed login, MFA verification or first-admin setup and drop the
+  shell back to the login screen; running the other way, a refresh answered before
+  a session was revoked could restore the signed-out session and flash the
+  authenticated shell. Both directions are now sequenced, so a completed
+  authentication is never undone by an in-flight refresh and a logged-out session
+  is never restored by a late one. ([#83](https://github.com/tyler-rich/Scrye/issues/83))
+
+- **Frontend lifecycle correctness.** Settings forms no longer render editable
+  before their initial load resolves, so a slow response cannot be saved over with
+  defaults; the scan-detail poller backs off exponentially and halts after a
+  failure ceiling instead of hammering a failing endpoint behind a stale "running"
+  badge; history and findings fetches use a latest-wins guard so out-of-order
+  responses cannot render results for a filter no longer selected; a status poll no
+  longer wipes an in-progress tag edit; per-scan state resets on navigation so two
+  scans cannot mix; the compare selection is reconciled against the visible rows so
+  it cannot diff a deleted scan; and mutation triggers are guarded in-flight —
+  most importantly stopping a double-click from minting an invisible second API
+  token.
+
+- **API-layer fixes.** A schema-validation `422` now renders its reason in the UI
+  instead of an empty error; a Trivy ignore rule's timezone offset is no longer
+  silently dropped; scan comparison includes `location` in the diff identity for
+  non-vulnerability findings and checks `target_type` before offering a compare;
+  and update paths for secret-bearing resources re-establish their create-time
+  invariants — a mandatory notification secret cannot be cleared, and a registry
+  update cannot blank a username.
 
 ### Changed
 
@@ -242,7 +330,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does not affect the rest of Scrye. No Scrye configuration changes;
   `SCRYE_DOCKER_PROXY_URL` and port 2375 are unchanged.
 
+- **Three smaller API response changes**, all narrower than the envelope change
+  above but worth knowing if you parse responses yourself:
+
+  - **Timestamps serialize with an explicit `Z`.** Every response timestamp is now
+    `2026-07-31T05:00:00Z` rather than bare ISO-8601. Storage is unchanged. This is
+    additive for any consumer that parses ISO-8601 correctly, but a consumer that
+    string-matches or assumes a fixed length will see the difference.
+  - **`GET /api/audit` renamed its envelope key `entries` → `items`**, matching the
+    `{total, items}` shape everything else uses. Admin-only, and the web UI was
+    updated with it.
+  - **Scan rows in list, history and dashboard responses no longer carry `options`
+    or `error`.** They carry a boolean `has_error` instead; the full fields remain
+    on the single-scan detail response. Fetch the scan by id if you need them.
+
 ### Security
+
+- **A repository scan can no longer be pointed at the container's own
+  filesystem.** A `repository` target was validated only for length and a leading
+  `-` before being handed to `trivy repo`, which also accepts a **local path** — so
+  a target of `/data` or `/run/secrets` walked the container filesystem and
+  persisted the result as a downloadable artifact. That is the arbitrary-file read
+  the `SCRYE_FILESYSTEM_SCAN_ROOTS` allowlist exists to prevent, reached through a
+  path the allowlist never covered, and it exposed the SQLite database and the
+  master key. A `repository` target must now be a **remote clone URL** (`http`,
+  `https`, `ssh` or `git`); anything else is refused at request time with a 422.
+  Scheduled scans are covered by the same validator.
+
+  **Action required only if you scanned a local path this way.** There was no UI
+  or configuration for it and the field has always been documented as a clone URL,
+  so most deployments are unaffected. Local directories are still scannable via a
+  **filesystem** scan, which remains gated by `SCRYE_FILESYSTEM_SCAN_ROOTS`.
+
+- **Server-side fetchers no longer reach private addresses by default.** A new
+  egress guard screens the notification (webhook/SMTP/Matrix) and registry-probe
+  fetchers: loopback and cloud-metadata addresses are **always** refused, and
+  RFC-1918/private ranges are refused unless `SCRYE_ALLOW_INTERNAL_EGRESS` is
+  enabled. The Docker-proxy fetcher is exempted from the private-range rule — it is
+  internal by design — but still refuses loopback and metadata.
+
+  **Action required if any notification target or registry lives on your LAN**,
+  which for a self-hosted deployment is likely: set
+  `SCRYE_ALLOW_INTERNAL_EGRESS=true`.
+
+- **The master key must now carry real entropy.** The key file must be valid
+  base64 decoding to at least 32 bytes. **The KDF and the on-disk token format are
+  unchanged, so all existing ciphertext still decrypts** — this is input validation
+  only.
+
+  **Action required if your key file holds a raw passphrase**, which v0.1.0
+  accepted: the container will not start. Do **not** simply generate a new key —
+  that leaves every stored secret undecryptable. Set the temporary escape hatch
+  `SCRYE_ALLOW_WEAK_MASTER_KEY=true` to boot (every load under it warns), take a
+  backup, then restore under a strong key and remove the opt-out.
+
+- **A scanner-supplied URL can no longer be rendered as a live link, and every
+  response carries a security-header baseline.** A finding's scanner-derived
+  `primary_url` is rendered as a link only if it is a well-formed `http`/`https`
+  URL — `javascript:`, `data:` and malformed values render as inert text — with
+  `rel="noopener noreferrer"`. Alongside it, every response now carries
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, and a Content-Security-Policy
+  with `script-src 'self'`, `object-src 'none'` and `frame-ancestors 'none'`. The
+  interactive API docs at `/docs` and `/redoc` are exempt from the CSP only, since
+  they need inline scripts. The CSRF double-submit design is unchanged.
+
+- **Stored secrets bind to their row, not just their column.** Field-encryption
+  AAD is now `<table>.<column>:<row-id>`, so a ciphertext lifted from one row
+  cannot be replayed into another. **Migration-free:** decryption tries the
+  row-bound tag and falls back to the column tag, so existing ciphertext still
+  decrypts and each secret upgrades on its next write.
+
+- **Restore and backup hardening.** A restore takes the write lock up front and
+  re-checks its "no scans in flight" guard **inside** the transaction (returning
+  409 rather than racing the check), and pauses the worker for its duration.
+  Passphrase-KDF parameters supplied by a restored bundle are clamped rather than
+  trusted, and the memory budget is a fixed constant instead of being derived from
+  the bundle's own numbers — an untrusted bundle can no longer drive the host out
+  of memory.
+
+- **Log redaction covers more shapes**, so a secret carrying spaces or commas in an
+  unquoted `key=value` pair is redacted whole rather than to its first token. This
+  over-redacts trailing free text after such a pair, which is the accepted
+  trade-off.
+
+- **Rate-limiter and MFA-challenge memory are bounded.** The rate limiter evicts
+  expired keys once its map grows past a threshold, and concurrent pending MFA
+  challenges are capped per user.
+
+- **Supply chain.** Backend dependencies install from a fully-resolved,
+  hash-verified `backend/requirements.lock` with `pip --require-hashes`, and CI
+  fails on lock drift. Every GitHub Action is pinned to a commit SHA and the
+  publish workflows' checkouts are hardened. Published images carry a BuildKit
+  **SLSA provenance** attestation (`mode=max`), an **SPDX SBOM**, and a
+  GitHub-signed build-provenance attestation you can check with
+  `gh attestation verify oci://ghcr.io/tyler-rich/scrye:0.2.0 --owner tyler-rich`.
+  The Dockerfile **cosign-verifies** each scanner's checksum file — keyless, with
+  the certificate identity pinned to that project's release workflow — before
+  verifying and extracting the binary. A weekly workflow re-scans the *published*
+  images and opens a tracking issue when a newly disclosed fixable HIGH/CRITICAL
+  appears, rather than waiting for the next release to notice. The backend test
+  suite and dev scripts no longer ship inside the image.
+
+- **Audit visibility for two documented MFA limitations.** An OIDC login under a
+  mandatory MFA policy records `mfa_delegated_to_idp` (Scrye delegates MFA to the
+  identity provider), and a policy-forced first enrollment records
+  `forced_by_policy`. No authentication behavior changed; both windows are
+  described in the README security model.
 
 - **A current image.** `ghcr.io/tyler-rich/scrye:latest` has been the v0.1.0
   build from 2026-07-09 for this whole cycle, and the weekly re-scan has been
