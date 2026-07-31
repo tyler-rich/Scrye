@@ -138,6 +138,39 @@ Features and developer-experience investments with a larger surface.
 - **Generated API client.** The frontend API layer is a thin, hand-written `fetch` wrapper
   (`frontend/src/api/*`). Generating a typed client from the FastAPI OpenAPI schema (e.g.
   openapi-typescript) over that wrapper would keep the client and server contracts in lockstep.
+- **Single-source the version string, and stamp it into the image.** Two halves of one problem:
+  the version is declared in several places and derived from none of them.
+
+  *Single-sourcing.* The app version is declared independently in `backend/app/__init__.py`,
+  `backend/pyproject.toml` and `frontend/package.json` (+ the lockfile's root fields), and
+  nothing derives one from another or from the git tag — so a release has to touch several files
+  in lockstep. `backend/tests/test_version.py` now fails on drift, which makes the duplication
+  safe but not gone. Collapse it to `app.__version__` as the single source: `pyproject.toml` can
+  pick it up via setuptools' dynamic version (`dynamic = ["version"]` +
+  `[tool.setuptools.dynamic] version = {attr = "app.__version__"}`), and
+  `frontend/package.json`'s copy — which is never bundled and never published (`private: true`),
+  since the SPA reads the version from the About/health API at runtime — can be dropped to a
+  fixed placeholder.
+
+  *Image stamping.* `publish.yml` computes the image tag from the pushed ref
+  (`${GITHUB_REF_NAME#v}`) but never stamps a version **into** the image: there is no `LABEL` in
+  `docker/Dockerfile` and no `labels:`/`build-args:` in any of the three build workflows
+  (`publish.yml`, `dev-nightly.yml`, `ci.yml` — none of them uses `docker/metadata-action`, which
+  is what normally generates the OCI label set). So `docker inspect` on a published image reveals
+  nothing about what is inside it, and an image whose tag was retagged or lost carries no
+  self-description at all. This is **metadata hygiene, not a defect**: the running app reports its
+  version correctly because `app/__init__.py` is baked in, and `/healthz` and the About tab both
+  serve it. The fix is the standard OCI label set on the runtime stage — at minimum
+  `org.opencontainers.image.version`, alongside `.title`, `.source`, `.revision` and `.created` —
+  fed by a build arg the publish workflow already has in `steps.version.outputs.version`. Note the
+  image is not wholly opaque today: `publish.yml` attaches BuildKit SLSA provenance
+  (`provenance: mode=max`) and an SPDX SBOM (`sbom: true`) plus a GitHub-signed attestation, so
+  the build is describable — just not through the one-command channel operators actually reach
+  for.
+
+  Both halves want their own PR and CI run rather than riding on a release bump; the label work
+  also touches the runtime stage, so read `docs/ARCHIVE.md` § Build performance first. See
+  `docs/ARCHIVE.md` § Deviations, 2026-07-29.
 - **Type-checking in CI.** Add a Python type checker (mypy or pyright) to the CI gate. This
   first needs the existing annotation gaps resolved so the gate lands green rather than red.
 - **Backend structural cleanup.** The four near-identical secret-CRUD routers (registries, git
