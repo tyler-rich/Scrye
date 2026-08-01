@@ -18,6 +18,7 @@ import { IconAlertCircle, IconLogin2 } from '@tabler/icons-react';
 import { OIDC_LOGIN_PATH } from '../api/oidc';
 import { ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { InsecureTransportAlert } from '../components/InsecureTransportAlert';
 
 const OIDC_ERRORS: Record<string, string> = {
   disabled: 'OIDC sign-in is not enabled.',
@@ -29,11 +30,13 @@ const OIDC_ERRORS: Record<string, string> = {
   not_provisioned: 'No account is linked to that identity.',
   inactive: 'Your account is inactive.',
   config: 'OIDC is misconfigured; contact an administrator.',
+  insecure_transport:
+    'Sign-in requires HTTPS: this server marks its session cookie Secure, so a browser will not keep it on an http:// page. See the banner above.',
 };
 
 /** Local-account login form, with optional OIDC sign-in and MFA challenge. */
 export function LoginPage() {
-  const { login, verifyMfa, refresh, oidc } = useAuth();
+  const { login, verifyMfa, refresh, oidc, insecureTransport } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [mfaToken, setMfaToken] = useState<string | null>(null);
@@ -91,7 +94,7 @@ export function LoginPage() {
 
   return (
     <Center mih="100vh" p="md">
-      <Paper withBorder radius="md" p="xl" w={380}>
+      <Paper withBorder radius="md" p="xl" w={insecureTransport ? 460 : 380}>
         <Stack gap="md">
           <div>
             <Title order={2} c="teal">
@@ -101,6 +104,7 @@ export function LoginPage() {
               {mfaToken ? 'Enter your authentication code' : 'Sign in to continue'}
             </Text>
           </div>
+          {insecureTransport && <InsecureTransportAlert />}
           {error && (
             <Alert color="red" icon={<IconAlertCircle size={16} />} variant="light">
               {error}
@@ -135,7 +139,12 @@ export function LoginPage() {
                 onChange={setCode}
                 aria-label="Authentication code"
               />
-              <Button onClick={submitMfa} loading={submitting} disabled={code.length < 6} fullWidth>
+              <Button
+                onClick={() => void submitMfa()}
+                loading={submitting}
+                disabled={code.length < 6}
+                fullWidth
+              >
                 Verify
               </Button>
               <Button

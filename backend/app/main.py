@@ -43,7 +43,8 @@ from app.api.trivy_policy import router as trivy_policy_router
 from app.api.users import router as users_router
 from app.auth.mfa import PendingMfaStore
 from app.core.config import Settings, get_settings
-from app.core.crypto import MasterKeyError, get_secret_cipher
+from app.core.crypto import MasterKeyError, get_master_key_resolution, get_secret_cipher
+from app.core.forwarded import ForwardedProtoMiddleware
 from app.core.logging import configure_logging
 from app.core.ratelimit import SlidingWindowRateLimiter
 from app.core.security_headers import SecurityHeadersMiddleware
@@ -58,9 +59,12 @@ logger = logging.getLogger(__name__)
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Validate the master key and start the scan worker at startup.
 
-    In production a missing/invalid key file is a fatal misconfiguration —
-    failing fast beats discovering it on the first secret write. Development
-    setups get a warning so the API can run before a key has been generated.
+    On a first launch with no key supplied, this is where the master key is
+    generated and persisted (see :func:`app.core.crypto.resolve_master_keys`); an
+    *invalid* or unresolvable key file is a fatal misconfiguration in production —
+    failing fast beats discovering it on the first secret write, and beats
+    generating a second key that would orphan stored secrets. Development setups
+    get a warning so the API can run before a key has been provided.
 
     The in-process scan worker is created here and reconciles any scans left
     mid-flight by a previous process before accepting new work.
@@ -69,9 +73,19 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     settings = get_settings()
     reset_dashboard_cache()  # start each process with a cold dashboard cache (API-7)
+    log_https_enforcement(settings)
     try:
+        # Resolve first: this is what generates the key on a first launch, and
+        # doing it here means the generation notice (and its back-this-up warning)
+        # lands in the startup log rather than mid-request.
+        resolution = get_master_key_resolution()
         cipher = get_secret_cipher()
-        logger.info("Master key loaded (current key version v%d).", cipher.current_version)
+        logger.info(
+            "Master key loaded from %s (%s, current key version v%d).",
+            resolution.path,
+            "configured secret file" if resolution.from_configured_path else "auto-generated",
+            cipher.current_version,
+        )
     except MasterKeyError as exc:
         if settings.is_development:
             logger.warning("Master key unavailable (dev mode, continuing): %s", exc)
@@ -106,6 +120,58 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # under its own try/except so one failure can't skip the rest (CON-7).
         await asyncio.shield(_shutdown_all(maintenance, backup_scheduler, worker))
         logger.info("Scan worker, backup, and maintenance schedulers stopped.")
+
+
+def log_https_enforcement(settings: Settings) -> None:
+    """State at startup whether HTTPS enforcement is on, and what that implies.
+
+    This exists because the failure it describes is otherwise invisible. With
+    enforcement on (the default) and Scrye reached over plain HTTP, the browser
+    discards the ``Secure`` session cookie: the operator sees 401s with correct
+    credentials, and — before this line existed — nothing anywhere said why. The
+    log therefore names the exact opt-out (variable **and** value) and the
+    reverse-proxy alternative, rather than merely reporting a flag's state.
+    """
+    trusted = settings.trusted_proxies
+    if settings.session_cookie_secure:
+        logger.info(
+            "HTTPS enforcement is ON (SCRYE_SESSION_COOKIE_SECURE=true): session cookies are "
+            "set with the Secure attribute, so browsers store them only on https:// pages. "
+            "LOGINS OVER PLAIN HTTP WILL FAIL - the cookie is discarded and every request "
+            "after a successful login looks unauthenticated. Behind a TLS-terminating "
+            "reverse proxy, keep this on and have the proxy send 'X-Forwarded-Proto: https' "
+            "(forwarded headers are trusted only from %s, per SCRYE_FORWARDED_ALLOW_IPS). "
+            "If this deployment is intentionally plain HTTP (LAN or evaluation), opt out "
+            "with SCRYE_SESSION_COOKIE_SECURE=false and restart.",
+            trusted.describe(),
+        )
+    else:
+        logger.warning(
+            "HTTPS enforcement is OFF (SCRYE_SESSION_COOKIE_SECURE=false): session cookies "
+            "are set WITHOUT the Secure attribute and will be sent over plain HTTP, where "
+            "anyone on the network path can read one and take over the session. Use this "
+            "only on a trusted LAN or for evaluation; remove it once TLS is in place."
+        )
+
+    if trusted.trust_all:
+        logger.warning(
+            "SCRYE_FORWARDED_ALLOW_IPS is '*': X-Forwarded-For and X-Forwarded-Proto are "
+            "trusted from EVERY peer, so any client can forge its source IP and claim an "
+            "HTTPS transport. Set it to the address your reverse proxy connects from."
+        )
+    if trusted.invalid:
+        logger.warning(
+            "SCRYE_FORWARDED_ALLOW_IPS contains %d entry/entries that are not a valid IP or "
+            "CIDR and were ignored: %s. Forwarded headers from those peers are NOT trusted.",
+            len(trusted.invalid),
+            ", ".join(trusted.invalid),
+        )
+    elif not trusted.is_configured:
+        logger.warning(
+            "SCRYE_FORWARDED_ALLOW_IPS is empty: X-Forwarded-For and X-Forwarded-Proto are "
+            "ignored from every peer. Behind a reverse proxy this collapses the auth rate "
+            "limiter onto the proxy's IP and makes an HTTPS deployment look like plain HTTP."
+        )
 
 
 async def _shutdown_all(
@@ -228,6 +294,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # CORS layer, applying to every response the app emits — including errors,
     # CORS preflight replies, and the served SPA.
     app.add_middleware(SecurityHeadersMiddleware)
+
+    # Resolve the client's scheme from X-Forwarded-Proto before anything reads it.
+    # Added last, so it is the outermost middleware and every downstream layer
+    # (including the security headers above) sees the corrected scheme. Trust is
+    # limited to the peers named in SCRYE_FORWARDED_ALLOW_IPS, and the scheme is
+    # only ever upgraded http -> https, never downgraded — see app.core.forwarded
+    # for how this composes with uvicorn's own --proxy-headers handling.
+    app.add_middleware(ForwardedProtoMiddleware, trusted=settings.trusted_proxies)
 
     app.include_router(health_router)
     app.include_router(metrics_router)

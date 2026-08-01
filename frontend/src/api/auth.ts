@@ -24,6 +24,13 @@ export interface AuthStatus {
   authenticated: boolean;
   user: UserInfo | null;
   oidc: OidcStatus;
+  /** Session cookies are marked `Secure`, so sign-in requires HTTPS. */
+  https_enforced: boolean;
+  /**
+   * This page reached the server over HTTPS — directly, or via a reverse proxy
+   * the server trusts for `X-Forwarded-Proto`.
+   */
+  transport_secure: boolean;
 }
 
 export interface LoginResponse {

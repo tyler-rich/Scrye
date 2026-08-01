@@ -125,7 +125,7 @@ export function UsersPanel() {
                       value={u.role}
                       disabled={isSelf}
                       allowDeselect={false}
-                      onChange={(v) => v && changeRole(u, v as Role)}
+                      onChange={(v) => v && void changeRole(u, v as Role)}
                       w={130}
                     />
                   </Table.Td>
@@ -138,7 +138,7 @@ export function UsersPanel() {
                     <Switch
                       checked={u.is_active}
                       disabled={isSelf}
-                      onChange={() => toggleActive(u)}
+                      onChange={() => void toggleActive(u)}
                     />
                   </Table.Td>
                 </Table.Tr>

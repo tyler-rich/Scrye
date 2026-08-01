@@ -24,9 +24,11 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 
 ## Locked decisions — do not re-open
 1. **Name:** Scrye.
-2. **Stack:** React 18 + TS + Vite + **Mantine v7** frontend; **Python 3.13 + FastAPI + Pydantic
-   v2 + SQLAlchemy 2.0 + Alembic** backend; **SQLite**. (Originally locked to Python 3.12;
-   revised to 3.13 in Phase 6 — see `docs/ARCHIVE.md` § Deviations.)
+2. **Stack:** React 18 + TS + Vite + **Mantine v7** frontend; **Python 3.14 + FastAPI + Pydantic
+   v2 + SQLAlchemy 2.0 + Alembic** backend; **SQLite**. The runtime floor is **3.14.6** —
+   never 3.14.0–3.14.4, whose incremental GC leaked resident memory in long-running servers
+   (reverted in 3.14.5). (Originally locked to Python 3.12; revised to 3.13 in Phase 6, then to
+   3.14 post-v1 — see `docs/ARCHIVE.md` § Deviations.)
 3. **Job model:** single-container **in-process async worker** (DB-backed `scans` table +
    concurrency semaphore). **No Redis/arq in v1** — but keep a thin worker interface so it could be
    swapped later.
@@ -62,8 +64,14 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   code, config, Compose, image layers, tests, or logs. Use the secret-file master key + env vars
   for non-sensitive config.
 - Stored secrets (registry creds, git tokens, OIDC client secret, API tokens) are **field-encrypted
-  with AES-256-GCM**; the **master key comes from a Docker secret file** (`APP_SECRET_KEY_FILE`),
-  never an env var or image layer.
+  with AES-256-GCM**; the **master key comes from a file — never an env var or image layer**. The
+  **Docker secret file** (`APP_SECRET_KEY_FILE`) is the recommended production mechanism and keeps
+  its precedence over everything else; when no secret is supplied, the key is **generated on first
+  launch** and persisted mode-0600 at `APP_SECRET_KEY_AUTOGEN_FILE` (default `/data/app_secret_key`)
+  so a fresh deployment starts without pre-seeding a secret. **An existing key file is always used
+  and never replaced:** a key file that exists but fails to load stops startup rather than being
+  regenerated, because a second key silently orphans every stored secret. See `docs/ARCHIVE.md`
+  § Deviations (2026-07-29) and README § The master key.
 - Secret API fields are **write-only**: accept on write, return a mask (`••••`) + timestamp on
   read. Never return or log plaintext secrets. Add a logging redaction filter.
 - Decrypt secrets **only at scan time**, in memory, into **tmpfs** credential files, and shred them
@@ -89,14 +97,26 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   or hotfix PR targeted at `main`), back-merge `main` into `dev`
   (`git fetch origin main dev && git checkout dev && git merge origin/main && git push`) so the
   branches stay reconciled and `dev` doesn't accumulate phantom "behind" commits. Do it promptly,
-  before `dev` diverges further — the merge is trivial then. Because promotions are **squash**-
-  merged, `main`'s squashed copy of already-promoted work will conflict with `dev`'s newer versions
-  of the same files; resolve every such conflict by **keeping `dev`'s side**. The only content a
+  before `dev` diverges further — the merge is trivial then. Because promotions are merged with a
+  **regular merge commit** (see below), `dev`'s tip is already an ancestor of `main`'s, so the
+  back-merge of a promotion alone is a **fast-forward with nothing to resolve**. The only content a
   back-merge should actually introduce to `dev` is commits that landed on `main` independently of a
-  promotion (e.g. a Dependabot bump). Verify this before committing: the net diff of the resolved
-  merge against `dev`'s pre-merge tip should be exactly those independent changes and nothing else
+  promotion (e.g. a Dependabot security bump). If such a commit touched a file `dev` also changed,
+  resolve by **keeping `dev`'s side** — but first confirm `dev` is genuinely ahead, i.e. that
+  nothing is present on `main` and absent from `dev`, so the resolution cannot revert a fix only
+  `main` carries. Verify before committing: the net diff of the resolved merge against `dev`'s
+  pre-merge tip should be exactly those independent changes and nothing else
   (`git diff <dev-before> HEAD`). This keeps the git-identity and no-attribution-footer rules; the
   merge commit is authored as the user like any other.
+- **`dev` → `main` promotions are merged with a regular merge commit, never squashed.** Use
+  GitHub's *"Create a merge commit"* — not *"Squash and merge"*. A squash replaces `dev`'s commits
+  with one new commit that has no ancestry link to them, so `main` and `dev` diverge the instant the
+  promotion lands and every subsequent back-merge is a conflict-resolution exercise against `main`'s
+  squashed copy of work `dev` already has. A merge commit keeps `dev`'s history as an ancestor of
+  `main`'s: the back-merge fast-forwards, `main` keeps the individual commits a release is supposed
+  to preserve, and a later promotion cannot open `dirty` merely because the previous one squashed.
+  **Contribution/feature PRs into `dev` are still squash-merged** — this applies only to promotions.
+  (Changed 2026-07-31; promotions were squash-merged before. See `docs/ARCHIVE.md` §14.)
 - **Landing a multi-PR stacked batch is not "merge each PR in order and walk away."** When a
   batch of stacked PRs (each built on the previous, e.g. child PR B based on parent PR A) is being
   landed:
@@ -113,6 +133,27 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
     into the target branch. Confirm it directly: `git fetch origin <target-branch>` and diff/log
     against what was claimed to have landed, or check a marker file/line unique to the final
     change, and only then report the batch complete.
+- **Retargeting a stacked child PR after its parent was squash-merged requires
+  `git rebase --onto`, not just changing the base in the UI.** A squash-merge does not preserve
+  the parent branch's commits — it replaces them with one new commit on the target branch — so the
+  child's original commits are orphaned. Flipping the base in the GitHub UI does **not** re-parent
+  them: GitHub recomputes the merge base against the new target, finds the old parent commits
+  absent from its history, and falls back to a much older common ancestor, so the PR's diff
+  balloons to include everything the parent already landed. Rebase the child onto the true target
+  first, then change the base:
+  `git fetch origin <target> && git rebase --onto origin/<target> <old-parent-branch> <child-branch>`
+  followed by `git push --force-with-lease`. **Verify the diff after retargeting, every time** — a
+  child PR that suddenly shows its parent's files is this failure, not a conflict, and merging it
+  would re-apply already-landed work.
+- **A base-branch change alone never re-runs CI.** `on: pull_request` with no explicit `types:`
+  defaults to `opened`, `synchronize`, and `reopened` — it does **not** include `edited`, and
+  changing a PR's base is an `edited` event, not a `synchronize`. So after retargeting a stacked
+  PR the checks shown are the ones from the *old* base and are stale, even though they read green.
+  Either push a commit (any `synchronize` re-triggers the full workflow), re-run the workflow
+  manually, or close-and-reopen the PR — and **never treat a green check from before a base change
+  as the CI gate** required by § Definition of done item 3. A workflow that genuinely needs to
+  react to retargeting must opt in explicitly with
+  `on: pull_request: types: [opened, synchronize, reopened, edited]`.
 - **CI is created in Phase 0 and is the gate for every PR thereafter, including Phase 0's own.**
   `.github/workflows/ci.yml` runs on every pull request and push to `main`: lint the backend
   (`ruff` + `black --check`) and frontend (ESLint + Prettier), and run `pytest` plus the frontend
@@ -126,14 +167,27 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   `git config user.email "170156756+tyler-rich@users.noreply.github.com"`.
   Every commit and PR must use this name/email — no Claude/Anthropic identity, no co-author
   trailer, no bot account. This is in addition to, not instead of, the no-attribution-footer rule
-  below. Note: a GitHub **squash-merge** authors the squashed commit as the merging account's
-  *profile display name*, which the repo-local `git config user.name` cannot override — so the
-  GitHub profile display name must also read `tyler-rich` for this rule to hold end-to-end on
-  squash-merged promotions (see `docs/ARCHIVE.md` § Deviations, 2026-07-13 squash-merge authorship).
+  below. Note: GitHub authors a **squash-merge** commit — and the **merge commit** a promotion
+  produces — as the merging account's *profile display name*, which the repo-local
+  `git config user.name` cannot override. So the GitHub profile display name must also read
+  `tyler-rich` for this rule to hold end-to-end on anything merged through the web UI. (A merge
+  commit leaves the individual promoted commits' own authorship intact, so only the merge commit
+  itself is affected. See `docs/ARCHIVE.md` § Deviations, 2026-07-13 squash-merge authorship.)
 - **Commit messages and PR descriptions contain no attribution footers.** Do not add
   "Generated by Claude Code," "Co-Authored-By: Claude," a session URL/link, or any similar
   signature. Commits and PRs should read as if written directly by the developer — plain
   Conventional Commit messages and a normal PR description (summary, what changed).
+- **After opening any PR, re-check the *live* PR body and strip any auto-appended attribution
+  footer.** In this environment tooling has appended an attribution footer (e.g. "Generated by
+  Claude Code", a "🤖 Generated with…" line, a session/`claude.ai` link) to the PR **body** on
+  essentially every PR in this effort — often *after* a clean description was submitted, so a body
+  that looked correct when composed is not proof. Therefore, immediately after opening (or editing)
+  a PR, fetch the live body via the GitHub API/CLI (not what you typed) and remove any such footer:
+  the PR body must carry **no** Claude/Anthropic identity, co-author trailer, session URL, or
+  "Generated by…"/"Generated with…" text — the same no-attribution standard the commit-authorship
+  rule holds for commits. Edit the PR body in place to strip it **before** telling the user the PR
+  is ready, and don't report this as done without having actually re-read the live body this
+  session.
 - **This has regressed before — treat it as untrusted until verified, every time.** Some tooling
   auto-appends an attribution footer or sets the commit author *after* you've composed the
   commit/PR, so believing you followed the rule is not sufficient. Before opening any PR, and
@@ -211,6 +265,42 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   with `pip --require-hashes`). **Whenever `pyproject.toml` dependencies change, regenerate the lock
   with the pinned `uv pip compile --generate-hashes` command** — uv is build/dev-time only, never in
   the runtime image — and CI fails on lock drift. See `CONTRIBUTING.md` § Backend dependency lock.
+- **Dependabot *security* updates open against `main`, not `dev` — check `baseRefName` before
+  touching one.** `.github/dependabot.yml` sets `target-branch: dev` on every ecosystem, but that
+  key governs **version updates only**. Security updates ignore it and always open against the
+  repository's **default branch** (`main`). This is a documented GitHub limitation, not a
+  misconfiguration in this repo, and there is no config that changes it. So the first thing to
+  check on any Dependabot PR is its base branch, and there are exactly two correct responses:
+  **(a)** merge it into `main` and immediately back-merge `main` into `dev` (§ Git & PR
+  conventions), or **(b)** close it and apply the same bump on `dev` directly, regenerating the
+  lockfile with the real package manager rather than hand-editing version strings.
+  **Retargeting the PR's base to `dev` is not a third option and does not work** — the diff stays
+  computed against the branch point it was opened from, so it goes stale the moment `dev` moves
+  ahead, and merging it can resolve *away* from the security fix. This is what happened to
+  **#120** (brace-expansion) on 2026-07-31; it was closed and the bump reapplied on `dev`. See
+  `docs/ARCHIVE.md` §14 (2026-07-31) and `CONTRIBUTING.md` § Releasing.
+- **Interpreter CVEs: verify against the target version's source before a bump is justified on
+  security grounds.** Scanner output, advisory "fixed in" fields, and this repo's own issue
+  summaries are **evidence, not proof** — none of them is sufficient on its own to claim that
+  moving the runtime to version X clears CVE Y. Before a runtime bump is argued as a security fix,
+  confirm the fix is actually present in the target interpreter: read the relevant stdlib module in
+  that exact version (unpack the pinned base image if needed) and check that the patched behavior is
+  there. If it isn't, the bump does not clear that CVE, whatever the metadata says. This rule is
+  **earned, not theoretical** — both interpreter bumps so far were decided from Grype's `FIXED IN`
+  column without ever reading CPython:
+  - **3.12 → 3.13** (2026-07-03) got the right outcome by luck, not method. The same entry that
+    justified it recorded the triggering CVEs' fixes as landing in "3.13+/**3.14+/3.15+**" — i.e.
+    the metadata itself said some were *not* fixed in 3.13 — yet the post-bump scan came back clean
+    anyway. Metadata that is wrong in the pessimistic direction is still wrong.
+  - **3.13 → 3.14** (2026-07-25) got the wrong outcome. The scoping doc and issue #52's
+    resolution-trigger line both asserted 3.14.6 carried the CVE-2025-15366/-15367 fixes; 3.14.6's
+    `imaplib`/`poplib` show it does not, and the bump cleared **nothing**. Issue #52 even contained
+    the correct fact ("declined backport to 3.10–3.14") in a different paragraph.
+
+  A runtime bump is still perfectly legitimate on **support-lifecycle, ecosystem, or dependency-
+  currency** grounds — those need no CVE argument and are what actually carried the 3.14 move. Just
+  don't sell a bump as a CVE fix that hasn't been verified at the source. See `docs/ARCHIVE.md` §14
+  (2026-07-25) for both cases.
 - **Build performance:** `docker/Dockerfile` changes must preserve the multi-stage build
   boundaries and layer ordering that keep build times down and the final image slim — the
   stage split exists to keep the Node/Python build toolchains out of the runtime image, and
@@ -231,8 +321,8 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 - **`LICENSE`** — MIT unless told otherwise.
 - **`.env.example`** — generate it in Phase 0–1 **from the Pydantic `Settings` model** (the config
   loader is the single source of truth — keep the two in sync). **Non-sensitive configuration vars
-  only.** The master key is never included (it comes from the Docker secret file
-  `APP_SECRET_KEY_FILE`); stored application secrets — registry creds, git tokens, the OIDC client
+  only.** The master key content is never included (only the *paths* it is read
+  from/generated at — `APP_SECRET_KEY_FILE`, `APP_SECRET_KEY_AUTOGEN_FILE`); stored application secrets — registry creds, git tokens, the OIDC client
   secret, API tokens — are **not** environment variables at all: they are configured through the app
   and held field-encrypted in the database, so no secret placeholder appears in `.env.example`.
   `.gitignore` already ignores `.env` but allows `.env.example`.

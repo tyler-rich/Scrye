@@ -1,6 +1,6 @@
 /** API types and calls for registries, git credentials, and Docker environments. */
 
-import { api } from './client';
+import { api, apiList } from './client';
 
 export interface MaskedSecret {
   is_set: boolean;
@@ -59,7 +59,7 @@ export interface RegistryTestResult {
 }
 
 export function listRegistries(): Promise<Registry[]> {
-  return api<Registry[]>('/api/registries');
+  return apiList<Registry>('/api/registries');
 }
 
 /** Operator-accessible id/name options for the scan-launch registry picker. */
@@ -104,7 +104,7 @@ export interface GitCredentialCreateInput {
 }
 
 export function listGitCredentials(): Promise<GitCredential[]> {
-  return api<GitCredential[]>('/api/git-credentials');
+  return apiList<GitCredential>('/api/git-credentials');
 }
 
 /** Operator-accessible id/name options for the scan-launch git-credential picker. */
@@ -147,7 +147,7 @@ export interface DockerImage {
 }
 
 export function listDockerEnvironments(): Promise<DockerEnvironment[]> {
-  return api<DockerEnvironment[]>('/api/docker-environments');
+  return apiList<DockerEnvironment>('/api/docker-environments');
 }
 
 export function createDockerEnvironment(

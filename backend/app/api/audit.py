@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.pagination import Page
 from app.api.schema_types import UtcDatetime
 from app.auth.deps import AuthContext, require_role
 from app.db.models import AuditLog, Role
@@ -35,15 +36,13 @@ class AuditEntryOut(BaseModel):
     details: dict[str, Any] | None
 
 
-class AuditPageOut(BaseModel):
+class AuditPageOut(Page[AuditEntryOut]):
     """A page of audit entries, newest first.
 
-    Uses the ``{total, items}`` envelope shared by every other paginated
-    endpoint (history, findings) rather than a third key name (APIR-8).
+    Uses the shared ``{total, items}`` envelope (:class:`~app.api.pagination.Page`)
+    rather than a third key name of its own (APIR-8). The named subclass exists
+    only to keep the OpenAPI component name stable.
     """
-
-    total: int
-    items: list[AuditEntryOut]
 
 
 @router.get("", response_model=AuditPageOut)

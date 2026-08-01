@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.pagination import Page, full_page
 from app.api.target_schemas import (
     DockerEnvironmentCreateIn,
     DockerEnvironmentOut,
@@ -53,14 +54,14 @@ def _get_or_404(db: Session, environment_id: int) -> DockerEnvironment:
     return environment
 
 
-@router.get("", response_model=list[DockerEnvironmentOut])
+@router.get("", response_model=Page[DockerEnvironmentOut])
 def list_environments(
     _: AuthContext = Depends(_operator),
     db: Session = Depends(get_db),
-) -> list[DockerEnvironmentOut]:
+) -> Page[DockerEnvironmentOut]:
     """List configured Docker environments."""
     rows = db.scalars(select(DockerEnvironment).order_by(DockerEnvironment.name)).all()
-    return [_to_out(e) for e in rows]
+    return full_page([_to_out(e) for e in rows])
 
 
 @router.post("", response_model=DockerEnvironmentOut, status_code=status.HTTP_201_CREATED)

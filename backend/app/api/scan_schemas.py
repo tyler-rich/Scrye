@@ -11,6 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.api.pagination import Page
 from app.api.schema_types import UtcDatetime
 from app.db.models import (
     ArtifactKind,
@@ -203,11 +204,12 @@ class FindingOut(BaseModel):
     primary_url: str | None
 
 
-class FindingsPage(BaseModel):
-    """A page of findings for a scan."""
+class FindingsPage(Page[FindingOut]):
+    """A page of findings for a scan.
 
-    total: int
-    items: list[FindingOut]
+    The shared ``{total, items}`` envelope; the named subclass keeps the OpenAPI
+    component name stable.
+    """
 
 
 class ArtifactOut(BaseModel):

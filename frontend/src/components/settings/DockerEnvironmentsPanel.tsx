@@ -7,7 +7,6 @@ import {
   Code,
   Group,
   List,
-  Loader,
   Modal,
   Stack,
   Switch,
@@ -30,6 +29,7 @@ import {
   updateDockerEnvironment,
 } from '../../api/targets';
 import { useAuth } from '../../auth/AuthContext';
+import { StatusLoader } from '../StatusLoader';
 
 /** Manage read-only Docker socket-proxy environments and enumerate their images. */
 export function DockerEnvironmentsPanel() {
@@ -152,7 +152,7 @@ export function DockerEnvironmentsPanel() {
                   {canManage ? (
                     <Switch
                       checked={e.risk_acknowledged}
-                      onChange={() => onToggleRisk(e)}
+                      onChange={() => void onToggleRisk(e)}
                       aria-label="Acknowledge residual risk"
                     />
                   ) : (
@@ -167,7 +167,7 @@ export function DockerEnvironmentsPanel() {
                       variant="subtle"
                       aria-label="Enumerate images"
                       disabled={!e.enabled || !e.risk_acknowledged}
-                      onClick={() => onEnumerate(e.id)}
+                      onClick={() => void onEnumerate(e.id)}
                     >
                       <IconList size={16} />
                     </ActionIcon>
@@ -176,7 +176,7 @@ export function DockerEnvironmentsPanel() {
                         variant="subtle"
                         color="red"
                         aria-label="Delete environment"
-                        onClick={() => onDelete(e.id)}
+                        onClick={() => void onDelete(e.id)}
                       >
                         <IconTrash size={16} />
                       </ActionIcon>
@@ -228,7 +228,7 @@ export function DockerEnvironmentsPanel() {
           </Alert>
         ) : images === null ? (
           <Group justify="center" py="lg">
-            <Loader color="teal" />
+            <StatusLoader color="teal" label="Loading images" />
           </Group>
         ) : images.length === 0 ? (
           <Text c="dimmed">No tagged images visible to this environment.</Text>

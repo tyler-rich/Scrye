@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.pagination import Page, full_page
 from app.api.target_schemas import (
     CredentialOption,
     GitCredentialCreateIn,
@@ -56,11 +57,11 @@ def _get_or_404(db: Session, credential_id: int) -> GitCredential:
     return credential
 
 
-@router.get("", response_model=list[GitCredentialOut])
+@router.get("", response_model=Page[GitCredentialOut])
 def list_git_credentials(
     _: AuthContext = Depends(_admin),
     db: Session = Depends(get_db),
-) -> list[GitCredentialOut]:
+) -> Page[GitCredentialOut]:
     """List configured git credentials with full metadata (admin only; tokens masked).
 
     Metadata (provider, host, username) is credential material, so the full view
@@ -68,7 +69,7 @@ def list_git_credentials(
     for id/name selection instead (docs/ARCHIVE.md §14).
     """
     rows = db.scalars(select(GitCredential).order_by(GitCredential.name)).all()
-    return [_to_out(c) for c in rows]
+    return full_page([_to_out(c) for c in rows])
 
 
 @router.get("/options", response_model=list[CredentialOption])

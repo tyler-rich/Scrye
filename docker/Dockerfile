@@ -10,11 +10,18 @@
 #   - Final image runs as a non-root user, COPY (never ADD), no secrets baked in.
 #   - HEALTHCHECK probes /healthz.
 # Build context is the repository root:
-#   docker build -f docker/Dockerfile -t scrye:0.1.0 .
+#   docker build -f docker/Dockerfile -t scrye:0.2.0 .
 # ─────────────────────────────────────────────────────────────────────────────
 
 # --- Stage 1: build the React/Vite SPA ---------------------------------------
-FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS frontend-builder
+# Node 22 (`jod`), digest-pinned. Keep this on the 22 line: 24 (`krypton`) is the
+# intended next move — it is the Active LTS and is supported through 2028-04-30,
+# versus 22's 2027-04-30 — but that bump also touches ci.yml's `node-version` and
+# CONTRIBUTING, so it is tracked as its own item in docs/ROADMAP.md rather than
+# ridden in on a digest refresh. Node 26 is not LTS until 2026-10-28 and is not a
+# candidate. Refresh this digest against the registry (the `22-bookworm-slim` tag
+# moves with each 22.x patch); do not let a Dependabot major stand in for it.
+FROM node:22-bookworm-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS frontend-builder
 WORKDIR /build/frontend
 
 # Install deps from the lockfile first for better layer caching. The BuildKit
@@ -30,7 +37,7 @@ RUN npm run build
 
 
 # --- Stage 2: download + checksum-verify the scanner binaries ----------------
-FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS scanners
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818 AS scanners
 ARG TARGETARCH
 # Pinned, current scanner versions (CLAUDE.md § Dependency hygiene).
 ARG TRIVY_VERSION=0.72.0
@@ -136,7 +143,13 @@ RUN set -eux; \
 
 
 # --- Stage 3: build the Python virtualenv ------------------------------------
-FROM python:3.13-slim-bookworm@sha256:fcbd8dfc2605ba7c2eca646846c5e892b2931e41f6227985154a596f26ab8ed7 AS backend-builder
+# Python 3.14.6+ only — NEVER 3.14.0 through 3.14.4. Those releases shipped an
+# incremental GC whose work estimate could go negative, so a long-running server
+# never cleared its cyclic-garbage backlog and resident memory grew several-fold.
+# It was reverted in 3.14.5, restoring 3.13's generational GC; 3.14.6 is the first
+# fully-safe release after the revert. The digest below is 3.14.6-slim-bookworm —
+# when bumping it, re-check that the new tag is 3.14.6 or later.
+FROM python:3.14-slim-bookworm@sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30 AS backend-builder
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build/backend
 
@@ -162,13 +175,20 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
 
 # Install the application package itself. Its runtime dependencies are already
 # present (installed and hash-verified from the lock above), so --no-deps keeps
-# the resolver from reaching back out to PyPI for an unpinned copy.
+# the resolver from reaching back out to PyPI for an unpinned copy. The build
+# backend (setuptools==83.0.0) is likewise in the lock and already installed
+# hash-verified, so --no-build-isolation reuses that pinned copy instead of pip
+# fetching an unpinned, unhashed setuptools into an isolated build env — closing
+# the last floating build-time dependency (SC-12). Keep the setuptools pin in
+# pyproject's [build-system]/[dependency-groups] and the lock in lockstep.
 COPY backend/app ./app
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked pip install --no-deps .
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    pip install --no-deps --no-build-isolation .
 
 
 # --- Final stage: minimal runtime image --------------------------------------
-FROM python:3.13-slim-bookworm@sha256:fcbd8dfc2605ba7c2eca646846c5e892b2931e41f6227985154a596f26ab8ed7 AS runtime
+# Same 3.14.6+ digest as the builder stage above — see the GC note there.
+FROM python:3.14-slim-bookworm@sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30 AS runtime
 
 # ca-certificates: scanner DB downloads + TLS. curl: container HEALTHCHECK.
 # git: authenticated clone of generic-host private repos into tmpfs, so the

@@ -32,17 +32,17 @@ jobs:
         working-directory: backend
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No step here pushes or authenticates to the remote (CI is
           # contents: read), so drop the persisted token rather than leave it
           # in .git/config for later steps (SC-11).
           persist-credentials: false
 
-      - name: Set up Python 3.13
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
           cache-dependency-path: backend/pyproject.toml
 
@@ -62,15 +62,17 @@ jobs:
       # from (docker/Dockerfile, SC-1). Regenerate it with the pinned uv and fail
       # if it drifts from pyproject.toml — uv reads the existing lock as a
       # preference set, so an unrelated new transitive release does NOT rewrite it;
-      # only a real pyproject dependency change does. Keep the uv pin and the
-      # compile flags identical to CONTRIBUTING.md § Backend dependency lock.
+      # only a real pyproject dependency change does. The `--group build` flag pulls
+      # the PEP 517 build backend (setuptools) into the same hash-pinned closure so
+      # no build-time dependency floats (SC-12). Keep the uv pin and the compile
+      # flags identical to CONTRIBUTING.md § Backend dependency lock.
       - name: Check requirements.lock is in sync with pyproject.toml
         run: |
           pip install uv==0.8.17
-          uv pip compile pyproject.toml --generate-hashes --python-version 3.13 \
+          uv pip compile pyproject.toml --group build --generate-hashes --python-version 3.14 \
             --output-file requirements.lock --quiet
           if ! git diff --exit-code requirements.lock; then
-            echo "::error::requirements.lock is out of sync with pyproject.toml. Regenerate it with: uv pip compile pyproject.toml --generate-hashes --python-version 3.13 --output-file requirements.lock" >&2
+            echo "::error::requirements.lock is out of sync with pyproject.toml. Regenerate it with: uv pip compile pyproject.toml --group build --generate-hashes --python-version 3.14 --output-file requirements.lock" >&2
             exit 1
           fi
 
@@ -85,7 +87,7 @@ jobs:
         working-directory: frontend
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No step here pushes or authenticates to the remote (CI is
           # contents: read), so drop the persisted token rather than leave it
@@ -93,7 +95,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node 22
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: npm
@@ -129,7 +131,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No step here pushes or authenticates to the remote (CI is
           # contents: read), so drop the persisted token rather than leave it
@@ -158,6 +160,30 @@ jobs:
             type=gha,scope=amd64-ci
             type=gha,scope=dev-multiarch
           cache-to: type=gha,mode=max,scope=amd64-ci
+
+      # SC-14: the runtime image must not ship the backend test suite or dev
+      # scripts (root .dockerignore excludes them from the build context), and
+      # must still carry the trees the runtime actually needs (app package +
+      # Alembic migrations). Assert both against the real built image so a future
+      # change that reintroduces those dev-only trees fails the gate.
+      - name: Verify runtime image excludes dev-only trees (SC-14)
+        run: |
+          docker run --rm --entrypoint sh scrye:ci -c '
+            set -e
+            for p in /app/backend/tests /app/backend/scripts; do
+              if [ -e "$p" ]; then
+                echo "::error::$p is present in the runtime image (SC-14 regression)" >&2
+                exit 1
+              fi
+            done
+            for p in /app/backend/app /app/backend/alembic /app/backend/alembic.ini; do
+              if [ ! -e "$p" ]; then
+                echo "::error::$p is missing from the runtime image" >&2
+                exit 1
+              fi
+            done
+            echo "SC-14 OK: backend/tests and backend/scripts absent; runtime trees present"
+          '
 
       - name: Export image to a tar for offline scanning
         run: docker save scrye:ci -o /tmp/scrye-image.tar
@@ -203,20 +229,68 @@ jobs:
             anchore/grype:v0.115.0@sha256:decd87500a90c1e4faa1706f77b0b2cbc1d2f9364e976f1898ce9037de09cc3a docker-archive:/image.tar -o table || true
 
       # Grype gate. Excludes only the bundled trivy/grype/syft binaries (see the
-      # Trivy gate note above); the base-image CPython interpreter is no longer
-      # excluded now that Scrye runs on Python 3.13, whose current patch release
-      # carries the interpreter-CVE fixes. Trivy's OS-aware scan also gates the
-      # base image. See docs/ARCHIVE.md § Deviations.
+      # Trivy gate note above); the base-image CPython interpreter is scanned and
+      # gated like everything else, with individual unfixable interpreter CVEs
+      # waived by ID in ci/grype.yaml rather than the binary being excluded
+      # wholesale. Trivy's OS-aware scan also gates the base image. See
+      # docs/ARCHIVE.md § Deviations.
+      #
+      # Two outputs from ONE invocation: `-o table` keeps the human verdict on
+      # stdout ("No vulnerabilities found" when nothing real matched), and
+      # `-o json=` writes the machine-readable report the "Waived by
+      # ci/grype.yaml" step below reads. This is deliberately not a second
+      # `docker run`: a second invocation would repeat the vulnerability-DB load
+      # and the whole scan, and this job is already the slowest in CI.
+      # See docs/ARCHIVE.md § Deviations (2026-07-31).
       - name: Grype — gate on fixable High+ (excl. bundled scanners)
         run: |
+          mkdir -p /tmp/grype-out && chmod 777 /tmp/grype-out
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
             -v "${{ github.workspace }}/ci/grype.yaml:/.grype.yaml:ro" \
+            -v /tmp/grype-out:/out \
             anchore/grype:v0.115.0@sha256:decd87500a90c1e4faa1706f77b0b2cbc1d2f9364e976f1898ce9037de09cc3a docker-archive:/image.tar \
             --only-fixed --fail-on high -c /.grype.yaml \
+            -o table -o json=/out/grype-gate.json \
             --exclude '/usr/local/bin/trivy' \
             --exclude '/usr/local/bin/grype' \
             --exclude '/usr/local/bin/syft'
+
+      # Non-gating. Prints exactly the CVEs waived by ci/grype.yaml's
+      # `vulnerability:` entries, read from the JSON the gate step already wrote
+      # — same scan, no second DB load.
+      #
+      # Why the filter is needed: Grype implements `--only-fixed` as an ignore
+      # rule too, so `ignoredMatches` also contains every won't-fix / unfixed
+      # package the gate deliberately filters out (~250 rows on this image, vs.
+      # our 7 waivers). A bare `--show-suppressed` therefore buries the waivers
+      # in noise AND replaces the verdict line with a table. Selecting only
+      # entries whose appliedIgnoreRules carry a `vulnerability` key keeps the
+      # by-ID waivers and drops both the --only-fixed set and the
+      # location-based bundled-binary rules.
+      #
+      # `if: always()` so the waiver list still prints when the gate fails —
+      # that is exactly when you want to know what was already excused.
+      - name: Waived by ci/grype.yaml (informational)
+        if: always()
+        run: |
+          report=/tmp/grype-out/grype-gate.json
+          if [ ! -f "$report" ]; then
+            echo "No Grype JSON report at $report — the gate step produced none."
+            exit 0
+          fi
+          echo "Waived by ci/grype.yaml — deliberate exceptions, NOT findings."
+          echo "Blocks: A-1 (issue #98) · A-2 (issue #116) · B (issue #52)"
+          echo
+          jq -r '
+            .ignoredMatches[]
+            | select(any(.appliedIgnoreRules[]?; has("vulnerability")))
+            | "  \(.vulnerability.id)  \(.vulnerability.severity)  \(.artifact.name) \(.artifact.version)"
+          ' "$report" | sort -u
+          echo
+          echo "Total waived: $(jq '[.ignoredMatches[]
+            | select(any(.appliedIgnoreRules[]?; has("vulnerability")))
+            | .vulnerability.id] | unique | length' "$report")"
 
   # Phase 6: prove the image builds for both target architectures
   # (linux/amd64 + linux/arm64, docs/ARCHIVE.md §9.1). No load/push — a multi-arch
@@ -240,7 +314,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.base.ref == 'main'
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No step here pushes or authenticates to the remote (CI is
           # contents: read), so drop the persisted token rather than leave it

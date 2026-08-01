@@ -35,6 +35,7 @@ from app.api.history_schemas import (
     ScanHistoryPage,
     ScanTagsIn,
 )
+from app.api.pagination import Page, full_page
 from app.api.scan_filters import HistoryFilters, history_filters
 from app.api.scan_schemas import (
     ArtifactOut,
@@ -269,7 +270,19 @@ async def create_sbom_scan(
     return await _queue_scan(request, db, scan, auth)
 
 
-@router.get("", response_model=list[ScanSummaryOut])
+@router.get(
+    "",
+    response_model=list[ScanSummaryOut],
+    deprecated=True,
+    description=(
+        "**Deprecated.** Returns a bare array with no total, so a client paging "
+        "through it cannot tell when the results are exhausted except by "
+        "observing a short page. Use `GET /api/scans/history` instead: it "
+        "supersedes this endpoint, supports the full filter set, and returns the "
+        "standard `{total, items}` envelope. The response shape here is a frozen "
+        "contract and will not change (L13 / APIR-8)."
+    ),
+)
 def list_scans(
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
@@ -278,7 +291,12 @@ def list_scans(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> list[ScanSummaryOut]:
-    """List scans, newest first (basic filters; full history in Phase 4)."""
+    """List scans, newest first (basic filters; full history in Phase 4).
+
+    Deprecated in favour of ``GET /scans/history``. The bare-array shape is a
+    frozen legacy contract and is deliberately left un-enveloped (L13 / APIR-8);
+    only the OpenAPI deprecation marker was added.
+    """
     # Eager-load tags to avoid an N+1 SELECT per row when the row reads them (API-1).
     stmt = (
         select(Scan)
@@ -420,18 +438,18 @@ def list_findings(
     return FindingsPage(total=total, items=[FindingOut.model_validate(r) for r in rows])
 
 
-@router.get("/{scan_id}/artifacts", response_model=list[ArtifactOut])
+@router.get("/{scan_id}/artifacts", response_model=Page[ArtifactOut])
 def list_artifacts(
     scan_id: int,
     _: AuthContext = Depends(_viewer),
     db: Session = Depends(get_db),
-) -> list[ArtifactOut]:
+) -> Page[ArtifactOut]:
     """List a scan's stored artifacts (raw scanner output, SBOMs)."""
     _get_scan_or_404(db, scan_id)
     rows = db.scalars(
         select(Artifact).where(Artifact.scan_id == scan_id).order_by(Artifact.id)
     ).all()
-    return [ArtifactOut.model_validate(r) for r in rows]
+    return full_page([ArtifactOut.model_validate(r) for r in rows])
 
 
 @router.get("/{scan_id}/artifacts/{artifact_id}/download")

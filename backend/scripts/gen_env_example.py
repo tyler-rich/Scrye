@@ -8,7 +8,8 @@ The config loader is the single source of truth for configuration (see
 
 Only **non-sensitive** variables are emitted. The application master key is
 never included — it is read at runtime from the Docker secret file referenced by
-``SCRYE_APP_SECRET_KEY_FILE``. When future phases add stored-secret settings
+``SCRYE_APP_SECRET_KEY_FILE``, or from the key Scrye generates on first launch at
+``SCRYE_APP_SECRET_KEY_AUTOGEN_FILE``. When future phases add stored-secret settings
 (e.g. an OIDC client secret), they must be emitted as a named placeholder with a
 comment, never a real value.
 """
@@ -30,9 +31,16 @@ HEADER = """\
 # Do NOT edit by hand — update the Settings model and regenerate.
 #
 # These are NON-SENSITIVE configuration variables only. The application
-# master key is never set here; it is read from the Docker secret file
-# referenced by SCRYE_APP_SECRET_KEY_FILE. Copy this file to `.env` for
-# local development and adjust values as needed.
+# master key is never set here: it is read from a FILE — the Docker secret
+# referenced by SCRYE_APP_SECRET_KEY_FILE, or, when no secret is supplied,
+# a key Scrye generates itself on first launch and persists at
+# SCRYE_APP_SECRET_KEY_AUTOGEN_FILE. Copy this file to `.env` for local
+# development and adjust values as needed.
+#
+# NOTE on SCRYE_APP_SECRET_KEY_FILE below: keeping it set asserts that a key
+# file exists at that path. If it does not, Scrye REFUSES to start rather
+# than generate a different key (which would orphan every stored secret).
+# Comment the line out to let Scrye generate and persist a key on first run.
 # ─────────────────────────────────────────────────────────────
 """
 

@@ -1,6 +1,7 @@
 /** Scan API types and calls (hand-written shim; generated client comes later). */
 
-import { api, apiUpload } from './client';
+import { api, apiList, apiUpload } from './client';
+import type { Page } from './client';
 
 export type Scanner = 'trivy' | 'grype';
 export type TargetType = 'image' | 'repository' | 'filesystem' | 'sbom';
@@ -66,10 +67,7 @@ export interface Finding {
   primary_url: string | null;
 }
 
-export interface FindingsPage {
-  total: number;
-  items: Finding[];
-}
+export type FindingsPage = Page<Finding>;
 
 export interface Artifact {
   id: number;
@@ -102,6 +100,13 @@ export function isActive(status: ScanStatus): boolean {
   return status === 'queued' || status === 'running';
 }
 
+/**
+ * @deprecated `GET /api/scans` returns a bare array with no total, so a caller
+ * cannot tell when its pages are exhausted. Use `listHistory` instead — it
+ * supersedes this endpoint, supports the full filter set, and returns the
+ * standard `{total, items}` envelope. The bare-array shape here is a frozen
+ * contract and will not change (L13 / APIR-8).
+ */
 export function listScans(
   params: { scanner?: Scanner; status?: ScanStatus } = {},
 ): Promise<ScanSummary[]> {
@@ -156,7 +161,7 @@ export function listFindings(
 }
 
 export function listArtifacts(id: number): Promise<Artifact[]> {
-  return api<Artifact[]>(`/api/scans/${id}/artifacts`);
+  return apiList<Artifact>(`/api/scans/${id}/artifacts`);
 }
 
 /** Direct browser download URL for a stored artifact (served by FastAPI). */
@@ -197,10 +202,7 @@ export interface HistoryQuery extends HistoryFilters {
   offset?: number;
 }
 
-export interface ScanHistoryPage {
-  total: number;
-  items: ScanSummary[];
-}
+export type ScanHistoryPage = Page<ScanSummary>;
 
 export interface FilterOptions {
   initiators: string[];

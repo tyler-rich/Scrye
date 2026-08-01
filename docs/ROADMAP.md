@@ -24,30 +24,114 @@ Small, self-contained work that closes a concrete gap.
   and the dashboard's per-target "open" posture — the scan row carries only the filename as
   identity. Key SBOM targets on a content hash (the SHA-256 already computed for the uploaded
   SBOM's artifact) instead of the filename, so distinct SBOMs are always distinct targets.
-- **Admin bulk secret re-encryption (key-rotation action).** The master-key file already
-  supports multiple versions (`v<N>:<base64>` lines) and new secrets encrypt under the highest
-  version, but there is no admin-facing action to *re-wrap existing rows* under a new version.
-  Today an old ciphertext stays wrapped under the version it was written with until that record
-  is next updated, so an operator must keep the retired key line in place indefinitely. A
-  "re-encrypt all secrets" action (walking the `SECRET_COLUMNS` registry) would let a rotation
-  actually retire an old key version.
+- **Admin bulk secret re-encryption (key-rotation action, and the legacy-AAD cutover).** The
+  master-key file already supports multiple versions (`v<N>:<base64>` lines) and new secrets
+  encrypt under the highest version, but there is no admin-facing action to *re-wrap existing
+  rows* under a new version. Today an old ciphertext stays wrapped under the version it was
+  written with until that record is next updated, so an operator must keep the retired key line
+  in place indefinitely. A "re-encrypt all secrets" action (walking the `SECRET_COLUMNS`
+  registry) would let a rotation actually retire an old key version. The same gap now also shows up
+  when a deployment that auto-generated its key later adopts a Docker secret: the documented move is
+  to carry the generated key forward as its own version (Scrye refuses to start if it isn't, rather
+  than orphan whatever was written under it), and only this action would let that version be dropped
+  afterwards.
+
+  The same action also finishes the **row-bound AAD** migration. Row binding itself is already
+  implemented — `secret_store.py`'s `row_aad()` composes `<table>.<column>:<row-id>` and
+  `encrypt_secret()` binds to the row on every write (L1/SEC-7, #64) — so new and updated
+  ciphertext is row-bound today. What is *not* done is the cutover: `decrypt_secret()` falls
+  back to the bare column tag so pre-#64 ciphertext still decrypts, and a row that has never
+  been updated since then is still column-only. That fallback can only be dropped once every
+  row has been re-encrypted, which is exactly what this action would do — one eager pass
+  instead of waiting for each record's next write.
+- **Move the frontend build from Node 22 to Node 24.** The image's `frontend-builder` stage and
+  CI both run Node 22 (`jod`), which entered maintenance on 2025-10-21 and is supported only
+  through **2027-04-30**. Node 24 (`krypton`) is the Active LTS and is supported through
+  **2028-04-30**, so it is where this should land. Node **26** is deliberately not the target: it
+  does not become LTS until **2026-10-28**. The move spans three places that must change together
+  — `docker/Dockerfile`'s pinned `node:22-bookworm-slim` digest, `.github/workflows/ci.yml`'s
+  `node-version: "22"`, and `CONTRIBUTING.md`'s stated Node floor (plus the matching line in
+  `README.md` § Requirements) — which is exactly why it is its own item and not something a
+  Dependabot digest bump can carry. Until it happens, the 22 digest still needs refreshing on its
+  own schedule; Dependabot offers the 26 major instead of a 22 digest refresh, so declining the
+  major leaves the builder stale (see `ARCHIVE.md` §14, 2026-07-26).
+- **Frontend tooling majors from Dependabot #86.** After the Mantine/React ignores landed
+  (locked decision §2 — `ARCHIVE.md` §14, 2026-07-26), the rest of that grouped PR is still
+  wanted and still unapplied: **TypeScript 5.7 → 7.0**, **ESLint 9 → 10**, **`typescript-eslint`
+  8.19 → 8.65**, **Vite 6 → 8**, **Vitest 3 → 4**, **jsdom 26 → 29**, and the smaller bumps
+  alongside them. None of these is locked. They are grouped here because they share one risk:
+  every one of them lands on the **type-aware ESLint gate** turned on 2026-07-24, so the real
+  work is the lint-config churn they shake out, not the version numbers. Best done as a single
+  deliberate PR rather than folded into an unrelated change.
+- **Retire the deprecated Starlette status-code constants.** `status.HTTP_422_UNPROCESSABLE_ENTITY`
+  raises a `StarletteDeprecationWarning` on every attribute access — Starlette renamed it to
+  `HTTP_422_UNPROCESSABLE_CONTENT` — and it is referenced at **22 call sites** across seven routers
+  (`scans.py` ×10, `scan_schedules.py` ×4, `registries.py` ×3, `notifications.py` ×2, and one each
+  in `trivy_policy.py`, `git_credentials.py`, `backups.py`). The same rename hit
+  `HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `HTTP_413_CONTENT_TOO_LARGE`, at 2 more call sites in
+  `uploads.py`. These are the backend suite's standing deprecation warnings, recorded as
+  pre-existing at each of the last two interpreter bumps (`ARCHIVE.md` §14, 2026-07-03 and
+  2026-07-25) and never actually cleared. The change is mechanical — the constants are equal
+  integers, so no status code or behavior moves — and it takes the suite's warning output down to
+  the Starlette-TestClient httpx notice, so a genuinely new warning becomes visible instead of
+  being lost in known noise.
 - **Offline / air-gapped scanner-DB import.** The Scanners settings already drive scheduled
   online DB refreshes (`trivy image --download-db-only`, `grype db update`). Add an import path
   for environments with no outbound access to `mirror.gcr.io` / `grype.anchore.io`, so the Trivy
   and Grype vulnerability databases can be side-loaded from a file.
-- **Pin GitHub Actions to commit SHAs.** Dependabot already tracks the `github-actions`
-  ecosystem, but the workflow `uses:` references are pinned by tag, not by full commit SHA.
-  Pin each action to a SHA (Dependabot will keep them rolling) to close the tag-mutability
-  supply-chain gap — more important now that the repo is public.
+- **De-flake `test_cancel_queued_scan` (make slot acquisition observable).**
+  `backend/tests/test_scans_api.py::test_cancel_queued_scan` is timing-dependent **by
+  construction**: it monkeypatches a scanner whose `scan_image` does `await asyncio.sleep(0.2)`,
+  forces the worker semaphore to a single slot, queues two scans, and cancels the second — which
+  only works while that second scan is still `queued`. On a loaded CI runner the 0.2 s window
+  closes before the cancel POST is processed, the scan has left `queued`, and the endpoint
+  correctly returns **409**. So the failure is the *test* being wrong, not the code: queued-only
+  cancellation is a deliberate design decision (`docs/ARCHIVE.md` §14, 2026-07-03 — the in-process
+  worker has no channel to interrupt a live scanner subprocess; lifting that limit is the separate
+  "Cancel a running scan" item under Medium-term).
+
+  **Fix by making the worker's slot acquisition observable to the test** — e.g. an event/future the
+  test can await to know the first scan actually holds the only slot, so the cancel is issued at a
+  known state instead of inside a sleep window. **Do not just widen the sleep**: a longer sleep only
+  lengthens the odds, leaves the race in place, and slows the suite on every run.
+
+  **Why it matters more than one red check:** a test that reddens CI intermittently trains everyone
+  to re-run without reading the failure. That habit is exactly how a real regression gets waved
+  through — and it costs the most on a security tool, where the dogfood gate's output is the thing
+  nobody should learn to skim. Observed 2026-07-31 on a docs-and-workflow-only PR (#118), where it
+  failed once and passed on re-run of the identical commit.
 - **Finish the public-repo governance setup (repository settings).** Going public added the
   in-repo pieces — a `.github/CODEOWNERS` (owner-review requests) and a `SECURITY.md` (private
   vulnerability reporting). The remaining pieces are GitHub **settings**, not files, so they live
-  here as a checklist: enable **branch protection** on `main` and `dev` (require a passing CI
-  status, require a pull request, require review from Code Owners, and — for `main` — restrict who
-  can push tags/promote); decide on **signed-commit enforcement** (require signed commits on the
-  protected branches, which means contributors must sign — worth it for a security tool, so weigh
-  the contributor friction); and enable **private vulnerability reporting** and Dependabot
-  **security** updates in the repo's Security settings.
+  here as a checklist. None of them is doable from a code session, which is exactly why several
+  sat invisible in `ARCHIVE.md` §14 prose for weeks before being collected here.
+
+  - **Branch protection** on `main` and `dev` — require a passing CI status, require a pull
+    request, require review from Code Owners, and for `main` restrict who can push tags/promote.
+  - **Signed-commit enforcement** — a decision to make. Requiring signed commits on the
+    protected branches means contributors must sign; worth it for a security tool, so weigh the
+    friction.
+  - **Private vulnerability reporting** — enable in the repo's Security settings, so
+    `SECURITY.md`'s stated channel actually exists.
+  - **Confirm Dependabot security alerts are enabled** (Security tab). The config file only
+    schedules *version* updates; security alerts are a separate repo setting. (§14 2026-07-20
+    context; carried from the remediation tracker.)
+  - **Settings → Actions → General → Workflow permissions → read-only.** Every workflow already
+    declares its own explicit `permissions:` block, and an explicit block takes precedence over
+    the repo default rather than being capped by it, so the restrictive default breaks nothing —
+    including GHCR push. Logged in §14 2026-07-06 and never carried anywhere until now.
+  - **Confirm the GHCR package `ghcr.io/tyler-rich/scrye` is public.** §14 2026-07-06 asked to
+    confirm it was *Private* (it inherited a private repo); the repo went public on 2026-07-09,
+    so the check is now the inverse — it should be **public**, per `CLAUDE.md` locked decision §6.
+    Still unverified in either direction.
+  - **Delete the unused `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` repo secrets.** No workflow has
+    referenced them since the GHCR consolidation (§14 2026-07-09); `grep -r DOCKERHUB .github/`
+    returns nothing. Dormant registry credentials on a public security-tool repo.
+  - **Set the GitHub profile display name to `tyler-rich`.** A squash-merge authors the squashed
+    commit with the merging account's *profile display name*, which repo-local `git config
+    user.name` cannot override — so while the profile reads "Tyler Richardson", every
+    squash-merged promotion silently breaks `CLAUDE.md`'s author-identity rule (R7/D4, §14
+    2026-07-13).
 
 ## Medium-term
 
@@ -72,18 +156,48 @@ Features and developer-experience investments with a larger surface.
   running installation. Add forward-migration of an older bundle on restore (run the Alembic
   chain against the imported data) so a backup taken on an earlier release can be restored onto
   a newer one.
-- **Frontend test runner.** There is no frontend test runner yet; the SPA is verified by `tsc`,
-  ESLint, Prettier, and a clean `vite build`. Add Vitest with unit tests — the shared
-  `lib/dates.ts` UTC-formatting helper and the scanner/target validation matrices are natural
-  first targets — and wire it into CI.
 - **Generated API client.** The frontend API layer is a thin, hand-written `fetch` wrapper
   (`frontend/src/api/*`). Generating a typed client from the FastAPI OpenAPI schema (e.g.
   openapi-typescript) over that wrapper would keep the client and server contracts in lockstep.
+- **Single-source the version string, and stamp it into the image.** Two halves of one problem:
+  the version is declared in several places and derived from none of them.
+
+  *Single-sourcing.* The app version is declared independently in `backend/app/__init__.py`,
+  `backend/pyproject.toml` and `frontend/package.json` (+ the lockfile's root fields), and
+  nothing derives one from another or from the git tag — so a release has to touch several files
+  in lockstep. `backend/tests/test_version.py` now fails on drift, which makes the duplication
+  safe but not gone. Collapse it to `app.__version__` as the single source: `pyproject.toml` can
+  pick it up via setuptools' dynamic version (`dynamic = ["version"]` +
+  `[tool.setuptools.dynamic] version = {attr = "app.__version__"}`), and
+  `frontend/package.json`'s copy — which is never bundled and never published (`private: true`),
+  since the SPA reads the version from the About/health API at runtime — can be dropped to a
+  fixed placeholder.
+
+  *Image stamping.* `publish.yml` computes the image tag from the pushed ref
+  (`${GITHUB_REF_NAME#v}`) but never stamps a version **into** the image: there is no `LABEL` in
+  `docker/Dockerfile` and no `labels:`/`build-args:` in any of the three build workflows
+  (`publish.yml`, `dev-nightly.yml`, `ci.yml` — none of them uses `docker/metadata-action`, which
+  is what normally generates the OCI label set). So `docker inspect` on a published image reveals
+  nothing about what is inside it, and an image whose tag was retagged or lost carries no
+  self-description at all. This is **metadata hygiene, not a defect**: the running app reports its
+  version correctly because `app/__init__.py` is baked in, and `/healthz` and the About tab both
+  serve it. The fix is the standard OCI label set on the runtime stage — at minimum
+  `org.opencontainers.image.version`, alongside `.title`, `.source`, `.revision` and `.created` —
+  fed by a build arg the publish workflow already has in `steps.version.outputs.version`. Note the
+  image is not wholly opaque today: `publish.yml` attaches BuildKit SLSA provenance
+  (`provenance: mode=max`) and an SPDX SBOM (`sbom: true`) plus a GitHub-signed attestation, so
+  the build is describable — just not through the one-command channel operators actually reach
+  for.
+
+  Both halves want their own PR and CI run rather than riding on a release bump; the label work
+  also touches the runtime stage, so read `docs/ARCHIVE.md` § Build performance first. See
+  `docs/ARCHIVE.md` § Deviations, 2026-07-29.
 - **Type-checking in CI.** Add a Python type checker (mypy or pyright) to the CI gate. This
   first needs the existing annotation gaps resolved so the gate lands green rather than red.
 - **Backend structural cleanup.** The four near-identical secret-CRUD routers (registries, git
-  credentials, notification channels, OIDC) and the list-response envelope convention could be
-  consolidated behind shared helpers to cut duplication.
+  credentials, notification channels, OIDC) could be consolidated behind shared helpers to cut
+  duplication. *(The list-response envelope half of this item is done — see `docs/ARCHIVE.md`
+  § Deviations, 2026-07-25, and `CONTRIBUTING.md` § API conventions.)*
 
 ## Longer-term / speculative
 
@@ -98,12 +212,6 @@ Architectural directions, mostly gated on a scale threshold or an explicit decis
   application layer today (AES-256-GCM), which is the required baseline. SQLCipher would encrypt
   the *entire* database file at rest as defense-in-depth. A clean seam was left for it; adopting
   it is a deliberate future hardening step, not a v1 requirement.
-- **Row-bound secret AAD.** Each field-encrypted secret is currently bound (via AES-GCM
-  additional authenticated data) to its *column*, not its *row*. Binding to the row id as well
-  would harden against a DB-*write* attacker swapping ciphertexts between rows — a threat outside
-  the current DB-*read* model. It requires a key-available re-encryption migration (it
-  invalidates every existing ciphertext), so it pairs naturally with the bulk re-encryption tool
-  above.
 - **Framed streaming backup encryption.** A backup bundle is assembled and encrypted in a single
   in-memory AES-GCM pass, so a very large findings table (hundreds of thousands of rows and up)
   needs container memory headroom proportional to the dump. A framed/streaming encryption format

@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Card, Group, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import {
+  Alert,
+  Badge,
+  Card,
+  Code,
+  Group,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+  Title,
+} from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 
 import { ApiError } from '../../api/client';
@@ -74,6 +85,27 @@ export function AboutPanel() {
           </Table.Tbody>
         </Table>
       </div>
+
+      {about.master_key && (
+        <div>
+          <Title order={5} mb="xs">
+            Master key
+          </Title>
+          <Text size="sm" c="dimmed">
+            {about.master_key.source === 'auto_generated' ? (
+              <>
+                Auto-generated at <Code>{about.master_key.path}</Code> — back this up; a Docker
+                secret gives stronger at-rest separation.
+              </>
+            ) : (
+              <>
+                Supplied as a secret file at <Code>{about.master_key.path}</Code> — keep your copy
+                backed up.
+              </>
+            )}
+          </Text>
+        </div>
+      )}
 
       <Group gap="xl">
         <Text size="sm" c="dimmed">

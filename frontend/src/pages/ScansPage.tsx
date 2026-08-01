@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ActionIcon,
   Anchor,
@@ -9,7 +9,6 @@ import {
   Center,
   Checkbox,
   Group,
-  Loader,
   Menu,
   MultiSelect,
   Pagination,
@@ -35,12 +34,14 @@ import {
 import {
   getFilterOptions,
   historyExportUrl,
+  historyFilterParams,
   listHistory,
   SEVERITY_ORDER,
   type ExportFormat,
   type FilterOptions,
   type HistoryFilters,
   type HistorySort,
+  type Scanner,
   type ScanStatus,
   type ScanSummary,
   type Severity,
@@ -52,6 +53,7 @@ import { formatWhen, parseUtc } from '../lib/dates';
 import { createLatestGuard } from '../lib/latest';
 import { ScanStatusBadge } from '../components/ScanStatusBadge';
 import { SeverityBadge } from '../components/SeverityBadge';
+import { StatusLoader } from '../components/StatusLoader';
 
 const PAGE_SIZE = 25;
 const SCANNERS = ['trivy', 'grype'];
@@ -74,16 +76,67 @@ function withDates(base: HistoryFilters, from: string, to: string): HistoryFilte
 
 const EMPTY_FILTERS: HistoryFilters = {};
 
+interface HistoryView {
+  filters: HistoryFilters;
+  dateFrom: string;
+  dateTo: string;
+  sort: HistorySort;
+  order: SortOrder;
+  page: number;
+}
+
+/**
+ * Restore the persisted history view (filters, date range, sort, page) from the
+ * URL query string, so Back/bookmark/share land on the same filtered view
+ * rather than a reset one (P3-1). The date pickers live outside `filters` (they
+ * are folded into `created_from`/`created_to` at request time), so they are
+ * parsed back out of those params here.
+ */
+function viewFromParams(params: URLSearchParams): HistoryView {
+  const filters: HistoryFilters = {};
+  const scanner = params.get('scanner');
+  if (scanner) filters.scanner = scanner as Scanner;
+  const targetType = params.get('target_type');
+  if (targetType) filters.target_type = targetType as TargetType;
+  const q = params.get('q');
+  if (q) filters.q = q;
+  const status = params.get('status');
+  if (status) filters.status = status as ScanStatus;
+  const initiator = params.get('initiator');
+  if (initiator) filters.initiator = initiator;
+  const highest = params.get('highest_severity');
+  if (highest) filters.highest_severity = highest as Severity;
+  const min = params.get('min_severity');
+  if (min) filters.min_severity = min as Severity;
+  const tags = params.getAll('tags');
+  if (tags.length > 0) filters.tags = tags;
+
+  const createdFrom = params.get('created_from');
+  const createdTo = params.get('created_to');
+  return {
+    filters,
+    dateFrom: createdFrom ? createdFrom.slice(0, 10) : '',
+    dateTo: createdTo ? createdTo.slice(0, 10) : '',
+    sort: (params.get('sort') as HistorySort) || 'created_at',
+    order: (params.get('order') as SortOrder) || 'desc',
+    page: Math.max(1, Number(params.get('page')) || 1),
+  };
+}
+
 /** Full scan-history view: filters, presets, sortable/paginated table, exports. */
 export function ScansPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Read the initial view from the URL exactly once; subsequent syncing is
+  // one-directional (state → URL) via the effect below.
+  const initialView = useRef(viewFromParams(searchParams));
 
-  const [filters, setFilters] = useState<HistoryFilters>(EMPTY_FILTERS);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [sort, setSort] = useState<HistorySort>('created_at');
-  const [order, setOrder] = useState<SortOrder>('desc');
-  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState<HistoryFilters>(initialView.current.filters);
+  const [dateFrom, setDateFrom] = useState(initialView.current.dateFrom);
+  const [dateTo, setDateTo] = useState(initialView.current.dateTo);
+  const [sort, setSort] = useState<HistorySort>(initialView.current.sort);
+  const [order, setOrder] = useState<SortOrder>(initialView.current.order);
+  const [page, setPage] = useState(initialView.current.page);
 
   const [data, setData] = useState<{ total: number; items: ScanSummary[] } | null>(null);
   const [options, setOptions] = useState<FilterOptions>({ initiators: [], tags: [] });
@@ -92,11 +145,25 @@ export function ScansPage() {
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [compare, setCompare] = useState<ScanSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [optionsError, setOptionsError] = useState(false);
 
   const effectiveFilters = useMemo(
     () => withDates(filters, dateFrom, dateTo),
     [filters, dateFrom, dateTo],
   );
+
+  // Mirror the active view into the URL query string so History is
+  // deep-linkable: Back, bookmarks, and shared links restore the same
+  // filtered/sorted/paged view instead of resetting to an empty page 1 (P3-1).
+  // `replace` (not push) keeps each keystroke from stacking a history entry;
+  // defaults are omitted to keep the URL clean.
+  useEffect(() => {
+    const params = historyFilterParams(effectiveFilters);
+    if (sort !== 'created_at') params.set('sort', sort);
+    if (order !== 'desc') params.set('order', order);
+    if (page > 1) params.set('page', String(page));
+    setSearchParams(params, { replace: true });
+  }, [effectiveFilters, sort, order, page, setSearchParams]);
 
   // Latest-wins guard: the debounce delays sending but never cancels in-flight
   // requests, so a slow response for an old filter could resolve after a newer
@@ -130,18 +197,36 @@ export function ScansPage() {
   }, [load]);
 
   const refreshOptions = useCallback(async () => {
+    // Surface a load failure instead of swallowing it: an empty initiator/tag
+    // list otherwise looks like "nothing to filter on" when the fetch actually
+    // failed (P3-3).
     try {
       const [opts, savedPresets] = await Promise.all([getFilterOptions(), listPresets()]);
       setOptions(opts);
       setPresets(savedPresets);
+      setOptionsError(false);
     } catch {
-      // Non-fatal: filter option lists just stay empty.
+      setOptionsError(true);
     }
   }, []);
 
   useEffect(() => {
     void refreshOptions();
   }, [refreshOptions]);
+
+  // Reconcile the compare selection whenever the visible rows change. `compare`
+  // holds full row snapshots that would otherwise outlive a filter/page change
+  // or a delete elsewhere — showing a phantom "1/2 selected" for an unreachable
+  // row and diffing against a scan that now 404s. Dropping any selected id that
+  // is no longer in the current results keeps the selection honest (P3-2).
+  useEffect(() => {
+    if (!data) return;
+    const visible = new Set(data.items.map((s) => s.id));
+    setCompare((prev) => {
+      const kept = prev.filter((s) => visible.has(s.id));
+      return kept.length === prev.length ? prev : kept;
+    });
+  }, [data]);
 
   const patch = (change: Partial<HistoryFilters>) => {
     setFilters((prev) => ({ ...prev, ...change }));
@@ -210,17 +295,22 @@ export function ScansPage() {
     });
   };
 
+  // `toggleCompare` caps the selection at two, so the pair of defined checks
+  // below is exactly the "two scans selected" condition the button gated on.
+  const [compareA, compareB] = compare;
   const canCompare =
-    compare.length === 2 &&
-    compare[0].scanner === compare[1].scanner &&
-    compare[0].target_type === compare[1].target_type &&
-    compare[0].target === compare[1].target;
+    compareA !== undefined &&
+    compareB !== undefined &&
+    compareA.scanner === compareB.scanner &&
+    compareA.target_type === compareB.target_type &&
+    compareA.target === compareB.target;
 
   const runCompare = () => {
     const [a, b] = [...compare].sort(
       (x, y) => parseUtc(x.created_at).getTime() - parseUtc(y.created_at).getTime(),
     );
-    navigate(`/scans/diff/${a.id}/${b.id}`);
+    if (!a || !b) return;
+    void navigate(`/scans/diff/${a.id}/${b.id}`);
   };
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
@@ -254,7 +344,7 @@ export function ScansPage() {
               ))}
             </Menu.Dropdown>
           </Menu>
-          <Button leftSection={<IconPlus size={16} />} onClick={() => navigate('/scans/new')}>
+          <Button leftSection={<IconPlus size={16} />} onClick={() => void navigate('/scans/new')}>
             New scan
           </Button>
         </Group>
@@ -262,6 +352,21 @@ export function ScansPage() {
 
       <Card withBorder radius="md" padding="md">
         <Stack gap="sm">
+          {optionsError && (
+            <Group gap="xs">
+              <Text c="yellow" size="sm">
+                Couldn&apos;t load filter options — the initiator and tag lists may be incomplete.
+              </Text>
+              <Anchor
+                component="button"
+                type="button"
+                size="sm"
+                onClick={() => void refreshOptions()}
+              >
+                Retry
+              </Anchor>
+            </Group>
+          )}
           <Group grow align="flex-end">
             <TextInput
               label="Target search"
@@ -428,7 +533,7 @@ export function ScansPage() {
 
       {data === null ? (
         <Center mih={160}>
-          <Loader color="teal" />
+          <StatusLoader color="teal" />
         </Center>
       ) : data.items.length === 0 ? (
         <Text c="dimmed">No scans match the current filters.</Text>

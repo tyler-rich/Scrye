@@ -60,7 +60,7 @@ def test_registry_create_masks_secret_and_never_returns_plaintext(client: TestCl
     listed = client.get("/api/registries")
     assert listed.status_code == 200
     assert REGISTRY_SECRET not in listed.text
-    assert listed.json()[0]["secret"]["value"] == SECRET_MASK
+    assert listed.json()["items"][0]["secret"]["value"] == SECRET_MASK
 
 
 def test_registry_requires_secret_for_static_auth(client: TestClient) -> None:
@@ -235,7 +235,7 @@ def test_registry_delete(client: TestClient) -> None:
     ).json()
     deleted = client.delete(f"/api/registries/{created['id']}", headers={CSRF: csrf})
     assert deleted.status_code == 204
-    assert client.get("/api/registries").json() == []
+    assert client.get("/api/registries").json() == {"total": 0, "items": []}
 
 
 # --- Git credentials ---------------------------------------------------------
@@ -314,6 +314,10 @@ def test_docker_environment_crud_and_enumeration(client: TestClient, monkeypatch
     )
     images = client.get(f"/api/docker-environments/{env_id}/images")
     assert images.status_code == 200
+    # Live enumeration off the Docker proxy is not a persisted Scrye collection,
+    # so it deliberately stays a bare array rather than taking the
+    # ``{total, items}`` envelope (see CONTRIBUTING.md § API conventions).
+    assert isinstance(images.json(), list)
     assert images.json()[0]["tags"] == ["alpine:3.19"]
 
 

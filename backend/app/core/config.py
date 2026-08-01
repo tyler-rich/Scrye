@@ -7,7 +7,9 @@ repository's ``.env.example`` is generated from the :class:`Settings` model
 Security notes:
 - This model holds **non-sensitive** configuration only. The application master
   key is **never** an env var; it is read at runtime from the Docker secret file
-  pointed to by ``APP_SECRET_KEY_FILE``. Only the *path* lives here.
+  pointed to by ``APP_SECRET_KEY_FILE``, or from the auto-generated key file at
+  ``APP_SECRET_KEY_AUTOGEN_FILE`` when no secret is supplied. Only the *paths*
+  live here.
 - Stored credentials/secrets (registry creds, git tokens, OIDC client secret,
   API tokens) are field-encrypted and are not configured here.
 """
@@ -20,6 +22,8 @@ from typing import Annotated
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+from app.core.forwarded import TrustedProxies, parse_trusted_proxies
 
 
 class Settings(BaseSettings):
@@ -64,9 +68,11 @@ class Settings(BaseSettings):
         description=(
             "REQUIRED per-deployment: the IP/CIDR your reverse proxy actually "
             "connects to Scrye from (uvicorn --forwarded-allow-ips, consumed by "
-            "docker/entrypoint.sh). Only X-Forwarded-For from these addresses is "
-            "trusted, so the real client IP drives the auth rate limiter and audit "
-            "log. Works with any proxy that sets X-Forwarded-For (Caddy, nginx, "
+            "docker/entrypoint.sh). Only X-Forwarded-For and X-Forwarded-Proto "
+            "from these addresses are trusted, so the real client IP drives the "
+            "auth rate limiter and audit log, and a TLS-terminating proxy's "
+            "X-Forwarded-Proto: https satisfies the HTTPS check that guards the "
+            "Secure session cookie. Works with any proxy that sets them (Caddy, nginx, "
             "Traefik, ...) — the logic is proxy-agnostic; only this value is "
             "deployment-specific. The default 172.16.0.0/12 assumes Caddy as a "
             "Docker container on the default bridge network; set it to your proxy's "
@@ -92,12 +98,38 @@ class Settings(BaseSettings):
         description="Filesystem path to the SQLite database file.",
     )
 
-    # --- Master key (path only; the key itself is read from the file) ------
+    # --- Master key (paths only; the key itself is read from the file) -----
     app_secret_key_file: Path = Field(
         default=Path("/run/secrets/app_secret_key"),
         description=(
             "Path to the Docker secret file holding the application master key. "
-            "The key content is NEVER set via an environment variable."
+            "The key content is NEVER set via an environment variable. This is the "
+            "highest-precedence key source; when it holds a key file, that key is "
+            "used and no key is ever generated. Setting this variable explicitly "
+            "asserts the key lives there: if the file is then missing, Scrye "
+            "REFUSES to start rather than quietly generate a different key (which "
+            "would orphan every stored secret). Leave it unset to fall back to "
+            "SCRYE_APP_SECRET_KEY_AUTOGEN_FILE."
+        ),
+    )
+    app_secret_key_autogenerate: bool = Field(
+        default=True,
+        description=(
+            "Generate a master key on first launch when no key file exists at "
+            "either master-key path, so a fresh deployment starts without "
+            "pre-seeding a secret. An existing key file is ALWAYS used and never "
+            "overwritten; a key file that exists but cannot be loaded fails "
+            "startup instead of being regenerated. Set false to require an "
+            "operator-provided key (startup then fails when none is found)."
+        ),
+    )
+    app_secret_key_autogen_file: Path = Field(
+        default=Path("/data/app_secret_key"),
+        description=(
+            "Path the auto-generated master key is written to (mode 0600) and read "
+            "back from on every later start. It MUST be on a persistent volume: "
+            "lose this file and every stored secret is unrecoverable. Ignored "
+            "whenever a key file exists at SCRYE_APP_SECRET_KEY_FILE."
         ),
     )
 
@@ -109,8 +141,18 @@ class Settings(BaseSettings):
     session_cookie_secure: bool = Field(
         default=True,
         description=(
-            "Set the Secure flag on session cookies. Keep true in production "
-            "(behind TLS-terminating Caddy); set false only for plain-HTTP local dev."
+            "HTTPS enforcement for sign-in: set the Secure flag on the session and "
+            "CSRF cookies. Browsers refuse to store a Secure cookie on an http:// "
+            "page, so with this true a login over PLAIN HTTP cannot take effect - "
+            "the credentials are accepted and every following request still looks "
+            "unauthenticated. Scrye therefore refuses such a sign-in outright and "
+            "says so, rather than appearing to work. Keep true in production. "
+            "Behind a TLS-terminating reverse proxy keep it true as well: have the "
+            "proxy send X-Forwarded-Proto: https and point "
+            "SCRYE_FORWARDED_ALLOW_IPS at the proxy. Set false ONLY to opt out "
+            "deliberately on a plain-HTTP LAN/evaluation deployment - the session "
+            "cookie then travels in cleartext and anyone on the network path can "
+            "steal it."
         ),
     )
     auth_rate_limit_attempts: int = Field(
@@ -227,6 +269,28 @@ class Settings(BaseSettings):
         default=Path("/app/frontend/dist"),
         description="Directory containing the built React SPA served by FastAPI.",
     )
+
+    @property
+    def app_secret_key_file_is_explicit(self) -> bool:
+        """Return True if the master-key path came from configuration, not the default.
+
+        ``model_fields_set`` covers every pydantic-settings source (environment,
+        ``.env``, explicit constructor kwargs), so this is true exactly when an
+        operator (or a test) named the path. The master-key resolver treats an
+        explicitly named path as an assertion that the key lives there and refuses
+        to auto-generate around it — see :func:`app.core.crypto.resolve_master_keys`.
+        """
+        return "app_secret_key_file" in self.model_fields_set
+
+    @property
+    def trusted_proxies(self) -> TrustedProxies:
+        """Return :attr:`forwarded_allow_ips` parsed into a trust boundary.
+
+        The same value uvicorn is given for ``--forwarded-allow-ips``; the app
+        re-parses it so ``X-Forwarded-Proto`` is honoured from exactly the peers
+        the operator named, and from nobody else (see :mod:`app.core.forwarded`).
+        """
+        return parse_trusted_proxies(self.forwarded_allow_ips)
 
     @property
     def database_url(self) -> str:

@@ -189,7 +189,7 @@ function MfaSection() {
             <Button
               color="red"
               variant="light"
-              onClick={disable}
+              onClick={() => void disable()}
               disabled={!password}
               loading={disabling}
             >
@@ -218,7 +218,11 @@ function MfaSection() {
               oneTimeCode
             />
             <Group>
-              <Button onClick={confirm} disabled={code.length < 6} loading={confirming}>
+              <Button
+                onClick={() => void confirm()}
+                disabled={code.length < 6}
+                loading={confirming}
+              >
                 Confirm & enable
               </Button>
               <Button variant="subtle" onClick={() => setEnrollment(null)} disabled={confirming}>
@@ -242,7 +246,7 @@ function MfaSection() {
           )}
           <Group>
             <Button
-              onClick={() => startEnroll(reauthRequired ? password : undefined)}
+              onClick={() => void startEnroll(reauthRequired ? password : undefined)}
               disabled={reauthRequired && !password}
               loading={enrolling}
             >
@@ -323,7 +327,7 @@ function SessionsSection() {
                       color="red"
                       loading={revoking === s.id}
                       disabled={revoking !== null}
-                      onClick={() => onRevoke(s.id)}
+                      onClick={() => void onRevoke(s.id)}
                     >
                       Revoke
                     </Button>

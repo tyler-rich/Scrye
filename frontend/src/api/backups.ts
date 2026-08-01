@@ -1,6 +1,6 @@
 /** API types and calls for backup, restore, and scheduled backups. */
 
-import { api, apiUpload } from './client';
+import { api, apiList, apiUpload } from './client';
 import type { MaskedSecret } from './targets';
 
 export interface BackupInfo {
@@ -37,7 +37,7 @@ export interface BackupScheduleUpdate {
   passphrase?: string;
 }
 
-export const listBackups = () => api<BackupInfo[]>('/api/backups');
+export const listBackups = () => apiList<BackupInfo>('/api/backups');
 export const createBackup = (passphrase: string, note?: string) =>
   api<BackupInfo>('/api/backups', { method: 'POST', body: { passphrase, note } });
 export const deleteBackup = (id: number) => api<void>(`/api/backups/${id}`, { method: 'DELETE' });

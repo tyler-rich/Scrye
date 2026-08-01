@@ -7,7 +7,6 @@ import {
   Card,
   Center,
   Group,
-  Loader,
   Stack,
   Table,
   Text,
@@ -18,6 +17,7 @@ import { IconAlertCircle, IconArrowLeft } from '@tabler/icons-react';
 import { ApiError } from '../api/client';
 import { getScanDiff, SEVERITY_ORDER, type DiffFinding, type ScanDiff } from '../api/scans';
 import { SeverityBadge } from '../components/SeverityBadge';
+import { StatusLoader } from '../components/StatusLoader';
 
 function DiffTable({
   title,
@@ -117,7 +117,7 @@ export function ScanDiffPage() {
           variant="subtle"
           size="compact-sm"
           leftSection={<IconArrowLeft size={14} />}
-          onClick={() => navigate('/scans')}
+          onClick={() => void navigate('/scans')}
         >
           Back to history
         </Button>
@@ -131,7 +131,7 @@ export function ScanDiffPage() {
   if (!diff) {
     return (
       <Center mih={200}>
-        <Loader color="teal" />
+        <StatusLoader color="teal" label="Loading diff" />
       </Center>
     );
   }
@@ -143,7 +143,7 @@ export function ScanDiffPage() {
           variant="subtle"
           size="compact-sm"
           leftSection={<IconArrowLeft size={14} />}
-          onClick={() => navigate('/scans')}
+          onClick={() => void navigate('/scans')}
           mb="xs"
         >
           Back to history

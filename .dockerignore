@@ -34,6 +34,15 @@ artifacts/
 htmlcov/
 *.egg-info/
 
+# Backend dev-only trees — never part of the runtime image (SC-14). The final
+# stage's `COPY backend/ /app/backend/` only needs alembic/, alembic.ini, app/,
+# and pyproject.toml at runtime; the test suite and the env-example generator
+# script are build/dev-time only, so keep them out of the image (less bloat and
+# attack surface on the published scanner image). Excluding them from the build
+# context does not affect CI, which runs pytest on the host checkout.
+backend/tests/
+backend/scripts/
+
 # Node / frontend (deps + build reinstalled inside the image)
 **/node_modules/
 frontend/dist/

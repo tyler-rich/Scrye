@@ -137,7 +137,7 @@ export function GitCredentialsPanel() {
                         variant="subtle"
                         color="red"
                         aria-label="Delete credential"
-                        onClick={() => onDelete(c.id)}
+                        onClick={() => void onDelete(c.id)}
                       >
                         <IconTrash size={16} />
                       </ActionIcon>

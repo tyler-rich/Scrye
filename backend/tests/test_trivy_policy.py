@@ -28,7 +28,7 @@ class TestVexApi:
             headers={CSRF: csrf},
         )
         assert resp.status_code == 201, resp.text
-        assert client.get("/api/trivy/vex-documents").json()[0]["name"] == "prod-vex"
+        assert client.get("/api/trivy/vex-documents").json()["items"][0]["name"] == "prod-vex"
 
     def test_invalid_json_rejected(self, client: TestClient) -> None:
         csrf = setup_admin(client)
@@ -61,7 +61,8 @@ class TestIgnoreRuleApi:
             json={"vuln_id": "CVE-2026-1234", "reason": "false positive"},
             headers={CSRF: csrf},
         ).json()["id"]
-        assert client.get("/api/trivy/ignore-rules").json()[0]["vuln_id"] == "CVE-2026-1234"
+        listed = client.get("/api/trivy/ignore-rules").json()
+        assert listed["items"][0]["vuln_id"] == "CVE-2026-1234"
         assert (
             client.put(
                 f"/api/trivy/ignore-rules/{rid}",
@@ -88,7 +89,7 @@ class TestIgnoreRuleApi:
             headers={CSRF: csrf},
         ).json()["id"]
 
-        stored = client.get("/api/trivy/ignore-rules").json()[0]["expires_at"]
+        stored = client.get("/api/trivy/ignore-rules").json()["items"][0]["expires_at"]
         assert stored.startswith("2026-07-31T15:00:00"), stored
 
         # A naive timestamp is assumed to already be UTC and passes through.
@@ -97,7 +98,7 @@ class TestIgnoreRuleApi:
             json={"vuln_id": "CVE-2026-5555", "expires_at": "2026-08-01T00:00:00"},
             headers={CSRF: csrf},
         )
-        stored = client.get("/api/trivy/ignore-rules").json()[0]["expires_at"]
+        stored = client.get("/api/trivy/ignore-rules").json()["items"][0]["expires_at"]
         assert stored.startswith("2026-08-01T00:00:00"), stored
 
 

@@ -9,8 +9,12 @@
 > (§0), the data model and architecture as originally specified, the full **Deviations log**
 > (§14 — every place the implementation diverged from the plan, dated, with rationale: the
 > Python 3.13 bump, the INF-2 → GHCR-nightly migration, the post-promotion back-merge process
-> fix, the multi-tier security-audit remediation, etc.), and the durable **Build performance**
-> notes at the end.
+> fix, the multi-tier security-audit remediation, etc.), the **finding-ID index** (§15 — the
+> decoder for the bare `SC-12`/`P3-4`/`QUA-17` citations §14 is full of, which replaced the
+> deleted `docs/reviews/` reports), and the durable **Build performance** notes at the end.
+>
+> §14 opens with a **newest-first index of all its entries** — use that rather than scrolling;
+> the entries themselves are not in one consistent order, and §14 explains why.
 >
 > It is **not** forward-looking. For what's next — open work, known limitations, and planned
 > features — see [`ROADMAP.md`](./ROADMAP.md). For what Scrye is and how to run it, see the
@@ -54,9 +58,17 @@ These were decided and are not open for re-litigation during the build:
    nightly GHCR build. No other registries or tags. (Originally locked to local-build-only, then to
    a Docker Hub merged-PR `:dev` trigger; revised again to the GHCR nightly split — see
    § Deviations, 2026-07-06.)
-7. **Backend runtime:** **Python 3.13.** (Originally locked to Python 3.12; revised to 3.13 in
-   Phase 6 to resolve Grype-flagged CPython interpreter CVEs whose fixes are only available in
-   3.13+ — see § Deviations for the full rationale.)
+7. **Backend runtime:** **Python 3.14** (floor **3.14.6** — never 3.14.0–3.14.4, whose
+   incremental GC leaked resident memory in long-running servers and was reverted in 3.14.5).
+   (Originally locked to Python 3.12; revised to 3.13 in Phase 6 to resolve Grype-flagged CPython
+   interpreter CVEs whose fixes are only available in 3.13+; revised again to 3.14 post-v1. Note
+   that the second bump did **not** deliver the CVE clearance it was scoped for: released 3.14.6
+   carries neither the CVE-2025-15366 (`imaplib`) nor the CVE-2025-15367 (`poplib`) guard, so it
+   cleared nothing at the version the image pins. The two have since diverged, though —
+   CVE-2025-15366's backport **did** land on the `3.14` maintenance branch (2026-07-07) and closes
+   on **3.14.7**, tracked in issue **#98**; only CVE-2025-15367 remains a standing acceptance below
+   3.15, tracked in **#52**. See § Deviations (2026-07-25 and both 2026-07-26 entries) for the full
+   rationale of both bumps and that correction.)
 
 ---
 
@@ -90,7 +102,7 @@ scan history, export results to CSV/Markdown/JSON, and include complete project 
 |-------|--------|-------|
 | Frontend | **React 18 + TypeScript + Vite** | |
 | Component library | **Mantine v7** (+ `mantine-datatable`, `@mantine/form`, `@mantine/notifications`, `@mantine/modals`) | Native light/dark, trivial teal `primaryColor`, rich tables/forms. |
-| Backend | **Python 3.13 + FastAPI + Pydantic v2** | Consistent with the Lacunarr stack; strong async subprocess handling. (Bumped from 3.12 in Phase 6 — see § Deviations.) |
+| Backend | **Python 3.14 + FastAPI + Pydantic v2** | Consistent with the Lacunarr stack; strong async subprocess handling. (Bumped from 3.12 in Phase 6, then from 3.13 post-v1 — see § Deviations.) |
 | ORM / migrations | **SQLAlchemy 2.0 + Alembic** | Typed models; migrations gate backup/restore. |
 | Database | **SQLite** | Secrets field-encrypted at the app layer (§6). |
 | Auth | **Authlib** (OIDC) + **argon2-cffi** (local) + **pyotp** (optional TOTP MFA) | Generic OIDC → Pocket ID (RS256). |
@@ -428,7 +440,7 @@ Must include, at minimum:
 Must include:
 - **Code of conduct** pointer (or a short statement).
 - **Local development environment** — step-by-step:
-  - Prereqs (Python 3.13, Node 20+, Docker, `trivy`/`grype`/`syft` for native runs).
+  - Prereqs (Python 3.14, Node 20+, Docker, `trivy`/`grype`/`syft` for native runs).
   - Backend: create venv, install deps, configure a local `app_secret_key`, run Alembic
     migrations, start FastAPI with reload.
   - Frontend: install deps, start the Vite dev server, proxy config to the API.
@@ -543,6 +555,1766 @@ at the time the deviation is made — don't batch these up for later. Format:
 **Plan section affected:** <§ reference>
 ```
 
+**Document names in these entries.** Entries below cite the 2026-07 review reports by bare
+filename — `security-review.md`, `00-summary.md`, `full-audit-2026-07-05.md`,
+`claude-md-compliance.md`, `STATUS.md`, `python-3.14.md` and the rest. Those files lived under
+`docs/reviews/` and `docs/upgrades/` and were **deleted on 2026-07-26**; the names are kept
+because they are how the entries identify their sources, not because the paths still resolve.
+**[§15](#15-finding-id-index-decoder-for-14s-citations) is the decoder** for every finding ID
+they defined, and records how to recover any of the originals from git.
+
+**Ordering — read this before you go looking for something.** This log is **not** in one
+consistent order, and reordering it is not worth the cost: sixteen entries refer to each other
+*relatively* ("the entry below", "superseded by the entry above", "the two 2026-07-03 entries
+above"), and every one of those would silently invert. The three regimes as they actually stand:
+
+1. **Newest-first** from the first entry (2026-07-25) back to 2026-07-07.
+2. **Oldest-first** from 2026-06-30 forward through the 2026-07-09 GHCR consolidation.
+3. **Oldest-first** again for the tail, 2026-07-09 → 2026-07-26 — the twelve entries that were
+   misfiled under `## Build performance` until 2026-07-26 and are now back under this section.
+
+**New entries go at the top of regime 1**, immediately below this index: that is where the most
+recent work already sits and where a reader looks first. The index itself is sorted **newest-first
+regardless of physical position**, so it — not the scroll order — is the reliable way to find an
+entry, and the anchors jump straight to it.
+
+### Index of §14 entries (116, newest first)
+
+- [2026-07-31 — Process — `dev` → `main` promotions merge with a merge commit, not a squash](#2026-07-31--process--dev--main-promotions-merge-with-a-merge-commit-not-a-squash)
+- [2026-07-31 — Release/Process — v0.2.0 release prep: CHANGELOG cut, brace-expansion reapplied on `dev`, Dependabot security-PR routing documented](#2026-07-31--releaseprocess--v020-release-prep-changelog-cut-brace-expansion-reapplied-on-dev-dependabot-security-pr-routing-documented)
+- [2026-07-31 — Infra/Process — Grype gate keeps its verdict *and* lists its waivers, from one scan](#2026-07-31--infraprocess--grype-gate-keeps-its-verdict-and-lists-its-waivers-from-one-scan)
+- [2026-07-30 — Infra/Process — Three `tarfile` interpreter CVEs waived as Group A-2 (issue #116); the grype.yaml blocks made self-describing](#2026-07-30--infraprocess--three-tarfile-interpreter-cves-waived-as-group-a-2-issue-116-the-grypeyaml-blocks-made-self-describing)
+- [2026-07-29 — Post-v1 — App version bumped 0.1.0 → 0.2.0; the three independent declarations put under a drift guard](#2026-07-29--post-v1--app-version-bumped-010--020-the-three-independent-declarations-put-under-a-drift-guard)
+- [2026-07-29 — Post-v1 — HTTPS enforcement made legible; `X-Forwarded-Proto` honored from configured proxies only](#2026-07-29--post-v1--https-enforcement-made-legible-x-forwarded-proto-honored-from-configured-proxies-only)
+- [2026-07-29 — Post-v1 — Master-key source surfaced on the About tab (the durable channel chosen over a per-boot log line)](#2026-07-29--post-v1--master-key-source-surfaced-on-the-about-tab-the-durable-channel-chosen-over-a-per-boot-log-line)
+- [2026-07-29 — Post-v1 — Master key auto-generated on first launch; the Docker secret keeps its precedence](#2026-07-29--post-v1--master-key-auto-generated-on-first-launch-the-docker-secret-keeps-its-precedence)
+- [2026-07-28 — Post-v1 — Compose `deploy:` keys retired for NAS portability; memory limits made portable, CPU limits moved to an opt-in overlay](#2026-07-28--post-v1--compose-deploy-keys-retired-for-nas-portability-memory-limits-made-portable-cpu-limits-moved-to-an-opt-in-overlay)
+- [2026-07-26 — Infra/Process — `node:22-bookworm-slim` digest refreshed; the Node 24 move and the #86 frontend tooling majors recorded in the roadmap](#2026-07-26--infraprocess--node22-bookworm-slim-digest-refreshed-the-node-24-move-and-the-86-frontend-tooling-majors-recorded-in-the-roadmap)
+- [2026-07-26 — Docs/Process — Review documents retired; §14 made contiguous and indexed; a false CVE claim removed from the CHANGELOG](#2026-07-26--docsprocess--review-documents-retired-14-made-contiguous-and-indexed-a-false-cve-claim-removed-from-the-changelog)
+- [2026-07-26 — Post-v1 — Socket-proxy operational behavior from a live Debian run documented (docs only)](#2026-07-26--post-v1--socket-proxy-operational-behavior-from-a-live-debian-run-documented-docs-only)
+- [2026-07-26 — Post-v1 — Stale socket-proxy wording retired from the code and Compose file](#2026-07-26--post-v1--stale-socket-proxy-wording-retired-from-the-code-and-compose-file)
+- [2026-07-26 — Infra/Process — Group A interpreter CVEs re-verified against the 3.14 branch; waivers re-pointed at a Group-A-only tracking issue (#98)](#2026-07-26--infraprocess--group-a-interpreter-cves-re-verified-against-the-314-branch-waivers-re-pointed-at-a-group-a-only-tracking-issue-98)
+- [2026-07-26 — Infra/Process — CVE-2025-15366 (imaplib) regrouped from Group B to Group A: the backport did land on 3.14](#2026-07-26--infraprocess--cve-2025-15366-imaplib-regrouped-from-group-b-to-group-a-the-backport-did-land-on-314)
+- [2026-07-26 — Infra/Process — Dependabot told to stop proposing Mantine/React majors (locked decision §2)](#2026-07-26--infraprocess--dependabot-told-to-stop-proposing-mantinereact-majors-locked-decision-2)
+- [2026-07-25 — Docs/Process — README + CONTRIBUTING audited against the post-remediation codebase](#2026-07-25--docsprocess--readme--contributing-audited-against-the-post-remediation-codebase)
+- [2026-07-25 — Docs/Process — Interpreter CVEs must be verified at the source before a bump is justified on security grounds](#2026-07-25--docsprocess--interpreter-cves-must-be-verified-at-the-source-before-a-bump-is-justified-on-security-grounds)
+- [2026-07-25 — Post-release — Backend runtime bumped Python 3.13 → 3.14 (locked decision revised)](#2026-07-25--post-release--backend-runtime-bumped-python-313--314-locked-decision-revised)
+- [2026-07-25 — Post-v1 — List-response envelope standardized behind shared helpers (L13 / APIR-8 deferred half)](#2026-07-25--post-v1--list-response-envelope-standardized-behind-shared-helpers-l13--apir-8-deferred-half)
+- [2026-07-25 — Post-v1 — Socket-proxy follow-ups: API-version bound and `DOCKER_GID` blast radius documented (docs only)](#2026-07-25--post-v1--socket-proxy-follow-ups-api-version-bound-and-docker_gid-blast-radius-documented-docs-only)
+- [2026-07-24 — Post-release — P3-8 closed: `noUncheckedIndexedAccess` + type-aware ESLint](#2026-07-24--post-release--p3-8-closed-nouncheckedindexedaccess--type-aware-eslint)
+- [2026-07-24 — Post-release — #83: a completed authentication is never undone by an in-flight refresh](#2026-07-24--post-release--83-a-completed-authentication-is-never-undone-by-an-in-flight-refresh)
+- [2026-07-24 — Post-release — Test-debt back-fill for M19, M20, and M21 (tests only)](#2026-07-24--post-release--test-debt-back-fill-for-m19-m20-and-m21-tests-only)
+- [2026-07-24 — Post-release — P3-4: sequence auth refresh against session invalidation](#2026-07-24--post-release--p3-4-sequence-auth-refresh-against-session-invalidation)
+- [2026-07-24 — Post-release — Frontend Priority-3 polish batch (P3-1, P3-2, P3-5, P3-6, P3-7, P3-8)](#2026-07-24--post-release--frontend-priority-3-polish-batch-p3-1-p3-2-p3-5-p3-6-p3-7-p3-8)
+- [2026-07-24 — Post-v1 — Docker socket proxy migrated `tecnativa` → `wollomatic/socket-proxy` (issue #63, M23/SC-7 deferred half)](#2026-07-24--post-v1--docker-socket-proxy-migrated-tecnativa--wollomaticsocket-proxy-issue-63-m23sc-7-deferred-half)
+- [2026-07-20 — Post-release — SC-12: pin and hash-lock the setuptools build backend](#2026-07-20--post-release--sc-12-pin-and-hash-lock-the-setuptools-build-backend)
+- [2026-07-20 — Post-release — D5b: pin ruff isort first-party classification so import ordering is version-stable](#2026-07-20--post-release--d5b-pin-ruff-isort-first-party-classification-so-import-ordering-is-version-stable)
+- [2026-07-20 — Post-release — SC-14: keep the backend test suite and dev scripts out of the runtime image](#2026-07-20--post-release--sc-14-keep-the-backend-test-suite-and-dev-scripts-out-of-the-runtime-image)
+- [2026-07-20 — Post-release — P3-3: surface credential/filter option-fetch failures instead of silently swallowing them](#2026-07-20--post-release--p3-3-surface-credentialfilter-option-fetch-failures-instead-of-silently-swallowing-them)
+- [2026-07-20 — Docs/Process — CLAUDE.md: strip auto-appended PR-body attribution footers after opening](#2026-07-20--docsprocess--claudemd-strip-auto-appended-pr-body-attribution-footers-after-opening)
+- [2026-07-20 — Post-v1 — Frontend jsdom + React Testing Library test harness](#2026-07-20--post-v1--frontend-jsdom--react-testing-library-test-harness)
+- [2026-07-13 — Post-release — H1/SEC-1: repository scan targets must be remote clone URLs (local-path arbitrary-read closed) [back-fill]](#2026-07-13--post-release--h1sec-1-repository-scan-targets-must-be-remote-clone-urls-local-path-arbitrary-read-closed-back-fill)
+- [2026-07-13 — Post-release — H9/SC-2 + H10/SC-3: SHA-pin all Actions, expand Dependabot, harden publish checkouts [back-fill]](#2026-07-13--post-release--h9sc-2--h10sc-3-sha-pin-all-actions-expand-dependabot-harden-publish-checkouts-back-fill)
+- [2026-07-13 — Docs/Process — CLAUDE.md compliance-drift closure (D1, D2, R1–R6) [back-fill]](#2026-07-13--docsprocess--claudemd-compliance-drift-closure-d1-d2-r1r6-back-fill)
+- [2026-07-13 — Post-release — Backend dev-dependency bumps (pytest, pytest-asyncio, black) [back-fill]](#2026-07-13--post-release--backend-dev-dependency-bumps-pytest-pytest-asyncio-black-back-fill)
+- [2026-07-13 — Post-release — CON-4 (H5): scanner JSON parse/normalize hopped off the event loop](#2026-07-13--post-release--con-4-h5-scanner-json-parsenormalize-hopped-off-the-event-loop)
+- [2026-07-13 — Docs/Process — Squash-merge authorship follows the GitHub profile display name (D4 doc-side)](#2026-07-13--docsprocess--squash-merge-authorship-follows-the-github-profile-display-name-d4-doc-side)
+- [2026-07-13 — Docs/Process — dev→main promotion PRs use a plain "Promote dev to main: …" title](#2026-07-13--docsprocess--devmain-promotion-prs-use-a-plain-promote-dev-to-main--title)
+- [2026-07-13 — Post-release — Security + supply-chain review batch (H11, M2–M5, M22–M26, L1–L4, L23)](#2026-07-13--post-release--security--supply-chain-review-batch-h11-m2m5-m22m26-l1l4-l23)
+- [2026-07-13 — Post-release — Frontend-review wave 2 (M19–M21, L16–L22)](#2026-07-13--post-release--frontend-review-wave-2-m19m21-l16l22)
+- [2026-07-13 — Post-release — API-review batch (APIR-1…APIR-10)](#2026-07-13--post-release--api-review-batch-apir-1apir-10)
+- [2026-07-13 — Post-release — CON-2/CON-14 remediation: process-group kills for scanner subprocesses](#2026-07-13--post-release--con-2con-14-remediation-process-group-kills-for-scanner-subprocesses)
+- [2026-07-13 — Post-release — CON-1/CON-11/CON-3/SEC-2 remediation; worker seam gains optional hooks](#2026-07-13--post-release--con-1con-11con-3sec-2-remediation-worker-seam-gains-optional-hooks)
+- [2026-07-13 — Post-release — CON-5–CON-20 remediation: async-path, shutdown, and pool hygiene](#2026-07-13--post-release--con-5con-20-remediation-async-path-shutdown-and-pool-hygiene)
+- [2026-07-13 — Security — account-takeover chain fix: XSS sink containment + baseline security headers](#2026-07-13--security--account-takeover-chain-fix-xss-sink-containment--baseline-security-headers)
+- [2026-07-13 — Infra — runtime-stage curl/libcurl explicitly version-pinned for CVE-2026-5773](#2026-07-13--infra--runtime-stage-curllibcurl-explicitly-version-pinned-for-cve-2026-5773)
+- [2026-07-13 — Infra/Process — CPython interpreter CVEs on 3.13 accepted as tracked risk; 3.14 deferred](#2026-07-13--infraprocess--cpython-interpreter-cves-on-313-accepted-as-tracked-risk-314-deferred)
+- [2026-07-09 — Infra/Process — repo goes public; distribution consolidated to GHCR-only](#2026-07-09--infraprocess--repo-goes-public-distribution-consolidated-to-ghcr-only)
+- [2026-07-09 — Post-v1 — teal hue refinement, scan deletion, nav active-match fix](#2026-07-09--post-v1--teal-hue-refinement-scan-deletion-nav-active-match-fix)
+- [2026-07-09 — Post-v1 — v0.1.0 bundled-binary CVE check: no upstream fix available yet](#2026-07-09--post-v1--v010-bundled-binary-cve-check-no-upstream-fix-available-yet)
+- [2026-07-07 — Process — back-merge step after promotion; Dependabot retargeted to `dev`](#2026-07-07--process--back-merge-step-after-promotion-dependabot-retargeted-to-dev)
+- [2026-07-06 — Infra — dev publishing moved to a nightly GHCR build (registry split + INF-2 resolved)](#2026-07-06--infra--dev-publishing-moved-to-a-nightly-ghcr-build-registry-split--inf-2-resolved)
+- [2026-07-05 — Post-P6 audit remediation (P0) — token-mint capping, backup/restore, webhook URLs](#2026-07-05--post-p6-audit-remediation-p0--token-mint-capping-backuprestore-webhook-urls)
+- [2026-07-05 — Post-P6 audit remediation (P1) — availability/performance under real volume](#2026-07-05--post-p6-audit-remediation-p1--availabilityperformance-under-real-volume)
+- [2026-07-05 — Post-P6 audit remediation (P2) — supply chain / deployment hardening](#2026-07-05--post-p6-audit-remediation-p2--supply-chain--deployment-hardening)
+- [2026-07-05 — Post-P6 audit remediation (P3) — feature gaps that mislead users](#2026-07-05--post-p6-audit-remediation-p3--feature-gaps-that-mislead-users)
+- [2026-07-05 — Post-P6 audit remediation (P4) — frontend correctness / UX](#2026-07-05--post-p6-audit-remediation-p4--frontend-correctness--ux)
+- [2026-07-05 — Deviation-logging debt from the audit (FE-2, INF-10, API-12, FEAT-4)](#2026-07-05--deviation-logging-debt-from-the-audit-fe-2-inf-10-api-12-feat-4)
+- [2026-07-05 — Post-P6 audit remediation (P5) — maintainability, process, long tail](#2026-07-05--post-p6-audit-remediation-p5--maintainability-process-long-tail)
+- [2026-07-04 — Post-P6 — Full-repo security audit remediation](#2026-07-04--post-p6--full-repo-security-audit-remediation)
+- [2026-07-04 — Post-P6 — Security-audit hotfix (follow-up to the merge above)](#2026-07-04--post-p6--security-audit-hotfix-follow-up-to-the-merge-above)
+- [2026-07-04 — Post-P6 — Scanner/report review fixes: diff identity and dashboard grouping revised](#2026-07-04--post-p6--scannerreport-review-fixes-diff-identity-and-dashboard-grouping-revised)
+- [2026-07-04 — Phase 6 — Docker Hub publishing (tagged releases + dev continuous build)](#2026-07-04--phase-6--docker-hub-publishing-tagged-releases--dev-continuous-build)
+- [2026-07-04 — Process — Adopted a dev/main branching model ahead of going public](#2026-07-04--process--adopted-a-devmain-branching-model-ahead-of-going-public)
+- [2026-07-03 — Phase P1 — First-admin bootstrap via explicit setup endpoint](#2026-07-03--phase-p1--first-admin-bootstrap-via-explicit-setup-endpoint)
+- [2026-07-03 — Phase P1 — Master key file supports optional multi-version format](#2026-07-03--phase-p1--master-key-file-supports-optional-multi-version-format)
+- [2026-07-03 — Phase P2 — Raw artifact bytes stored on the filesystem](#2026-07-03--phase-p2--raw-artifact-bytes-stored-on-the-filesystem)
+- [2026-07-03 — Phase P2 — Frontend routing via `react-router-dom` v7](#2026-07-03--phase-p2--frontend-routing-via-react-router-dom-v7)
+- [2026-07-03 — Phase P2 — Scan views use Mantine `Table`, not `mantine-datatable`](#2026-07-03--phase-p2--scan-views-use-mantine-table-not-mantine-datatable)
+- [2026-07-03 — Phase P2 — Scan cancellation limited to queued scans](#2026-07-03--phase-p2--scan-cancellation-limited-to-queued-scans)
+- [2026-07-03 — Phase P3 — Filesystem scans gated behind an allowlist](#2026-07-03--phase-p3--filesystem-scans-gated-behind-an-allowlist)
+- [2026-07-03 — Phase P3 — Git authentication mechanism per provider](#2026-07-03--phase-p3--git-authentication-mechanism-per-provider)
+- [2026-07-03 — Phase P3 — SBOM generation is an opt-in per-scan pass](#2026-07-03--phase-p3--sbom-generation-is-an-opt-in-per-scan-pass)
+- [2026-07-03 — Phase P3 — Registry credential helpers configured but not bundled](#2026-07-03--phase-p3--registry-credential-helpers-configured-but-not-bundled)
+- [2026-07-03 — Phase P3 — Runtime deps (httpx, python-multipart) and read scope](#2026-07-03--phase-p3--runtime-deps-httpx-python-multipart-and-read-scope)
+- [2026-07-03 — Phase P3 — Security Review #2: generic-host git auth off-argv](#2026-07-03--phase-p3--security-review-2-generic-host-git-auth-off-argv)
+- [2026-07-03 — Phase P3 — Security Review #5: credential lists are admin-only](#2026-07-03--phase-p3--security-review-5-credential-lists-are-admin-only)
+- [2026-07-03 — Phase P4 — History exposed via a dedicated `/scans/history` endpoint](#2026-07-03--phase-p4--history-exposed-via-a-dedicated-scanshistory-endpoint)
+- [2026-07-03 — Phase P4 — Scan tags modeled as a `scan_tags` table, set by operators](#2026-07-03--phase-p4--scan-tags-modeled-as-a-scan_tags-table-set-by-operators)
+- [2026-07-03 — Phase P4 — Saved filter presets are owner-scoped](#2026-07-03--phase-p4--saved-filter-presets-are-owner-scoped)
+- [2026-07-03 — Phase P4 — Export scope semantics and diff constraints](#2026-07-03--phase-p4--export-scope-semantics-and-diff-constraints)
+- [2026-07-03 — Phase P4 — History view uses the base Mantine `Table`, not `mantine-datatable`](#2026-07-03--phase-p4--history-view-uses-the-base-mantine-table-not-mantine-datatable)
+- [2026-07-03 — Phase P5 — Runtime settings stored in a generic `settings` table](#2026-07-03--phase-p5--runtime-settings-stored-in-a-generic-settings-table)
+- [2026-07-03 — Phase P5 — Dependencies added: Authlib and pyotp](#2026-07-03--phase-p5--dependencies-added-authlib-and-pyotp)
+- [2026-07-03 — Phase P5 — OIDC uses Authlib's `jose`, isolated behind an import shim](#2026-07-03--phase-p5--oidc-uses-authlibs-jose-isolated-behind-an-import-shim)
+- [2026-07-03 — Phase P5 — OIDC provisioning: username sanitization and admin-group mapping](#2026-07-03--phase-p5--oidc-provisioning-username-sanitization-and-admin-group-mapping)
+- [2026-07-03 — Phase P5 — TOTP MFA: two-step enrollment and in-process login challenge](#2026-07-03--phase-p5--totp-mfa-two-step-enrollment-and-in-process-login-challenge)
+- [2026-07-03 — Phase P5 — API tokens: bearer auth, CSRF exemption, and role capping](#2026-07-03--phase-p5--api-tokens-bearer-auth-csrf-exemption-and-role-capping)
+- [2026-07-03 — Phase P5 — Notifications: channels + test-send now; event dispatch deferred](#2026-07-03--phase-p5--notifications-channels--test-send-now-event-dispatch-deferred)
+- [2026-07-03 — Phase P5 — Scanner DB schedule/offline-import stored but not yet actuated](#2026-07-03--phase-p5--scanner-db-scheduleoffline-import-stored-but-not-yet-actuated)
+- [2026-07-03 — Phase P5 — Backup bundle is a logical row dump with passphrase re-wrap](#2026-07-03--phase-p5--backup-bundle-is-a-logical-row-dump-with-passphrase-re-wrap)
+- [2026-07-03 — Phase P5 — Scheduled backups run on an in-process asyncio loop](#2026-07-03--phase-p5--scheduled-backups-run-on-an-in-process-asyncio-loop)
+- [2026-07-03 — Phase P5 — Self-service Account page; role-gated Settings tabs](#2026-07-03--phase-p5--self-service-account-page-role-gated-settings-tabs)
+- [2026-07-03 — Phase P5 — Security review hardening: OIDC alg allowlist + scrypt work factor](#2026-07-03--phase-p5--security-review-hardening-oidc-alg-allowlist--scrypt-work-factor)
+- [2026-07-03 — Phase P6 — Branch name `phase/P6`](#2026-07-03--phase-p6--branch-name-phasep6)
+- [2026-07-03 — Phase P6 — Cron scheduling via a self-contained evaluator](#2026-07-03--phase-p6--cron-scheduling-via-a-self-contained-evaluator)
+- [2026-07-03 — Phase P6 — Notification dispatch: per-channel event subscriptions](#2026-07-03--phase-p6--notification-dispatch-per-channel-event-subscriptions)
+- [2026-07-03 — Phase P6 — Trivy VEX/ignore applied via env vars, ignore rules structured](#2026-07-03--phase-p6--trivy-vexignore-applied-via-env-vars-ignore-rules-structured)
+- [2026-07-03 — Phase P6 — Dashboard "open" posture from the latest scan per target](#2026-07-03--phase-p6--dashboard-open-posture-from-the-latest-scan-per-target)
+- [2026-07-03 — Phase P6 — `/metrics` is authenticated; hand-rolled exposition](#2026-07-03--phase-p6--metrics-is-authenticated-hand-rolled-exposition)
+- [2026-07-03 — Phase P6 — Retention prunes raw artifacts only; config in the settings table](#2026-07-03--phase-p6--retention-prunes-raw-artifacts-only-config-in-the-settings-table)
+- [2026-07-03 — Phase P6 — Dogfood self-scan gates on fixable High/Critical with triage allowlists](#2026-07-03--phase-p6--dogfood-self-scan-gates-on-fixable-highcritical-with-triage-allowlists)
+- [2026-07-03 — Phase P6 — Fix wrong `debian:bookworm-slim` base digest](#2026-07-03--phase-p6--fix-wrong-debianbookworm-slim-base-digest)
+- [2026-07-03 — Phase P6 — Dogfood gate excludes the bundled scanner binaries](#2026-07-03--phase-p6--dogfood-gate-excludes-the-bundled-scanner-binaries)
+- [2026-07-03 — Phase P6 — Dogfood-driven dependency bumps (FastAPI/Starlette/multipart)](#2026-07-03--phase-p6--dogfood-driven-dependency-bumps-fastapistarlettemultipart)
+- [2026-07-03 — Phase P6 — Grype gate excludes the CPython interpreter binary](#2026-07-03--phase-p6--grype-gate-excludes-the-cpython-interpreter-binary)
+- [2026-07-03 — Phase P6 — Bundled Trivy bumped 0.71.2 → 0.72.0](#2026-07-03--phase-p6--bundled-trivy-bumped-0712--0720)
+- [2026-07-03 — Phase P6 — Backend runtime bumped Python 3.12 → 3.13 (locked decision revised)](#2026-07-03--phase-p6--backend-runtime-bumped-python-312--313-locked-decision-revised)
+- [2026-07-03 — Phase P6 — Scanner temp/cache dirs pinned to the writable `/cache` volume; `/tmp` tmpfs owned by the app uid](#2026-07-03--phase-p6--scanner-tempcache-dirs-pinned-to-the-writable-cache-volume-tmp-tmpfs-owned-by-the-app-uid)
+- [2026-07-03 — Phase P6 — Scanner cache redirected via env vars for **every** invocation (incl. probes)](#2026-07-03--phase-p6--scanner-cache-redirected-via-env-vars-for-every-invocation-incl-probes)
+- [2026-07-03 — Post-P6 bug-fix round — `/tmp` tmpfs kept at 200 MB; footprint documented; cache/staging fix re-verified live end-to-end](#2026-07-03--post-p6-bug-fix-round--tmp-tmpfs-kept-at-200-mb-footprint-documented-cachestaging-fix-re-verified-live-end-to-end)
+- [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
+- [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
+- [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-07-31 — Process — `dev` → `main` promotions merge with a merge commit, not a squash
+
+**What changed:** `CONTRIBUTING.md` § Releasing step 1 and `CLAUDE.md` § Git & PR conventions now
+require promotions to be merged with GitHub's **"Create a merge commit"**, where they previously
+said promotions are **squash**-merged (the rule adopted 2026-07-04 with the branching model, and
+restated in the 2026-07-13 promotion-title entry). Feature and contribution PRs into `dev` are
+**unchanged** — those are still squash-merged. Documentation and process only; no code, schema, API
+contract, security model, job model, auth, or CI behavior is affected.
+
+Three dependent passages were corrected in the same pass rather than left to contradict the new
+rule:
+- `CONTRIBUTING.md` § Releasing step 3 and the matching `CLAUDE.md` back-merge bullet both described
+  the post-promotion back-merge as an exercise in resolving `main`'s squashed copy of already-
+  promoted work against `dev`'s newer versions. Under a merge commit that conflict does not exist —
+  `dev`'s tip is already an ancestor of `main`'s, so the back-merge of a promotion **fast-forwards**.
+  Both now say so, and both keep the "resolve in favour of `dev`" rule for the one case that still
+  produces conflicts: a commit that landed on `main` independently of a promotion.
+- The `CLAUDE.md` git-identity note said a **squash-merge** authors its commit as the merging
+  account's GitHub *profile display name*. That is equally true of a merge commit, so the note was
+  generalized to anything merged through the web UI, with the clarification that a merge commit
+  leaves the individual promoted commits' own authorship intact.
+
+**Why:** the argument is the divergence this session had to reconcile, not a preference. Squashing a
+promotion replaces `dev`'s commits with one new commit on `main` that has **no ancestry link** to
+them, so `main` and `dev` diverge the instant the promotion lands. Every subsequent back-merge is
+then a conflict-resolution exercise against a squashed copy of work `dev` already has — which is
+precisely the failure the 2026-07-07 entry documented and tried to manage procedurally rather than
+remove.
+
+It got worse than "manage procedurally." Because `main` was not an ancestor of `dev`, **#110** (a
+Dependabot security update, which lands on `main` — see the entry below) could not be back-merged
+cheaply, so **#119** *replicated* its change on `dev` as a separate commit instead of merging
+`main`. Both branches had then independently edited `frontend/package-lock.json`, and the v0.2.0
+promotion PR (#122) opened `dirty`. Resolving it required merging `origin/main` into `dev` and
+hand-picking a side of the lockfile — on a file where picking wrong silently reverts a security
+fix. That is a bad place to be for a purely mechanical reason.
+
+A merge commit removes the cause: `main` keeps the individual commits a release is supposed to
+preserve, `dev` stays an ancestor of `main`, the back-merge becomes a fast-forward, and a later
+promotion cannot open `dirty` merely because the previous one squashed. The cost — a busier
+first-parent history on `main` — is the thing a release branch actually wants to record.
+
+**What this does not change.** Squash-merging remains correct for PRs into `dev`: those are the
+PRs whose intermediate commits are noise, and `dev`'s one-commit-per-PR history is what makes a
+promotion's commit list readable in the first place. The rule is asymmetric on purpose. The
+existing § Git & PR conventions rule about **retargeting a stacked child PR after its parent was
+squash-merged** is likewise untouched — it is about feature PRs into `dev`, where squashing still
+applies.
+
+**Plan section affected:** `CLAUDE.md` § Git & PR conventions (new promotion merge-method rule,
+back-merge bullet rewritten, git-identity note generalized); `CONTRIBUTING.md` § Releasing (step 1
+merge method, step 3 back-merge guidance plus a new pre-promotion reconciliation check). Supersedes
+the squash-merge half of the 2026-07-04 branching-model entry and the 2026-07-07 back-merge entry;
+both are left in place as the record of what was believed then.
+
+---
+
+### 2026-07-31 — Release/Process — v0.2.0 release prep: CHANGELOG cut, brace-expansion reapplied on `dev`, Dependabot security-PR routing documented
+
+**What changed:** the `CONTRIBUTING.md` § Releasing "Before you tag" checklist run for **v0.2.0**,
+plus the three items it turned up that had to land on `dev` before the promotion PR was opened. No
+application code, schema, API-contract, security-model, job-model, auth, or CI-behavior change.
+
+**1. `CHANGELOG.md` `[Unreleased]` cut to `[0.2.0] - 2026-07-31`.** A fresh empty `[Unreleased]`
+sits above it and the reference-link block gained
+`[0.2.0]: …/compare/v0.1.0...v0.2.0` with `[Unreleased]` re-pointed at `…/compare/v0.2.0...HEAD`.
+`CONTRIBUTING.md` § Releasing describes this as a tag-time maintainer step; doing it **before** the
+promotion means `main` receives an already-correct CHANGELOG rather than a commit landing on `main`
+after the fact, outside a release.
+
+A new **`### Security`** entry was added to the 0.2.0 section, because nothing in the section
+answered the question the release actually exists to answer. Issue **#75** — the weekly
+`rescan.yml` tracking issue — has been reporting fixable HIGH/CRITICAL CVEs against the published
+`:latest` since 2026-07-20, and `:latest` has been the **v0.1.0 image from 2026-07-09** the whole
+time. None of those findings is a defect in Scrye; they are advisories disclosed against the base
+image and dependency tree after that image was built, and only a rebuild clears them. The entry
+enumerates what actually moved since v0.1.0 (both Python stages 3.13 → 3.14.6; refreshed
+`debian:bookworm-slim` and `node:22-bookworm-slim` digests; `fastapi`, `uvicorn`, `pydantic`,
+`pydantic-settings`, `sqlalchemy`, `alembic`, new `greenlet`; `setuptools` pinned exactly and
+hash-locked; the frontend `brace-expansion` bumps below) and — deliberately — what it does **not**
+clear: the seven waived CPython interpreter CVEs, split across #98, #116 and #52.
+
+The rest of `[Unreleased]` was re-verified claim by claim against the tree rather than trusted, per
+the checklist's first item. It held up: the false-CVE correction from the 2026-07-26 entry is
+present and accurate; the four waived CVEs it names, the `SCRYE_APP_SECRET_KEY_*` setting names,
+the `mem_limit`/`mem_reservation` values and the CPU-limits overlay, the wollomatic uid 65534 /
+`GET /images/json` allowlist / `DOCKER_GID` fallback of 999, the thirteen enveloped endpoints
+(exactly thirteen `full_page(` call sites across `backend/app/api/`), the 3.14 dependency versions,
+and all six cross-document references (four README anchors, `CONTRIBUTING.md` § API conventions,
+`docs/ARCHIVE.md` §15) were each checked at the file. One sentence
+was amended: "All four stay waived in the dogfood scan" was true but read as a total, and three
+further `tarfile` CVEs had been waived after it was written (2026-07-30 entry), so it now says so
+and points at § Security.
+
+**2. `THIRD_PARTY_LICENSES/` re-verified.** The version table (Trivy 0.72.0, Grype 0.115.0, Syft
+1.46.0) still matches the `TRIVY_VERSION`/`GRYPE_VERSION`/`SYFT_VERSION` args in
+`docker/Dockerfile`, and all four bundled files were re-fetched from upstream at those tags and
+compared byte-for-byte — `trivy/LICENSE`, `trivy/NOTICE`, `grype/LICENSE`, `syft/LICENSE` are
+identical; Grype and Syft still 404 on `NOTICE`. No change was needed. This repeats the 2026-07-26
+verification rather than inheriting it, which is the point of the checklist item.
+
+**3. `brace-expansion` bumped on `dev` — 1.1.16 → 1.1.18, and the nested
+`@typescript-eslint/typescript-estree` copy 2.1.3 → 2.1.4.** Dependabot proposed exactly this as
+**#120**, but opened it against **`main`**, and retargeting left the diff stale, so #120 was closed
+and the bump reapplied here. Regenerated with `npm update brace-expansion --package-lock-only` —
+not by editing version strings — so `resolved` URLs and `integrity` hashes moved with the versions;
+the resulting diff is 6 lines in each of the two entries and nothing else. `npm ci` installs
+1.1.18 and 2.1.4, `npm run build` and the 20-file / 69-test Vitest suite both pass.
+
+`dev` and `main` were confirmed to agree on `brace-expansion` **before** the promotion: #110
+(1.1.15 → 1.1.16) was merged directly into `main` and back-merged to `dev` in #119, so both
+branches read 1.1.16/2.1.3 at the promotion's merge base and the promotion cannot resolve away from
+the earlier security fix.
+
+**Known and deliberately not acted on:** GHSA-mh99-v99m-4gvg covers `brace-expansion` **`<=5.0.7`**,
+so 1.1.18 and 2.1.4 are still inside the affected range — there is no fixed release on the 1.x or
+2.x lines, and `npm audit fix --force` would resolve it by installing `eslint@10`. The bump is
+therefore currency, not a clearance, and the CHANGELOG entry does not claim otherwise (CLAUDE.md
+§ Dependency hygiene — advisory metadata is evidence, not proof). Both copies are `devDependencies`
+reached only through the ESLint tree; neither ships in the image or the browser bundle. Tracked in
+**#125**, which exists specifically because this invites one wrong conclusion: a bot proposed the
+bump as a *security* update, the bump was taken, and the advisory is still open afterwards — without
+a written record the next person reads that as dropped work rather than an accepted, unfixable-at-
+this-major finding.
+
+**4. Dependabot security-PR routing documented** — the actual lesson from #120, in `CLAUDE.md`
+§ Dependency hygiene and a new `CONTRIBUTING.md` § Releasing subsection. `.github/dependabot.yml`
+sets `target-branch: dev` on all six ecosystems, and that key is honoured for **version** updates
+only; **security** updates ignore it and always open against the repository's **default branch**,
+`main`. That is a GitHub limitation with no config-level workaround, so a Dependabot PR's base is
+not predictable from the config and must be read off the PR. Two responses are correct — merge to
+`main` and back-merge, or close and reapply on `dev` — and **retargeting is not a third one**: the
+diff is not recomputed against the new base, so it goes stale as `dev` moves ahead and merging it
+can revert newer work, up to and including the fix the PR exists to deliver. Retargeting also does
+not re-run CI, since `on: pull_request` never fires on `edited` (already recorded in § Git & PR
+conventions, and the same failure mode from the other direction). The stale parenthetical at
+`CONTRIBUTING.md` § Releasing step 3 — "Dependabot targets `dev`, so promotion squashes are
+normally the only thing the back-merge has to reconcile" — was corrected in the same pass; it is
+exactly the belief that made #120 surprising.
+
+**5. The `[0.2.0]` section was missing everything between v0.1.0 and the 2026-07-24 work.** The
+first draft of the cut carried only what had been written into `[Unreleased]` since roughly
+2026-07-24 — the socket proxy, the list envelope, the 3.14 move, the Compose and master-key work.
+Everything promoted in **#70** (2026-07-13, i.e. #53–#67) and the #77–#88 batch that followed it had
+never been changelogged at all, because v0.1.0 was tagged 2026-07-09 and #70 landed four days later.
+That is roughly two dozen PRs of security and correctness work that genuinely ships in 0.2.0.
+
+This was caught because the release notes drafted from the **commit range** described work the
+CHANGELOG did not contain, so the notes' "full details" link pointed at a document missing half of
+what a reader had just read. Backfilled from the #70 commit range and the §14 entries for that
+batch — not from the release-notes draft, which is downstream of the same reading and would have
+laundered any error in it.
+
+Merged into the existing `Added`/`Fixed`/`Changed`/`Security` sections rather than added as a
+separate "previously unreleased" block: 0.2.0 is one release, and a changelog-within-a-changelog
+would make a reader track which half of it applies to them. Where an item was already covered —
+the `setuptools` pin and `requirements.lock`, both already named in § Security — the existing bullet
+was left and the new one written to complement rather than restate it.
+
+Three of the six upgrade-affecting items in the release live in this backfill and were invisible
+before it: the **SSRF egress guard** (`SCRYE_ALLOW_INTERNAL_EGRESS`, default off — likely to bite a
+self-hosted deployment whose SMTP relay or registry is on the LAN), the **remote-clone-URL
+requirement** for repository targets, and the **master-key entropy floor**, which will refuse to
+start a v0.1.0 deployment whose key file holds a raw passphrase. The last is the sharpest: the
+CHANGELOG now spells out that the fix is the `SCRYE_ALLOW_WEAK_MASTER_KEY` boot-and-rotate escape
+hatch followed by a backup/restore cycle, **not** generating a fresh key, which would leave every
+stored secret undecryptable.
+
+Also recorded from that range: three API response changes narrower than the envelope but still
+contract-visible — timestamps now serialize with an explicit `Z` (APIR-5), `/api/audit` renamed its
+envelope key `entries` → `items` (APIR-8), and scan rows in list/history/dashboard responses dropped
+`options`/`error` in favour of `has_error` (APIR-9).
+
+**6. `README.md` stopped advertising a release that does not exist.** The image-tag table and the
+`docker pull` block both used `:1.4.0` as the "pin a release" example, for a project whose only
+release is v0.1.0. Corrected to `:0.2.0`. Cosmetic, but it is in the *Quick start* path on the page
+a reader lands on the day the release goes out.
+
+**7. Three dependency findings given live tracking issues.** All three are non-blocking and all
+three would otherwise have been visible only in an `npm audit` run nobody makes a habit of:
+- **#123** — GHSA-qwww-vcr4-c8h2, `react-router` 7.18.1. The only one on a **runtime** dependency.
+  Not reachable: the advisory is specific to RSC mode, and Scrye is a declarative SPA
+  (`<BrowserRouter>` in `main.tsx`, no data-mode router, no `@react-router/*` server package, no
+  `react-router.config.ts`, no server actions, no react-router server process in the image). The fix
+  is 8.3.0, a major; `npm audit fix --force` would "fix" it by **downgrading** to 7.11.0, below the
+  vulnerable range, giving up sixteen patch releases to close an unreachable path. The reachability
+  assessment is stated explicitly in the issue, in the shape #52 uses for the poplib acceptance.
+- **#124** — GHSA-r28c-9q8g-f849, `postcss` 8.5.16, dev-only. Unlike the other two the fix is a
+  patch-level bump (8.5.25) inside the pinned major, so there is no policy obstacle — just a routine
+  bump.
+- **#125** — the brace-expansion finding above.
+
+**Also observed, not changed here.** `main`'s push CI is **red** at `086fb1e`: its image job still
+builds on Python **3.13.14** and trips the Grype gate on CVE-2026-11940 (`tarfile`) and
+CVE-2026-15308 (`html.parser`), both HIGH. `dev` waived them in #117 and moved to 3.14.6 in #91, so
+the promotion is what fixes `main`'s CI — not a regression introduced by it. Relatedly, `main` also
+carries the default-branch copies of `dev-nightly.yml` and `rescan.yml`, which is the copy scheduled
+and tag-triggered runs execute, so both have been running versions of themselves that predate every
+workflow change on `dev`; the promotion is what lands those too.
+
+**Why:** every item is one the "Before you tag" checklist exists to catch, and all four are
+permanent or expensive to undo once the tag exists — a CHANGELOG ships verbatim as published
+history, a mis-verified `THIRD_PARTY_LICENSES/` is an Apache-2.0 §4 compliance defect in a
+distributed image, and an un-triaged security PR left pointing at the wrong branch is how a fix
+gets silently reverted. Items 1, 3 and 4 land on `dev` **before** the promotion PR so they flow to
+`main` through it rather than as follow-up commits on a protected branch.
+
+**Plan section affected:** `CLAUDE.md` § Dependency hygiene (new Dependabot security-update rule);
+`CONTRIBUTING.md` § Releasing (checklist bullet, new § Dependabot security updates target `main`,
+step-3 parenthetical corrected); `CHANGELOG.md` (`[0.2.0]` cut, new § Security, and the v0.1.0 →
+2026-07-24 backfill across all four sections); `README.md` § image tags;
+`frontend/package-lock.json`. No plan-level decision changed by this entry — the promotion
+merge-method change is a separate decision, recorded in the entry above.
+
+---
+
+### 2026-07-31 — Infra/Process — Grype gate keeps its verdict *and* lists its waivers, from one scan
+
+**What changed:** two edits to the Grype gate in `.github/workflows/ci.yml`, no change to
+`ci/grype.yaml`'s entries or to `ci/trivyignore`:
+
+1. The gate invocation gains `-o table -o json=/out/grype-gate.json` — **two outputs from one
+   `docker run`**. `table` keeps the human verdict on stdout; the JSON is written to a mounted
+   `/tmp/grype-out` for the next step.
+2. A new **non-gating** step, *"Waived by ci/grype.yaml (informational)"*, `jq`-filters that JSON
+   and prints exactly the CVEs waived by `vulnerability:` rules, labelled as deliberate exceptions
+   rather than findings. It runs `if: always()`, so the waiver list still prints when the gate
+   fails — precisely when you want to know what was already excused.
+
+The gate's flags (`--only-fixed --fail-on high -c /.grype.yaml`, the three `--exclude`s) are
+otherwise unchanged, so pass/fail behaviour is identical to before.
+
+**Why:** the gate's output was `No vulnerabilities found`, **ambiguous between "nothing matched"
+and "everything that matched was waived."** Grype's `ignore:` rules drop matched findings from the
+report before it prints, so a clean-looking line is exactly what a seven-entry waiver list also
+produces. Confirming a waiver had taken effect therefore required a controlled comparison against a
+run from before it landed, rather than reading the log in front of you — a bad property for the
+gate on a security product, where the reassuring output and the suppressed-into-silence output were
+the same string.
+
+**The naive fix does not work, and the reason is worth knowing: `--only-fixed` is itself
+implemented as an ignore rule.** Simply adding `--show-suppressed` to the gate was tried first and
+rejected on the evidence. Because `--only-fixed` is an ignore rule like any other, its matches land
+in the same `ignoredMatches` bucket as the by-ID waivers, so `--show-suppressed` printed **every
+won't-fix / unfixed package** as well: roughly **250 rows** (`curl`, `perl`, `libexpat1`,
+`libssh2-1`, `libc6` …) against the 7 that were wanted. Worse, having rows to print, Grype emits the
+table *instead of* the `No vulnerabilities found` line — so the verdict disappeared and confirming
+"nothing real matched" meant checking that no row among ~250 lacked `(suppressed)`. That trades one
+legibility problem for a bigger one. Filtering `appliedIgnoreRules` for entries carrying a
+`vulnerability` key is what separates the deliberate by-ID waivers from the `--only-fixed` set and
+from the location-based bundled-binary rules.
+
+**One invocation, not two.** The JSON is a second output of the *existing* scan rather than a second
+`grype` run. A second invocation would repeat the vulnerability-DB download and the full image scan,
+and the image job is already the slowest in CI — paying that twice for log legibility would not be a
+trade worth making.
+
+**Exit code unaffected.** The gate's flags are unchanged and the new step is non-gating, so nothing
+about pass/fail moved. Verified on this change's own run: three of the seven waivers are HIGH
+(CVE-2026-15308, plus the tarfile pair CVE-2026-11940 / CVE-2026-11972) against a `--fail-on high`
+gate, and the job passed while the follow-on step listed all seven.
+
+**Not changed:** the waiver list itself — no CVE added, removed, or re-severitied; this only makes
+the existing seven legible. The two informational scans (`if: github.event_name == 'push'`) are
+untouched and still run only on pushes to `main`.
+
+**Plan section affected:** CLAUDE.md § Dependency hygiene (dogfood gate), `.github/workflows/ci.yml`.
+
+### 2026-07-30 — Infra/Process — Three `tarfile` interpreter CVEs waived as Group A-2 (issue #116); the grype.yaml blocks made self-describing
+
+**What changed:** `ci/grype.yaml` gained a second Group A block waiving three CPython
+interpreter-binary CVEs in the **`tarfile`** stdlib module, tracked in new issue **#116**. The
+existing blocks were relabelled `Group A-1` (#98) / `Group A-2` (#116) / `Group B` (#52), and a
+**"WHICH BLOCK IS TRACKED WHERE"** index was added at the top of the interpreter section so the
+block → issue mapping is legible from the file without opening GitHub.
+
+| CVE | Sev | Gates? | Defect |
+| --- | --- | --- | --- |
+| CVE-2026-11940 | HIGH | yes | Hardlink referencing a symlink stored deeper than itself makes the extraction fallback recreate the symlink at the shallower path, escaping the destination dir. Incomplete fix of CVE-2025-4330. |
+| CVE-2026-11972 | HIGH | yes | Streaming mode (`mode="r\|"`) mishandles EOF: `_Stream.seek()` discarded `read()`'s result, so a truncated archive parses in an infinite loop. CWE-252. |
+| CVE-2026-0864 | MEDIUM | no | Oversized extended-header (GNU long name/link, pax) size field caused a single huge pre-allocating read. |
+
+**Why now:** the two HIGHs turned CI red on 2026-07-30, on a **docs-only commit** in the v0.2.0
+version-bump PR (#115). Nothing in that diff touched a build input — the only `docker/Dockerfile`
+change was a comment, no dependency or base-image digest moved — and the same job had passed on the
+prior commit a day earlier. These are new advisories reaching Grype's DB, not a regression.
+
+**Verification (2026-07-30), per CLAUDE.md § Dependency hygiene.** All three fixes are merged to the
+`3.14` maintenance branch and absent from released `v3.14.6`, so all three close on **3.14.7** —
+the same trigger as the #98 trio. Method: shallow blobless clone of `python/cpython`,
+`git log -- Lib/tarfile.py` for the commits, `git merge-base --is-ancestor <commit> v3.14.6` for
+release membership, plus a direct `3.14`-vs-`v3.14.6` file diff. **`v3.14.6` = commit `c63aec6`,
+released 2026-06-10.**
+
+| CVE | Upstream | 3.14 backport commit | Merged | vs. 3.14.6 cut | Ancestor of `v3.14.6`? |
+| --- | --- | --- | --- | --- | --- |
+| CVE-2026-11972 | gh-151981 / GH-151982 | `e86666c` (#151992) | 2026-06-23 | +13 days | no |
+| CVE-2026-11940 | gh-151558 | `79c06bd` (GH-151559) | 2026-06-23 | +13 days | no |
+| CVE-2026-11940 (companion) | gh-151987 / GH-151988 | `5e0ef3f` (#152609) | 2026-06-29 | +19 days | no |
+| CVE-2026-0864 | gh-151497 / GH-151498 | `2cf26d0` (GH-151979) | 2026-06-24 | +14 days | no |
+
+Code-level: `3.14`'s `_Stream.seek()` has `if not data: break` where `v3.14.6` discards the read;
+`makelink_with_filter()` re-filters against the hardlink's own name before the fallback and
+`_extract()` threads `filter_function` into `_extract_one()`, neither present in `v3.14.6`;
+`_safe_read()` + `_EXTHEADER_READ_CHUNK` bound the extended-header read, with an in-tree comment
+citing `gh-151497`. Release state: `3.14` patchlevel reads `"3.14.6+"` and no `v3.14.7` tag exists.
+
+**Does Scrye use the module?** **No** — `tarfile` appears nowhere in the repository; backup bundles
+are a JSON envelope (`app/backup/bundle.py`), not tar. So the residual risk is unreachable stdlib
+code present in the image, the same rationale the `poplib` acceptance (#52) rests on. Recorded per
+CVE because the poplib precedent showed module reachability materially changes the acceptance.
+
+**Grype was wrong in the pessimistic direction, again.** It reports `FIXED IN 3.15.0b4` for all
+three. Read literally that means "unfixable below 3.15" and argues for a runtime bump — the precise
+mistake CLAUDE.md's source-verification rule was written to prevent, and the third time this
+column has misreported the 3.14 line (see 2026-07-25 and the two 2026-07-26 entries). **No 3.15
+move is warranted and none should be scoped off the back of this.**
+
+**Why a new issue rather than extending #98.** #98 carries its own source-verification evidence
+dated 2026-07-26 and a review date scoped to its specific trio. Appending CVEs verified on a
+different date against different files would leave that issue's evidence section not covering half
+its own contents — which defeats the point of recording the evidence at all. Both are Group A with
+the same 3.14.7 trigger and the same **2026-10-25** review date (deliberately aligned so one review
+covers both), and each issue cross-references the other so the split reads as intentional rather
+than as duplicate trackers to be merged later. The in-file index exists for the same reason: a
+single shared "tracked in #NN" header is exactly what previously made two unrelated decisions look
+like one (2026-07-26).
+
+**Not changed:** #115 (the v0.2.0 version bump) is untouched — it stays clean release prep and goes
+green on a re-run once this lands.
+
+**Plan section affected:** CLAUDE.md § Dependency hygiene (dogfood gate, interpreter-CVE
+source verification), `ci/` triage allowlists.
+
+### 2026-07-29 — Post-v1 — App version bumped 0.1.0 → 0.2.0; the three independent declarations put under a drift guard
+
+**What changed:** ahead of tagging `v0.2.0`, the app version moved `0.1.0` → `0.2.0` in the three
+places that declare it — `backend/app/__init__.py` (`__version__`), `backend/pyproject.toml`, and
+`frontend/package.json` (plus `package-lock.json`'s two root `version` fields, written by
+`npm version --no-git-tag-version`). Four documentation/Compose references to the example image tag
+`scrye:0.1.0` and the `/healthz` sample output were updated alongside them
+(`docker/docker-compose.yml`, `docker/Dockerfile`'s build-command comment, `README.md` ×3).
+
+New tests pin this so the next release cannot half-land:
+
+- `backend/tests/test_version.py` (new) asserts `pyproject.toml`, `frontend/package.json` and
+  `package-lock.json` all agree with `app.__version__`. Verified non-vacuous: reverting
+  `pyproject.toml` to `0.1.0` fails the suite.
+- `tests/test_settings_api.py::TestAbout::test_about_reports_version_and_counts` was asserting only
+  that `body["version"]` was **truthy**. It now asserts `== __version__`, which is the property the
+  About tab actually depends on.
+- `frontend/src/components/settings/AboutPanel.test.tsx` gained a version-stat test binding the
+  rendered value to its own card (`previousElementSibling` is the `Version` label) — the Scanners
+  table has a `Version` column header, so the label alone does not identify the stat.
+
+**Why:** the three declarations are **independent hardcoded literals** — nothing derives one from
+another, and nothing derives any of them from the git tag. `publish.yml` computes the *image* tag
+from the pushed ref (`${GITHUB_REF_NAME#v}`) but never stamps a version into the image: no
+`--build-arg`, no `LABEL org.opencontainers.image.version`. So tagging `v0.2.0` would have published
+`ghcr.io/tyler-rich/scrye:0.2.0` running an app that reported `0.1.0` on the About tab, `/healthz`,
+the OpenAPI document, every backup bundle's `app_version`, and the `scrye_build_info` metric. That
+is the exact drift this bump closes, and the drift guard is what stops it recurring silently.
+
+Only `backend/app/__init__.py` is load-bearing at runtime — `pyproject.toml`'s is packaging metadata
+and `frontend/package.json`'s is never bundled (no `define` in `vite.config.ts`, no import of it in
+`src/`). They are still bumped together because a lockstep set with a test is honest, whereas two
+stale copies are a trap for whoever greps for the version next.
+
+**Deliberately not changed.** Historical `0.1.0` references in `CHANGELOG.md` (the `## [0.1.0]`
+release section and its compare/tag links) and in this file's own prior entries are **release
+history**, not the current version, and rewriting them would falsify the record. The backup-record
+fixtures `backend/tests/test_backup.py:317` and
+`frontend/src/components/settings/BackupsPanel.test.tsx:47` carry `app_version: '0.1.0'` as the
+version stamped on a *previously stored* backup — arbitrary historical data, and arguably more
+realistic left as an older version than the running one. `CHANGELOG.md`'s `## [Unreleased]` heading
+is **not** converted to `## [0.2.0]` here: per `CONTRIBUTING.md` § Releasing that is a tag-time
+maintainer step carrying the release date, and doing it in a pre-tag PR would date the release
+wrongly.
+
+**Recommendation recorded, not implemented (single-sourcing).** The duplication should collapse to
+one source, and that source should be `backend/app/__init__.py` — it is the only copy with runtime
+consumers, it needs no build step to be readable, and it is importable by everything backend-side
+that already uses it. `backend/pyproject.toml` can stop restating it via setuptools' dynamic
+version (`[project] dynamic = ["version"]` +
+`[tool.setuptools.dynamic] version = {attr = "app.__version__"}`), which removes one copy outright.
+`frontend/package.json` cannot read Python, and the SPA already gets the version from the About/
+health API at runtime rather than from the bundle — so the honest options there are to drop the
+field to a fixed placeholder (it is `private: true`, so npm never publishes it and the number is
+decorative) or to leave it and let `test_version.py` keep it honest. Deferred rather than done
+because it is a build-configuration change that wants its own PR and its own green CI run, not a
+rider on a release-prep bump; see `docs/ROADMAP.md`.
+
+The roadmap item pairs this with a second, related half: **stamping the version into the image**.
+No `LABEL` exists in `docker/Dockerfile` and no `labels:`/`build-args:` in `publish.yml`,
+`dev-nightly.yml` or `ci.yml` (none uses `docker/metadata-action`), so `docker inspect` on a
+published image says nothing about what is inside it. That is metadata hygiene rather than a
+defect — the running app reports its version correctly because `app/__init__.py` is baked in — but
+it is the same problem seen from the outside, so the two belong together.
+
+**Plan section affected:** §10.1 (README), CLAUDE.md § Definition of done (docs updated),
+`CONTRIBUTING.md` § Releasing (pre-tag checklist).
+
+### 2026-07-29 — Post-v1 — HTTPS enforcement made legible; `X-Forwarded-Proto` honored from configured proxies only
+
+**What changed:** A real onboarding failure: a user deployed over plain HTTP and got 401s with valid
+credentials, with nothing in the logs or the UI explaining why. The app was behaving correctly — the
+session cookie is `Secure`, and a browser silently discards a `Secure` cookie set on an `http://`
+page, so the login response was a `200` whose cookie never landed and every request after it was
+unauthenticated. Nothing observable said so from either end. **The cookie posture is unchanged; the
+failure is now legible**, in five parts:
+
+- **Startup line** (`app.main.log_https_enforcement`). One INFO line states that HTTPS enforcement
+  is ON, that **logins over plain HTTP will fail**, which peers forwarded headers are trusted from,
+  and the exact opt-out — variable *and* value (`SCRYE_SESSION_COOKIE_SECURE=false`). With
+  enforcement off it is a WARNING that session cookies now travel in cleartext. `*` in
+  `SCRYE_FORWARDED_ALLOW_IPS`, unparseable entries, and an empty value each get their own warning.
+- **Refusal at every session-minting path** rather than a session the browser will throw away.
+  `POST /auth/login`, `/auth/setup`, `/auth/mfa/verify`, and the OIDC login start now check
+  `session_cookie_would_be_dropped()` and return **503** with a transport-specific `detail` (OIDC
+  redirects with `oidc_error=insecure_transport`). Setup is refused **before** the admin is created:
+  creating it and then failing to log in would leave bootstrap permanently 409ing with nobody able
+  to sign in.
+- **A distinct log and audit path.** `app.api.auth._refuse_insecure_transport` logs at ERROR and, on
+  the password-login flow, states which way the credentials came out — a valid-credential rejection
+  says `THE SUBMITTED CREDENTIALS WERE VALID` and `This is NOT a bad-password rejection`. A new
+  audit action `auth.login_blocked_insecure_transport` carries `{flow, scheme, credentials_valid}`.
+  Bad credentials on this path still also record `auth.login_failed`, so failed-login accounting is
+  not lost.
+- **A login/setup banner** (`InsecureTransportAlert`), driven by two new **transport-only** fields on
+  `GET /auth/status` — `https_enforced` and `transport_secure`. It states that this is an HTTPS
+  configuration issue and not wrong credentials, and names all three remedies.
+- **`X-Forwarded-Proto` support** (`app/core/forwarded.py`): a new `ForwardedProtoMiddleware` plus a
+  `TrustedProxies` parser, wired as the outermost middleware in `create_app` and fed from a new
+  `Settings.trusted_proxies` property.
+
+**Non-disclosure (deliberate design, not incidental).** The credential check still runs on
+`/auth/login` before the refusal — that is what lets the log distinguish a valid from an invalid
+login — but the **client-visible** result is byte-identical for valid, invalid, and unknown accounts:
+same status, same `detail`, and the same work performed, since `service.authenticate` already burns
+an argon2 verification for an unknown user. The banner is rendered from `/auth/status` before
+anything is submitted, so it cannot reflect credential state either. Only the server-side log and the
+admin-only audit log carry the distinction. `tests/test_https_enforcement.py` asserts the identical-
+response property directly.
+
+**Why auto-detection was rejected.** The obvious "fix" — drop `Secure` when the request looks like
+plain HTTP — is a silent security downgrade: a reverse proxy terminating TLS makes the app see HTTP,
+so auto-detection would strip `Secure` on genuinely-HTTPS deployments, putting the session cookie of
+a correctly-configured production install on the wire in cleartext. `Secure` is therefore never
+dropped from an observed scheme; the scheme is used **only** to detect and explain a sign-in that
+cannot succeed, and turning enforcement off stays an explicit operator decision.
+
+**Trusted-proxy design.** Shape 2 (behind a TLS-terminating proxy) is the case most affected users
+are actually in, and the real fix for them. uvicorn was already started with `--proxy-headers
+--forwarded-allow-ips` by `docker/entrypoint.sh`, so `X-Forwarded-Proto` was in fact honored in the
+shipped image — but only there: it was untested, invisible to the app-level code, absent under
+`TestClient`, and absent in a dev server started without those flags. The new middleware makes it
+explicit and testable, reusing `SCRYE_FORWARDED_ALLOW_IPS` (the boundary the deployment already
+configures for `X-Forwarded-For`) rather than adding a second, divergable setting. Two properties are
+load-bearing:
+
+- **Upgrade-only.** The middleware may change the scheme `http` → `https`, never the reverse. This is
+  what makes it compose with uvicorn's own `ProxyHeadersMiddleware`: uvicorn rewrites
+  `scope["client"]` to the *forwarded client* once it trusts a hop, so by the time this middleware
+  runs the peer is no longer the proxy's address and a downgrade decided from it would be wrong.
+  Real TLS at Scrye's own listener also always wins.
+- **Never blanket.** A peer that is not a parseable IP inside a configured network — including the
+  `"testclient"` placeholder and any hostname — is untrusted, so an arbitrary client cannot claim an
+  HTTPS transport. `*` is accepted for parity with uvicorn's flag (diverging would confuse more than
+  it protects) but draws a loud startup warning; unparseable entries are reported and ignored rather
+  than silently widening or narrowing the boundary.
+
+**Status code.** `503 Service Unavailable`, not `401`: the credentials are not what is being
+rejected, and the whole point is that this must not read as a bad password. `421 Misdirected Request`
+is the closer semantic match for a scheme mismatch but was rejected — browsers give `421` special
+retry handling on HTTP/2 connection coalescing, which would make a refused login retry oddly.
+
+**Tests:** `backend/tests/test_https_enforcement.py` (29 tests) covers cookie attributes under all
+three deployment shapes (direct HTTPS, behind a TLS-terminating proxy, plain HTTP with and without
+the opt-out), the distinct valid- vs. invalid-credential log path and its audit record, the
+identical-response property, `X-Forwarded-Proto` honored only from trusted sources (bare IP, CIDR,
+untrusted peer, non-IP peer, proxy chain, upgrade-only), and the startup log's contents.
+`frontend/src/pages/LoginPage.httpsAlert.test.tsx` covers the banner.
+
+**Why:** The app was working correctly and appeared broken — the worst kind of onboarding failure,
+and one no amount of correct behaviour fixes on its own.
+
+**Plan section affected:** § Hard security rules (additive: the cookie posture and CSRF model are
+unchanged; this adds a refusal + explanation path and an explicitly-bounded forwarded-header trust).
+No schema, data-model, job-model, or locked-decision change. README § Reverse proxy (TLS) gains
+"If you're not using HTTPS"; § Security model, § Configuration, and § Troubleshooting first-run
+issues updated; `.env.example` regenerated from the amended `Settings` descriptions.
+
+### 2026-07-29 — Post-v1 — Master-key source surfaced on the About tab (the durable channel chosen over a per-boot log line)
+
+**What changed:** Settings → About gained one row reporting which master key is in force — its
+**source** (`auto_generated` / `secret_file`) and its **path**, rendered as either "Auto-generated at
+`<path>` — back this up; a Docker secret gives stronger at-rest separation" or "Supplied as a secret
+file at `<path>` — keep your copy backed up". `core/system_info.py` gains `master_key_info()`
+alongside `host_info()`, and `api/settings.py` adds `AboutOut.master_key`; the frontend renders it in
+`AboutPanel.tsx`. No new endpoint, no new setting, no schema change.
+
+**Why here rather than in the log:** the entry above (auto-generated master key) logs the
+back-this-up warning once, at generation. The reviewer's question was what an operator who deploys
+and returns six months later sees — nothing, in that design. The rejected alternative was a per-boot
+warning that the generated key shares a volume with the database: it would fire on every start of the
+**documented default** for most deployments, which is how operators learn to skip startup logs, and it
+would cost the generation-time warning that actually matters. It also wouldn't work — nobody reads
+startup logs at month six. The About tab is where an admin actually looks, so the fact lives there and
+the per-boot log line stays as it was (a single-line source record, unchanged by this entry).
+
+**Constraints the row is built to:**
+
+- **No key material, and nothing else new.** Source and path only — deliberately *not* the key
+  version, which is visible nowhere else and would be a new disclosure rather than a relocation of an
+  existing one. A test asserts the response body does not contain the key file's contents and that the
+  object's keys are exactly `{source, path}`.
+- **Admin-only, on an endpoint that is not.** `GET /settings/about` is readable by every role (the SPA
+  needs the instance name and health), so the row is populated per-request for admins and omitted
+  otherwise; the path is deployment layout a viewer has no need for. The gate is
+  `AuthContext.effective_role`, not `user.role`, so an **admin's role-capped API token** sees exactly
+  what its role sees — the same capping rule as everywhere else.
+- **Accurate for both sources, not autogen text shown unconditionally.** A deployment using a Docker
+  secret gets the secret-file wording. Both variants say to back the key up, because losing it is
+  equally fatal either way; only the separation advice is specific to the generated case.
+- **Never the reason a page fails.** `master_key_info()` reads the *cached* startup resolution, so it
+  does no filesystem work and cannot generate a key from a request; if the key does not resolve at all
+  (a development instance, where the lifespan warns instead of failing) it returns `None` and the row
+  is omitted rather than erroring the whole About response.
+
+**Testing** matches how the other About rows are covered — through the API, since `host_info()` has no
+unit test of its own either: both sources, the no-key-material/no-extra-fields assertions, omission for
+a viewer, omission for a role-capped admin token, and omission when the resolution raises.
+
+**Plan section affected:** §4.5 About/health tab — additive (one response field, admin-gated). No
+schema, security-model, or job-model change; the key handling from the entry below is untouched.
+
+---
+
+
+### 2026-07-29 — Post-v1 — Master key auto-generated on first launch; the Docker secret keeps its precedence
+
+**What changed:** A new deployment could not start until the operator had produced a master key by
+hand (`openssl rand -base64 48 > docker/secrets/app_secret_key`). Because Compose validates a
+file-backed `secrets:` entry *before* it reads the rest of the stack, a missing file failed
+`docker compose up` outright rather than producing a startup error anyone could act on — a user hit
+this as a first-run blocker. The key is now generated on first launch when none is supplied.
+
+**The precedence order, which had exactly one entry before this change** (the file at
+`SCRYE_APP_SECRET_KEY_FILE`, default `/run/secrets/app_secret_key`), is now, first match wins:
+
+1. `SCRYE_APP_SECRET_KEY_FILE` — the Docker secret. **Unchanged, still highest.**
+2. `SCRYE_APP_SECRET_KEY_AUTOGEN_FILE` (new, default `/data/app_secret_key`) — the key a previous
+   start generated.
+3. A key generated now and written to (2) — only when neither file exists and
+   `SCRYE_APP_SECRET_KEY_AUTOGENERATE` (new, default true) is on.
+
+No key is read from an environment variable or an image layer, as before;
+`SCRYE_ALLOW_WEAK_MASTER_KEY` remains a validation opt-out, not a key source. Generation is
+`os.urandom(48)` base64-encoded — byte-for-byte the documented `openssl rand -base64 48` form — so it
+clears the SEC-3 entropy floor (valid base64 decoding to ≥ 32 bytes; see the 2026-07-13 security
+batch entry, M2/SEC-3) without the weak-key opt-out. It is written `O_CREAT|O_EXCL` + `fsync`,
+`chmod`-ed 0600 (the `O_CREAT` mode is a umask-masked ceiling, not a guarantee), then **re-stat
+verified** for mode 0600 and owner-uid before use.
+
+**The invariants are the substance of this change; the convenience is not.** A second master key
+silently orphans every field-encrypted secret in the database — registry credentials, git tokens, the
+OIDC client secret, TOTP seeds, scheduled-backup passphrases — while the app looks perfectly healthy,
+so:
+
+- **A key file that exists is used, never replaced.** If it is unreadable, empty, not base64, too
+  short, or malformed, startup **fails**. Generation follows only from a *proven absent* file, never
+  from a failed load. Absence itself must be proven: `_key_file_exists()` treats only
+  `ENOENT`/`ENOTDIR` as absence and raises on any other `stat` error, so an unreadable parent
+  directory can never read as "no key here".
+- **An explicitly configured path is an assertion.** If `SCRYE_APP_SECRET_KEY_FILE` was set by any
+  configuration source (env, `.env`, kwargs — tracked via pydantic's `model_fields_set`, exposed as
+  `Settings.app_secret_key_file_is_explicit`) and the file is missing, startup fails rather than
+  substituting a generated key: on an existing deployment that state means an unmounted secret, not a
+  fresh install. Auto-generation applies when the setting is left at its default.
+- **The two files may not disagree.** When a supplied secret is in force and a previously
+  auto-generated file also exists, every `version → material` pair in the generated file must be
+  present **under the same version** in the file in use, else startup fails. Version-aware, not
+  material-aware: stored tokens name their key version, so the same key present under a different
+  version number would still not be found at decrypt time.
+- **A generation race cannot mint two keys.** The `O_EXCL` loser reads the winner's file. This
+  surfaced a real bug the test caught: a third process that merely *saw the path exist* read the
+  winner's zero-length file and failed. `O_CREAT|O_EXCL` publishes the file before its content, so
+  the loader now retries — but only on the empty-file case, which is why the empty-file failure got
+  its own `MasterKeyFileEmptyError` subclass. An earlier attempt gated the retry on `st_size == 0`
+  *after* the failed read and had its own TOCTOU (content arriving between the two re-raised a
+  failure the retry had already resolved); retrying the load itself is race-free.
+- **A key that fails its permission check is removed by the call that created it** — nothing has read
+  it, so no ciphertext exists under it, and leaving it would have the next start silently adopt the
+  file this one refused. That is the only place in the codebase that deletes a key file.
+
+**No crypto change:** the KDF, the token format, and every existing ciphertext are untouched
+(regression-tested), and existing deployments resolve their key exactly as before.
+
+**Compose/docs:** `docker/docker-compose.yml` and the README paste-in stack no longer require the
+secret — the `secrets:` blocks and the `SCRYE_APP_SECRET_KEY_FILE` line are kept, commented out, with
+the reason. README § The master key now documents the precedence order, what auto-generation does,
+that the file must be backed up, what is lost if it isn't, and the **trade-off** that the generated
+key sits on the same volume as the database it protects (field encryption then still covers narrower
+disclosure — a leaked `.db`, a stray copy, log exposure — but not whole-volume compromise; supply a
+Docker secret, or repoint `SCRYE_APP_SECRET_KEY_AUTOGEN_FILE`, to separate them).
+
+**One documentation premise was corrected rather than repeated.** The task framing said a backup
+bundle without the master key is useless for the encrypted fields. That is not true of Scrye's
+bundles: §8's design decrypts each secret and **re-wraps it under the user's passphrase**, so a
+bundle restores on a host with a different master key — and now onto a fresh deployment that
+generated its own. The master key *is* required for a volume/file-level backup, where the rows are
+master-key ciphertext, so README § Backup & restore now draws that line explicitly instead.
+
+**Deviation from CLAUDE.md's hard security rule, stated plainly:** the rule read "the master key
+comes from a Docker secret file (`APP_SECRET_KEY_FILE`), never an env var or image layer". The
+Docker secret file is still the recommended production mechanism and still takes precedence, and the
+key is still never an env var or an image layer — but it is no longer the *only* source. CLAUDE.md's
+rule was amended in the same commit to say so, rather than leaving the file contradicting the code.
+`docker/Dockerfile` deliberately does **not** set `SCRYE_APP_SECRET_KEY_FILE` as an image `ENV`: that
+would make the path explicit for every deployment and re-break the zero-touch first run.
+
+**Tests:** `backend/tests/test_master_key_autogeneration.py` (35 cases) covers generation on a clean
+volume, the entropy floor without the opt-out, mode 0600 and owner, the one-time INFO backup notice,
+existing keys reused verbatim, every malformed/unreadable/undeterminable case failing rather than
+regenerating, the explicit-but-missing refusal, the two-key interlock (including the same key under a
+different version, and the documented carry-forward that is accepted), eight-thread concurrent
+startup producing exactly one key, the permission-check cleanup, and a generated key still decrypting
+its data across a restart. Verified end-to-end against a running instance: first boot generated the
+key at 0600 and reported `/healthz` healthy, a registry secret was stored, and after a restart the
+same key was reused and a backup bundle built successfully (which decrypts every stored secret to
+re-wrap it).
+
+**The adjacent first-run blocker was fixed in the same PR, on review.** Tracing the NAS case the
+original report came from (a bind-mounted `/data` whose ownership doesn't match the container uid)
+produced a result worth recording, because it is not the obvious one:
+
+| `/data` bind mount | `O_CREAT\|O_EXCL` | `chmod 0600` | owner re-stat | Outcome |
+| --- | --- | --- | --- | --- |
+| `0755`, foreign owner (not writable by the app uid) | EACCES | — | — | refuses, nothing left behind |
+| `0777`, foreign owner (world-writable share) | ✓ | ✓ | ✓ | **works** — key `0600`, owned by the app uid |
+| `2775` setgid, group-writable, gid matches | ✓ | ✓ | ✓ | **works** (file gid follows the dir; harmless at `0600`) |
+| ownership-synthesizing fs (CIFS `uid=`, NFS squash) | ✓ | ✓ | ✗ | refuses, file deleted |
+
+The load-bearing fact: **on Linux a newly created file always belongs to the creating process's
+euid**, so a foreign-owned *directory* never trips the owner check. The ordinary NAS bind mount
+(rows 2–3) passes. The owner check only fires where the filesystem *fakes* ownership, and there its
+`0600` is meaningless anyway — the refusal is correct, and SQLite is already unsupported over CIFS.
+
+Row 1 is **not** a new blocker introduced here: `docker/entrypoint.sh` runs `alembic upgrade head`
+before the app starts, so an unwritable `/data` already killed the container with
+`sqlite3.OperationalError: unable to open database file` — which names neither the path nor the fix.
+That pre-existing failure is the same first-run-blocker class this entry is about, so it was fixed
+here rather than deferred: the entrypoint now **preflights** the database directory (exists +
+writable) before Alembic, and fails with the path, the container `uid:gid`, a literal
+`chown -R <uid>:<gid> <host path>`, the `user:`-matching alternative, and the note that a named
+volume inherits the right ownership from the image while a bind mount keeps the host's. Kept to a
+dozen lines of `sh` — a probe file created and removed, no validation framework.
+
+The two master-key messages in the same class were made equally actionable: the unwritable-directory
+error carries the same uid/`chown` guidance, and the synthesized-ownership error now states that
+`chown` **cannot** help and offers matching `user:` or a Docker secret instead. README
+§ Troubleshooting first-run issues leads with both cases.
+
+**Testing the entrypoint.** `backend/tests/test_entrypoint_preflight.py` executes the shipped script
+with `sh` against real directory permissions, stubbing `alembic`/`uvicorn` on `PATH` (so "did the boot
+stop before migrations?" is observable as an absent marker file) and rewriting only `cd /app/backend`,
+a path that exists solely in the image. Every line under test — probe, ordering, message text — is the
+shipped one. Two cases are skipped when the suite runs as **root**, which bypasses directory
+permission bits; they were verified locally under uid 1000 and run for real in CI, which is non-root.
+This is not a substitute for booting the image; CI's image job covers that.
+
+**Also fixed in passing:** this section's index heading said "107 entries" while the index and the
+section both held 108; it now reads 109, matching the count after this entry.
+
+**Deliberately not done here:** a per-boot warning that the auto-generated key shares a volume with
+the database. It would fire on every start of the documented default for most deployments, which is
+how operators learn to skip startup logs — costing the generation-time backup warning that actually
+matters. The existing one-line per-boot source record
+(`Master key loaded from … (auto-generated, current key version v1)`) is the right size. The durable
+channel for that fact is the admin **System panel** (`core/system_info.py` → `api/settings.py`), which
+is where someone looks months later; that is a separate follow-up PR, not folded in here.
+
+**Plan section affected:** §6 secrets-at-rest — additive (a second key *source*, no format or KDF
+change); CLAUDE.md § Hard security rules (master-key sourcing) and § Required deliverables
+(`.env.example` wording); two new `Settings` fields → regenerated `.env.example`; `docker/
+entrypoint.sh` gains a data-directory preflight (startup behavior only — it fails a deployment that
+was already broken, sooner and with a usable message). No schema, job-model, or API change.
+
+---
+
+
+### 2026-07-28 — Post-v1 — Compose `deploy:` keys retired for NAS portability; memory limits made portable, CPU limits moved to an opt-in overlay
+
+**What changed:** `docker/docker-compose.yml` carried a `deploy.resources` block on **all three**
+services and nothing else under `deploy:` — no `replicas`, `restart_policy`, `placement` or
+`update_config`. A fourth copy of the same block sat in the paste-in stack in `README.md` § 3. All
+four are gone; the constraints they expressed are not.
+
+| Service | Was (`deploy.resources`) | Now |
+|---|---|---|
+| `scrye` | `limits.cpus "2.0"`, `limits.memory 2G`, `reservations.memory 256M` | `mem_limit: 2g` + `mem_reservation: 256m` in the base file; `cpus: 2.0` in the overlay |
+| `trivy-server` (profile `trivy-server`) | `limits.cpus "1.0"`, `limits.memory 1G` | `mem_limit: 1g`; `cpus: 1.0` in the overlay |
+| `docker-socket-proxy` (profile `docker-env`) | `limits.cpus "0.5"`, `limits.memory 64M` | `mem_limit: 64m`; `cpus: 0.5` in the overlay |
+
+New file: **`docker/docker-compose.cpu-limits.yml`**, applied with a second `-f`
+(`docker compose -f docker-compose.yml -f docker-compose.cpu-limits.yml up -d`), documented in
+README § "Resource limits (and NAS platforms)" and in the file's own header.
+
+**Why:** a user reported the stack would not deploy on their NAS. Several NAS container platforms
+— Synology Container Manager and QNAP Container Station among them — reject or mishandle `deploy:`
+keys, because the block is Swarm-oriented; Compose v2 honours it for a plain `docker compose up`,
+but that only helps on a real Compose v2 host. A hardening measure that prevents deployment
+outright is not providing the hardening, so the choice was between dropping the constraints and
+re-expressing them.
+
+**Why not just delete the limits.** They are a CIS-baseline containment control
+(`CLAUDE.md` § Hard security rules), and the `0.5` cap on `docker-socket-proxy` is deliberate
+rather than a round number: that sidecar is the only container in the stack that mounts
+`/var/run/docker.sock`, and its cap is the documented bound on a wedged or runaway proxy. Deleting
+the block would have discarded three tuned values and a documented control to fix a portability
+problem that has a portable fix.
+
+**Why the memory/CPU split is where it is.** Memory is the containment control that matters most
+here: it bounds the OOM blast radius, and the RAM-backed `/tmp` tmpfs is charged against it (the
+reason `docker-compose.yml` warns against enlarging that tmpfs). It also has a portable spelling
+that predates `deploy:` — `mem_limit` / `mem_reservation` — accepted by every Compose
+implementation, so it stays **on by default** and no platform has to opt in. CPU exhaustion
+degrades where memory exhaustion kills, so CPU is the right half to make opt-in. It went to an
+overlay rather than being deleted for the reason above; users whose platform rejects the overlay
+too can set CPU caps in their platform's own container UI, which writes them straight to the
+Docker API.
+
+**Why the overlay uses `cpus:` and not `deploy:`.** The first draft of the overlay used a
+`deploy.resources.limits.cpus` block — on the reasoning that opting in implies a platform that
+supports `deploy:`. `docker compose config` rejected the merged project outright:
+
+```
+services.scrye: can't set distinct values on 'mem_limit' and 'deploy.resources.limits.memory'
+```
+
+Compose normalizes `mem_limit` and `deploy.resources.limits.memory` into one field and validates
+that they agree; an overlay contributing a `deploy.resources.limits` map with no `memory` in it
+therefore conflicts with the base file's `mem_limit`. The overlay would not have applied at all.
+The portable `cpus:` key merges cleanly and is accepted by more implementations besides.
+
+**`cpus:` is the same limit, not a weaker one — verified, not assumed.** Compose enforces the
+identical normalization for CPU as for memory: a service setting both `cpus: 2.0` and
+`deploy.resources.limits.cpus: "3.0"` is rejected with `can't set distinct values on 'cpus' and
+'deploy.resources.limits.cpus'`, and setting both to the same value is accepted and normalizes to
+one limit. A key that were merely parsed and ignored could not participate in that check. This is
+the evidence the caps still bind; it is not a claim from documentation.
+
+**Validation.** `docker compose config` was run on all four combinations — base alone and
+base + overlay, each with no profiles and with `--profile trivy-server --profile docker-env` — and
+all four parse. The merged config reports exactly the pre-change values: `cpus 2` / `mem_limit
+2147483648` / `mem_reservation 268435456` for `scrye`, `cpus 1` / `1073741824` for `trivy-server`,
+`cpus 0.5` / `67108864` for `docker-socket-proxy`. Only the Compose CLI is available in this
+environment (no daemon), so **no container was started**: the claim verified here is that the
+files parse and normalize to the original limits, not that a live container was inspected for
+them. `docker compose up` / `/healthz` (§ Definition of done item 4) is unverified this session
+for that reason.
+
+Five regression guards were added to `backend/tests/test_compose_hardening.py` — no `deploy:` key
+in either file, a `mem_limit` for every service, `scrye`'s `mem_reservation`, a `cpus` entry in the
+overlay for every service the base file defines, and the overlay's use of the portable key. They
+were exercised against seven mutations of the real files (a `deploy:` block returning, the overlay
+deleted, `mem_limit`/`mem_reservation` dropped, a new uncapped service, the overlay reverting to
+`deploy:`, and the socket-proxy cap loosened) and each fires on the regression it names, with the
+unmodified files clean. They are string-level like the rest of that module, deliberately: the
+backend declares no YAML parser, and PyYAML is only present transitively. The backend suite could
+not be run here (this container has Python 3.11; the backend requires 3.14), so the test bodies
+were executed standalone against the checked-in files rather than under `pytest` — CI is the gate.
+`ruff` and `black` are clean.
+
+**Plan section affected:** §9.2 (Compose stack), `CLAUDE.md` § Hard security rules (CIS baseline —
+resource limits retained, one of the two now opt-in), § Required deliverables (README). No
+application code, schema, API-contract, security-model, job-model, or auth change.
+
+---
+
+
+### 2026-07-26 — Infra/Process — `node:22-bookworm-slim` digest refreshed; the Node 24 move and the #86 frontend tooling majors recorded in the roadmap
+
+**What changed:** Two small, related items.
+
+**1. `docker/Dockerfile`'s `frontend-builder` base digest rolled forward.**
+`node:22-bookworm-slim` was pinned at `sha256:53ada149…`; the tag now resolves to
+`sha256:6c74791e…`, which is **Node 22.23.1** (`jod`), pushed 2026-07-14. Verified against the
+registry rather than taken from the bump metadata: `registry-1.docker.io`'s manifest endpoint
+returns that digest for the `22-bookworm-slim` tag, the index it points at is an OCI image index
+carrying both `linux/amd64` and `linux/arm64` (both legs of the multi-arch build), and Docker Hub's
+tag listing shows the same digest shared by `22.23.1-bookworm-slim`, `22.23-bookworm-slim` and
+`jod-bookworm-slim` — which is what actually establishes the version behind the moving tag. The
+line also gained a comment recording why it stays on 22 and where the 24 move is tracked.
+**Nothing structural changed** — no stage boundary, no layer ordering, no cache scope
+(`CLAUDE.md` § Build performance, `§ Build performance` § Invariants). Only the digest moved.
+
+**Why it was stale.** This is the same case as the `debian:bookworm-slim` refresh in #104, and it
+has the same cause. Dependabot's `docker-images` group does not offer digest refreshes within a
+major line — it offered **node 22 → 26**, a major on a line that is not LTS. Declining that major
+is correct, but declining it is *all* that happened, so the 22 pin simply sat where it was. A
+digest pin does not maintain itself, and the bot that would normally nag about it was proposing
+something else entirely. Refreshing the digest is the actual maintenance action; the major was
+never the same question.
+
+**Why 22 and not 26 — and why 24 is the eventual answer.** From the upstream release schedule
+(`nodejs/Release`): **22** (`jod`) entered maintenance 2025-10-21 and is supported through
+**2027-04-30**. **24** (`krypton`) has been Active LTS since 2025-10-28 and is supported through
+**2028-04-30** — it is the current Active LTS and the right target. **26** does not become LTS
+until **2026-10-28**, so today it is `Current`, not a base for a build image. Staying on 22 is
+therefore a hold, not a decision to stay: it is where the pin is until the 24 move is done
+properly, since that move also touches `.github/workflows/ci.yml` (`node-version: "22"`) and
+`CONTRIBUTING.md`'s Node floor and has to land as one change across all three.
+
+**2. Three deferred items written into `docs/ROADMAP.md` § Near-term.** All three already
+existed as decisions; none of them existed anywhere a reader would find them, which is the
+failure mode this repo has hit before (see the 2026-07-26 governance-checklist entry — items sat
+invisible in §14 prose for weeks).
+
+- **Node 22 → 24**, with the three-file scope above and the note that Dependabot will keep
+  offering 26 rather than the refresh.
+- **The frontend tooling majors left over from Dependabot #86** after the Mantine/React ignores
+  landed: TypeScript 5.7 → 7.0, ESLint 9 → 10, `typescript-eslint` 8.19 → 8.65, Vite 6 → 8,
+  Vitest 3 → 4, jsdom 26 → 29 and the smaller bumps beside them. The 2026-07-26 Dependabot entry
+  already said these were "not locked, wanted, and their own PR" — but that sentence was inside an
+  entry about *ignoring Mantine and React*, so the wanted half was recorded only as an aside to
+  the declined half. They share one real risk: every one of them lands on the type-aware ESLint
+  gate turned on 2026-07-24, so the work is the lint-config churn, not the version numbers.
+- **The deprecated Starlette status-code constants.** `status.HTTP_422_UNPROCESSABLE_ENTITY`
+  emits a `StarletteDeprecationWarning` on every attribute access, at **22 call sites** across
+  seven routers; the same rename hit `HTTP_413_REQUEST_ENTITY_TOO_LARGE` at 2 more in
+  `uploads.py`. These have been noted as "pre-existing" in the validation paragraph of both
+  interpreter-bump entries (2026-07-03, 2026-07-25) and cleared by neither — a warning described
+  as pre-existing twice is a backlog item, not a footnote.
+
+  Verified against the pinned **starlette 1.3.1**, not assumed from the warning text: both old
+  names still resolve and both warn, the replacements `HTTP_422_UNPROCESSABLE_CONTENT` and
+  `HTTP_413_CONTENT_TOO_LARGE` exist, and each pair is the same integer (422, 413) — so the
+  cleanup cannot move a status code. The count is from the tree (`grep` over `backend/app`): **22**
+  and **2** call sites, not the 44 the item was scoped at.
+
+**Validation.** Lint and the test suites are CI's — the local container has no Python 3.14, so the
+backend suite could not be run here and is not claimed to have been. The digest claim was checked
+directly against `registry-1.docker.io` and the Docker Hub tag API; the Node dates against
+`nodejs/Release`'s `schedule.json`; the Starlette constants against an install of the exact pinned
+version. Backend code is untouched by this entry, so no test outcome changes; the image build is
+the gate that matters and it runs in CI.
+
+**Plan section affected:** §9.1 (image build), `CLAUDE.md` § Dependency hygiene, § Build
+performance (invariants respected — read, not altered), § Required deliverables
+(`docs/ROADMAP.md`). No application code, schema, API-contract, security-model, job-model, or auth
+change.
+
+---
+
+
+### 2026-07-26 — Docs/Process — Review documents retired; §14 made contiguous and indexed; a false CVE claim removed from the CHANGELOG
+**What changed:** A docs-only cleanup acting on the 2026-07-26 repository audit
+(`docs/reviews/CLEANUP-AUDIT.md`, #101). No application code, CI, Compose, or configuration
+behavior changed. The audit's own findings were **re-verified rather than inherited** — it was
+explicit about what it had not checked, and two of its claims did not survive (see "Corrections"
+below).
+
+**1. `docs/reviews/` and `docs/upgrades/` are deleted; §15 replaces them.** Twelve review reports
+and one upgrade handoff doc — every finding in them closed — sat at the same directory level as
+the two live documents, so `docs/` read as twelve historical files next to two current ones. They
+are gone. `docs/` now contains exactly `ARCHIVE.md`, `ROADMAP.md`, and `screenshots/`.
+
+**A `docs/history/` subtree was considered and rejected.** The audit recommended moving the
+reports under `docs/history/reviews/` with a README banner. The argument against deletion was
+never "someone might want to read them" — it was that §14 cites bare finding IDs (`SC-12`,
+`P3-4`, `QUA-17`, `H5/CON-4`) relentlessly and never re-explains them, so without the reports
+those citations are unresolvable, and §14 is a document CLAUDE.md § Definition of done obliges us
+to keep writing to. That argument is satisfied by a **decoder**, not by the reports themselves:
+the new **§15** resolves every ID from all ten reports to one line and its resolving PR. Git is
+the archive for the rest. Keeping a `history/` tree would have preserved 300 KB of superseded
+reasoning to answer a question a 250-line table answers, and — as the audit itself observed about
+archiving an audit of an archive — is how the folder reached twelve files in the first place.
+
+**The originals are fully retrievable.** The commit immediately before the deletion is
+**`0780b07e5e440dcc34ce23f0a9f43fffb4079477`**. Any of them prints verbatim with:
+
+```
+git show 0780b07e5e440dcc34ce23f0a9f43fffb4079477:docs/reviews/full-audit-2026-07-05.md
+git show 0780b07e5e440dcc34ce23f0a9f43fffb4079477:docs/upgrades/python-3.14.md
+```
+
+§15 lists all thirteen paths. Nothing was rewritten before deletion, so what git holds is exactly
+what was reviewed.
+
+**Reference sweep.** Five live-document references were repointed —
+`CONTRIBUTING.md` § Project layout (both directories dropped, `screenshots/` added, and the
+`docs/` entry now names §14/§15), `CONTRIBUTING.md` § API conventions, `CHANGELOG.md`'s L13/APIR-8
+citation, and both `.github/dependabot.yml` D3 comments — all now pointing at §15. Inside §14, 59
+`docs/reviews/` and 7 `docs/upgrades/` path prefixes were stripped so the entries name the reports
+as **documents** rather than as paths that no longer resolve; a note at the top of §14 states that
+and sends the reader to §15. The dead link at the old `ARCHIVE.md:1004` —
+`claude-md-compliance-review.md`, a filename that never existed — was corrected to
+`claude-md-compliance.md` in the same pass. One reference was deliberately **left**: the
+2026-07-25 entry's record that `CONTRIBUTING.md` § Project layout had omitted `docs/upgrades/` is
+a statement about that document's state on that date, and editing it would falsify the record; it
+is marked "(as it then was)".
+
+**2. §14 is contiguous again, and indexed.** Twelve dated entries — every one from 2026-07-09
+onward, i.e. all recent work — sat underneath `## Build performance` rather than under §14, so
+scrolling §14 "to the end" stopped short of them. `## Build performance` was moved to the end of
+the file instead of re-parenting the twelve: it is self-contained and cross-referenced by **heading
+name** (`§ Build performance`) from CLAUDE.md and four workflow files, never by position, so the
+move breaks nothing — verified by grep before making it. All **104** dated entries are now under
+§14, confirmed programmatically.
+
+§14 now opens with a **newest-first index**, one anchored line per entry, plus a stated ordering
+convention: new entries go at the top. **The entries themselves were deliberately not reordered.**
+Sixteen of them refer to each other *relatively* — "the entry below", "superseded by the entry
+above", "the two 2026-07-03 entries above" — and a sort would silently invert every one of those,
+corrupting the record to fix a navigation problem. The three ordering regimes are documented
+instead, and because the index is sorted by date **regardless of physical position**, lookup no
+longer depends on the scroll order at all. This is the "document the regimes" option the scoping
+offered; it is strictly better here than a sort, not merely cheaper.
+
+**3. The `[Unreleased]` CHANGELOG carried a false, user-facing CVE claim.** It stated that
+CVE-2025-15366 and CVE-2025-15367 "remain unfixable until 3.15" because upstream declined the
+backport to 3.10–3.14, and pointed at issue **#52** for all four waived CVEs. Both halves are
+false as of the two 2026-07-26 entries below, and this text **ships verbatim as release notes** —
+tagging would have made it permanent published history. Corrected against `ci/grype.yaml` as it
+stands: three of the four (CVE-2026-15308, CVE-2026-12003 and **CVE-2025-15366**) have their fixes
+merged on the CPython `3.14` maintenance branch, unreleased, closing on **3.14.7**, tracked in
+**#98**; only CVE-2025-15367 (poplib) is genuinely 3.15-only and still tracked in **#52**. What
+was true is kept and restated: released 3.14.6 carries neither guard, so the runtime bump cleared
+nothing at the version the image pins.
+
+The same false claim sat in **§0 locked decision #7** — the "what is locked" summary a reader
+treats as current, unlike a dated entry — and was amended there too. The dated 2026-07-25 and
+2026-07-13 entries that carry the original claim were **not** edited: they are superseded in place
+by the entries below, and the trail is the point.
+
+**4. `ROADMAP.md`.** Struck two completed items — "Pin GitHub Actions to commit SHAs" (#57;
+verified: `ci.yml` 8 SHA-pinned `uses:`, `dev-nightly.yml` 3, `publish.yml` 3, `rescan.yml` 2) and
+"Frontend test runner" (#78; verified: `vitest 3.2.7`, `"test": "vitest run"`, 20 test files). The
+"Row-bound secret AAD" item was **false as stated** — it claimed secrets are bound to the column
+and not the row, but `secret_store.py`'s `row_aad()` has composed `<table>.<column>:<row-id>` since
+L1/SEC-7 (#64) and every write binds to the row. What actually remains is the *cutover*: the
+decrypt path still falls back to the bare column tag for pre-#64 ciphertext, and that fallback can
+only be dropped once every row has been re-encrypted. It is therefore folded into the existing
+"Admin bulk secret re-encryption" item rather than struck, since that is the action that would do
+it. Five settings-level items that existed only in §14 prose — and were therefore invisible for
+weeks — were collected into the public-repo governance checklist: Actions workflow permissions →
+read-only (2026-07-06), confirm the GHCR package is **public** (2026-07-06, a check whose premise
+inverted when the repo went public on 2026-07-09 and which is still unverified in either
+direction), delete the unused `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets (2026-07-09), set the
+GitHub profile display name to `tyler-rich` (R7/D4), and confirm Dependabot security alerts are
+enabled.
+
+**5. `CLAUDE.md` § Git & PR conventions gains two rules**, both learned the expensive way during
+the stacked-PR work and unrecorded until now: retargeting a stacked child PR after its parent was
+squash-merged requires `git rebase --onto` (flipping the base in the UI recomputes the merge base
+against an absent history and balloons the diff to re-include everything the parent landed), and
+`on: pull_request` without explicit `types:` does not fire on `edited`, so a base change never
+re-runs CI and the green check shown after a retarget is from the *old* base.
+
+**6. `CONTRIBUTING.md` § Releasing gains a "Before you tag" checklist.** The section documented the
+promotion-title convention and the tag mechanics but had no pre-tag gate, while this cleanup alone
+surfaced four things that must happen before a tag: review `[Unreleased]` for stale or false claims
+(item 3 above is exactly that failure), verify `THIRD_PARTY_LICENSES/` against the scanner versions
+actually pulled at build time, triage open Dependabot PRs, and regenerate `requirements.lock` if
+backend deps moved. Plus the two after-tag steps: back-merge `main` into `dev`, and re-run
+`rescan.yml`.
+
+**Corrections to the audit that produced this work.** Both were caught by checking rather than
+transcribing, which is the reason the scoping asked for verification:
+- It reported **"fourteen dated deviation entries"** misfiled under `## Build performance`. There
+  are **twelve**; the other two of the fourteen `###` headings under that section are Build
+  performance's own sub-headings ("Why the build was slow…", "Invariants — do NOT undo these").
+  Its own enumeration listed twelve line numbers, so the prose count was the error, not the list.
+- It reported **33 prunable remote branches out of 39**. The repository carries **42** branches
+  today: 36 merged leftovers, `dev`, `main`, and 4 Dependabot heads. Its own enumeration listed 35
+  (29 named + 6 review branches), so "33" was an undercount even when written; its own branch has
+  merged since.
+
+**Verified, not assumed.** `THIRD_PARTY_LICENSES/` — which the audit explicitly flagged as
+unchecked — was verified this session: the version table (Trivy 0.72.0, Grype 0.115.0, Syft
+1.46.0) matches the `TRIVY_VERSION`/`GRYPE_VERSION`/`SYFT_VERSION` args in `docker/Dockerfile`, and
+all four bundled files are **byte-identical** to what upstream ships at those tags
+(`trivy/LICENSE`, `trivy/NOTICE`, `grype/LICENSE`, `syft/LICENSE`); the claim that Grype and Syft
+ship no `NOTICE` was confirmed by 404 at both tags. Issues **#63** and **#83** were re-verified
+resolved in code (`docker/docker-compose.yml`'s wollomatic allowlist and seven regression tests;
+`AuthContext.tsx`'s `applyAuthenticated()` wired into all three authentication paths) and are safe
+for the maintainer to close by hand — closing keywords never fired because PRs target `dev`, not
+the default branch. No workflow, test, or source file references either deleted directory
+(grepped before deleting), and the four `§ Build performance` workflow cross-references are by
+heading name and survive the move.
+**Why:** `docs/` had accumulated twelve closed-finding documents beside two live ones, §14's most
+recent two weeks of entries were filed under an unrelated heading where nobody scrolling would
+find them, and the CHANGELOG was one `git tag` away from publishing a false CVE claim as release
+notes. The finding-ID index is the piece that makes deletion safe rather than lossy: it is what
+§14's citations actually need, and it is maintained in the same file as the citations instead of
+in a folder that drifts out from under them.
+**Plan section affected:** §0 (#7 — CVE wording corrected), §14 (structure, index, ordering
+convention), new §15 (finding-ID index), § Build performance (moved to end of file, content
+unchanged). `CLAUDE.md` § Git & PR conventions; `CONTRIBUTING.md` § Project layout, § API
+conventions, § Releasing; `CHANGELOG.md` `[Unreleased]`; `docs/ROADMAP.md`;
+`.github/dependabot.yml` comments. Docs and comments only — no code, schema, API-contract,
+security-model, job-model, auth, or CI-behavior change.
+
+### 2026-07-25 — Docs/Process — README + CONTRIBUTING audited against the post-remediation codebase
+**What changed:** A docs-only pass reconciling the two user/contributor-facing documents with the
+state §14's remediation-cycle entries left the code in. No application code, CI, or configuration
+was touched. Verified against the tree rather than against the prior entries — each claim below was
+re-checked at `file:line` before being written or left alone.
+
+`README.md`:
+- **Field-encryption AAD was documented as "column-bound"** — stale since L1/SEC-7 (#64). The
+  security model now describes the **row-bound** AAD (`<table>.<column>:<row-id>`), applied on
+  write with the column-only tag as a read fallback so legacy ciphertext still decrypts and
+  upgrades on next write (`backend/app/core/secret_store.py:54`).
+- **H1/SEC-1 was absent from the security model.** Added a bullet naming
+  `SCRYE_FILESYSTEM_SCAN_ROOTS` as the **sole** gate on local-path scanning, and the
+  remote-clone-URL requirement on `repository` targets (422 at request validation, inherited by
+  scheduled scans) that closes the `trivy repo <local path>` route around it. § Features and
+  § Usage previously said "HTTPS clone URL"; both now say remote clone URL and name the four
+  accepted schemes, matching `is_remote_repo_url()`.
+- **New § Supply chain.** The supply-chain hardening from H11/SC-1, H9/SC-2, H10/SC-3, M24/SC-4,
+  M26/SC-8, SC-12, and SC-14 had no user-facing home — a consumer had no documented way to verify
+  a pulled image. The section covers the `gh attestation verify` command for the SLSA provenance +
+  SPDX SBOM attestations, cosign keyless verification of the scanner `checksums.txt` before
+  `sha256sum -c`, the hash-pinned `requirements.lock` (`pip --require-hashes`) and pinned build
+  backend, digest-pinned base/sidecar images, SHA-pinned Actions, Dependabot's five ecosystems
+  including the composite-action directory, and the exclusion of `backend/tests/` and
+  `backend/scripts/` from the runtime image. The § Security model CIS bullet now says
+  "cosign-verified" rather than the vaguer "verified against their signed checksum files" and links
+  here.
+- **§ Configuration.** The "one variable is not a Scrye setting" note listed only `DOCKER_GID`;
+  `SCRYE_ALLOW_WEAK_MASTER_KEY` is also an env var absent from `.env.example` (it is read directly
+  by `core/crypto.py:47`, not by the `Settings` model), so the note now covers both and explains
+  why neither is generated.
+- **§ Optional sidecars.** The socket-proxy entry described the wollomatic allowlist correctly but
+  buried the `DOCKER_GID` prerequisite in a shell comment, where an operator copying the service
+  into their own Compose file would miss it. It is now its own bullet, with the digest pin and
+  uid 65534 named alongside.
+
+`CONTRIBUTING.md`:
+- **The TypeScript strictness gates were undocumented.** `noUncheckedIndexedAccess` and type-aware
+  ESLint (`recommendedTypeChecked` + `projectService`) have been enforced since the P3-8 close
+  (2026-07-24) and fail the build, but a contributor had no way to know. § Coding standards now
+  documents both, the preference for encoding an invariant in the type over a non-null assertion
+  (the tree has zero `!` assertions), and the `void`-operator idiom for the promise rules.
+- **`eslint-disable` stance, stated accurately.** The scoping for this pass described the codebase
+  as using none. It uses **nine** — two `react-refresh/only-export-components` with `--`
+  justifications and seven `react-hooks/exhaustive-deps` on mount-only effects. What the P3-8 entry
+  actually claims is that *that pass added zero*, which is a different statement. The rule is
+  therefore written as: targeted `eslint-disable-next-line` only, never file-level, never on the two
+  gates, always with a stated reason — and the nine existing ones are named so the next reader
+  doesn't have to re-derive whether they are drift.
+- **§ Project layout was stale.** It listed `ci.yml` as the only workflow (there are four), omitted
+  `.github/actions/build-image/`, `dependabot.yml`, `CHANGELOG.md`, `SECURITY.md`, `` (as it then was),
+  `frontend/src/lib/`, `frontend/src/test/`, and `api/pagination.py`.
+- **§ Releasing lacked the promotion-title convention that `CLAUDE.md` points at it for.**
+  CLAUDE.md § Coding standards cites "`CONTRIBUTING.md` § Releasing" as the source for the plain
+  `Promote dev to main: …` title exception, but § Releasing never stated it — a dangling
+  cross-reference between the two documents. Now stated where CLAUDE.md says it lives.
+- **§ Pull request process** gained the lock-regeneration and dated-§14-deviation checklist items,
+  `tsc -b`, the no-AI-attribution-footer requirement on commits *and* the PR body, and an explicit
+  statement that CI is the merge gate — aligning the contributor-facing checklist with CLAUDE.md
+  § Definition of done.
+
+**Deliberately left alone.** § Backend dependency lock was re-verified end to end (pinned
+`uv==0.8.17` matching `ci.yml:71`, `uv pip compile pyproject.toml --group build --generate-hashes
+--python-version 3.14`, `pip --require-hashes`, the `--no-deps --no-build-isolation` app install,
+and the CI drift gate) and is **accurate and complete after SC-12** — no change. The frontend test
+conventions (`.test.ts`→node, `.test.tsx`→jsdom, `renderWithProviders`) were likewise already
+correct and complete. The README's Python **3.14** prerequisite was confirmed against
+`docker/Dockerfile` (both stages pin the 3.14.6 digest) rather than assumed from the scoping note,
+which expected 3.13.
+**Why:** The compliance audit's finding was three sources of truth drifting apart, so the value of
+this pass is in the cross-document reconciliation, not the individual corrections. Two contradictions
+were found and closed by editing the doc that was wrong, not the contract: the dangling CLAUDE.md →
+CONTRIBUTING § Releasing promotion-title reference, and the `.env.example`-vs-README account of which
+env vars are `Settings` fields. `CLAUDE.md` was **not** amended in this pass by instruction.
+**Plan section affected:** §10.1 (`README.md`), §10.2 (`CONTRIBUTING.md`). Docs only — no code, CI,
+configuration, schema, security-model, or job-model change.
+
+### 2026-07-25 — Docs/Process — Interpreter CVEs must be verified at the source before a bump is justified on security grounds
+**What changed:** A new standing rule in `CLAUDE.md` § Coding standards § Dependency hygiene:
+scanner output, advisory "fixed in" fields, and this repo's own issue summaries are **evidence, not
+proof**, and none is sufficient on its own to claim that moving the runtime to version X clears
+CVE Y. Before a runtime bump is argued as a security fix, the fix must be confirmed present in the
+target interpreter by reading the relevant stdlib module in that exact version (unpacking the pinned
+base image if needed). Bumps justified on **support-lifecycle, ecosystem, or dependency-currency**
+grounds need no CVE argument at all and are unaffected. `ci/grype.yaml`'s Group B waiver was also
+re-cast in the same pass from a deferral into a **standing acceptance**: CVE-2025-15366 /
+CVE-2025-15367 are accepted risk on **any interpreter below 3.15**, with an **annual** re-confirmation
+review (next 2027-07-25) replacing the old upgrade-tied date, and an explicit note not to scope a 3.15
+move as a reaction to them.
+**Why:** Both interpreter bumps to date were decided from Grype's `FIXED IN` column without anyone
+reading CPython — one unsound method with two different failure modes:
+- **3.12 → 3.13** (2026-07-03) reached the right outcome by luck. The entry justifying it recorded
+  the triggering CVEs' fixes as landing in "3.13+/3.14+/3.15+" — the metadata itself said some were
+  *not* fixed in 3.13 — yet the post-bump scan, with the interpreter exclusion removed, came back
+  clean. Metadata wrong in the pessimistic direction is still wrong; the decision just wasn't
+  punished for it.
+- **3.13 → 3.14** (2026-07-25, the entry below) reached the wrong one. The scoping doc and issue #52's
+  resolution-trigger line both asserted 3.14.6 carried the CVE-2025-15366/-15367 fixes; it does not,
+  and the bump cleared nothing. Issue #52 even held the correct fact — "declined backport to
+  3.10–3.14" — in a different paragraph from the claim it contradicted.
+Worth recording precisely, because the tempting summary ("two bumps, neither resolved its CVEs") is
+**not** what happened and would make the rule easy to dismiss on inspection: the first bump did clear
+what triggered it. What the two share is the method, not the result — which is the actual thing worth
+banning. Source verification is also cheap, as this session showed: unpacking the pinned base image
+and reading two stdlib functions took minutes and settled a question two documents had gotten wrong.
+**Plan section affected:** CLAUDE.md § Coding standards (Dependency hygiene); `ci/grype.yaml`
+(Group B waiver rationale and review cadence); no code, schema, security-model, or job-model change.
+
+### 2026-07-25 — Post-release — Backend runtime bumped Python 3.13 → 3.14 (locked decision revised)
+**What changed:** The locked backend runtime was revised from **Python 3.13 to Python 3.14** — the
+second interpreter bump, mirroring the 3.12 → 3.13 precedent below (2026-07-03). Executed from the
+scoping/handoff doc `python-3.14.md`, which the 2026-07-13 entry created when the move
+was deferred. Concretely: the Dockerfile base image is now `python:3.14-slim-bookworm` (digest-pinned
+to `sha256:86f975ac…`, which is **3.14.6**) for both the venv-builder and runtime stages;
+`backend/pyproject.toml` `requires-python` is `>=3.14`; the CI backend job runs on Python `3.14` and
+the lock-drift gate compiles with `--python-version 3.14`; and `CONTRIBUTING.md`/`README.md` name 3.14
+as the native-dev prerequisite. The locked decision is updated in `CLAUDE.md` § Locked decisions #2
+and §0 (#7) / §2 above.
+
+**The 3.14.6 floor is load-bearing, not cosmetic.** Python 3.14.0 through 3.14.4 shipped an
+incremental garbage collector whose work-estimate calculation could go negative, so a long-running
+server never drained its cyclic-garbage backlog and resident memory grew up to ~5×. It was reverted
+in 3.14.5, restoring the same generational GC 3.13 used; 3.14.6 is the first fully-safe release after
+the revert. Scrye is exactly the long-lived-server workload that regression targets. The Dockerfile
+carries this as a comment at both `FROM` lines so a future digest bump re-checks it. The other two
+3.14 runtime changes are non-events here: free-threading (PEP 703) needs the separate `python3.14t`
+build, and the JIT (PEP 744) is disabled by default on Linux — the standard slim image has neither.
+
+**Dependency changes.** Three were flagged as hard blockers by the scoping doc and are done:
+`pydantic` 2.10.4 → **2.13.4** (2.10.4 pins pydantic-core 2.27.2, which publishes no cp314 wheel and
+does not build from source there — PyO3 caps at 3.13); `uvicorn[standard]` 0.34.0 → **0.51.0**
+(official 3.14 support landed in 0.38.0); and an explicit **`greenlet==3.5.4`** pin, since SQLAlchemy's
+async support needs it and no longer pulls it implicitly. Two more were found during the pass and are
+**deviations from the scoping doc's dependency table**:
+
+- **`sqlalchemy` 2.0.36 → 2.0.51.** 2.0.36 has no cp314 wheel, but unlike pydantic-core it does not
+  fail — it also publishes a pure-Python `py3-none-any` wheel, so pip silently installs *that* on 3.14
+  and the compiled accelerators disappear with no error anywhere. cp314 wheels first appear in
+  2.0.45. Same 2.0.x series, so no API surface moved.
+- **`ruff` 0.8.6 → 0.16.0.** 0.8.6 rejects `target-version = "py314"` outright (py313 is its ceiling),
+  so the doc's "bump target-version to py314" is impossible without it. 0.16.0 reports **zero** new
+  violations on the tree — the `known-first-party` isort pin added for D5b (2026-07-20) is what makes
+  a ruff jump this large a no-op, exactly as intended.
+
+`fastapi` 0.139.0, `starlette` 1.3.1, `cryptography` 49.0.0, `argon2-cffi` 25.1.0, `httpx` 0.28.1,
+`authlib` 1.7.2, `pyotp` 2.10.0, `alembic` 1.14.0, `pydantic-settings` 2.7.1 and `black` 26.3.1 were
+**verified**, not assumed, and are unchanged: every C/Rust-backed package in the resolved closure
+(`cffi`, `argon2-cffi-bindings`, `cryptography`, `uvloop`, `httptools`, `watchfiles`, `websockets`,
+`markupsafe`, `pyyaml`) already ships cp314 wheels at its pinned version. `requirements.lock` was
+regenerated with the pinned `uv pip compile --group build --generate-hashes --python-version 3.14`.
+
+**The pydantic bump got its own compatibility pass** (CLAUDE.md § When to ask vs. decide treats the
+I/O-validation layer as a data-model surface). Scrye's usage is plain Pydantic v2 — `BaseModel`,
+`ConfigDict(from_attributes=True)`, `Field`, `SecretStr`, `field_validator`, `model_validator`,
+`PlainSerializer` via `Annotated`, plus pydantic-settings' `BaseSettings`/`SettingsConfigDict`/
+`NoDecode` — with no `pydantic.v1` namespace use anywhere. The 2.11–2.13 change most likely to bite
+was 2.12's "do not implicitly convert after model validators to class methods": every
+`@model_validator(mode="after")` in the tree is already instance-style (`def _check(self)`), so it
+does not apply. The empirical check was a full OpenAPI-schema diff, old stack vs new: **the only
+difference across the entire 229 KB schema is nine `"additionalProperties": true` keys** that 2.12+
+now emits explicitly on bare `dict` fields. That is semantically identical to what `{"type":
+"object"}` already implied, and the frontend's API client is hand-written rather than generated from
+the schema (FE-2), so **no code change was required** — the bump is code-neutral.
+
+**`black` stays at `target-version = ["py313"]` — a deliberate deviation** from the scoping doc's
+"bump target-version to py314", which applies to ruff only. black's target-version is the oldest
+interpreter its *output* must parse on, and at py314 it applies PEP 758, rewriting `except (A, B):`
+to `except A, B:` at four sites (`passwords.py`, `crypto.py`, `logging.py`, `trivy.py`). That is
+valid 3.14 syntax, but it reads like Python 2's `except (A, B), e:` and buys nothing, so the
+parenthesized form is kept; the reasoning is inline in `pyproject.toml` so it doesn't look like an
+oversight. ruff's target-version gates only which lint rules apply and emits no syntax of its own, so
+it does track the real runtime floor at `py314`.
+
+**CVE outcome (issue #52) — the scoping doc's central premise turned out to be wrong, and this
+upgrade clears none of the four CVEs.** Both `python-3.14.md` and issue #52's
+resolution-trigger line asserted that **Python 3.14.6 already carries the CVE-2025-15366 /
+CVE-2025-15367 fixes** (imaplib/poplib command injection, both MEDIUM), making "move off the 3.13
+line" the practical way to clear them — that was the stated reason this upgrade project existed. It
+is not true. The waivers were removed on that basis, and the CI dogfood scan on the upgrade PR
+immediately reported both back against interpreter **3.14.6** with `FIXED IN 3.15.0a6`. Reading
+3.14.6's own stdlib confirms the scanner rather than the doc: `imaplib._command()` and
+`poplib._putcmd()` still concatenate arguments straight onto the wire with no CRLF/control-character
+validation. Issue #52 in fact contradicted itself — its Group B paragraph correctly records that
+upstream declined the backport to "3.10–3.14", which *includes* 3.14, while its resolution-trigger
+line said the 3.14 upgrade would close them. The Group B paragraph was right. **Both waivers were
+restored**, retargeted at 3.14 with the corrected rationale and no review trigger earlier than a 3.15
+upgrade. CVE-2026-15308 (HIGH, `html.parser` quadratic-complexity CPU DoS) and CVE-2026-12003
+(MEDIUM, `getpath.py` in-tree search-path fallback) are unchanged by the move, exactly as the doc did
+correctly predict: merged to both the 3.13 and 3.14 maintenance branches, in no released point
+version, closing on the next 3.14.x just as they would have on the next 3.13.x. Their review date
+moves to 2026-10-25 — a real trigger, unlike Group B's, which is now an annual re-confirmation of a
+standing acceptance (see the process entry above). Net: the waiver list is **unchanged at four
+entries**, and the security
+justification for this bump did not materialize — what remains is staying current on a supported
+interpreter line ahead of 3.13's EOL, plus the dependency currency the move forced. Whether that
+alone justifies the change is a call for the maintainer, not something this entry should paper over.
+
+**Validation.** The full backend suite — **579 passed, 3 skipped** — runs green on a genuine CPython
+**3.14.6** unpacked from the same `python:3.14-slim-bookworm` digest the image pins, against the
+regenerated lock. Also verified there: a clean `import app.main`, and a full Alembic
+upgrade → downgrade to base → upgrade cycle back to `0008_oidc_flow_browser_binding`. No new
+warnings: the only ones are the pre-existing Starlette `HTTP_422_UNPROCESSABLE_ENTITY` /
+`HTTP_413_REQUEST_ENTITY_TOO_LARGE` deprecations and the Starlette-TestClient httpx notice, none of
+which involve a package this change touches. `uvicorn 0.51.0` still exposes the `--proxy-headers` and
+`--forwarded-allow-ips` flags `docker/entrypoint.sh` depends on. The image build,
+`docker compose up` + `/healthz`, and the Trivy + Grype dogfood self-scan were run **by CI on the
+PR** — the authoring environment had no Docker daemon, which is also why the Grype waiver narrowing
+above is confirmed by the CI dogfood report rather than a local scan.
+**Plan section affected:** §0 (#7, new locked runtime), §2 (tech stack), §9.1 (base image),
+§12 (Phase 6 self-scan), CLAUDE.md § Locked decisions #2; supersedes the 2026-07-13
+"CPython interpreter CVEs on 3.13 accepted as tracked risk; 3.14 deferred" entry below and closes
+out `python-3.14.md`.
+
+### 2026-07-24 — Post-release — P3-8 closed: `noUncheckedIndexedAccess` + type-aware ESLint
+**What changed:** The two TS-strictness flags P3-8 deferred to a dedicated pass are now on, in two
+independently reviewable/revertible commits. **Re-measured against current `dev` first** (the #81
+counts predate the M19/M20/M21 back-fills in #84 and the issue-83 work in #87): the actual scope is
+**smaller** than the ~53 problems scoped then — 14 TS errors across 5 files, and **30** ESLint
+problems across 15 files rather than 39, because #81's `parseResponse<T>` boundary already retired
+the `no-unsafe-*` family. All 20 Vitest files lint clean under the typed rules, so the expected
+test-file promise noise never materialized.
+
+**1. `noUncheckedIndexedAccess`** (`frontend/tsconfig.app.json`) — 14 errors, fixed with **no**
+non-null assertions:
+- `NewScanPage.tsx`, `ScheduledScansPanel.tsx` — the two real `Scanner | undefined` mismatches the
+  scoping flagged. `SCANNERS_FOR` retyped `Record<TargetType, Scanner[]>` →
+  `Record<TargetType, readonly [Scanner, ...Scanner[]]>`. The "keep the scanner valid for the chosen
+  target type" effect resets to `allowed[0]`, which was `Scanner | undefined` against a setter
+  taking `Scanner`; the non-empty tuple encodes the actual invariant (every target type has at least
+  one permitted scanner) so the read is `Scanner` by construction rather than by assertion.
+- `RegistriesPanel.tsx`, `NotificationsPanel.tsx` — the per-row `tests[id]` lookup was performed
+  three times per row (existence check, `.ok`, `.detail`). Hoisted to one `const test` inside the
+  row callback, which satisfies the flag and drops two redundant lookups per row.
+- `ScansPage.tsx` — `canCompare` indexed `compare[0]`/`compare[1]` behind a `length === 2` check TS
+  does not narrow on; destructured to `compareA`/`compareB` with direct `undefined` checks.
+  `runCompare` gained an `if (!a || !b) return` guard on the sorted pair — unreachable in practice
+  (the button is gated on `canCompare`), so no behavior change.
+
+**2. Type-aware ESLint** (`frontend/eslint.config.js`) — `tseslint.configs.recommended` →
+`recommendedTypeChecked` with `projectService: true` + `tsconfigRootDir`. 30 problems, all fixed at
+the call site with **zero `eslint-disable` comments added**:
+- **`no-misused-promises` (25)** — an `async` handler in an `onClick`/`onChange` slot expecting a
+  `void` return. Each of the 21 handler bodies was read to decide bug-vs-style: **every one wraps
+  its entire body in `try/catch`** (with `finally` where it clears in-flight state), so none can
+  produce an unhandled rejection — these are genuinely shape mismatches, not latent bugs. Marked
+  with the `void` operator, the idiom already used for `void load()` here. The other 4 are
+  `onClick={() => navigate(...)}`: react-router 7's `navigate()` returns `void | Promise<void>`.
+  Three sites passed the async function directly (`onClick={disable}`, `{confirm}`, `{submitMfa}`)
+  and are now arrow-wrapped; all three take no parameters, so dropping the click event is inert.
+- **`no-floating-promises` (4)** — all four are bare `navigate(...)` statements (`NewScanPage` ×2,
+  `ScanDetailPage`, `ScansPage`), the same react-router 7 return type. Prefixed with `void`.
+- **`no-unnecessary-type-assertion` (1)** — `ApiTokensPanel.tsx:60` asserted
+  `(user?.role ?? 'viewer') as Role` on an expression already typed `Role`. Dropped.
+
+**No runtime behavior changed.** The `void` operator only discards a value that was already being
+discarded; the tuple retype and the hoisted lookup are type/structure-only; every handler's error
+path is untouched. Full suite (54 tests / 18 files), `tsc -b`, `eslint .`, Prettier, and
+`npm run build` all green.
+**Why:** Closes the last open item in `STATUS.md` — P3-8's strictness-flag half, split
+out of #81 precisely so it could be reviewed on its own. Both flags are permanent gates from here:
+new indexed reads and new unawaited promises now fail CI rather than accumulating.
+**Plan section affected:** none — frontend build/lint configuration and type-level handling only; no
+schema, API, security-model, or job-model change. Extends the Coding standards § TypeScript rule
+(ESLint + Prettier clean) with the two stricter gates.
+
+### 2026-07-24 — Post-release — #83: a completed authentication is never undone by an in-flight refresh
+**What changed:** `frontend/src/auth/AuthContext.tsx` — the mirror of the P3-4 race fixed in #82,
+running the other way. `login()`, `verifyMfa()`, and `setup()` wrote the authenticated user into
+state without sequencing against a `refresh()` that was already in flight. That status request was
+answered by the backend *before* the credential existed, so it carries `user: null`; resolving after
+the sign-in, it overwrote the fresh session and dropped the shell back to the login screen (the next
+`refresh()` or a re-login recovered it). The provider now enforces the companion invariant **a
+successfully completed authentication — login, MFA verification, or first-admin setup — is never
+undone by a `refresh()` that was already in flight when it completed**: the three success paths go
+through one `applyAuthenticated()` helper that burns a token from the existing
+`refreshGuard` (`createLatestGuard()`, `lib/latest.ts`) before writing the user, so any refresh
+already running is superseded and returns without writing. No new mechanism — this is the same
+latest-wins guard `refresh()` already uses against itself, just begun by an authentication instead
+of a fetch. Deliberately **not** changed: `sessionGeneration` and its invalidation semantics, so the
+P3-4 invariant (a logged-out session is never restored by a late refresh) is untouched; a superseded
+refresh writing nothing at all cannot strand the app on the loading spinner here, because the
+authentication path itself sets `loading: false`. Four new jsdom cases in `auth/AuthContext.test.tsx`
+— one per authentication path (each holds a refresh open, authenticates, then resolves the stale
+anonymous status and asserts the session stays signed in), plus a non-regression case proving a
+refresh *started after* the sign-in still applies. The three race cases were confirmed to fail
+against the pre-fix provider (`expected 'signed-out' to be 'signed-in:operator'`) by stashing the
+fix and re-running; both P3-4 race tests pass unchanged in the same run.
+**Why:** Issue #83. Pre-existing (predates #82, which scoped itself to the invalidation direction)
+and fail-safe in direction — the failure is being logged *out*, never *in*, so no session is
+presented that the backend hasn't authorized and there is no security edge; it is a UX/correctness
+wart that #82's machinery made closeable in a few lines. Reuses the codebase's guard idiom rather
+than introducing a third pattern, per the issue's scope note.
+**Plan section affected:** none — frontend session-state sequencing only; no schema, API,
+security-model, or job-model change. Companion to the P3-4 entry below
+(`frontend-review.md` § Priority 3).
+
+### 2026-07-24 — Post-release — Test-debt back-fill for M19, M20, and M21 (tests only)
+**What changed:** Nothing in the application — this entry records **new tests only**, back-filling
+the three fixes `STATUS.md` § "Test debt on already-shipped fixes" listed as
+"resolved in code, proof absent". The fixes landed in #62, before the jsdom/RTL harness existed
+(#78), so M19 had no coverage at all and M20/M21 were covered only at the pure-helper level
+(`lib/polling.test.ts`, `lib/latest.test.ts`) with the page-effect wiring that consumes those
+helpers untested. Six new jsdom files, one commit per finding:
+- **M19 / P1-2** (settings-form clobber guard) — `RetentionPanel.test.tsx`, `GeneralPanel.test.tsx`,
+  `BackupsPanel.test.tsx`, `NewScanPage.prefill.test.tsx`. The three panels assert the form is
+  neither editable nor savable before the initial GET resolves (a Save attempt writes nothing) and
+  that the fetched values, not the built-in defaults, are what a later Save sends.
+- **M20 / P1-3** (poller backoff) — `ScanDetailPage.poller.test.tsx` drives the poll effect under
+  fake timers: consecutive errors stretch the retry delay, the poller stops at `MAX_POLL_FAILURES`
+  and renders the "Auto-refresh paused" alert, and a 404 halts on the first failure.
+- **M21 / P1-4** (latest-wins) — `ScansPage.latestwins.test.tsx` and
+  `ScanDetailPage.latestwins.test.tsx` hold an earlier request open across a filter change so the
+  newer one resolves first, then assert the superseded response is discarded.
+
+**Scope note — where the "dirty form is not clobbered" half of M19 is asserted.** In
+`RetentionPanel`/`GeneralPanel` the inputs are themselves gated on `loaded`, so there is no
+user-reachable path to dirty the form before the GET resolves; the disabled gate subsumes the
+`isDirty()` check and a page-level "dirty" test there could only assert something unreachable.
+That half is therefore asserted where it *is* reachable: `NewScanPage` (fields deliberately
+ungated, so a late `getScannerSettings` prefill can land on an edited form) and `BackupsPanel`
+(the `load()` re-fetch triggered by an unrelated list mutation, which must not rehydrate an
+in-progress schedule edit). This is called out in a comment in `RetentionPanel.test.tsx` rather
+than papered over with a hollow assertion.
+
+**Why:** Every discriminating assertion was verified to **fail** against the pre-fix behavior by
+temporarily reverting the guard locally and re-running — the same standard applied to the P3-4
+race tests — so none of these can pass vacuously. Confirmed failure signatures: M19 — the Save
+button is enabled and the defaults PUT before the GET lands (and, with `load()` rehydrating, the
+edited interval reverts); M20 — 25 requests where the fixed version makes 6, and no paused alert;
+M21 — the stale rows replace the current filter's rows. Two companion assertions (a pristine form
+seeds from fetched values; a latest response still renders) pass both before and after by design —
+they guard the fix's *non*-regression, and the pre-fix-failing assertions sit alongside them in
+the same files.
+
+**Plan section affected:** §12 Phase 6 / CLAUDE.md § Coding standards → Testing; closes the
+"Test debt on already-shipped fixes" block in `STATUS.md` §1.
+
+### 2026-07-24 — Post-release — P3-4: sequence auth refresh against session invalidation
+**What changed:** `frontend/src/auth/AuthContext.tsx` — `refresh()` wrote the `fetchAuthStatus`
+result into auth state unconditionally, with no sequencing against the `scrye:auth-invalidated`
+event (dispatched by `api/client.ts` on any 401) or against `logout()`. A status request answered
+by the backend *before* the credential was revoked but resolving *after* the invalidation would
+write its stale `user` back, flashing the authenticated shell over the login screen until the next
+401. The provider now enforces the session-lifecycle invariant **a logged-out session is never
+restored by a late-arriving refresh**: a `sessionGeneration` ref is bumped by every invalidation
+(both the 401 event handler and `logout()`, the latter *before* awaiting the request so a refresh
+already in flight is covered); `refresh()` captures the generation before fetching and, if it
+changed by the time the response lands, applies the session-independent facts (`needs_setup`,
+`oidc`, `loading: false`) but forces `user: null`. Keeping the non-identity fields is what stops an
+invalidation during the initial load from stranding the app on the loading spinner. `refresh()`
+additionally takes a token from the existing `createLatestGuard()` helper (`lib/latest.ts`, the same
+latest-wins guard the history/findings fetches use) so two overlapping refreshes can't resolve out
+of order and clobber each other — an older refresh returns without writing at all, rather than
+writing a logged-out state a newer in-flight refresh is about to contradict. New jsdom test
+`auth/AuthContext.test.tsx` covers both races (invalidation event mid-refresh; `logout()`
+mid-refresh) plus the happy path; both race tests were confirmed to fail against the pre-fix
+provider. `src/test/render.tsx` re-exports `act` so tests keep importing the whole Testing Library
+surface from one place.
+**Why:** P3-4 (frontend review, LOW with a correctness/security edge) — the last open finding in
+the Priority-3 batch, tracked in `STATUS.md` § 1. Low likelihood and self-healing, but
+it is a session-lifecycle defect: the UI can present an authenticated shell for a session the
+backend has already ended. A generation counter was chosen over aborting the request because the
+invalidation must also invalidate a response that has *already* been received but not yet applied,
+which an `AbortController` does not cover; it reuses the codebase's existing guard idiom rather
+than introducing a new one.
+**Plan section affected:** none — frontend session-state sequencing only; no schema, API,
+security-model, or job-model change. `frontend-review.md` P3-4.
+
+### 2026-07-24 — Post-release — Frontend Priority-3 polish batch (P3-1, P3-2, P3-5, P3-6, P3-7, P3-8)
+**What changed:** Worked the frontend-review "Priority 3" backlog (`frontend-review.md`
+§Priority 3; tracked in `STATUS.md`), one commit per finding:
+- **P3-1 (`ScansPage.tsx`)** — history filters/date-range/sort/page were `useState`-only, so
+  Back/bookmark/share reset the view. The active view is now read from the URL on mount and mirrored
+  back into `useSearchParams` (`replace`, defaults omitted), making History deep-linkable. jsdom test.
+- **P3-2 (`ScansPage.tsx`)** — the compare selection held full row snapshots that outlived a
+  filter/page change or a delete, showing a phantom "1/2 selected" and diffing a since-deleted scan
+  (404). Added an effect that reconciles the selection against the current rows whenever they change,
+  dropping any selected id no longer present. jsdom tests (filter-out and deleted-scan).
+- **P3-5 (`ScanDetailPage.tsx`)** — the ≤500-row findings table re-rendered on every tag keystroke
+  and 2.5 s poll because it was co-located with `tagDraft`. Extracted a `memo`ized `FindingsTable`
+  child keyed only on findings state. jsdom render-count test (SeverityBadge-spy).
+- **P3-6 (new `components/StatusLoader.tsx`; loader sites; `Dashboard.tsx`)** — bare `Loader`s
+  announced nothing to screen readers. Added a `StatusLoader` wrapping the spinner in a
+  `role="status"` `aria-live="polite"` region with visually hidden text, used at the standalone
+  loader sites (App shell, history, scan detail, diff, docker environments); gave the dashboard chart
+  bars `role="img"` so their existing `aria-label` is honored. jsdom test.
+- **P3-7 (`Dashboard.tsx`)** — severity colors re-stated as `"red"`/`"orange"` literals now reuse
+  `SEVERITY_COLOR`; the scans-over-time chart switched from the pinned dark-mode `teal-6` to
+  `var(--mantine-primary-color-filled)` so it tracks `primaryShade` per scheme. Pure token swap.
+- **P3-8 (`api/client.ts`)** — the two blind `(await response.json()) as T` casts (the FE-2
+  hand-written-client boundary) were consolidated into one documented `parseResponse<T>` helper
+  (shared error/401/204 handling too). jsdom test for the client. **The two broader strictness
+  flags in this finding were deferred by decision** (see Why).
+**Why:** These are the LOW/UX/a11y/maintainability items the original `/code-review` frontend report
+raised but `00-summary.md` never scheduled. Tests follow the post-v1 Vitest harness (`.test.tsx` +
+jsdom via `renderWithProviders` for anything rendering, `.test.ts` + node for pure logic). On **P3-8**,
+only the cited `as T` casts were fixed in this batch; enabling `noUncheckedIndexedAccess` (measured:
+**14 new TS errors across 6 files**, some genuine `Scanner | undefined` mismatches, not just
+non-null-assertion fixes) and switching ESLint to `recommendedTypeChecked`/type-aware rules
+(measured: **39 problems** — 25 `no-misused-promises`, 4 `no-floating-promises`, 1
+`no-unnecessary-type-assertion`, plus others) is a ~53-problem cleanup across ~10 files, so it is
+tracked as its own dedicated pass rather than folded into this polish batch (the review itself framed
+these as residual gaps, not violations). P3-3 was resolved earlier in #77; P3-4 remains open.
+**Plan section affected:** none — frontend UX/a11y/maintainability polish only; no schema,
+security-model, or job-model change. `frontend-review.md` §Priority 3;
+`STATUS.md`.
+
+### 2026-07-20 — Post-release — SC-12: pin and hash-lock the setuptools build backend
+**What changed:** `backend/pyproject.toml`'s `[build-system].requires` was `setuptools>=75` — unpinned
+and, as a PEP 517 build dependency, absent from the otherwise fully hash-pinned `requirements.lock`
+(the one gap the lockfile left floating). Pinned it to exact `setuptools==83.0.0` and added a PEP 735
+`[dependency-groups] build = ["setuptools==83.0.0"]` so the build backend flows through the same
+`uv pip compile --generate-hashes` process as the runtime deps. The lock is now regenerated with
+`--group build` (updated in `CONTRIBUTING.md` § Backend dependency lock and the CI drift gate in
+`.github/workflows/ci.yml`), so `setuptools==83.0.0` now appears hash-pinned in `requirements.lock`.
+The image's app-package build changed from `pip install --no-deps .` to
+`pip install --no-deps --no-build-isolation .` (`docker/Dockerfile`), so the PEP 517 build reuses the
+hash-verified setuptools already installed from the lock instead of pip fetching an unpinned, unhashed
+setuptools into an isolated build environment. Regression guards added/updated in
+`tests/test_dockerfile_supply_chain.py` (asserts the `--no-build-isolation` install form and that the
+lock carries a hash-pinned `setuptools==`).
+**Why:** SC-12 (supply-chain review, LOW; omitted from `00-summary.md` — see `STATUS.md`).
+Closes the last floating/unhashed build-time dependency, so a build of a given commit resolves setuptools
+identically and verifiably. A consequence is that setuptools (small, now hash-pinned) is present in the
+final `/opt/venv` — an accepted trade for a fully hash-verified build with no isolated-build PyPI fetch;
+`--group build` was chosen over a project-wide dependency because the fixed `uv pip compile pyproject.toml`
+CI command emits only declared groups, keeping the lock reproducible and drift-gated. Verified end-to-end:
+`pip install --require-hashes -r requirements.lock` installs setuptools==83.0.0 hash-verified, then
+`pip install --no-deps --no-build-isolation .` builds the app against it (no standalone `wheel` needed);
+the CI compile command is idempotent (no lock drift).
+**Plan section affected:** none — build reproducibility / supply-chain hardening only. Locked decision §6
+(no floating deps / hash-pinned build), Coding standards § Dependency hygiene (hash-pinned lockfile).
+`supply-chain-review.md` SC-12.
+
+### 2026-07-20 — Post-release — D5b: pin ruff isort first-party classification so import ordering is version-stable
+**What changed:** `backend/tests/test_migrations.py`'s import block passed ruff's `I001` (import sorting)
+check only because ruff is pinned at `0.8.6`; a newer ruff (e.g. `0.15.x`) reclassifies `alembic.config`
+from first-party to third-party and would re-sort the block, failing CI on a future ruff bump. Root cause:
+the repo ships a local `alembic/` migrations package whose name collides with the third-party `alembic`
+distribution, and ruff's first-party auto-detection resolves that collision differently across versions.
+Because the two ruff versions disagree on the **section** `alembic.config` belongs to (not merely the
+ordering within a section), no pure reordering of the file satisfies both — so the deterministic fix is a
+config pin: `[tool.ruff.lint.isort] known-first-party = ["alembic", "app"]` in `backend/pyproject.toml`.
+That makes ruff classify the two local packages first-party on every version, so the whole tree's existing
+(and already-correct) import ordering — `test_migrations.py` included — sorts identically under `0.8.6`
+and current ruff, with **no** import reordering needed anywhere in the backend.
+**Why:** D5b (claude-md-compliance review, TRIVIAL/latent; omitted from `00-summary.md`). Pinning the
+classification the codebase already assumes is the minimal, faithful fix — the alternative
+(`known-third-party = ["alembic"]`) is more semantically literal but reshuffles import blocks across ~8
+files including the migration scripts, which is neither minimal nor in scope. The ruff pin itself is
+intentionally **not** bumped in this change — that remains separate, deliberate work per the existing
+§14 / `#59` note (bumping ruff needs its own review of new lint findings). Confirmed clean under both
+ruff `0.8.6` (pinned/CI) and `0.15.22` across the whole backend.
+**Plan section affected:** none — lint determinism only; no schema, security-model, or job-model change.
+`claude-md-compliance.md` D5.
+
+### 2026-07-20 — Post-release — SC-14: keep the backend test suite and dev scripts out of the runtime image
+**What changed:** The final image stage copies the backend tree wholesale
+(`COPY --chown=1000:1000 backend/ /app/backend/`), which shipped `backend/tests/` (the full pytest
+suite) and `backend/scripts/` (the env-example generator) into the published image — needless bloat and
+attack surface on a security tool's own image. Added `backend/tests/` and `backend/scripts/` to the root
+`.dockerignore` so those dev-only trees are excluded from the build context; the final `COPY backend/`
+now brings in only `alembic/`, `alembic.ini`, `app/`, `pyproject.toml`, and `requirements.lock`, which
+is everything the runtime (Alembic migrations + `uvicorn app.main:app`) actually needs.
+**Why:** SC-14 (supply-chain review, LOW/INFO). Verified no runtime code imports `tests`/`scripts`
+(`app` and the Alembic `env.py` import only from `app`), so the exclusion is import-safe. The fix lives
+in the **root** `.dockerignore` rather than a `backend/.dockerignore` because Docker only honors the
+context-root ignore file for a normal build (a per-subdirectory `.dockerignore` is a silent no-op), and
+in `.dockerignore` rather than a rewritten multi-line COPY to avoid restructuring the final stage's layer
+ordering (CLAUDE.md § Build performance). This does not affect CI, which runs pytest on the host checkout,
+not inside the image. Two guards were added: a static one in `test_dockerfile_supply_chain.py` (asserts
+the `.dockerignore` carries both patterns), and — because the dogfood scan proves the image is *clean*
+but not that these dirs are *absent* — a **content assertion in the CI dogfood job** (`ci.yml`, the
+"Image — build + dogfood self-scan" job) that runs against the real built image and fails if
+`/app/backend/tests` or `/app/backend/scripts` is present, or if the runtime `app`/`alembic` trees are
+missing. No local `docker` daemon was available in the fix session, so image-content absence is confirmed
+live by that CI step (and was pre-confirmed by a faithful `.dockerignore` pattern-match simulation).
+**Plan section affected:** none — image-content hygiene only; no schema, security-model, or job-model
+change. `supply-chain-review.md` SC-14; CLAUDE.md § Hard security rules (CIS baseline —
+slim runtime image).
+
+### 2026-07-20 — Post-release — P3-3: surface credential/filter option-fetch failures instead of silently swallowing them
+**What changed:** `NewScanPage.tsx` and `ScansPage.tsx` each had an empty `catch` around the option
+fetch (registry/git-credential pickers on New Scan; initiator/tag filter lists + presets on Scan
+history). A failed fetch left the pickers/lists silently empty, which is indistinguishable from
+"genuinely none configured" — so an operator could launch a **private-image or -repository scan
+anonymously**, believing no credential was saved, when in fact the credential list just failed to load
+(the scan then fails minutes later with an opaque registry/clone auth error). The empty catches now set
+an `optionsError` state and reset the lists; the UI distinguishes the two cases: New Scan shows a yellow
+warning `Alert` (with a Retry action) above the registry/git-credential picker telling the operator that
+saved credentials couldn't be loaded and launching now would scan anonymously; Scan history shows a
+non-blocking inline warning (with Retry) that the initiator/tag lists may be incomplete. A successful
+(re)load clears the warning.
+**Why:** P3-3 (frontend review, LOW with a security edge) — the silent-empty-catch made a failed load
+look like "no credentials configured", the misleading path that could get a private target scanned
+anonymously. No test added: the Vitest suite runs in the Node environment and covers only pure
+`src/lib/` helpers — there is no jsdom/React-Testing-Library harness to render a page component, and
+adding one is out of scope for a minimal LOW fix (consistent with the existing untested page-effect
+posture noted in `STATUS.md` § 1).
+**Plan section affected:** none — UI error-surfacing only; no schema, security-model, or job-model
+change. `frontend-review.md` P3-3.
+
+### 2026-07-20 — Docs/Process — CLAUDE.md: strip auto-appended PR-body attribution footers after opening
+**What changed:** Added a rule to `CLAUDE.md` § Git & PR conventions requiring that, immediately after
+opening (or editing) any PR, the **live** PR body be re-fetched via the GitHub API/CLI and any
+auto-appended attribution footer — "Generated by Claude Code", a "🤖 Generated with…" line, a
+session/`claude.ai` link, a co-author trailer — be stripped, so PR bodies carry no Claude/Anthropic
+identity, matching the existing commit-authorship and no-attribution-footer rules.
+**Why:** The environment's tooling has appended an attribution footer to the PR **body** on essentially
+every PR in this remediation effort, frequently *after* a clean description was submitted — so "the body
+looked right when I composed it" is not sufficient proof. The pre-existing "treat it as untrusted until
+verified" bullet already told a session to check the PR description, but the failure kept recurring;
+codifying an explicit post-open live-body check-and-strip step means a future session that doesn't catch
+it still has the rule to follow. Docs/process only — no code, schema, security-model, or job-model
+change. (The PR that added this entry, together with the four §14 back-fill entries below, applied the
+new rule to its own body.)
+**Plan section affected:** CLAUDE.md § Git & PR conventions. Process/docs only; no build-phase, schema,
+security-model, or job-model change.
+
+### 2026-07-13 — Post-release — H1/SEC-1: repository scan targets must be remote clone URLs (local-path arbitrary-read closed) [back-fill]
+_Back-fill entry (written 2026-07-20): records a fix that merged earlier (#53) without a §14 entry — see `STATUS.md` § "ARCHIVE.md §14 gaps"._
+**What changed:** A `target_type=repository` scan was validated only for length and a leading `-`, then
+passed straight to `trivy repo --`. Trivy's `repo` subcommand also accepts a **local filesystem path**,
+so a target like `/data` or `/run/secrets` made Trivy walk the container filesystem and persist the
+results as a downloadable artifact — the exact arbitrary-host-file read (SQLite DB / master key exposure)
+that the `SCRYE_FILESYSTEM_SCAN_ROOTS` allowlist exists to prevent, reached through an ungated code path.
+The fix requires a `repository` target to be a **remote git clone URL** (scheme `http`/`https`/`ssh`/
+`git`): new `is_remote_repo_url()` helper (`backend/app/scanners/credentials.py`) and a `ScanCreateIn`
+model validator (`backend/app/api/scan_schemas.py`) that rejects a non-URL target at request time (422);
+because `ScanScheduleIn` subclasses `ScanCreateIn`, scheduled scans are covered too. Regression tests
+reject `/data`, `/run/secrets`, `/`, `/app`, and `file://` targets (scanner never reached) and confirm a
+valid remote clone URL still runs to `succeeded`, plus direct unit coverage of `is_remote_repo_url`.
+Landed in **#53**.
+**Distinct from the older SEC-1 already in §14:** this SEC-1 is the *security-review* SEC-1 (Top 5 #1,
+HIGH — repository local-path read). It is **unrelated** to the older webhook-URL "SEC-1" logged in the
+2026-07-05 P0 remediation entry below (generic-webhook URL stored as a write-only credential, §4.5/§6).
+Two different reviews reused the same "SEC-1" label — this entry is the scan-target one.
+**Why:** SEC-1 / Top 5 #1, the headline HIGH of the review batch. Keeps `SCRYE_FILESYSTEM_SCAN_ROOTS` as
+the **only** way any scan can be pointed at local paths. Requiring a remote URL (vs. routing bare paths
+through the filesystem gate) fits the existing schema-layer validation and avoids *adding* a local-git-
+repo capability Scrye never offered — the target field is documented as a clone URL with no UI/config for
+local paths.
+**Plan section affected:** §4 (scan targets / request validation), §6 (filesystem allowlist as the sole
+local-path gate); `security-review.md` SEC-1. No schema or job-model change.
+
+### 2026-07-13 — Post-release — H9/SC-2 + H10/SC-3: SHA-pin all Actions, expand Dependabot, harden publish checkouts [back-fill]
+_Back-fill entry (written 2026-07-20): records a fix that merged earlier (#57) without a §14 entry — see `STATUS.md` § "ARCHIVE.md §14 gaps"._
+**What changed:** Supply-chain hardening of the CI/publish workflows (#57):
+- **SC-2 (H9).** Every external `uses:` in `.github/workflows/*.yml` **and** the composite action
+  `.github/actions/build-image/action.yml` is pinned to a full commit SHA, with the human-readable
+  version kept as a trailing comment (`uses: actions/checkout@<sha> # v7.0.0`).
+- **SC-3 (H10).** `.github/dependabot.yml` expanded from the single `github-actions` entry to also watch
+  `pip` (`/backend`), `npm` (`/frontend`), and `docker` + `docker-compose` (`/docker`, base + sidecar
+  images) — all targeting `dev`, weekly, grouped — **plus** a separate `github-actions` entry for the
+  composite-action directory, since Dependabot's `github-actions` ecosystem does not recurse into
+  composite actions living outside `.github/workflows/` (what D3 flagged as already broken).
+- **Publish-checkout hardening (L24/SC-11, publish side).** `persist-credentials: false` set on the
+  checkout steps of the two token-bearing (`packages: write`) workflows, `publish.yml` and
+  `dev-nightly.yml`. (The `ci.yml` checkouts got the same treatment later in **#67**, logged in the
+  2026-07-13 CON-4 entry below — that entry does **not** cover #57's SHA-pins/Dependabot work.)
+- **D3/SC-10/L25 version-skew convergence.** The composite build action pinned older action majors than
+  `ci.yml`; aligned them to the same majors `ci.yml` uses (`setup-qemu-action`/`setup-buildx-action`
+  v4.2.0, `build-push-action` v7.3.0). This is the only behavioral change to the composite action —
+  otherwise SHA-pin only, no cache-scope, layer-ordering, or build-invocation change (per CLAUDE.md
+  § Build performance).
+**Why:** SC-2 and SC-3 are the two HIGH supply-chain findings (Top 5 #5): mutable action tags are a
+supply-chain risk (SHA-pinning removes it), and Dependabot's coverage gap left pip/npm/docker deps and
+the composite action un-updated. Hardening the publish checkouts drops the persisted `GITHUB_TOKEN` on
+the only token-bearing workflows; converging D3/L25 removes the version skew between the composite action
+and `ci.yml`.
+**Plan section affected:** locked decision §6 (publish/CI supply-chain hardening), CLAUDE.md § Dependency
+hygiene / CI; `supply-chain-review.md` SC-2/SC-3/SC-11, `claude-md-compliance.md` D3. No
+schema, application-security-model, or job-model change.
+
+### 2026-07-13 — Docs/Process — CLAUDE.md compliance-drift closure (D1, D2, R1–R6) [back-fill]
+_Back-fill entry (written 2026-07-20): records a docs-only fix that merged earlier (#65) without a §14 entry — see `STATUS.md` § "ARCHIVE.md §14 gaps"._
+**What changed:** Documentation-only reconciliation (#65) closing the drift flagged in
+`claude-md-compliance.md`. **D1:** swept ~100 dead `docs/PLAN.md` → `docs/ARCHIVE.md`
+cross-references across the backend, frontend, and Dockerfile (86 files, 106 references; section anchors
+unchanged; historical files under `docs/ARCHIVE.md` and `` intentionally keep their PLAN.md
+refs as build-history record). **D2:** corrected the stale "no registry publishing" comments in
+`docker/Dockerfile` and `docker/docker-compose.yml` to match locked decision §6 (GHCR publishing).
+**R1–R6:** amended CLAUDE.md text to describe current reality — hand-written typed API client (FE-2),
+dogfood gate = fixable HIGH/CRITICAL (INF-10), Vitest frontend tests, stored secrets field-encrypted in
+the DB rather than `.env.example` placeholders, extended deliverables list, and the PLAN→ARCHIVE
+references. **R7** (squash-merge authorship) and **R8** (promotion-title exception) already have their
+own dated §14 entries above and are not re-logged here. No code, test, Dockerfile-logic, or CI-behavior
+change.
+**Why:** These amendments bring CLAUDE.md and the in-repo comments **in line with deviations already
+logged in §14** (FE-2, INF-10, Vitest, OIDC-secret env handling, the extended deliverables, the PLAN→
+ARCHIVE rename) so a future session doesn't "fix" already-compliant code back toward the abandoned plan.
+Recorded here as a short closure pointer to those existing entries rather than restating each one.
+**Plan section affected:** CLAUDE.md (multiple sections) and in-repo doc comments; points at the
+already-logged §14 deviations. Process/docs only; no schema, security-model, or job-model change.
+
+### 2026-07-13 — Post-release — Backend dev-dependency bumps (pytest, pytest-asyncio, black) [back-fill]
+_Back-fill entry (written 2026-07-20): records a fix that merged earlier (#59) without a §14 entry — see `STATUS.md` § "ARCHIVE.md §14 gaps"._
+**What changed:** Bumped the `backend/pyproject.toml` dev extras (#59): `pytest` 8.3.4 → 9.0.3,
+`pytest-asyncio` 0.25.1 → 1.4.0, `black` 24.10.0 → 26.3.1; **`ruff` deliberately left at 0.8.6**. This
+corrected Dependabot's grouped pip bump (#58), which raised `pytest`/`black` but left `pytest-asyncio`
+pinning `pytest<9` — an unsatisfiable combination that failed the backend job at install time
+(`ResolutionImpossible`); #59 retargeted to `dev` and moved `pytest-asyncio` to a release allowing
+`pytest<10` so the dev toolchain resolves. Verified: full suite **476 passed, 3 skipped**; `black --check`
+and `ruff check` clean.
+**Why:** A pinned-version refresh addressing the supply-chain review's dev-dependency staleness note;
+because it changed pinned versions it warrants a §14 line under the dependency-pinning convention. `ruff`
+was held at 0.8.6 on purpose — bumping it would surface the latent `test_migrations.py` I001 straggler
+tracked as **D5b** (a separate follow-up), not something to fold into a routine bump. Dev/test-only pins:
+the runtime image and hash-pinned `backend/requirements.lock` are unaffected.
+**Plan section affected:** CLAUDE.md § Dependency hygiene (pinned dev deps); `supply-chain-review.md`
+dev-dep staleness note. No runtime dependency, schema, security-model, or job-model change.
+
 ### 2026-07-13 — Post-release — CON-4 (H5): scanner JSON parse/normalize hopped off the event loop
 **What changed:** Each scanner's `_execute` now runs its parse+normalize step in a worker thread via
 `anyio.to_thread.run_sync` instead of calling it inline on the event loop:
@@ -563,7 +2335,7 @@ remediation batch and had **no prior §14 entry** (it fell in the gap between th
 **same** `anyio.to_thread.run_sync` primitive CON-5 used for blocking DB work — a mechanical thread hop,
 no new concurrency primitive, no schema/security-model/job-model change (§0.2 single-container in-process
 async worker unchanged).
-**Plan section affected:** `docs/reviews/concurrency-review.md` CON-4; no change to §0/§4/§7. Also folds
+**Plan section affected:** `concurrency-review.md` CON-4; no change to §0/§4/§7. Also folds
 in L24/SC-11 (add `persist-credentials: false` to `.github/workflows/ci.yml` checkouts) as a separate
 commit — CLAUDE.md hard security rules / CI hygiene.
 
@@ -573,7 +2345,7 @@ GitHub **squash-merge** authors the squashed commit with the merging account's *
 which the repo-local `git config user.name "tyler-rich"` cannot override. The rule therefore requires
 the GitHub profile display name to also read `tyler-rich` for the identity convention to hold
 end-to-end.
-**Why:** The CLAUDE.md compliance audit (`docs/reviews/claude-md-compliance.md`, GP4/D4) found 8
+**Why:** The CLAUDE.md compliance audit (`claude-md-compliance.md`, GP4/D4) found 8
 squash-merge promotion commits authored as "Tyler Richardson" (the account's display name) rather than
 `tyler-rich` — same account, same mandated no-reply email, only the *name* diverging. This is not
 something a session can fix via `git config`: squash authorship is assigned server-side at merge time
@@ -589,7 +2361,7 @@ an explicit exception: `dev` → `main` **promotion** PRs use a plain `Promote d
 rather than a Conventional-Commit prefix, matching `CONTRIBUTING.md` § Releasing.
 **Why:** Promotions are deliberate, maintainer-initiated release steps (not routine feature work); the
 squash-merge subject names the release action rather than a code change, so a `feat:`/`fix:` prefix
-would misdescribe it. The CLAUDE.md compliance audit (`docs/reviews/claude-md-compliance.md`, GP6) noted
+would misdescribe it. The CLAUDE.md compliance audit (`claude-md-compliance.md`, GP6) noted
 the promotion titles were not Conventional-Commit-shaped; recording the convention as a stated
 exception — rather than "fixing" compliant release titles toward a prefix — matches the release process
 already documented in `CONTRIBUTING.md` § Releasing.
@@ -597,9 +2369,9 @@ already documented in `CONTRIBUTING.md` § Releasing.
 schema, security-model, or job-model change.
 
 ### 2026-07-13 — Post-release — Security + supply-chain review batch (H11, M2–M5, M22–M26, L1–L4, L23)
-**What changed:** Worked the security-review (`docs/reviews/security-review.md`, SEC-*) and
-supply-chain-review (`docs/reviews/supply-chain-review.md`, SC-*) findings summarized in
-`docs/reviews/00-summary.md`, one commit per finding:
+**What changed:** Worked the security-review (`security-review.md`, SEC-*) and
+supply-chain-review (`supply-chain-review.md`, SC-*) findings summarized in
+`00-summary.md`, one commit per finding:
 - **H11 / SC-1.** Added a hash-pinned backend lockfile (`backend/requirements.lock`, compiled with
   `uv pip compile --generate-hashes` — uv is build/dev-time only, pyproject stays PEP 621). The
   image installs runtime deps with `pip install --require-hashes -r requirements.lock` then the app
@@ -654,7 +2426,7 @@ schema or job-model change.
 
 ### 2026-07-13 — Post-release — Frontend-review wave 2 (M19–M21, L16–L22)
 **What changed:** Worked the remaining confirmed frontend-review findings from
-`docs/reviews/frontend-review.md` (summarized in `docs/reviews/00-summary.md`), one commit each.
+`frontend-review.md` (summarized in `00-summary.md`), one commit each.
 No schema, security-model, or contract change — all fixes are client-side lifecycle/UX/a11y:
 - **M19 / P1-2.** Settings forms (Retention, General, Backups schedule) no longer render editable
   with Save enabled before their initial GET resolves — they gate the inputs/Save on a `loaded`
@@ -687,7 +2459,7 @@ touched.
 
 ### 2026-07-13 — Post-release — API-review batch (APIR-1…APIR-10)
 **What changed:** Worked the API/data-model review findings from
-`docs/reviews/api-review.md` (summarized in `docs/reviews/00-summary.md`), one commit each:
+`api-review.md` (summarized in `00-summary.md`), one commit each:
 - **APIR-1 (H7).** `IgnoreRuleIn.expires_at` now normalizes aware datetimes to naive UTC via a
   new shared `core.timeutil.to_naive_utc` (which `scan_filters` also reuses), so a Trivy ignore
   rule's offset is no longer silently dropped.
@@ -733,13 +2505,13 @@ which only signalled the direct child. The helper (and the pre-existing `wait()`
 **Why:** `git clone` spawns `git-remote-https`, and trivy/grype can spawn their own helpers; on
 timeout, output-cap overflow, or worker-shutdown cancellation the direct child died but these
 grandchildren kept running with `SCRYE_GIT_PASSWORD`/`GIT_ASKPASS` still in their environment
-(`docs/reviews/concurrency-review.md` CON-2, Top 5 #4) — a leaked credential-bearing process racing
+(`concurrency-review.md` CON-2, Top 5 #4) — a leaked credential-bearing process racing
 `generic_repo_checkout`'s best-effort cache cleanup. Process-group kill is the review's recommended
 fix and covers every current and future scanner child through the single `run_command` seam.
 **Plan section affected:** none (bug fix; no schema, security-model, or job-model change).
 
 ### 2026-07-13 — Post-release — CON-1/CON-11/CON-3/SEC-2 remediation; worker seam gains optional hooks
-**What changed:** Three coupled fixes from the 2026-07-12 review batch (`docs/reviews/00-summary.md`
+**What changed:** Three coupled fixes from the 2026-07-12 review batch (`00-summary.md`
 Top 5 #2), landed as one change-set because they compound into a single failure theme:
 - **CON-1 + CON-11.** The worker's DB commits (the queued→running claim, `_persist_success`,
   `_fail`, `_store_failure_output`) now run through a bounded retry-with-backoff helper for SQLite
@@ -775,7 +2547,7 @@ model (§0.2) — the worker stays a single-container in-process async worker.
 
 ### 2026-07-13 — Post-release — CON-5–CON-20 remediation: async-path, shutdown, and pool hygiene
 **What changed:** The remaining medium/low concurrency-review findings
-(`docs/reviews/concurrency-review.md`), each landed as its own commit with a regression test:
+(`concurrency-review.md`), each landed as its own commit with a regression test:
 - **CON-5** (event-loop offload). The maintenance tick's scanner-DB policy read
   (`workers/db_update.py`), the worker's per-scan Trivy/Grype policy loads, and the scan-queue
   insert/audit/commit (`api/scans.py`) now hop off the loop via a worker thread, matching the
@@ -1111,7 +2883,7 @@ and keep Trivy's native `GITHUB_TOKEN`/`GITLAB_TOKEN` env path (already off-argv
 the URL, which necessarily lands on argv. Cloning with the real `git` binary is the
 only way to keep the credential off the process list while still supporting generic
 hosts. Decision and implementation approach are per
-`docs/reviews/phase3-finding2-resolution.md` (Option 1). Two adaptations to that
+`phase3-finding2-resolution.md` (Option 1). Two adaptations to that
 spec, both preserving its security mechanics: the askpass script is `0700` rather
 than `0600` because git *execs* it (a non-executable helper fails with `EACCES`),
 and the clone runs through the existing async `run_command` seam on the container's
@@ -1847,7 +3619,7 @@ letting contributors work freely without risking the release branch.
 architectural sections affected.
 
 ### 2026-07-05 — Post-P6 audit remediation (P0) — token-mint capping, backup/restore, webhook URLs
-**What changed:** First tier (P0) of the full-repo audit (`docs/reviews/full-audit-2026-07-05.md`,
+**What changed:** First tier (P0) of the full-repo audit (`full-audit-2026-07-05.md`,
 §10). Fixes carry their audit finding IDs:
 - **QUA-1 (§5, privilege escalation):** `POST /api/api-tokens` capped minting against the owner's
   account role instead of the caller's effective (token-capped) role, so a low-privilege token
@@ -2100,116 +3872,6 @@ locked decision `CLAUDE.md` §6 is updated accordingly.
 CLAUDE.md § Locked decisions §6. Supersedes the Docker Hub role in the 2026-07-06 entry; completes
 and closes INF-2 (2026-07-05 P2 / 2026-07-06 entries).
 
----
-
-## Build performance
-
-Durable notes on why the image build is structured the way it is, and — critically —
-what **not** to undo. Cross-referenced from `CLAUDE.md` § Coding standards → Build
-performance, `docker/Dockerfile`, and the four build workflows. Read this before
-restructuring the Dockerfile or the build workflows' caching.
-
-### Why the build was slow, and what was changed (2026-07-07)
-
-**Diagnosis (from actual CI logs, not the YAML).** The CI "image" work is four jobs:
-`backend`, `frontend`, the amd64-only `image` (build + Trivy/Grype dogfood scan), and
-`image-multiarch` (a `linux/amd64,linux/arm64` build-only check). The first three each
-finish in 1–5 min; the ~12 min wall-clock was set almost entirely by **`image-multiarch`**.
-Reading the buildkit step timings for a representative run:
-
-- The arm64 leg runs the whole Dockerfile under **QEMU emulation**, which is 5–15× slower
-  than the native amd64 leg per step (e.g. `apt-get install` 15s→333s, `npm ci` 26s→278s,
-  `npm run build` 20s→328s, `pip install` 21s→231s under emulation).
-- **The GHA layer cache was cold on essentially every run** (0 `CACHED` layers observed).
-  Root cause: the recent cost-reduction pass partitioned the `type=gha` cache into per-build
-  scopes (`amd64-ci`, `multiarch`, `dev-multiarch`) to stop them evicting each other under
-  the repo's 10 GB budget — correct — but the `multiarch` scope is *written* only by rare
-  events (a PR targeting `main`, or a release tag), so between its own invocations its
-  entries age out and it is cold when it next runs. A cold cache means the QEMU-emulated
-  arm64 layers are **re-executed from scratch** rather than restored — a `type=gha` cache
-  *hit* skips executing a layer entirely, emulation cost included. So the recurring cost was
-  the cold cache forcing a full emulated rebuild, more than QEMU per se.
-
-**Changes made (this pass). No security posture was weakened** — the scanner-binary
-checksum verification, the digest-pinned base images, and the non-root/hardened final stage
-are all unchanged.
-
-1. **Cross-seed the cache scopes (config-level, all four paths).** Each build path still
-   *writes* exactly one scope (preserving the 10 GB budget partitioning), but now also
-   *reads* the frequently-warm sibling scope, so a rarely-run build restores warm layers
-   instead of rebuilding cold:
-   - `.github/actions/build-image` gained an `extra-cache-scopes` input; a shell step composes
-     `cache-from` = primary + extras (read many) while `cache-to` stays primary-only (write one).
-   - `image-multiarch` (ci.yml) and the tagged-release build (publish.yml): write `multiarch`,
-     additionally **read** `dev-multiarch`. `main`/release content is promoted `dev`, so the
-     daily nightly build usually carries bit-identical base/apt/venv/npm-ci/arm64 layers.
-   - the nightly (dev-nightly.yml): writes `dev-multiarch`, additionally reads `multiarch`
-     (symmetric — a recent release seeds the nightly). The nightly is what keeps
-     `dev-multiarch` warm for the others to read.
-   - the amd64-only `image` job (ci.yml): writes `amd64-ci`, additionally reads `dev-multiarch`
-     (its amd64 layers are reusable by an amd64-only build and are refreshed daily).
-2. **Persist pip/npm download caches across builds (Dockerfile).** `pip install` and `npm ci`
-   use BuildKit `--mount=type=cache` mounts (and `PIP_NO_CACHE_DIR` was dropped) so an
-   unchanged dependency isn't re-downloaded when its install layer rebuilds. The cache lives
-   in the mount, not the image layer, so nothing bloats the (discarded) builder stages or the
-   final image. (Note: BuildKit cache mounts are not exported to `type=gha`, so this mainly
-   speeds **local** rebuilds and dependency-change rebuilds; the CI recurring win is item 1.)
-3. **Parallelize the scanner-binary downloads (Dockerfile).** The trivy/grype/syft
-   download→verify→extract pipelines were sequential; they now run concurrently in background
-   subshells joined by `wait`. This roughly halves a cold scanner stage, most visibly on the
-   emulated arm64 leg. **Integrity is unchanged:** each binary is still fetched with its
-   publisher's signed checksums file and verified with `sha256sum -c` *before* extraction, and
-   a failure in any subshell (download error or checksum mismatch) propagates through `wait`
-   under `set -e` to fail the build (verified under both dash and bash).
-
-**Expected before/after per build path** (estimates; the dominant variable is cache warmth):
-
-| Build path | Trigger | Before | After (typical) | Mechanism |
-|---|---|---|---|---|
-| `image` (amd64 dogfood) | every PR / main push | ~4 min | ~2–4 min | reads warm `dev-multiarch` amd64 layers |
-| `image-multiarch` | PR→main / main push | ~10–12.5 min | **~3–5 min** when `dev-multiarch` is warm (common); ~10–12 min only on a genuine cold/dep-change build | reads the nightly's warm arm64 layers → arm64 layers CACHED, QEMU rebuild skipped |
-| nightly `:dev` → GHCR | 04:00 UTC (skip if idle) | ~10–12 min | ~10–12 min first build after a dep change; faster when reading a warm `multiarch` | self-warms `dev-multiarch`; still pays QEMU on true cold builds |
-| tagged release → Docker Hub | `v*.*.*` on main | ~10–12 min | ~3–5 min when `dev-multiarch` is warm | reads the nightly's warm arm64 layers |
-
-**Not done (deliberately):** switching the arm64 leg to native `ubuntu-24.04-arm` hosted
-runners (matrix + manifest merge). It would remove QEMU from cold builds too (~12→~4–5 min
-even cold), but this is a **private** repo, so hosted arm64 runners bill per-minute and CI
-would break if the runner label isn't enabled for the account. Left as a documented future
-option, gated on that cost/availability decision. If revisited, it replaces item-1's reliance
-on cache warmth for the cold case; it does not conflict with items 2–3.
-
-### Invariants — do NOT undo these
-
-- **Keep the multi-stage split.** `frontend-builder` (Node), `scanners` (curl/tar), and
-  `backend-builder` (venv) are separate stages precisely so their toolchains never reach the
-  final `runtime` image. Do **not** consolidate stages or install build tooling in `runtime` —
-  it would bloat the image and enlarge its attack surface. The final stage copies only the
-  built venv, the three verified scanner binaries, backend source (for Alembic), the compiled
-  SPA `dist/`, the entrypoint, and the licenses.
-- **Keep the layer ordering.** Dependency manifests (`package*.json`, `pyproject.toml`) are
-  copied and installed **before** the app source is copied, so a code-only change doesn't
-  invalidate the (expensive) dependency-install layers. Do not reorder these.
-- **Keep the cache scopes partitioned by *writer*.** Each build path writes exactly one
-  `type=gha` scope; cross-seeding is **read-only** (`cache-from`). Do **not** make two paths
-  write the same scope or have a path write multiple scopes — that reintroduces the eviction
-  churn under the 10 GB budget that the partitioning exists to prevent. Broadening `cache-from`
-  is safe; broadening `cache-to` is not.
-- **Keep download-then-verify-then-extract for the scanner binaries.** The parallelism is
-  cosmetic to the integrity control; the ordering (fetch signed checksums → `sha256sum -c` →
-  only then `tar -x`) and the digest-pinned bases are the supply-chain guarantee
-  (`CLAUDE.md` § Hard security rules). Do not collapse to `curl | tar`, and do not drop the
-  per-binary checksum step to save time.
-
-**Deployment note (what must reach `main`).** The default branch is `main`; scheduled
-workflows and tag-triggered workflows run from the **default branch's** copy. So:
-`image` (amd64) Dockerfile/cache improvements take effect on `dev` PRs as soon as this merges
-to `dev`; but `image-multiarch` (runs only on main-scoped events), the release build
-(publish.yml, tag on `main`), and the nightly's own symmetric `multiarch` read
-(dev-nightly.yml runs from `main`) only take effect once promoted to `main`. The nightly keeps
-warming `dev-multiarch` from `main`'s existing copy regardless, so the cross-seed reads in the
-other paths work as soon as those paths land on their trigger branches.
-
-**Plan section affected:** §9.1 (image build), §0.6 (distribution/CI paths), process.
 
 ### 2026-07-09 — Post-v1 — teal hue refinement, scan deletion, nav active-match fix
 **What changed:** Three small frontend/backend changes:
@@ -2320,6 +3982,8 @@ can be dropped.
 **Plan section affected:** §9.1 (Dockerfile / apt packages).
 
 ### 2026-07-13 — Infra/Process — CPython interpreter CVEs on 3.13 accepted as tracked risk; 3.14 deferred
+**(Superseded by the "Backend runtime bumped Python 3.13 → 3.14" entry above, 2026-07-25 — the
+deferral ended, 15366/15367 are cleared, and the Group B waivers were removed.)**
 **What changed:** The CI dogfood Grype self-scan flags four CPython interpreter-binary CVEs on the
 runtime base image (`python:3.13-slim-bookworm`, interpreter 3.13.14 — current latest 3.13.x). Two
 have fixes merged to the 3.13 maintenance branch but not yet in any released point version —
@@ -2334,7 +3998,7 @@ CPython point-release cadence; Group B / 2025-15366 + 2025-15367 later, tied to 
 horizon), each referencing tracking issue #52. The now-stale `ci/grype.yaml` note claiming 3.13's
 current patch carries the interpreter fixes is corrected in the same change. The move to Python 3.14
 was evaluated and **deferred to a separate, deliberately-scoped project** (handoff doc:
-`docs/upgrades/python-3.14.md`), not undertaken as a reaction to this scan.
+`python-3.14.md`), not undertaken as a reaction to this scan.
 **Why:** All four are genuinely unfixable-by-us on 3.13 today — two await an unreleased 3.13.x point
 release, two are permanently 3.15+-only — which is exactly the "only genuinely unfixable upstream/
 OS-level items may remain, tracked" carve-out in CLAUDE.md § Dependency hygiene. Moving to 3.14 is
@@ -2349,3 +4013,967 @@ session). Resolution triggers, tracked in #52: 15366/15367 close when the 3.14 u
 **Plan section affected:** §0 (#7, runtime lock — reaffirmed, not changed), §2 (tech stack —
 unchanged), §9.1 (base image / dogfood self-scan), §12 (Phase 6 self-scan), CLAUDE.md
 § Dependency hygiene.
+
+### 2026-07-20 — Post-v1 — Frontend jsdom + React Testing Library test harness
+**What changed:** Added the DOM test infrastructure the frontend suite was missing so
+component- and page-level render tests are possible (previously Vitest ran only in the `node`
+environment, which limited coverage to the pure `src/lib/` helpers). New dev dependencies
+(all exact-pinned): `jsdom@26.1.0`, `@testing-library/react@16.3.0`, `@testing-library/dom@10.4.1`,
+`@testing-library/user-event@14.6.1`, `@testing-library/jest-dom@6.9.1`. Vitest now runs **two
+projects** split by file extension (`frontend/vite.config.ts`): `*.test.ts` under `node` (the
+existing `src/lib/` helper tests, untouched) and `*.test.tsx` under `jsdom` with a `src/test/setup.ts`
+(jest-dom matchers, per-test unmount, and `matchMedia`/`ResizeObserver`/`scrollIntoView` polyfills
+Mantine needs). A shared `src/test/render.tsx` wraps components in `MantineProvider` + a router and
+re-exports the Testing Library surface. One smoke test (`src/pages/NewScanPage.test.tsx`) proves the
+harness end-to-end — render, query, and a Retry click — against the already-shipped **P3-3**
+credential-load-failure warning. `eslint.config.js` gained a small override turning off
+`react-refresh/only-export-components` for test files/utilities (they're outside the Fast-Refresh
+graph). CONTRIBUTING.md § Testing documents the `.test.ts`→node / `.test.tsx`→jsdom convention and
+the `renderWithProviders` pattern.
+**Why:** Four already-shipped fixes (P3-3, and M19/M20/M21's page-effect wiring) had only helper-level
+or no tests because there was no DOM harness to render components under — see `STATUS.md`
+§ "Test debt on already-shipped fixes." This lands the infrastructure and proves it works; it does
+**not** backfill the M19/M20/M21/P3-3 page-level tests (that's follow-up work now unblocked). Aligns
+with CLAUDE.md § Testing ("the frontend uses Vitest … expanding over time"). Test-tooling only — no
+runtime dependency, schema, security-model, or job-model change.
+**Plan section affected:** CLAUDE.md § Testing (frontend Vitest coverage expanding), § Coding
+standards (TypeScript); `STATUS.md` § "Remaining work" test-debt section. No change to
+§0/§2/§4/§7.
+
+### 2026-07-24 — Post-v1 — Docker socket proxy migrated `tecnativa` → `wollomatic/socket-proxy` (issue #63, M23/SC-7 deferred half)
+**What changed:** The `docker-env` sidecar in `docker/docker-compose.yml` — the only container in
+the stack that mounts `/var/run/docker.sock` — moved from
+`tecnativa/docker-socket-proxy:v0.4.2` (HAProxy on Alpine, `USER root`, coarse env-var toggles) to
+`wollomatic/socket-proxy:1.12.3@sha256:74e770f5ed3cfc9ecb6350e177d2aa55873568c85bc953079834e68607dbf71b`
+(a from-scratch Go binary, `USER 65534`, per-method regex request allowlisting). This completes the
+half of M23/SC-7 that was deliberately deferred out of the 2026-07-13 supply-chain batch.
+
+**Allowlist mapping — this is the point of the migration.** The backend makes exactly one request
+of this proxy: `GET /images/json` (`backend/app/core/docker_proxy.py`; `list_images()` is the only
+caller, and the `core/egress.py` guard in front of it is DNS-only and issues no HTTP). The previous
+configuration permitted vastly more than that:
+
+| Previously (tecnativa) | Source | Now (wollomatic) |
+|---|---|---|
+| `GET /containers…` — incl. `/containers/{id}/json` (**every container's env vars and command line**), `/logs`, `/top`, `/stats`, `/changes`, `/export` (**container filesystem tarball**), `/archive` (**arbitrary file read out of any container**) | `CONTAINERS=1` | **denied (403)** |
+| `GET /images…` — incl. `/images/{n}/json`, `/images/{n}/history`, `/images/search`, `/images/{n}/get` (**image tarball export**) | `IMAGES=1` | **denied (403)** except the listing |
+| `GET /info` | `INFO=1` | **denied (403)** |
+| `GET /events`, `GET /_ping`, `GET /version` | image defaults `EVENTS`/`PING`/`VERSION`=1 | **denied (403)** |
+| `GET /images/json` | `IMAGES=1` | **allowed** — the only thing allowed |
+| any non-`GET` method | `POST=0` denied POST; HAProxy denied the rest | **denied (405)** |
+| any source on `scrye_net` | tecnativa has no source allowlist | **only the `scrye` container** (`-allowfrom=scrye`) |
+
+The new allowlist is the single flag `-allowGET=(/v1\.[0-9]{1,2})?/images/json`. wollomatic anchors
+every pattern itself (`regexp.Compile("^"+regex+"$")`) and matches it against the URL **path** only,
+and answers 405 for any method that has no `-allow*` entry — so omitting the other five method flags
+is what makes the proxy read-only, replacing `POST=0`. The optional group accepts the `/v1.NN` API
+version prefix a Docker CLI would send for the same endpoint; it adds no endpoint. The tecnativa
+rules were **prefix** matches (`^(/v[\d\.]+)?/images`, unanchored at the end), which is why a single
+`IMAGES=1`/`CONTAINERS=1` toggle opened a whole route family.
+
+**Hardening deltas.** Dropped the `/run` tmpfs entirely — INF-5 existed only because the HAProxy
+image needed a writable pid/stats path under `read_only: true`; a static Go binary needs no writable
+path, so the sidecar now runs read-only with **no** tmpfs. Memory cap 128M → 64M. Healthcheck moved
+off the proxied API (`wget http://localhost:2375/info`) onto the image's bundled `/healthcheck`
+binary against the separate `-allowhealthcheck` listener on `127.0.0.1:55555` — which is why `/info`
+no longer has to be exposed at all just to have a liveness probe. Added `-watchdoginterval=3600`
+`-stoponwatchdog` so a socket broken by a Docker engine update is recovered by `restart:
+unless-stopped`. `cap_drop: ALL`, `no-new-privileges`, digest pin, no host port, capped logging, and
+CPU limit are unchanged.
+
+**One operational difference operators must act on.** tecnativa ran as root in-container and could
+read the socket regardless of ownership. wollomatic ships `USER 65534:65534`, and
+`/var/run/docker.sock` is `root:docker` mode 0660 — so the container's **GID must be the host's
+docker group**. The service is therefore `user: "65534:${DOCKER_GID:-999}"`, and the operator sets
+`DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"`. The `999` default is a Debian/Ubuntu
+convention, not a guarantee; a wrong GID surfaces as a socket permission error at proxy start. This
+is a deployment prerequisite only — no application behavior, API contract, schema, or client code
+changed, and `SCRYE_DOCKER_PROXY_URL` / port 2375 are unchanged.
+
+**Verification.** No Docker daemon was reachable in the environment where this was prepared, and
+Docker Hub's blob CDN (`production.cloudfront.docker.com`) is egress-blocked, so the published image
+could not be pulled or booted. Instead the request-handling path was exercised directly: upstream's
+`handlehttprequest.go` and `bindmount.go` at tag `1.12.3` were compiled **verbatim** (the module is
+stdlib-only) against a minimal `internal/config` carrying upstream's `AllowList` types and
+`compileRegexp` unmodified, put in front of a stub Docker API on a real unix socket, and configured
+with the `-allowGET` pattern **read out of `docker-compose.yml`**. Against that: the real
+`docker_proxy.list_images()` enumerated images successfully; all 11 previously-permitted sensitive
+paths returned 403; HEAD/POST/PUT/DELETE/PATCH returned 405; the `/v1.NN` form and a query string
+were accepted; and the stub socket's access log confirmed **only** the 4 allowed requests ever
+reached it while all 16 blocked ones stopped at the proxy. `docker compose --profile docker-env
+config` renders the service (regex and `DOCKER_GID` interpolation intact). **Still to do on a
+Docker-capable host:** one `docker compose --profile docker-env up` to confirm the published image
+boots under the full hardened option set and that `DOCKER_GID` is correct for that host.
+
+`backend/tests/test_compose_hardening.py` gained seven regression tests that keep the allowlist tied
+to the client: the `-allowGET` pattern is compiled the way upstream compiles it and checked against
+the path `list_images()` is *observed* to request (not a hardcoded string), checked to reject every
+previously-allowed sensitive path, and checked for method flags, source restriction, digest pin,
+unprivileged uid, and the absence of a re-introduced writable `/run`. Each was verified to fail
+against a deliberately widened Compose config before being committed.
+**Why:** Issue #63. This is the highest-value hardening target in the stack — the one container
+holding the Docker socket — and the migration turns "read access to the whole Docker API's GET
+surface, from anywhere on the network" into "one image-listing endpoint, from one container."
+**Plan section affected:** locked decision §0.4 is satisfied unchanged (still a read-only
+socket-proxy sidecar; the app still never mounts the socket) — only the implementing image and its
+allowlist mechanism changed. README § Optional sidecars, § Configuration, and § Security model
+updated. No schema, job-model, API-contract, or auth change.
+
+### 2026-07-25 — Post-v1 — List-response envelope standardized behind shared helpers (L13 / APIR-8 deferred half)
+**What changed:** The broad list-envelope standardization that #61 deliberately deferred — #61 was
+held to the single `entries`→`items` rename on `/api/audit` per maintainer direction, with the rest
+tracked in `docs/ROADMAP.md` § Backend structural cleanup. This entry closes that deferral.
+
+Thirteen endpoints that returned bare JSON arrays now return the shared `{total, items}` envelope:
+`GET /api/registries`, `/api/git-credentials`, `/api/users`, `/api/notifications`,
+`/api/scan-schedules`, `/api/api-tokens`, `/api/backups`, `/api/filter-presets`,
+`/api/docker-environments`, `/api/trivy/vex-documents`, `/api/trivy/ignore-rules`,
+`/api/auth/sessions`, and `/api/scans/{id}/artifacts`. They remain unpaginated, so `total` always
+equals `len(items)` today.
+
+**The rule, not a one-off call.** The split was made derivable so a future endpoint's shape doesn't
+need a decision: **persisted resource collections** — rows that grow with usage, where a count is a
+meaningful answer and pagination is a plausible future need — take the envelope; **fixed
+enumerations and live, non-persisted data** stay bare arrays, because `total` there answers a
+question nobody asks. Four endpoints are therefore deliberately *not* enveloped:
+`/api/registries/options` and `/api/git-credentials/options` (id/name value lists feeding a
+`<Select>`), `/api/notifications/events` (a fixed `list[str]` vocabulary), and
+`/api/docker-environments/{id}/images` (live enumeration proxied off a Docker daemon; nothing
+persisted). The rule and the four exceptions are documented in `CONTRIBUTING.md` § API conventions
+so a later review reads them as a decision rather than as drift — the same treatment the other
+deferrals got in `STATUS.md` § 2.
+
+**Behind shared helpers, per the ROADMAP note.** New `backend/app/api/pagination.py` holds
+`Page[ItemT]` and `full_page(items)`; each route declares `response_model=Page[ThingOut]` and
+returns `full_page([...])` rather than hand-rolling `{"total": …, "items": …}`, so the convention is
+enforced structurally. The three pre-existing envelopes were re-based onto it — `AuditPageOut`,
+`ScanHistoryPage`, and `FindingsPage` are now `Page[T]` subclasses, which collapses the duplicated
+field declarations while **keeping their OpenAPI component names unchanged** (a bare `Page[T]` would
+have renamed them to `Page_AuditEntryOut_` etc. and churned a future generated client for no gain).
+`Page`/`full_page` use PEP 695 type-parameter syntax, which `ruff`'s UP046/UP047 require on the
+3.13 runtime.
+
+**Frontend absorbed the change at the client boundary.** `apiList<T>(path)` in
+`frontend/src/api/client.ts` unwraps the envelope, so the thirteen client functions keep their
+`Promise<Thing[]>` signatures and **no page component or existing test changed** — the SPA's
+page-level tests mock the API-client functions rather than `fetch`, so all 18 frontend test files
+passed untouched. `FindingsPage`/`ScanHistoryPage` in `api/scans.ts` became aliases of a shared
+`Page<T>` interface.
+
+**`GET /api/scans` was left frozen and only deprecated.** It is the one bare array that *is*
+paginated (`limit`/`offset`, no total) and so the one the envelope would materially fix, but its
+shape is a documented frozen contract from Phase P4. Re-shaping it as a side effect of this cleanup
+would have been exactly the kind of scope creep this cycle has avoided elsewhere; if that contract
+should be revisited, it warrants its own scoped decision and its own §14 entry. It now carries
+`deprecated=True` plus a description naming both the replacement (`GET /api/scans/history`) and the
+reason (no total ⇒ a client cannot detect exhaustion), so a reader of the generated client sees the
+why and the where-to-go rather than only a flag. `listScans` in the TS client carries the matching
+`@deprecated` JSDoc. This closes APIR-8 as its own fix direction stated it, rather than substituting
+a larger change for it.
+
+**Contract note (breaking for external consumers).** The thirteen endpoints' response shape changed;
+scripts driving them with an API token must read `.items`. Recorded in `CHANGELOG.md` under
+Unreleased with the endpoint list and an action-required note. The SPA is unaffected.
+
+**Tests:** new `backend/tests/test_list_envelope.py` parametrizes over every enveloped endpoint
+(shape, key set, `total == len(items)`), over the bare-array exceptions (asserting they *stay*
+bare), that `total` tracks rows as a collection grows, that a paginated endpoint's `total` exceeds
+its page, and that `/api/scans` is still a bare array *and* carries the deprecation marker with a
+description naming the replacement. ~34 existing assertions across 15 test modules were updated
+mechanically to read `["items"]`. On the frontend, `client.test.tsx` covers `apiList` directly,
+including one **client/server seam** case that unwraps a verbatim serialized `full_page()` payload:
+the backend proves it *sends* the envelope and the page-level tests mock the client functions, so
+without it nothing would catch the two halves drifting apart — both suites would stay green while
+the app broke at runtime. Backend 582 passed; frontend 59 passed across 18 files; `ruff`, `black`,
+ESLint, Prettier, `tsc --noEmit`, and `vite build` all clean.
+**Why:** L13 / APIR-8 — three envelope conventions coexisted, which made the contract inconsistent
+for API-token consumers and would have made the planned generated client inconsistent too. The
+"unpaginated by design" reasoning that deferred this remains correct and is preserved: nothing here
+paginates that didn't before. It argues against *paginating* these lists, not against giving them a
+uniform shape.
+**Plan section affected:** none structurally (no schema, security-model, job-model, or auth change).
+`docs/ROADMAP.md` § Backend structural cleanup loses its list-envelope half; the four-secret-CRUD-
+router consolidation remains open. `STATUS.md` moves L13 / APIR-8 out of § 2 "Deferred
+by decision". `CONTRIBUTING.md` gains § API conventions; `CHANGELOG.md` records the contract change.
+
+### 2026-07-25 — Post-v1 — Socket-proxy follow-ups: API-version bound and `DOCKER_GID` blast radius documented (docs only)
+**What changed:** Two comment/doc-only follow-ups to the 2026-07-24 wollomatic migration (#63). No
+behavior change — `docker/docker-compose.yml`'s `-allowGET` value, the sidecar's option set, and the
+application are all byte-for-byte unchanged in effect.
+
+**1. The allowlist's two-digit API-version bound is now discoverable.** The pattern
+`(/v1\.[0-9]{1,2})?/images/json` accepts `v1.0`–`v1.99`. The Engine API is ~v1.51 today, so this is
+years of headroom, but the bound is hard rather than open: at v1.100 a client sending
+`/v1.100/images/json` would stop matching and image listing would fail with a **403** — which reads
+as a broken allowlist, not as a version-range issue, and would cost real debugging time to trace
+back to a quantifier. A comment above the flag now states the bound, the failure it produces, and
+the fix (widen to `{1,3}` *and* update the matching expectation in
+`backend/tests/test_compose_hardening.py`). The regex was **deliberately not widened** — the tight
+pattern is the security property; only its limits needed to be written down.
+
+**2. The wrong-`DOCKER_GID` failure mode is confirmed and documented.** The 2026-07-24 entry noted
+that a wrong GID "surfaces as a socket permission error at proxy start" but never said what that
+does to the *rest* of the stack — the question an operator actually has. Verified against the
+Compose file rather than assumed:
+
+- **No `depends_on` exists anywhere in `docker/docker-compose.yml`** (no service, in any profile,
+  declares one). So the `scrye` container neither waits on the proxy at startup nor is torn down
+  when it fails; there is no `condition: service_healthy` gate to block on.
+- The proxy's `healthcheck` is consumed by **nothing but itself** — no other service reads it, so an
+  unhealthy proxy cannot hold anything back.
+- `restart: unless-stopped` keeps the sidecar retrying on its own; the failure stays inside that one
+  container.
+- The service is `profiles: ["docker-env"]`, so it is opt-in to begin with.
+- App-side, `docker_proxy.list_images()` raises `DockerProxyError`, which
+  `backend/app/api/docker_environments.py` maps to a **502 Bad Gateway** on that one endpoint.
+  Scans, history, schedules, reports, and auth are untouched.
+
+Net: a permission error at proxy start means **"docker-env is unavailable"**, not "Scrye is broken."
+That is now a paragraph in the README's `DOCKER_GID` note (§ Configuration), so an operator reads it
+where they set the variable. Nothing was changed to make this true — the configuration already had
+this property; it just wasn't written down.
+**Why:** Both are latent-surprise removal on the highest-risk service in the stack. Each would
+otherwise be diagnosed from a symptom (a 403; a crash-looping sidecar) that points away from its
+actual cause.
+**Plan section affected:** none. Docs and a Compose comment only — no schema, API-contract,
+security-model, job-model, or auth change, and no change to the allowlist itself.
+
+### 2026-07-26 — Post-v1 — Socket-proxy operational behavior from a live Debian run documented (docs only)
+**What changed:** The 2026-07-24 migration entry closed with "**Still to do on a Docker-capable
+host:** one `docker compose --profile docker-env up` to confirm the published image boots under the
+full hardened option set and that `DOCKER_GID` is correct for that host." That run has now happened,
+on a real Debian host with a live Docker daemon. Everything the docs assert about the *allowlist*
+held — this entry records the four **operational** behaviors the run surfaced that the docs either
+got wrong or never said. Docs only: no code, Compose, CI, or configuration change, and the
+`-allowGET` pattern and option set are untouched.
+
+**Confirmed as documented (no change needed):** the digest-pinned `wollomatic/socket-proxy:1.12.3`
+image boots under `user: "65534:<gid>"` with `read_only: true`, `cap_drop: ALL`, and
+`no-new-privileges`; `GET /images/json` and `GET /v1.NN/images/json` return **200**; `/info`,
+`/containers/json`, and `/version` return **403**; any `POST` returns **405**. This retires the
+2026-07-24 "still to do" item — the compiled-upstream harness used there predicted the published
+image's behavior exactly.
+
+**1. `999` is a convention, not a fallback anyone should rely on — the host measured `989`.** Both
+the README's § Configuration note and the 2026-07-24 entry called `999` "the Debian/Ubuntu default,"
+which reads as "probably right." On the Debian host actually used, `stat -c '%g' /var/run/docker.sock`
+returned **`989`**, so the Compose fallback would have failed outright. The README now calls `999` a
+placeholder rather than a default and cites the measured `989`; the `stat` derivation was already
+the instruction and remains it.
+
+**2. The `-allowfrom` source check rejects before the path and method rules are evaluated.**
+wollomatic resolves the client address back to a hostname and compares it to `scrye` *first*. A
+request from a non-matching source gets **403** for everything — including methods that would
+otherwise answer 405. So from the client, a wrong source and a disallowed path are
+indistinguishable, and an operator debugging "403 on an endpoint that should work" will suspect the
+`-allowGET` regex when the cause is the source check. (The proxy's own log does distinguish them:
+`blocked request … forbidden IP`.) Documented in the README's § Optional sidecars and § Security
+model, with the "check the log before editing the pattern" instruction attached.
+
+**3. The wrong-GID failure mode is a crash loop, not a clean exit.** The README said the proxy
+"reports a socket permission error and stays down," which sends an operator looking for a stopped
+container. What actually happens: it logs
+`dial unix /var/run/docker.sock: connect: permission denied`, exits, and `restart: unless-stopped`
+restarts it into the identical failure, repeating under Docker's restart backoff. `docker compose ps`
+shows STATUS **`Restarting`** — never `Exited`. The README now describes it that way.
+
+**4. From the client, a crash-looping proxy is a connection error, not an HTTP status.** Nothing is
+listening, so `curl` reports **`000`** and `docker_proxy.list_images()` raises `DockerProxyError`
+from `httpx.HTTPError` ("Could not reach the Docker proxy at …") rather than from a non-200
+response. Both paths surface as **502** on `GET /api/docker-environments/{id}/images` — the
+distinguishing signal is the detail text, not the status code. That is the cheapest way to tell a
+broken sidecar (connection error / `000`) from a working-but-restrictive allowlist (`returned HTTP
+403`), and the README now says so at the point where the 502 is described.
+
+**Structural re-confirmation: a crash-looping proxy does not block the app.** Re-verified against
+`docker/docker-compose.yml` this session — grepped repo-wide, **no `depends_on` exists in any
+Compose file, for any service, in any profile**, so there is no `condition: service_healthy` gate,
+the `scrye` container neither waits on the proxy nor is torn down by it, and the proxy's healthcheck
+is consumed by nothing but itself. Scrye starts and stays up while the sidecar cycles. This matches
+what the 2026-07-25 entry recorded; nothing needed flagging or changing.
+
+**Not changed, deliberately.** Two spots still carry the softer wording, left alone because this was
+scoped docs-only: `docker/docker-compose.yml`'s `DOCKER_GID` comment ("a `docker` group of 999 is
+the Debian/Ubuntu default") is a configuration file, and
+`backend/app/core/docker_proxy.py`'s non-200 error message still advises checking that the proxy is
+"read-only with `IMAGES=1`" — a stale tecnativa env-var reference that has been wrong since
+2026-07-24 and is code. Both are cosmetic and tracked for a follow-up that is allowed to touch
+non-doc files.
+**Why:** Every one of these is a symptom that points away from its cause — a 403 that looks like a
+regex bug, a crash loop that looks like a stopped container, a connection error that looks like an
+API rejection, and a GID default that looks safe. They cost debugging time exactly once per
+operator, and only the live run could surface them.
+**Plan section affected:** none. `README.md` § Configuration, § Optional sidecars, and § Security
+model, plus the `CHANGELOG.md` `docker-env` action-required note. No schema, API-contract,
+security-model, job-model, or auth change; the allowlist itself is byte-for-byte unchanged.
+
+### 2026-07-26 — Post-v1 — Stale socket-proxy wording retired from the code and Compose file
+**What changed:** The 2026-07-26 entry above closed with a "**Not changed, deliberately**" paragraph
+naming two spots it left carrying pre-wollomatic wording because that entry was scoped docs-only.
+Both are now fixed; nothing else in this change.
+
+**1. `backend/app/core/docker_proxy.py` — the non-200 error detail.** It advised checking that the
+proxy is "read-only with `IMAGES=1` and reachable on the internal network." `IMAGES=1` is a
+**tecnativa** env var that has not existed in this stack since the wollomatic migration (#89), and
+this string prints in exactly the 403 case the README now teaches operators to diagnose — so it was
+actively pointing them at a knob that isn't there. It now names the real causes: a non-allowlisted
+path (`-allowGET` permits only `/images/json` and `/v1.NN/images/json`), a non-GET method (405), or
+the `-allowfrom` source check rejecting a client that isn't the `scrye` container — with the note
+that the proxy's own log distinguishes the last two (`blocked request … forbidden IP`), and a
+pointer to the README's § Optional sidecars rather than a restatement of it. It stays an error
+detail, not documentation.
+
+`backend/tests/test_docker_proxy.py` gains a regression guard: it drives `list_images()` through an
+`httpx.MockTransport` returning 403 and asserts the message carries `-allowGET`, `-allowfrom`, and
+`forbidden IP` and does **not** carry `IMAGES=1`. No existing test asserted on the old string, so
+nothing needed updating — only adding.
+
+**2. `docker/docker-compose.yml` — the `DOCKER_GID` comment.** It called `999` "the Debian/Ubuntu
+default … used here as a fallback only," the same wording the README corrected when the live run
+measured **`989`** on the Debian host. It now matches the README: `999` is a **placeholder, not a
+safe default**, it was `989` on the host this was last verified against, and the
+`stat -c '%g' /var/run/docker.sock` derivation remains the instruction. The adjacent failure-mode
+sentence ("shows up as the proxy logging a socket permission error on start") was corrected in the
+same comment for the same reason the README's was — the real behavior is a **crash loop** under
+`restart: unless-stopped` (STATUS `Restarting`, never `Exited`), and a comment that says "on start"
+sends an operator looking for a stopped container.
+**Why:** Both were tracked as follow-ups precisely because a docs-only change can't reach them, and
+a stale env-var name in the one error string an operator reads while debugging a 403 is worse than
+no advice at all.
+**Plan section affected:** none. One error-message string, one Compose comment, one added test. No
+schema, API-contract, security-model, job-model, or auth change; the `-allowGET` pattern, the option
+set, and the `${DOCKER_GID:-999}` value itself are all unchanged.
+
+### 2026-07-26 — Infra/Process — Group A interpreter CVEs re-verified against the 3.14 branch; waivers re-pointed at a Group-A-only tracking issue (#98)
+**What changed:** `ci/grype.yaml`'s **Group A** waivers — CVE-2026-15308 (HIGH, `html.parser`
+quadratic-complexity CPU DoS) and CVE-2026-12003 (MEDIUM, `getpath.py` in-tree search-path
+fallback) — were re-verified against the runtime the image actually pins, and their tracking
+reference was moved off issue #52 onto a new **Group-A-only** issue, #98. **Group B was not
+touched**: CVE-2025-15366 / CVE-2025-15367 remain the standing acceptance on any interpreter below
+3.15 with the annual re-confirmation the 2026-07-25 process entry gave them, and nothing about the
+3.14 move changes that.
+
+**Verification, done at the source** per CLAUDE.md § Dependency hygiene (the rule the 2026-07-25
+process entry added) — the `3.14` branch and the `v3.14.6` tag were fetched and diffed file by file,
+rather than reading Grype's `FIXED IN` column, which still reports 3.15.x for both:
+- **CVE-2026-15308 / `Lib/html/parser.py`** — the `3.14` branch carries the buffered-`feed()`
+  rewrite (`_pending` / `_pending_len` / `_parse_threshold`, with `close()` flushing the pending
+  list) from backport PR python/cpython#153039, commit `07efb08`, merged 2026-07-04. `v3.14.6`
+  still has the unguarded `self.rawdata = self.rawdata + data; self.goahead(0)`.
+- **CVE-2026-12003 / `Modules/getpath.py`** — the `3.14` branch has the `BUILD_LANDMARK` constants
+  (`Modules/Setup.local`, `%VPATH%\Modules\Setup.local`) and the `isfile(joinpath(
+  real_executable_dir, BUILD_LANDMARK))` fallback removed, with an inline `gh-151544;
+  CVE-2026-12003` comment in their place, from backport PR python/cpython#151682, commit `b93d6d3`,
+  merged 2026-06-22. `v3.14.6` still has both.
+- **Release state** — `Include/patchlevel.h` on the `3.14` branch reads `PY_VERSION "3.14.6+"`;
+  there is no `v3.14.7` tag and no `Misc/NEWS.d/3.14.7.rst`. 3.14.6 (released 2026-06-10) is the
+  latest 3.14.x, and both backports merged after it. **3.14.7 is the first release that will carry
+  either fix**, so both waivers stand and the 2026-10-25 review date is unchanged.
+
+**Two premises this pass was scoped on did not survive checking, and the work was adjusted rather
+than forced to fit:**
+1. **The Group A comment was expected to still read "next 3.13.x."** It did not — the 2026-07-25
+   upgrade entry had already retargeted it to "next 3.14.x." No trigger correction was needed; what
+   the block was actually missing was the concrete release (3.14.7) and any record of the fixes
+   having been verified rather than assumed. Those were added instead.
+2. **Issue #52 was expected to be closed.** It is open — checked twice through different APIs, and
+   the repository has zero closed issues. #98 was therefore opened on the ground that does hold:
+   #52 is the older all-four tracker, written end to end against the 3.13 runtime, and stale since
+   the 3.14 move — including a resolution-trigger line still asserting that 3.14.6 carries the
+   Group B fixes, which the 2026-07-25 entry records as false. The waiver comment says #98
+   **supersedes #52 for Group A** and notes #52 is still open; it does not claim #52 is closed.
+   Whether to close #52 or re-scope it to Group B is left to the maintainer.
+
+`ci/grype.yaml` changes: the shared header no longer names a single tracking issue for all four
+CVEs (the two groups have different triggers and different trackers, and one blanket "Tracked in
+issue #52" line is what let a Group-A reference go stale behind a Group-B-shaped issue); the Group A
+block gains the dated source-verification note, the named 3.14.7 trigger, and the #98 reference.
+**Why:** The waivers' tracking reference had drifted out from under them — #52 describes a runtime
+Scrye no longer runs, and its own text contradicts what §14 records as true — so a waiver reviewer
+arriving on 2026-10-25 would have been sent to a document that is wrong about the thing they are
+reviewing. Re-verifying at the source before re-dating anything is the 2026-07-25 rule applied to
+its first real case, and it is what caught premise (1): the trigger was already correct, and a pass
+that had assumed otherwise would have "fixed" it into the same state while recording a correction
+that never happened.
+**Plan section affected:** §9.1 (base image / dogfood self-scan), §12 (Phase 6 self-scan), CLAUDE.md
+§ Dependency hygiene. Configuration and documentation only — no application code, schema,
+API-contract, security-model, job-model, or auth change, and no change to the waiver list itself
+(still four entries).
+
+### 2026-07-26 — Infra/Process — CVE-2025-15366 (imaplib) regrouped from Group B to Group A: the backport did land on 3.14
+**What changed:** `ci/grype.yaml`'s Group B waiver block covered two CVEs on the rationale that
+upstream had declined the backport to 3.10–3.14, making them permanently unfixable below 3.15.
+Checking that rationale at the source before restating it in the re-scoped tracking issue showed it
+is **no longer true of CVE-2025-15366**. The waiver moved to Group A; Group B is now
+CVE-2025-15367 alone. No CVE was un-waived — the list goes from four entries to four entries, three
+in Group A and one in Group B.
+
+**The evidence, not just the conclusion.** `Lib/imaplib.py` and `Lib/poplib.py` were fetched from
+the `3.14` branch, the `3.13` branch, the `v3.14.6` tag and `main`, and compared:
+- **imaplib — fix is on the maintenance branches.** `3.14` and `3.13` both define
+  `_control_chars = re.compile(b'[\x00\r\n]')` and raise
+  `ValueError("NUL, CR and LF not allowed in commands")` inside `IMAP4._command()`'s argument loop,
+  before each argument is appended to the wire buffer. `v3.14.6` has neither the constant nor the
+  guard. Upstream issue **gh-143921**; 3.14 backport **python/cpython#153137**, merge commit
+  `2981822`, merged **2026-07-07**; 3.13 backport **python/cpython#153287**, merge commit
+  `71926d9`, same day.
+- **It is queued, not released.** `Misc/NEWS.d/next/Security/2026-01-16-11-41-06.gh-issue-143921.AeCOor.rst`
+  ("Reject NUL, CR and LF characters in IMAP commands. Other control characters are allowed and
+  sent quoted.") is present on `3.14` and `3.13` and **404s on `v3.14.6`**. Still under `next/`, so
+  it ships in the next point release and has shipped in none — exactly the Group A shape.
+- **poplib was NOT backported.** `POP3._putcmd()`'s
+  `re.search(b'[\x00-\x1F\x7F]', line)` → `ValueError('Control characters not allowed in commands')`
+  guard exists on `main` only; the `3.14` branch, the `3.13` branch and `v3.14.6` all still pass the
+  line to `_putline()` unvalidated. Upstream issue **gh-143923** lists a single PR
+  (**python/cpython#143924**, commit `b234a2b`, 2026-01-20, `main`) and no backport PR against any
+  maintenance branch.
+- **Why the companion fixes diverged** — this is the part that makes the split make sense rather
+  than look arbitrary. The original imaplib fix (**python/cpython#143922**) rejected *all* control
+  characters, and that breadth is what drew the compatibility-regression concern behind the original
+  no-backport decision. A follow-up, **python/cpython#153067**, narrowed the check to NUL, CR and LF
+  only — other control characters are legal in quoted strings and are sent quoted — and it is the
+  **narrowed** version that was backported (the 3.14 commit message records it as a combined
+  backport of GH-143922 and GH-153067). poplib's fix still rejects the full `[\x00-\x1F\x7F]` range
+  and has had no equivalent narrowing, which is consistent with it remaining un-backported. So the
+  two were never going to move together, despite the identical stated reasoning in our own record.
+
+**On the 2026-07-25 entry: superseded for CVE-2025-15366 only, and left in place unedited.** That
+entry's own reading was correct and is not being retracted — it verified **3.14.6**, the released
+interpreter, and 3.14.6 genuinely lacks both guards; that remains true today. What does not survive
+is the *generalisation* it drew from that reading: "upstream declined the backport to 3.10–3.14, so
+these are fixed only in 3.15+ and no 3.14.x point release will ever clear them." The honest
+chronology is that the imaplib backport merged on **2026-07-07**, **18 days before** that entry was
+written — so the claim was already stale when recorded, not overtaken afterwards. The check looked
+at the released tag and concluded something about the maintenance *branch*, which the tag cannot
+tell you. **Nothing in the 2026-07-25 entry was edited**; it stands as written and this entry
+supersedes it on that one point.
+
+**The lesson is narrower than "verify at the source," which was already the rule.** Source
+verification was performed on 2026-07-25 and still produced a wrong standing conclusion, because
+the ref it read could not answer the question being asked. A claim about whether a fix *will ever*
+arrive on a line is a claim about the **branch**; only a claim about what is shipping *today* can be
+settled from a tag. Both refs are cheap to check — this pass read four — and a waiver whose
+rationale is "permanently unfixable" should be pinned to the branch, not the release.
+
+`ci/grype.yaml` changes: CVE-2025-15366 moved into the Group A list with the imaplib backport added
+to the Group A source-verification block; Group B rewritten for poplib alone, with its own
+source-verification lines, the divergence explanation, and issue #52 as its tracker; the shared
+header's ARCHIVE pointer extended to this entry. The Group B **review cadence (annual, next
+2027-07-25)**, the standing-acceptance framing, and the explicit "do not scope a 3.15 move as a
+reaction to this" instruction are all carried over unchanged — the acceptance itself was not
+re-opened, only its membership.
+**Why:** A waiver is only as good as the rationale beside it, and this one had drifted from
+"accepted because unfixable" to "accepted because unfixable, except it was fixed three weeks ago."
+Regrouping keeps the two blocks meaning what they say — Group A has a trigger and a review date
+tied to a release, Group B is a standing acceptance with an annual re-confirmation — so a reviewer
+arriving on either date knows which question they are being asked.
+**Plan section affected:** §9.1 (base image / dogfood self-scan), §12 (Phase 6 self-scan),
+CLAUDE.md § Dependency hygiene. Configuration and documentation only — no application code, schema,
+API-contract, security-model, job-model, or auth change.
+
+---
+
+### 2026-07-26 — Infra/Process — Dependabot told to stop proposing Mantine/React majors (locked decision §2)
+
+**What changed:** `.github/dependabot.yml`'s npm entry gained an `ignore:` block that drops
+**major** updates for `@mantine/*`, `react`, `react-dom`, `@types/react` and `@types/react-dom`.
+Minor and patch updates inside Mantine v7 and React 18 are untouched and still open as usual. No
+other ecosystem entry changed.
+
+**Why:** locked decision §2 fixes the frontend at **React 18 + Mantine v7**. Dependabot did not
+know that, so the weekly frontend group PR (#86, 25 updates) proposed `@mantine/*`
+7.15.2 → **9.4.2** and `react`/`react-dom` 18.3.1 → **19.2.8** — two locked decisions re-opened by
+a bot, in the same PR as a dozen updates that are perfectly fine. That grouping is the actual
+problem, not the majors themselves: because Dependabot groups the whole ecosystem into one branch,
+a single unmergeable entry makes the entire PR unmergeable, and closing it throws away the
+mergeable bumps sitting next to it. #86 was closed by hand for exactly this reason. Without the
+ignores, next week's run rebuilds the same PR and the same manual close happens again — the config
+is where the lock has to be expressed, once, or it gets re-litigated weekly.
+
+**Why `@types/react*` are in the list even though the ask named only Mantine and React.** Their
+major version tracks React's: `@types/react` 19 against `react` 18 is a type-level mismatch, and
+this repo turned on **type-aware ESLint** on 2026-07-24, so that mismatch surfaces as a failing
+lint gate rather than as a quiet inconsistency. Ignoring the runtime majors while letting their
+`@types` majors through would leave the group unmergeable for the same reason it already was.
+
+**What this deliberately does not do.** It does not touch the frontend **tooling** majors that #86
+also proposed — TypeScript 5.7 → 7.0, ESLint 9 → 10, `typescript-eslint` 8.19 → 8.65, Vite 6 → 8,
+Vitest 3 → 4, jsdom 26 → 29. Those are not locked, they are wanted, and all of them land on the
+type-aware ESLint gate, so they are real work with a real chance of churn in the lint config —
+scoped as their own PR rather than folded into a config change or into a bump PR. Nor is it a
+permanent verdict on React 19 / Mantine v9: an ignore rule is a statement that a bot may not make
+this decision, not that the decision can never be made. Lifting either line is a locked-decision
+change and goes through the user first (CLAUDE.md § When to ask vs. decide).
+
+**Plan section affected:** CLAUDE.md locked decision §2, § Dependency hygiene, § Required
+deliverables (`.github/dependabot.yml`). Repository configuration only — no application code,
+schema, API-contract, security-model, job-model, or auth change, and no dependency version moved
+in either direction by this entry.
+
+---
+
+## 15. Finding-ID index (decoder for §14's citations)
+
+§14 cites bare finding IDs — `SC-12`, `P3-4`, `QUA-17`, `H5/CON-4` — and never re-explains them.
+Those IDs came from ten review documents that lived under `` and ``
+until 2026-07-26, when they were deleted: every finding in them was closed, and a folder of
+closed findings sitting beside the two live documents was costing more than it returned. This
+section is what replaced them — **a decoder, not a summary**. It resolves an ID to one line of
+what it was and, where known, the PR that closed it. It is not a backlog: nothing here is open.
+
+**The originals are still retrievable.** They were removed in a single commit; the commit
+immediately before it is recorded in the 2026-07-26 §14 entry "Review documents retired…", and
+`git show <sha>:<file>` prints any of them verbatim. Use that when one line here
+isn't enough — the reasoning lives in git, not in the working tree.
+
+**Two namespaces reuse the same prefix.** `SEC-*` means one thing in the 2026-07-12
+`security-review.md` and a different thing in the 2026-07-05 `full-audit-2026-07-05.md`; the two
+sets are unrelated and are labelled **(review)** and **(audit)** below. `SEC-1` is the case that
+actually bites: the *review's* SEC-1 is the repository-target local-path read (#53), the *audit's*
+SEC-1 is the plaintext webhook URL (2026-07-05 P0). §14 flags this inline at the H1 back-fill entry.
+
+---
+
+### Summary IDs (`00-summary.md`, 2026-07-12) → source finding
+
+The severity-ranked backlog used its own H/M/L numbering on top of the source reports. §14 cites
+both forms, often paired (`H5/CON-4`, `M23/SC-7`). Resolving PRs are on the source rows below.
+
+`H1`=SEC-1(review) · `H2`=CON-1 · `H3`=CON-2 · `H4`=CON-3 · `H5`=CON-4 · `H6`=P1-1+SEC-5(review) ·
+`H7`=APIR-1 · `H8`=APIR-2 · `H9`=SC-2 · `H10`=SC-3 · `H11`=SC-1
+
+`M1`=SEC-2(review) · `M2`=SEC-3 · `M3`=SEC-4 · `M4`=SEC-5 · `M5`=SEC-6 · `M6`=CON-5 · `M7`=CON-6 ·
+`M8`=CON-7 · `M9`=CON-8 · `M10`=CON-9 · `M11`=CON-10 · `M12`=CON-11 · `M13`=CON-12 · `M14`=CON-13 ·
+`M15`=APIR-3 · `M16`=APIR-4 · `M17`=APIR-5 · `M18`=APIR-6 · `M19`=P1-2 · `M20`=P1-3 · `M21`=P1-4 ·
+`M22`=SC-6 · `M23`=SC-7 · `M24`=SC-4 · `M25`=SC-5 · `M26`=SC-8
+
+`L1`=SEC-7(review) · `L2`=SEC-8 · `L3`=SEC-9 · `L4`=SEC-10 · `L5`=CON-14 · `L6`=CON-15 ·
+`L7`=CON-16 · `L8`=CON-17 · `L9`=CON-18 · `L10`=CON-19 · `L11`=CON-20 · `L12`=APIR-7 ·
+`L13`=APIR-8 · `L14`=APIR-9 · `L15`=APIR-10 · `L16`=P2-1 · `L17`=P2-2 · `L18`=P2-3 · `L19`=P2-4 ·
+`L20`=P2-5 · `L21`=P2-6 · `L22`=P2-7 · `L23`=SC-9 · `L24`=SC-11 · `L25`=D3/SC-10
+
+---
+
+### `SEC-*` (review) — `security-review.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| SEC-1 | `repository` scan targets accepted local paths, bypassing the filesystem-scan allowlist → arbitrary host-file read | #53 |
+| SEC-2 | Backup restore trusted bundle-supplied scrypt cost params with no ceiling → pre-passphrase memory-exhaustion DoS | #54 |
+| SEC-3 | No entropy floor / key stretching on the master key | #64 |
+| SEC-4 | Log redaction only prefix-masked unquoted secrets containing spaces or commas | #64 |
+| SEC-5 | No CSP / `X-Frame-Options` / `nosniff` / `Referrer-Policy`; CSRF cookie JS-readable by design | #55 |
+| SEC-6 | SSRF: notification / registry / docker-proxy fetchers reached arbitrary internal and link-local hosts | #64 |
+| SEC-7 | Field-encryption AAD bound to the column, not the row | #64 (row-bindable, lazy upgrade-on-write) |
+| SEC-8 | Mandatory-MFA policy not enforced on the OIDC login path | #64 (accepted limitation + audit visibility) |
+| SEC-9 | Forced-enrollment window let a password-only attacker bind their own TOTP | #64 (same) |
+| SEC-10 | Auth rate-limiter and pending-MFA store grew unbounded by distinct key | #64 |
+
+### `SC-*` — `supply-chain-review.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| SC-1 | No backend lockfile — transitive Python deps floated unpinned at every image build | #64 |
+| SC-2 | Every workflow `uses:` tag-pinned, not SHA-pinned, incl. the `packages: write` publish paths | #57 |
+| SC-3 | Dependabot watched only `github-actions`; pip, npm and docker unmonitored | #57 |
+| SC-4 | Published images carried no SLSA provenance or SBOM attestation | #64 |
+| SC-5 | No scheduled re-scan of the already-published `:latest`/`:dev` images | #64 (`rescan.yml`) |
+| SC-6 | `node:22-bookworm-slim` build-stage digest stale | #64 |
+| SC-7 | `tecnativa/docker-socket-proxy:0.3.0` ~15 months stale — the one sidecar holding the socket | #64 (→v0.4.2), #89 (→wollomatic) |
+| SC-8 | Scanner `checksums.txt` verified same-origin only, no signature check | #64 (cosign keyless) |
+| SC-9 | `# syntax=docker/dockerfile:1.7` BuildKit frontend tag-pinned, not digest-pinned | #64 |
+| SC-10 | `ci.yml` and the composite build action pinned different majors of the same actions | #57 |
+| SC-11 | `persist-credentials: false` missing on token-bearing workflow checkouts | #57 (publish), #67 (`ci.yml`) |
+| SC-12 | `[build-system].requires = setuptools>=75` — the one floating, unhashed build-time dep | #80 |
+| SC-13 | Mantine 7.15.2 is two majors behind current | **Not a defect** — locked decision §2 pins v7 |
+| SC-14 | Runtime image shipped `backend/tests/` and `backend/scripts/` | #77 |
+
+### `APIR-*` — `api-review.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| APIR-1 | Timezone-aware `expires_at` on Trivy ignore rules stored with its offset silently dropped | #61 |
+| APIR-2 | Two incompatible 422 body shapes; the SPA rendered only one → blank "Request failed (422)" | #61 |
+| APIR-3 | Scan-diff: SPA's Compare gate missed `target_type`; diff payload omitted `location` | #61 |
+| APIR-4 | Filtered-history export silently truncated at 5 000 scans with no signal | #61 |
+| APIR-5 | Naive-UTC timestamps serialized with no `Z`; one consumer already parsed them wrong | #61 |
+| APIR-6 | Update paths accepted states create paths forbid on secret-bearing resources | #61 |
+| APIR-7 | "Run now" left `last_run_at`/`last_status` stale, contradicting `last_scan_id` | #60 (via CON-17), assertion #61 |
+| APIR-8 | Three list-envelope conventions across endpoints | #61 (`entries`→`items`), 2026-07-25 (full standardization) |
+| APIR-9 | List/history rows shipped `options` + unbounded `error` text the views never render | #61 |
+| APIR-10 | Scanner↔target matrix defined twice and already drifted | #61 |
+
+### `CON-*` — `concurrency-review.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| CON-1 | SQLite lock contention unhandled → scans stuck `running` forever, artifact files deleted | #54 |
+| CON-2 | `proc.kill()` signalled only the direct child; credential-bearing git/scanner grandchildren survived | #56 |
+| CON-3 | Restore's "no active scans" guard was check-then-act across the upload `await` | #54 |
+| CON-4 | Scanner JSON parse/normalize ran on the event loop; a large report froze the app | #67 |
+| CON-5 | Synchronous SQLite commits/reads on the event loop in async contexts | #54 (claim/fail), #60 (rest) |
+| CON-6 | Shutdown arithmetic exceeded Docker's 10 s stop grace → SIGKILL mid-commit | #60 |
+| CON-7 | Lifespan shutdown unshielded; a second cancellation skipped `worker.shutdown()` | #60 |
+| CON-8 | `PendingMfaStore` not thread-safe but shared across threadpool threads | #60 |
+| CON-9 | Backup bundle had no single-transaction snapshot; scheduled path had no active-scan guard | #60 |
+| CON-10 | Every running scan pinned a pooled DB connection for its full wall-clock | #60 |
+| CON-11 | Scans committed `queued` and never submitted on shutdown races; caller still saw 201 | #54 (watchdog) |
+| CON-12 | Scanner-DB auto-update marked itself done *before* running → failure not retried for a full interval | #60 |
+| CON-13 | Maintenance tick fully serialized; slow DB updates delayed schedules/retention ~20 min | #60 |
+| CON-14 | `proc.kill()` unprotected against `ProcessLookupError`; on the cancel path could replace the cancellation | #56 |
+| CON-15 | Notification dispatch ran while the scan still held its concurrency-semaphore slot | #60 |
+| CON-16 | Per-scan task exceptions outside `_execute`'s `try` never retrieved; task spawning unbounded | #60 |
+| CON-17 | "Run now" raced the cron tick — duplicate scans, lost `last_scan_id` | #60 |
+| CON-18 | Dashboard `gather` without `return_exceptions` abandoned in-flight probe subprocesses | #60 |
+| CON-19 | Worker could notify for a scan deleted milliseconds earlier (stale identity-map read) | #60 |
+| CON-20 | Multi-GB checkout `shutil.rmtree` ran synchronously on the event loop | #60 |
+
+### `P1-*` / `P2-*` / `P3-*` — `frontend-review.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| P1-1 | XSS: scanner-derived `primary_url` rendered as an unvalidated `href` | #55 (`safeHttpUrl`) |
+| P1-2 | Settings forms rendered editable before their initial GET resolved → Save could write defaults | #62 (tests back-filled 2026-07-24) |
+| P1-3 | Scan-detail poller never stopped or backed off on errors, behind a stale "running" badge | #62 |
+| P1-4 | History fetch had no stale-response guard — table could contradict the filter controls | #62 |
+| P2-1 | Tag draft wiped every 2.5 s by the status poll | #62 |
+| P2-2 | Navigating between scan details mixed two scans' state | #62 |
+| P2-3 | Findings panel: empty-state flash, stale rows during filter changes, no loading flag | #62 |
+| P2-4 | Unguarded double-fire mutations — incl. minting an invisible second API token | #62 |
+| P2-5 | History table unusable by keyboard: click-only sort, click-only row navigation | #62 |
+| P2-6 | Unlabeled form controls (filters, tags input, segmented controls, MFA PinInput) | #62 |
+| P2-7 | All navigation disappeared below the `sm` breakpoint | #62 |
+| P3-1 | History filters lived only in memory — Back/bookmark/share lost the view | batch 2026-07-24 |
+| P3-2 | Compare selection drifted from the visible table (phantom "1/2", deleted-scan 404) | batch 2026-07-24 |
+| P3-3 | Silent empty catches hid credential/filter fetch failures → private target scanned anonymously | #77 |
+| P3-4 | Auth refresh could resurrect a logged-out session (narrow race) | #82 |
+| P3-5 | 500-row findings table re-rendered on every unrelated keystroke and poll | batch 2026-07-24 |
+| P3-6 | Loading states silent for screen readers; chart ARIA inert | batch 2026-07-24 |
+| P3-7 | Theme-token drift (hardcoded severity colors, pinned `teal-6` chart) | batch 2026-07-24 |
+| P3-8 | TypeScript strictness gaps: blind `as T` casts, `noUncheckedIndexedAccess`, type-aware ESLint | #81 (casts), batch 2026-07-24 (both flags) |
+
+**Mirror finding:** issue **#83** is P3-4's companion running the other way — a stale pre-login
+`refresh()` wiping a just-completed `login()` — fixed in **#87**.
+
+### `D-*` / `R-*` — `claude-md-compliance.md`, 2026-07-12
+
+| ID | Finding | Closed by |
+|---|---|---|
+| D1 | ~100 dead `docs/PLAN.md` references across backend, frontend and Dockerfile | #65 |
+| D2 | Stale "no registry publishing" comments contradicting locked decision §6 | #65 |
+| D3 | Composite build action pinned older action majors than `ci.yml`; Dependabot didn't reach it | #57 |
+| D4 | 8 squash-merge commits authored as "Tyler Richardson" (GitHub profile display name) | #65 / §14 — doc-side only; the profile setting is still open, see `ROADMAP.md` |
+| D5a | The one `except Exception` in `inprocess.py` without an explanatory comment | batch hygiene |
+| D5b | `test_migrations.py` import block that a newer ruff would re-sort (latent `I001`) | #80 |
+| R1 | CLAUDE.md still mandated an OpenAPI-*generated* API client; FE-2 kept the hand-written one | #65 |
+| R2 | CLAUDE.md said CI resolves "all fixable findings"; the gate is fixable HIGH/CRITICAL (INF-10) | #65 |
+| R3 | CLAUDE.md referenced frontend tests that did not exist (FE-10) | #65 |
+| R4 | CLAUDE.md's `.env.example` rule named an `OIDC_CLIENT_SECRET` placeholder that must not exist | #65 |
+| R5 | Required-deliverables list missing CHANGELOG, SECURITY.md, CODEOWNERS, ROADMAP, dependabot, `ci/` | #65 |
+| R6 | Code comments still pointing at `docs/PLAN.md` (with D1/D2) | #65 |
+| R7 | Squash-merge authorship follows the GitHub *profile display name*, not `git config` | #65 / §14 2026-07-13 |
+| R8 | Promotion-PR title convention (`Promote dev to main: …`) undefined | §14 2026-07-13 |
+
+That report also carried pass/fail checkpoints under four prefixes — `LD1–LD7` (locked decisions),
+`HS1–HS7` (hard security rules), `GP1–GP7` (git & PR conventions), `CS1–CS8` (coding standards).
+All passed except `GP4` (author identity → D4) and `GP6` (Conventional Commits on promotions → R8),
+which are the only two §14 cites.
+
+---
+
+### `full-audit-2026-07-05.md` — `INF-*` / `SEC-*` (audit) / `SCN-*` / `API-*` / `FE-*` / `FEAT-*` / `QUA-*` / `DOC-*`
+
+Remediated in tiers **P0–P5**, each with its own dated 2026-07-05 §14 entry; those entries name the
+IDs they closed. Where a row says "P0"…"P5" below, that is the tier entry that closed it.
+
+**`INF-*` — infrastructure & deployment**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| INF-1 | Actions tag-pinned, not SHA-pinned | P2 (Dependabot), #57 (SHA pins) |
+| INF-2 | `:dev` publish silently failed for merged fork PRs (secrets withheld) | 2026-07-06, fully retired 2026-07-09 |
+| INF-3 | Locked decision §6 text contradicted the implemented `:dev` trigger | P2 |
+| INF-4 | `trivy-server` sidecar runs as root | P2 — documented exception (still true) |
+| INF-5 | `docker-socket-proxy` under `read_only` + `cap_drop: ALL` needed a writable `/run` | P2; moot after #89 (wollomatic needs none) |
+| INF-6 | Dockerfile / Compose "no registry publishing" comments stale | P3 / #65 (= D2) |
+| INF-7 | Dockerfile comment overstated verification — checksums same-origin, not signed | P2 wording; #64 added cosign (= SC-8) |
+| INF-8 | Two near-simultaneous release tags could leave `:latest` on the older version | Accepted — single-maintainer release flow |
+| INF-9 | No CI ran on `dev` while `:dev` was built from the merge commit | Retired by the 2026-07-06 nightly split |
+| INF-10 | Dogfood gate is HIGH/CRITICAL-only while CLAUDE.md said "all fixable" | Logged deviation 2026-07-05; CLAUDE.md amended in #65 (= R2) |
+| INF-11 | README said generic private repos clone into tmpfs; they check out under `/cache/tmp` | P3 |
+| INF-12 | Generic private-repo `git clone` ran with a minimal env dropping proxy/TLS vars | Accepted — deliberate env stripping |
+| INF-13 | Healthchecks hard-coded port 8089 while `SCRYE_PORT` is configurable | Info-level; unchanged |
+| INF-14 | `trivy-server` healthcheck (`trivy version`) didn't test the listener | Info-level; unchanged |
+| INF-15 | `trivy-server` tmpfs unsized and root-owned | Info-level; unchanged |
+| INF-16 | Release publish had no dependency on a green CI run for the tagged commit | Accepted — promotion PR is the gate |
+| INF-17 | Production image shipped the full `backend/` tree incl. `tests/`/`scripts/` | #77 (= SC-14) |
+| INF-18 | README quick start only built locally; the published image was documented in CONTRIBUTING | P3 (= DOC-1) |
+| INF-19 | Large multipart uploads spooled to the 200 MB `/tmp` tmpfs | P1 (`read_upload_capped`) |
+
+**`SEC-*` (audit) — distinct from the review's SEC-\* above**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| SEC-1 | Token-bearing generic-webhook URL stored in plaintext and returned on read | P0 |
+| SEC-2 | `logging.py` comment claimed OIDC `code`/`state` redaction that did not exist | Comment corrected |
+| SEC-3 | Password-gated re-auth endpoints not rate-limited | Info-level |
+| SEC-4 | Auth rate-limiter per-IP bucket map grew unbounded | #64 (= SEC-10 review) |
+| SEC-5 | Unauthenticated OIDC login endpoint created DB rows with no rate limit | Info-level |
+| SEC-6 | TOTP codes had no replay/last-used tracking within their validity window | Info-level |
+| SEC-7 | API-token display prefix exposed 4 characters of the secret body | Accepted — prefix is for display |
+| SEC-8 | Registry *create* encrypted a secret for credential-helper auth types that *update* rejects | Validation inconsistency |
+| SEC-9 | `registry_check` returned a raw exception string to the response | No secret leaked; noted |
+
+**`SCN-*` — scanner orchestration, workers, credentials-at-scan-time**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| SCN-1 | Unbounded scanner stdout read into memory (no output size cap) | P1 (`SCRYE_SCANNER_MAX_OUTPUT_BYTES`) |
+| SCN-2 | Docker-proxy and registry-check responses read without a size limit | Low |
+| SCN-3 | `list[str]` settings couldn't be parsed from their documented comma-separated env form | P2 (startup bug) |
+| SCN-4 | `git checkout <commit>` had no `--` end-of-options terminator | 2026-07-04 audit remediation |
+| SCN-5 | Registry credential forwarded to a bearer realm chosen by the probed registry | 2026-07-04 (refuses non-HTTPS realms) |
+| SCN-6 | Multi-step scans had no aggregate wall-clock bound (~2× the configured timeout) | Low |
+| SCN-7 | Cron evaluated in UTC with no timezone affordance | Documented |
+| SCN-8 | A DB error on one schedule aborted the whole due-firing batch for that tick | Low |
+| SCN-9 | Filesystem-allowlist TOCTOU and symlinks inside an allowed root (PLAUSIBLE) | Documented — admin-configured roots |
+| SCN-10 | Deleting a credential NULLed the schedule FK but left the stale id in `options` JSON | Fails closed (= QUA-2) |
+
+**`API-*` — API layer, data model, reports, backup/restore, performance**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| API-1 | N+1 lazy-load of `scan.tags` in `list_scans`/`list_history` | P1 |
+| API-2 | `restore_bundle` (scrypt + full DB rebuild) ran directly on the event loop | P0 |
+| API-3 | Bundle build materialized the whole DB as in-memory JSON, held ~3× | P0 |
+| API-4 | Upload endpoints read the entire body into memory *before* the size cap | P1 |
+| API-5 | Worker persisted findings and raw artifacts synchronously on the event loop | P1 |
+| API-6 | Large findings commit could exceed `busy_timeout` and surface as a 500 (PLAUSIBLE) | #54 (= CON-1) |
+| API-7 | Dashboard/metrics hydrated a full ORM row per target, unbounded and uncached | P1 (TTL cache) |
+| API-8 | Backup download read the whole bundle into memory instead of streaming | Low |
+| API-9 | Malformed-but-decryptable bundles crashed restore with a 500 instead of a 400 | 2026-07-13 (`BackupError`) |
+| API-10 | Backups carried no artifact files; restore produced rows pointing at nothing | P0 |
+| API-11 | Restore didn't pause the worker; concurrent scans raced the table wipe | P0 (409), #54 (worker pause) |
+| API-12 | `scans` composite index uses `created_at`, plan §7 promised `started_at` | Logged deviation 2026-07-05 — index kept |
+| API-13 | History predicates on `created_by_username`/`highest_severity` unindexed | Low |
+| API-14 | Scan diff returned every added/removed finding uncapped | Low |
+| API-15 | Retention pruning and schedule firing ran sync DB + file I/O on the loop each tick | P1 |
+| API-16 | `GET /api/settings/about` spawned three uncached scanner subprocesses per request | 2026-07-04 (TTL cache) |
+| API-17 | Pagination envelope naming drift (`entries` vs `items` vs bare array) | #61, then 2026-07-25 (= QUA-9 / APIR-8) |
+| API-18 | `FilterPresetIn.filters` an unbounded, unvalidated `dict[str, Any]`, no per-user cap | Low |
+| API-19 | Diff `severity_delta` counts deduplicated keys (PLAUSIBLE) | Info-level |
+| API-20 | `load_only` report queries had no `raiseload` guard against future drift | Info-level |
+| API-21 | `delete_backup` unlinked the file before the DB commit | Info-level (= QUA-18) |
+
+**`FE-*` — frontend (audit numbering; distinct from `P1/P2/P3-*`)**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| FE-1 | No global 401/session-expiry handling; stale authenticated shell after session death | P4 |
+| FE-2 | API client hand-rolled, not generated from the OpenAPI schema | Logged deviation 2026-07-05 — kept; CLAUDE.md amended #65 (= R1) |
+| FE-3 | Account/Backups/Schedules rendered naive-UTC timestamps as local | P4 (`lib/dates.ts`) |
+| FE-4 | `BackupsPanel` restore file held in `useRef`; "No file selected" never updated | P4 |
+| FE-5 | `ScheduledScansPanel` had no scanner/target matrix and no role gating | P4 |
+| FE-6 | History fetch had an out-of-order response race | #62 (= P1-4) |
+| FE-7 | Status polling recreated its interval every tick, no backoff, no hidden-tab pause | #62 (= P1-3) |
+| FE-8 | 422 `detail` arrays surfaced as a generic "Request failed (422)" | #61 (= APIR-2) |
+| FE-9 | Finding `primary_url` rendered as an anchor with no scheme validation | #55 (= P1-1) |
+| FE-10 | Zero frontend tests and no test runner | #78 (Vitest), #78+ (jsdom/RTL harness) |
+| FE-11 | `UsersPanel` docstring promised a reset-password action with no UI | Info-level |
+| FE-12 | Forced-MFA enrollment stored `otpauth_uri` but never rendered it; no QR anywhere | Info-level |
+| FE-13 | `UserMenu` logout swallowed a rejected `apiLogout` with no catch | Info-level |
+| FE-14 | Date-range filters serialized local day boundaries as naive UTC | Info-level |
+| FE-15 | `AuthenticationPanel` OIDC save had redundant secret handling + an unchecked cast | Info-level |
+| FE-16 | Assorted small UI items (partial row-click, hidden token expiry, shared `busy` flag, …) | Info-level |
+
+**`FEAT-*` — feature completeness vs. the plan**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| FEAT-1 | Uploaded image-tar (`docker save`) targets not implemented | De-scoped in docs (P3); on `ROADMAP.md` |
+| FEAT-2 | "Scan running images" is enumerate-only; no multi-select launch | De-scoped (P3); on `ROADMAP.md` |
+| FEAT-3 | Grype filesystem "uploaded archive" target missing | De-scoped (P3); on `ROADMAP.md` |
+| FEAT-4 | Scanner-DB update schedule was a stored no-op | P3 (`workers/db_update.py`) |
+| FEAT-5 | Offline / air-gapped DB import missing entirely | De-scoped (P3); on `ROADMAP.md` |
+| FEAT-6 | Grype ignore rules stored but never applied at scan time | P3 (`scanners/grype_policy.py`) |
+| FEAT-7 | Scanner default options/thresholds stored but applied nowhere | P3 (New Scan prefill) |
+| FEAT-8 | VEX and `.trivyignore` are global-only, not the per-scan options the plan lists | Documented (P3) |
+| FEAT-9 | Trivy server URL is deploy-time env only, not a Scanners setting | Documented |
+| FEAT-10 | Key rotation has no admin-facing bulk re-encryption path | De-scoped (P3); on `ROADMAP.md` |
+| FEAT-11 | `SCRYE_DOCKER_PROXY_URL` is a dead config knob | Info-level (= QUA-20) |
+| FEAT-12 | SBOM generation unavailable for repository scans | Info-level |
+| FEAT-13 | Restore's destructive confirm is a single click | Info-level |
+| FEAT-14 | Audit log has an admin API but no UI | Info-level |
+
+**`QUA-*` — backend code quality**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| QUA-1 | API-token minting capped against the *owner's* role, not the effective role → privilege escalation | P0 |
+| QUA-2 | `ScanSchedule` stores credential references twice; the FK `SET NULL` is cosmetic | Low (= SCN-10) |
+| QUA-3 | Five `ScannerSettings` fields editable via the API but consumed by nothing | P3 (= FEAT-4/6/7) |
+| QUA-4 | Four near-identical secret-CRUD routers (~900 lines of parallel code) | **Deferred** — `ROADMAP.md` § Backend structural cleanup |
+| QUA-5 | `_ALLOWED_SCANNERS` matrix duplicated with divergence | #61 (= APIR-10) |
+| QUA-6 | Scan-from-template construction duplicated across two modules | Low |
+| QUA-7 | Pagination params re-declared per endpoint with four different caps | Low |
+| QUA-8 | Trivy version probe implemented twice | Low |
+| QUA-9 | Three list-envelope conventions across phases | #61, then 2026-07-25 (= APIR-8) |
+| QUA-10 | Create schemas strip/validate; Update schemas don't | #61 (= APIR-6) |
+| QUA-11 | Notification secret rules asymmetric between create and update | #61 (= APIR-6) |
+| QUA-12 | Two mask literals — 8-bullet `SECRET_MASK` vs 6-bullet `_URL_MASK` | Low |
+| QUA-13 | Name-clash check idioms differ between routers | Trivial |
+| QUA-14 | `filter_presets` router skips auditing and uses a different commit pattern | Trivial (plausibly intended) |
+| QUA-15 | `run_schedule_now` left `last_run_at`/`last_status` stale (PLAUSIBLE) | #60 (= CON-17 / APIR-7) |
+| QUA-16 | No type checker anywhere | **Deferred** — `ROADMAP.md` § Type-checking in CI (blocked on QUA-17) |
+| QUA-17 | Annotation lies and `Any` seams (`-> object`, un-parameterized dicts, `**vars(p)` reflection) | **Open** — the blocker under QUA-16 |
+| QUA-18 | `delete_backup` unlinks before commit; `create_backup` writes before insert | Info (= API-21) |
+| QUA-19 | `backups.py` re-validates a passphrase length the schema already enforces | Trivial (unreachable) |
+| QUA-20 | `Settings.docker_proxy_url` dead knob | Info (= FEAT-11) |
+| QUA-21 | `backup/store.py` write/read/delete helpers exported but never called | Trivial |
+| QUA-22 | `workers/schedules.py` `if created: db.commit() else: db.commit()` — identical branches | Trivial |
+| QUA-23 | `conftest.py` built the schema via `create_all`, never the Alembic chain | P5 (`tests/test_migrations.py`) |
+| QUA-24 | Coverage gaps — no test for the QUA-1 hole, no rate-limiter unit test | P5 + later back-fills |
+
+**`DOC-*` — documentation deliverables**
+
+| ID | Finding | Closed by |
+|---|---|---|
+| DOC-1 | README contradicted locked decision §6 on registry publishing | P3 |
+| DOC-2 | README overstated unimplemented features (image-tar, multi-select, archive upload) | P3 |
+| DOC-3 | README config table omitted `SCRYE_FORWARDED_ALLOW_IPS` and `SCRYE_SCANNER_CACHE_DIR` | Low |
+| DOC-4 | Duplicate `## Releasing` heading in `CONTRIBUTING.md` | Low |
+| DOC-5 | README advertised ECR/GCR/ACR helpers without noting the binaries aren't bundled | P3 |
+
+---
+
+### Documents this index replaces
+
+All were deleted 2026-07-26; recover any of them with `git show <sha>:<path>` using the SHA in that
+day's §14 entry.
+
+| Path | What it held |
+|---|---|
+| `docs/reviews/00-summary.md` | The H/M/L severity backlog + Top-5; the summary-ID → source-ID map above |
+| `docs/reviews/security-review.md` | `SEC-*` (review) |
+| `docs/reviews/supply-chain-review.md` | `SC-*` |
+| `docs/reviews/api-review.md` | `APIR-*` |
+| `docs/reviews/frontend-review.md` | `P1-*`, `P2-*`, `P3-*` |
+| `docs/reviews/concurrency-review.md` | `CON-*` |
+| `docs/reviews/claude-md-compliance.md` | `D*`, `R*`, `LD*`/`HS*`/`GP*`/`CS*` |
+| `docs/reviews/full-audit-2026-07-05.md` | `INF-*`, `SEC-*` (audit), `SCN-*`, `API-*`, `FE-*`, `FEAT-*`, `QUA-*`, `DOC-*` |
+| `docs/reviews/STATUS.md` | Remediation tracker — the ID → resolving-PR column above came from its §3 ledger |
+| `docs/reviews/fix-verification.md` | A 2026-07-13 verification pass, superseded by STATUS.md |
+| `docs/reviews/phase3-finding2-resolution.md` | Pre-implementation design note for generic-host git auth (§14 2026-07-03 implements it) |
+| `docs/reviews/CLEANUP-AUDIT.md` | The 2026-07-26 audit that produced this cleanup; its conclusions are the §14 entry |
+| `docs/upgrades/python-3.14.md` | Python 3.14 scoping/handoff doc — superseded by §14 2026-07-25, and wrong on its central CVE premise |
+
+---
+
+## Build performance
+
+Durable notes on why the image build is structured the way it is, and — critically —
+what **not** to undo. Cross-referenced from `CLAUDE.md` § Coding standards → Build
+performance, `docker/Dockerfile`, and the four build workflows. Read this before
+restructuring the Dockerfile or the build workflows' caching.
+
+### Why the build was slow, and what was changed (2026-07-07)
+
+**Diagnosis (from actual CI logs, not the YAML).** The CI "image" work is four jobs:
+`backend`, `frontend`, the amd64-only `image` (build + Trivy/Grype dogfood scan), and
+`image-multiarch` (a `linux/amd64,linux/arm64` build-only check). The first three each
+finish in 1–5 min; the ~12 min wall-clock was set almost entirely by **`image-multiarch`**.
+Reading the buildkit step timings for a representative run:
+
+- The arm64 leg runs the whole Dockerfile under **QEMU emulation**, which is 5–15× slower
+  than the native amd64 leg per step (e.g. `apt-get install` 15s→333s, `npm ci` 26s→278s,
+  `npm run build` 20s→328s, `pip install` 21s→231s under emulation).
+- **The GHA layer cache was cold on essentially every run** (0 `CACHED` layers observed).
+  Root cause: the recent cost-reduction pass partitioned the `type=gha` cache into per-build
+  scopes (`amd64-ci`, `multiarch`, `dev-multiarch`) to stop them evicting each other under
+  the repo's 10 GB budget — correct — but the `multiarch` scope is *written* only by rare
+  events (a PR targeting `main`, or a release tag), so between its own invocations its
+  entries age out and it is cold when it next runs. A cold cache means the QEMU-emulated
+  arm64 layers are **re-executed from scratch** rather than restored — a `type=gha` cache
+  *hit* skips executing a layer entirely, emulation cost included. So the recurring cost was
+  the cold cache forcing a full emulated rebuild, more than QEMU per se.
+
+**Changes made (this pass). No security posture was weakened** — the scanner-binary
+checksum verification, the digest-pinned base images, and the non-root/hardened final stage
+are all unchanged.
+
+1. **Cross-seed the cache scopes (config-level, all four paths).** Each build path still
+   *writes* exactly one scope (preserving the 10 GB budget partitioning), but now also
+   *reads* the frequently-warm sibling scope, so a rarely-run build restores warm layers
+   instead of rebuilding cold:
+   - `.github/actions/build-image` gained an `extra-cache-scopes` input; a shell step composes
+     `cache-from` = primary + extras (read many) while `cache-to` stays primary-only (write one).
+   - `image-multiarch` (ci.yml) and the tagged-release build (publish.yml): write `multiarch`,
+     additionally **read** `dev-multiarch`. `main`/release content is promoted `dev`, so the
+     daily nightly build usually carries bit-identical base/apt/venv/npm-ci/arm64 layers.
+   - the nightly (dev-nightly.yml): writes `dev-multiarch`, additionally reads `multiarch`
+     (symmetric — a recent release seeds the nightly). The nightly is what keeps
+     `dev-multiarch` warm for the others to read.
+   - the amd64-only `image` job (ci.yml): writes `amd64-ci`, additionally reads `dev-multiarch`
+     (its amd64 layers are reusable by an amd64-only build and are refreshed daily).
+2. **Persist pip/npm download caches across builds (Dockerfile).** `pip install` and `npm ci`
+   use BuildKit `--mount=type=cache` mounts (and `PIP_NO_CACHE_DIR` was dropped) so an
+   unchanged dependency isn't re-downloaded when its install layer rebuilds. The cache lives
+   in the mount, not the image layer, so nothing bloats the (discarded) builder stages or the
+   final image. (Note: BuildKit cache mounts are not exported to `type=gha`, so this mainly
+   speeds **local** rebuilds and dependency-change rebuilds; the CI recurring win is item 1.)
+3. **Parallelize the scanner-binary downloads (Dockerfile).** The trivy/grype/syft
+   download→verify→extract pipelines were sequential; they now run concurrently in background
+   subshells joined by `wait`. This roughly halves a cold scanner stage, most visibly on the
+   emulated arm64 leg. **Integrity is unchanged:** each binary is still fetched with its
+   publisher's signed checksums file and verified with `sha256sum -c` *before* extraction, and
+   a failure in any subshell (download error or checksum mismatch) propagates through `wait`
+   under `set -e` to fail the build (verified under both dash and bash).
+
+**Expected before/after per build path** (estimates; the dominant variable is cache warmth):
+
+| Build path | Trigger | Before | After (typical) | Mechanism |
+|---|---|---|---|---|
+| `image` (amd64 dogfood) | every PR / main push | ~4 min | ~2–4 min | reads warm `dev-multiarch` amd64 layers |
+| `image-multiarch` | PR→main / main push | ~10–12.5 min | **~3–5 min** when `dev-multiarch` is warm (common); ~10–12 min only on a genuine cold/dep-change build | reads the nightly's warm arm64 layers → arm64 layers CACHED, QEMU rebuild skipped |
+| nightly `:dev` → GHCR | 04:00 UTC (skip if idle) | ~10–12 min | ~10–12 min first build after a dep change; faster when reading a warm `multiarch` | self-warms `dev-multiarch`; still pays QEMU on true cold builds |
+| tagged release → Docker Hub | `v*.*.*` on main | ~10–12 min | ~3–5 min when `dev-multiarch` is warm | reads the nightly's warm arm64 layers |
+
+**Not done (deliberately):** switching the arm64 leg to native `ubuntu-24.04-arm` hosted
+runners (matrix + manifest merge). It would remove QEMU from cold builds too (~12→~4–5 min
+even cold), but this is a **private** repo, so hosted arm64 runners bill per-minute and CI
+would break if the runner label isn't enabled for the account. Left as a documented future
+option, gated on that cost/availability decision. If revisited, it replaces item-1's reliance
+on cache warmth for the cold case; it does not conflict with items 2–3.
+
+### Invariants — do NOT undo these
+
+- **Keep the multi-stage split.** `frontend-builder` (Node), `scanners` (curl/tar), and
+  `backend-builder` (venv) are separate stages precisely so their toolchains never reach the
+  final `runtime` image. Do **not** consolidate stages or install build tooling in `runtime` —
+  it would bloat the image and enlarge its attack surface. The final stage copies only the
+  built venv, the three verified scanner binaries, backend source (for Alembic), the compiled
+  SPA `dist/`, the entrypoint, and the licenses.
+- **Keep the layer ordering.** Dependency manifests (`package*.json`, `pyproject.toml`) are
+  copied and installed **before** the app source is copied, so a code-only change doesn't
+  invalidate the (expensive) dependency-install layers. Do not reorder these.
+- **Keep the cache scopes partitioned by *writer*.** Each build path writes exactly one
+  `type=gha` scope; cross-seeding is **read-only** (`cache-from`). Do **not** make two paths
+  write the same scope or have a path write multiple scopes — that reintroduces the eviction
+  churn under the 10 GB budget that the partitioning exists to prevent. Broadening `cache-from`
+  is safe; broadening `cache-to` is not.
+- **Keep download-then-verify-then-extract for the scanner binaries.** The parallelism is
+  cosmetic to the integrity control; the ordering (fetch signed checksums → `sha256sum -c` →
+  only then `tar -x`) and the digest-pinned bases are the supply-chain guarantee
+  (`CLAUDE.md` § Hard security rules). Do not collapse to `curl | tar`, and do not drop the
+  per-binary checksum step to save time.
+
+**Deployment note (what must reach `main`).** The default branch is `main`; scheduled
+workflows and tag-triggered workflows run from the **default branch's** copy. So:
+`image` (amd64) Dockerfile/cache improvements take effect on `dev` PRs as soon as this merges
+to `dev`; but `image-multiarch` (runs only on main-scoped events), the release build
+(publish.yml, tag on `main`), and the nightly's own symmetric `multiarch` read
+(dev-nightly.yml runs from `main`) only take effect once promoted to `main`. The nightly keeps
+warming `dev-multiarch` from `main`'s existing copy regardless, so the cross-seed reads in the
+other paths work as soon as those paths land on their trigger branches.
+
+**Plan section affected:** §9.1 (image build), §0.6 (distribution/CI paths), process.

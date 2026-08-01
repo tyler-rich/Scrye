@@ -40,7 +40,10 @@ const TARGET_TYPES: { value: TargetType; label: string }[] = [
 // Which scanners can run each schedulable target type — the backend rejects
 // invalid combos (scan_schedules.py), so mirror it here to keep the form valid
 // up front rather than 400-ing after the whole form is filled (FE-5).
-const SCANNERS_FOR: Record<TargetType, Scanner[]> = {
+// Typed as a non-empty tuple so `SCANNERS_FOR[t][0]` is a `Scanner`, not
+// `Scanner | undefined` — every target type has at least one scanner, and the
+// "reset to the first allowed scanner" effect below depends on that.
+const SCANNERS_FOR: Record<TargetType, readonly [Scanner, ...Scanner[]]> = {
   image: ['trivy', 'grype'],
   repository: ['trivy'],
   filesystem: ['grype'],
@@ -222,7 +225,7 @@ export function ScheduledScansPanel() {
                         aria-label="Run now"
                         loading={rowBusy?.id === s.id && rowBusy.action === 'run'}
                         disabled={rowBusy !== null}
-                        onClick={() => onRun(s.id)}
+                        onClick={() => void onRun(s.id)}
                       >
                         <IconPlayerPlay size={16} />
                       </ActionIcon>
@@ -232,7 +235,7 @@ export function ScheduledScansPanel() {
                         aria-label="Delete schedule"
                         loading={rowBusy?.id === s.id && rowBusy.action === 'delete'}
                         disabled={rowBusy !== null}
-                        onClick={() => onDelete(s.id)}
+                        onClick={() => void onDelete(s.id)}
                       >
                         <IconTrash size={16} />
                       </ActionIcon>

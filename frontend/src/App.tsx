@@ -1,19 +1,9 @@
-import {
-  AppShell,
-  Burger,
-  Button,
-  Center,
-  Drawer,
-  Group,
-  Loader,
-  Stack,
-  Text,
-  Title,
-} from '@mantine/core';
+import { AppShell, Burger, Button, Center, Drawer, Group, Stack, Text, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { ColorSchemeToggle } from './components/ColorSchemeToggle';
+import { StatusLoader } from './components/StatusLoader';
 import { UserMenu } from './components/UserMenu';
 import { useAuth } from './auth/AuthContext';
 import { AccountPage } from './pages/AccountPage';
@@ -104,7 +94,7 @@ export function App() {
   if (loading) {
     return (
       <Center mih="100vh">
-        <Loader color="teal" />
+        <StatusLoader color="teal" />
       </Center>
     );
   }

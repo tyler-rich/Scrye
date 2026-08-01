@@ -21,7 +21,7 @@ class TestBackupEndpoints:
         assert backup["kind"] == "manual"
 
         listing = client.get("/api/backups").json()
-        assert len(listing) == 1
+        assert listing["total"] == 1
 
         download = client.get(f"/api/backups/{backup['id']}/download")
         assert download.status_code == 200
@@ -31,7 +31,7 @@ class TestBackupEndpoints:
         assert (
             client.delete(f"/api/backups/{backup['id']}", headers={CSRF: csrf}).status_code == 204
         )
-        assert client.get("/api/backups").json() == []
+        assert client.get("/api/backups").json() == {"total": 0, "items": []}
 
     def test_short_passphrase_rejected(self, client: TestClient) -> None:
         csrf = setup_admin(client)
@@ -65,7 +65,7 @@ class TestRestoreEndpoint:
         data = client.get(f"/api/backups/{backup_id}/download").content
 
         # Delete the second user, then restore the bundle.
-        users = client.get("/api/users").json()
+        users = client.get("/api/users").json()["items"]
         viewer = next(u for u in users if u["username"] == "viewer9")
         client.patch(f"/api/users/{viewer['id']}", json={"is_active": False}, headers={CSRF: csrf})
 

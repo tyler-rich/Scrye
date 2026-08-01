@@ -13,7 +13,7 @@ updates:
     # Covers .github/workflows/*. Dependabot's github-actions ecosystem only
     # scans workflow files under the given directory, not composite actions
     # nested elsewhere in the repo — the composite build action needs its own
-    # entry below (see docs/reviews/claude-md-compliance.md D3).
+    # entry below (compliance finding D3; see docs/ARCHIVE.md §15).
     directory: "/"
     # Open bumps against `dev`, not the default branch (`main`). Per the
     # branching model, `main` is protected and receives only deliberate `dev`->
@@ -32,9 +32,9 @@ updates:
 
   - package-ecosystem: "github-actions"
     # The reusable composite action's `uses:` refs live outside .github/workflows/
-    # and need their own directory entry to be scanned (docs/reviews/
-    # claude-md-compliance.md D3 — the single "/" entry above does not reach
-    # this file).
+    # and need their own directory entry to be scanned (compliance finding D3,
+    # docs/ARCHIVE.md §15 — the single "/" entry above does not reach this
+    # file).
     directory: "/.github/actions/build-image"
     target-branch: "dev"
     schedule:
@@ -65,6 +65,28 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "frontend"
+    # Mantine v7 and React 18 are LOCKED (CLAUDE.md locked decision §2: "React 18
+    # + TS + Vite + Mantine v7"). A major bump on either is a re-opening of a
+    # locked decision, not a dependency update, so Dependabot must not propose
+    # one — a grouped PR that contains an unmergeable major has to be closed by
+    # hand, and closing it discards the mergeable bumps grouped alongside it.
+    # These ignores keep the frontend group mergeable; lifting them is a
+    # deliberate decision made with the user first, not a Dependabot PR.
+    #
+    # Minor/patch updates within v7 / React 18 are NOT ignored and still flow.
+    # @types/react* are majors-locked too because their major tracks React's:
+    # @types/react 19 against react 18 breaks the type-aware ESLint gate.
+    ignore:
+      - dependency-name: "@mantine/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
     groups:
       frontend-dependencies:
         patterns:

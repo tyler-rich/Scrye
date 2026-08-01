@@ -1,0 +1,48 @@
+# Optional CPU-limit overlay for docker-compose.yml.
+#
+# Apply it by naming both files, in this order:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.cpu-limits.yml up -d
+#
+# ...and on every subsequent command in the same stack (`ps`, `logs`, `down`),
+# otherwise Compose recomputes the config without the overlay and recreates the
+# containers uncapped. Export it once instead if you prefer:
+#
+#   export COMPOSE_FILE=docker-compose.yml:docker-compose.cpu-limits.yml
+#
+# WHY THIS IS A SEPARATE FILE. CPU limits used to live in a `deploy.resources`
+# block in docker-compose.yml. Compose v2 honours `deploy:` for a plain
+# `docker compose up`, but it is Swarm-oriented, and several NAS container
+# platforms (Synology Container Manager, QNAP Container Station) reject or
+# mishandle it — so a base file containing it will not deploy there at all.
+# Keeping CPU limits in an opt-in overlay leaves docker-compose.yml portable
+# while preserving the constraint, and the tuned values, for everyone else.
+#
+# The `cpus:` key below is the portable spelling of the same limit, not a weaker
+# one: Compose treats `cpus` and `deploy.resources.limits.cpus` as one field and
+# refuses a project that sets them to different values. It is used here rather
+# than `deploy:` for two reasons — it is accepted by more Compose
+# implementations, and it composes with the base file's `mem_limit`, which a
+# `deploy.resources.limits` block in an overlay does not (Compose rejects the
+# merged project with "can't set distinct values on 'mem_limit' and
+# 'deploy.resources.limits.memory'").
+#
+# Memory limits are deliberately NOT here. They are the containment control that
+# matters most (OOM blast radius, and the RAM-backed /tmp tmpfs counts against
+# them), so they stay in docker-compose.yml, where the portable `mem_limit` /
+# `mem_reservation` keys mean no platform has to opt in to get them.
+#
+# The two profile-gated services below only start when their profile is active;
+# listing them here is a no-op otherwise.
+
+services:
+  scrye:
+    cpus: 2.0
+
+  trivy-server:
+    cpus: 1.0
+
+  # The only container in the stack that mounts /var/run/docker.sock, hence the
+  # tightest cap: a wedged or runaway proxy must not be able to spin the host.
+  docker-socket-proxy:
+    cpus: 0.5

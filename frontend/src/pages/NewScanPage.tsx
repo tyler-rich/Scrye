@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
+  Anchor,
   Button,
   Checkbox,
   FileInput,
@@ -60,8 +61,13 @@ const TARGET_TYPES: { value: TargetType; label: string }[] = [
   { value: 'sbom', label: 'SBOM' },
 ];
 
-/** Scanners permitted per target type (mirrors the backend matrix). */
-const SCANNERS_FOR: Record<TargetType, Scanner[]> = {
+/**
+ * Scanners permitted per target type (mirrors the backend matrix). Typed as a
+ * non-empty tuple so `SCANNERS_FOR[t][0]` is a `Scanner`, not `Scanner | undefined`:
+ * every target type has at least one scanner, and that is the invariant the
+ * "reset to the first allowed scanner" effect below depends on.
+ */
+const SCANNERS_FOR: Record<TargetType, readonly [Scanner, ...Scanner[]]> = {
   image: ['trivy', 'grype'],
   repository: ['trivy'],
   filesystem: ['grype'],
@@ -94,15 +100,23 @@ export function NewScanPage() {
   const [gitCredentials, setGitCredentials] = useState<CredentialOption[]>([]);
   const [sbomFile, setSbomFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [optionsError, setOptionsError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const loadTargets = useCallback(async () => {
+    // Surface a load failure instead of swallowing it: a silently-empty picker
+    // reads as "no credentials configured", so an operator could launch a
+    // private-image/-repo scan anonymously when saved credentials actually
+    // exist but the fetch failed (P3-3).
     try {
       const [regs, creds] = await Promise.all([listRegistryOptions(), listGitCredentialOptions()]);
       setRegistries(regs);
       setGitCredentials(creds);
+      setOptionsError(false);
     } catch {
-      // Non-fatal: credential pickers stay empty if the lists can't load.
+      setRegistries([]);
+      setGitCredentials([]);
+      setOptionsError(true);
     }
   }, []);
 
@@ -177,7 +191,7 @@ export function NewScanPage() {
           return;
         }
         const scan = await createSbomScan(sbomFile, 'grype');
-        navigate(`/scans/${scan.id}`);
+        void navigate(`/scans/${scan.id}`);
         return;
       }
 
@@ -206,7 +220,7 @@ export function NewScanPage() {
       }
 
       const scan = await createScan(payload);
-      navigate(`/scans/${scan.id}`);
+      void navigate(`/scans/${scan.id}`);
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : 'Failed to launch scan.');
     } finally {
@@ -283,6 +297,17 @@ export function NewScanPage() {
                 disabled={!canLaunch}
                 {...form.getInputProps('target')}
               />
+            )}
+
+            {optionsError && (targetType === 'image' || targetType === 'repository') && (
+              <Alert color="yellow" icon={<IconAlertCircle size={16} />} variant="light">
+                Couldn&apos;t load saved credentials. Any configured registry or git credentials
+                won&apos;t appear below, so launching now would scan the target anonymously — retry
+                before starting a scan of a private target.{' '}
+                <Anchor component="button" type="button" onClick={() => void loadTargets()}>
+                  Retry
+                </Anchor>
+              </Alert>
             )}
 
             {targetType === 'image' && (

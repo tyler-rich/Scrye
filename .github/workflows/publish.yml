@@ -56,7 +56,7 @@ jobs:
       attestations: write
     steps:
       - name: Checkout (full history to verify the tag is on main)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           # The repo is public, so the anonymous `git fetch origin main` below
@@ -82,7 +82,7 @@ jobs:
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4.5.1
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -110,8 +110,16 @@ jobs:
       # GitHub-signed SLSA build provenance, verifiable with `gh attestation
       # verify oci://ghcr.io/tyler-rich/scrye:<version>` (SC-4). Attests the pushed
       # multi-arch index by digest and stores the attestation in GHCR alongside it.
+      #
+      # As of v4 this action is a thin wrapper over `actions/attest`, which
+      # upstream now recommends for new workflows; the wrapper stays supported,
+      # so switching is a separate, deliberate change rather than part of a bump.
+      # v3 added `create-storage-record` (default true) — it needs an
+      # `artifact-metadata: write` scope, but only ever runs for
+      # organization-owned repos, and this one is user-owned, so the action skips
+      # it outright. No extra permission is required here.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-name: ghcr.io/tyler-rich/scrye
           subject-digest: ${{ steps.build.outputs.digest }}

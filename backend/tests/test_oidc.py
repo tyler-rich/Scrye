@@ -216,7 +216,7 @@ class TestOidcLoginFlow:
             assert fresh.get("/api/auth/me").json()["username"] == "alice"
 
         # Only one local account exists for the repeated identity.
-        users = client.get("/api/users").json()
+        users = client.get("/api/users").json()["items"]
         assert [u["username"] for u in users].count("alice") == 1
 
 
@@ -292,7 +292,7 @@ class TestOidcRoleSyncHotfix:
         assert solo.get("/api/auth/me").json()["role"] == "admin"
         # Make ``solo`` the ONLY active admin by deactivating the seed local admin.
         solo_csrf = solo.cookies.get("scrye_csrf")
-        seed = next(u for u in solo.get("/api/users").json() if u["username"] == "admin")
+        seed = next(u for u in solo.get("/api/users").json()["items"] if u["username"] == "admin")
         deact = solo.patch(
             f"/api/users/{seed['id']}", json={"is_active": False}, headers={CSRF: solo_csrf}
         )
