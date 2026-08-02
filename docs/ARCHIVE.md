@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (125, newest first)
+### Index of §14 entries (126, newest first)
 
+- [2026-08-02 — Post-v1 — Log redaction moved from the `LogRecord` to the formatted line; uvicorn's access logger stops raising on every request](#2026-08-02--post-v1--log-redaction-moved-from-the-logrecord-to-the-formatted-line-uvicorns-access-logger-stops-raising-on-every-request)
 - [2026-08-02 — Post-v1 — OIDC account linking: authenticated self-link, guarded self-unlink, and stale-link detection (#114)](#2026-08-02--post-v1--oidc-account-linking-authenticated-self-link-guarded-self-unlink-and-stale-link-detection-114)
 - [2026-08-02 — Security/Process — Filesystem-gate symlink and TOCTOU residual risks closed out (neither is real); CodeQL advanced-setup migration assessed](#2026-08-02--securityprocess--filesystem-gate-symlink-and-toctou-residual-risks-closed-out-neither-is-real-codeql-advanced-setup-migration-assessed)
 - [2026-08-02 — Security/Process — CodeQL code scanning enabled via default setup; first-run triage: six alerts, all false positives](#2026-08-02--securityprocess--codeql-code-scanning-enabled-via-default-setup-first-run-triage-six-alerts-all-false-positives)
@@ -705,6 +706,119 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-02 — Post-v1 — Log redaction moved from the `LogRecord` to the formatted line; uvicorn's access logger stops raising on every request
+
+**What changed:** `SecretRedactionFilter` (a `logging.Filter` that rewrote each record in place) is
+replaced by `RedactingFormatter` (a delegating `logging.Formatter` that masks a handler's rendered
+output) plus `install_redaction(handler)`, which wraps a handler's existing formatter idempotently.
+`configure_logging()` now wraps the formatters of every handler on the root logger and on
+`uvicorn`/`uvicorn.access`/`uvicorn.error` instead of attaching a filter to them. Redaction coverage
+is unchanged in intent and slightly wider in fact; no pattern in `redact()` was touched.
+
+**The bug.** Every uvicorn access log line raised
+`TypeError: cannot unpack non-iterable NoneType object` inside
+`uvicorn/logging.py::AccessFormatter.formatMessage` and printed a ~50-line `--- Logging error ---`
+traceback in place of the line. The app was unaffected — `GET /healthz` returned 200 throughout,
+because `logging` routes a formatting failure to `Handler.handleError()` and carries on — so the
+only symptom was log volume. With the container healthcheck at 30s that is ~2,880 failures/day from
+the healthcheck alone and roughly **144,000 lines/day** into Docker's json-file driver. On a host
+with no rotation configured that is a disk-filling defect, not a cosmetic one.
+
+**Cause, verified at the source rather than inferred.** Reproduced against real uvicorn 0.51.0 on
+CPython 3.14.6 by replaying the actual startup order (`dictConfig(uvicorn.config.LOGGING_CONFIG)`,
+then `configure_logging()`) and emitting the exact record uvicorn's access middleware emits; the
+traceback matched the reported one line for line. Two independent facts collide:
+
+1. `AccessFormatter.formatMessage()` does not use `record.getMessage()` at all. It unpacks
+   `record.args` into `(client_addr, method, full_path, http_version, status_code)` and rebuilds
+   `%(client_addr)s`/`%(request_line)s`/`%(status_code)s` from the pieces. The five-tuple **is** the
+   record's payload.
+2. `SecretRedactionFilter.filter()` normalized every record it saw to a pre-rendered string:
+   `if redacted != message or record.args: record.msg = redacted; record.args = None`. Note the
+   `or record.args` — the collapse fired on **every** record carrying args, redaction or not, so a
+   plain `GET /healthz` line was destroyed just as surely as one containing a token.
+
+That normalization is not gratuitous. A secret routinely straddles the msg/args boundary —
+`log.info("password=%s", pw)` has neither `"password=%s"` nor `"hunter2"` matching `_KV_PATTERN` on
+its own — so `redact()` can only work after `%`-interpolation, and putting the result back into a
+record means collapsing `msg`/`args` and clearing `args`. **Record-level redaction and a formatter
+that reads `record.args` cannot both be satisfied.** So the fix is the one the alternative implies:
+redact the formatted output, not the record. Exempting the access logger was explicitly rejected —
+access lines carry query strings that can hold an `api_token`/`access_token`, which is why
+`uvicorn.access` was brought under redaction in the first place.
+
+Redacting output is also strictly *more* complete than the record-level pass was: the access line's
+`client_addr`/`request_line` fields are rebuilt from `args` and never appear in `getMessage()`, so
+the old filter could not have masked a secret sitting in them even when it did not crash. Exception
+tracebacks and `stack_info`, previously handled by pre-formatting `exc_text` inside the filter, now
+fall out for free — they are part of what the inner formatter returns.
+
+**Ordering requirement (why wrapping handlers is sufficient).** `uvicorn.Config.__init__` applies
+`LOGGING_CONFIG` via `dictConfig` before `Config.load()` imports `app.main` and reaches
+`create_app()` → `configure_logging()`, so uvicorn's handlers already exist when we wrap them. The
+wrapping is idempotent (`isinstance(handler.formatter, RedactingFormatter)`) and re-applied on every
+`configure_logging()` call rather than being gated behind the one-shot `_CONFIGURED` flag, which now
+guards only the `basicConfig` half.
+
+**Accepted trade-off, unchanged from SEC-4.** An access line whose query string carries a secret is
+truncated after the key, e.g.
+`127.0.0.1:54076 - "GET /api/scans?api_token=[REDACTED]` — the tempered-greedy unquoted-value branch
+consumes to end of line because nothing after the token looks like another `key=` pair. Over-
+redacting a status code beats leaking a token; this is the same trade-off M3/SEC-4 recorded.
+
+**When it was introduced — it predates M3/SEC-4 and is not that entry's fault.** Two ingredients,
+neither harmful alone:
+
+| | Commit | Date | What it added |
+|---|---|---|---|
+| Latent | `3def52a` `feat(crypto): AES-256-GCM envelope encryption and log redaction` | 2026-07-03 | `record.msg = redacted; record.args = None` — harmless while the filter only sat on root handlers, since nothing reaching root reads `args` |
+| Trigger | `f2806d6` `fix(security): remediate full-repo security audit findings` | 2026-07-04 | `_INDEPENDENT_LOGGERS` — attached the filter to `uvicorn`/`uvicorn.access`/`uvicorn.error` (the "Secrets/logging (§6)" bullet of the 2026-07-04 audit-remediation entry) |
+
+The bug went live with the **second**, on 2026-07-04. **M3/SEC-4** (`8e100ee`, 2026-07-13, #64) only
+rewrote the unquoted-value branch of `_KV_PATTERN`; it never touched `filter()` or the logger
+wiring, and reverting it would not have fixed anything. It is a plausible suspect only because it is
+the most recent change to this file. Everything from the 2026-07-04 remediation onward — v0.1.0 and
+v0.2.0 both — shipped with it.
+
+**Why CI never surfaced it, and why the Definition-of-done smoke check didn't either.** Three
+compounding reasons, none of them an oversight in any single check:
+
+- **Nothing in CI starts a uvicorn server.** `ci.yml` runs `ruff`/`black`/`pytest`, the frontend
+  lint/Vitest/build, and an image build + Trivy/Grype self-scan. There is no run step, no
+  `docker compose up`, no request against a live server.
+- **The test suite cannot reach the code path.** `pytest` drives the app through FastAPI's
+  `TestClient` (ASGI in-process). uvicorn's access middleware never runs, so no record with a
+  five-tuple `args` is ever emitted, and `test_redaction.py` only exercised the filter against
+  records it constructed itself.
+- **Even a live smoke check would have passed.** DoD item 4 is "`docker compose up` brings the stack
+  up and `/healthz` returns healthy" — and it did, every time. The failure is inside `Handler.emit`,
+  which catches it, and the response is unaffected. A green healthcheck is exactly what a broken
+  access logger looks like from the outside. The observable is stdout volume, which nothing asserts
+  on.
+
+The general lesson worth keeping: a defect confined to the logging layer is invisible to every check
+that asserts on *behavior*, and a record-mutating `logging.Filter` is a shared-mutable-state hazard
+precisely because the mutation is invisible until some other component reads the field you cleared.
+
+**Regression coverage.** `TestUvicornAccessLogging` in `backend/tests/test_redaction.py` builds a
+handler with the real `uvicorn.logging.AccessFormatter` and a `StreamHandler` subclass that records
+`handleError()` calls (stock `logging` swallows them, so a naive test passes against the broken
+code). It asserts that an access record formats without raising, that the exact expected line is
+emitted, that `record.args` is still the five-tuple after formatting and that re-formatting is
+stable, that a token in the query string is still redacted, and — mirroring real startup —
+that `configure_logging()` after `dictConfig(LOGGING_CONFIG)` leaves a `RedactingFormatter` on every
+handler of root and the three uvicorn loggers. The suite was verified to **fail** when
+`install_redaction` is swapped back for the old filter, so it is a real regression gate.
+`test_redaction.py::TestRedactingFormatter` additionally pins that the record is *not* mutated.
+
+**Plan section affected:** CLAUDE.md § Hard security rules ("Add a logging redaction filter" — still
+satisfied, now implemented as a formatter). Supersedes the "Secrets/logging (§6)" bullet of the
+2026-07-04 audit-remediation entry on the mechanism only; the coverage it describes is intact.
+Amends the M3/SEC-4 bullet of the 2026-07-13 entry only insofar as `SecretRedactionFilter` no longer
+exists by that name. No schema, security-model, or job-model change.
 
 ---
 
@@ -1449,9 +1563,10 @@ annotation is not among them, and no rewrite of this line short of `str(scan_id)
 not being cautious about something uncertain; it simply has no way to express the fact that makes the
 code safe.
 
-**Not to be confused with the redaction filter.** `SecretRedactionFilter` (`app/core/logging.py`,
+**Not to be confused with the redaction layer.** `SecretRedactionFilter` (`app/core/logging.py`,
 covered by `backend/tests/test_redaction.py`) exists to keep *secrets* out of log output. It is a
-different control for a different problem and is not what makes this line safe.
+different control for a different problem and is not what makes this line safe. (It was replaced by
+`RedactingFormatter` in the 2026-08-02 access-logger entry above; the point stands unchanged.)
 
 ---
 

@@ -6,7 +6,16 @@ import io
 import logging
 from datetime import UTC, datetime
 
-from app.core.logging import REDACTED, SecretRedactionFilter, redact
+import pytest
+from uvicorn.logging import AccessFormatter
+
+from app.core.logging import (
+    REDACTED,
+    RedactingFormatter,
+    configure_logging,
+    install_redaction,
+    redact,
+)
 from app.core.masking import SECRET_MASK, masked_secret
 
 
@@ -98,11 +107,11 @@ class TestRedact:
         assert redact("access_token=abc.def.ghi") == f"access_token={REDACTED}"
 
 
-class TestRedactionFilter:
+class TestRedactingFormatter:
     def _capture(self) -> tuple[logging.Logger, io.StringIO]:
         stream = io.StringIO()
         handler = logging.StreamHandler(stream)
-        handler.addFilter(SecretRedactionFilter())
+        install_redaction(handler)
         logger = logging.getLogger("scrye.test.redaction")
         logger.handlers = [handler]
         logger.propagate = False
@@ -113,6 +122,9 @@ class TestRedactionFilter:
         logger, stream = self._capture()
         # Non-secret context that precedes the secret is preserved; the secret
         # (unquoted, last on the line) is consumed to end-of-line (SEC-4).
+        # Note the secret spans the msg/args boundary — `password=` lives in the
+        # format string, the value in the args — which is precisely why redaction
+        # has to run on the rendered line rather than on either half.
         logger.info("storing registry credential for %s password=%s", "ghcr.io", "SuperSecret42")
         output = stream.getvalue()
         assert "SuperSecret42" not in output
@@ -123,6 +135,149 @@ class TestRedactionFilter:
         logger, stream = self._capture()
         logger.info("healthy in %sms", 12)
         assert "healthy in 12ms" in stream.getvalue()
+
+    def test_record_is_not_mutated(self) -> None:
+        # The formatter must leave msg/args intact so downstream formatters (and
+        # any second handler on the same record) still see the original structure.
+        logger, _ = self._capture()
+        records: list[logging.LogRecord] = []
+        logger.handlers[0].addFilter(lambda record: records.append(record) or True)
+        logger.info("password=%s", "SuperSecret42")
+        (record,) = records
+        assert record.msg == "password=%s"
+        assert record.args == ("SuperSecret42",)
+
+    def test_exception_traceback_is_redacted(self) -> None:
+        logger, stream = self._capture()
+        try:
+            raise ValueError("failed for token=leaked-secret-value")
+        except ValueError:
+            logger.exception("scan failed")
+        output = stream.getvalue()
+        assert "leaked-secret-value" not in output
+        assert REDACTED in output
+        assert "ValueError" in output
+
+    def test_wrapping_is_idempotent_and_preserves_the_inner_formatter(self) -> None:
+        handler = logging.StreamHandler(io.StringIO())
+        inner = logging.Formatter("%(levelname)s|%(message)s")
+        handler.setFormatter(inner)
+        install_redaction(handler)
+        install_redaction(handler)
+        wrapper = handler.formatter
+        assert isinstance(wrapper, RedactingFormatter)
+        assert wrapper.inner is inner
+        record = logging.LogRecord("t", logging.INFO, __file__, 1, "token=abc", None, None)
+        assert wrapper.format(record) == f"INFO|token={REDACTED}"
+
+
+class TestUvicornAccessLogging:
+    """Regression: redaction must not break uvicorn's access logger.
+
+    uvicorn's ``AccessFormatter`` unpacks ``record.args`` into a five-tuple.
+    Record-level redaction used to null ``args`` out, so every access line raised
+    ``TypeError: cannot unpack non-iterable NoneType object`` and logging printed
+    a ~50-line traceback in place of the line — roughly 144k lines/day from the
+    30-second healthcheck alone. See ``docs/ARCHIVE.md`` §14 (2026-08-02).
+    """
+
+    ACCESS_FMT = '%(client_addr)s - "%(request_line)s" %(status_code)s'
+
+    def _access_logger(self) -> tuple[logging.Logger, io.StringIO, list[BaseException]]:
+        errors: list[BaseException] = []
+        stream = io.StringIO()
+
+        class _StrictHandler(logging.StreamHandler):  # type: ignore[type-arg]
+            """Surfaces formatting failures that ``logging`` would otherwise swallow."""
+
+            def handleError(self, record: logging.LogRecord) -> None:  # noqa: N802
+                import sys
+
+                errors.append(sys.exc_info()[1] or RuntimeError("unknown logging error"))
+
+        handler = _StrictHandler(stream)
+        handler.setFormatter(AccessFormatter(self.ACCESS_FMT, use_colors=False))
+        install_redaction(handler)
+        logger = logging.getLogger("scrye.test.uvicorn.access")
+        logger.handlers = [handler]
+        logger.propagate = False
+        logger.setLevel(logging.INFO)
+        return logger, stream, errors
+
+    @staticmethod
+    def _log_access(logger: logging.Logger, path: str, status: int = 200) -> None:
+        """Emit the exact record uvicorn's access middleware emits."""
+        logger.info('%s - "%s %s HTTP/%s" %d', "127.0.0.1:54076", "GET", path, "1.1", status)
+
+    def test_access_record_formats_without_raising(self) -> None:
+        logger, stream, errors = self._access_logger()
+        self._log_access(logger, "/healthz")
+        assert errors == [], f"access log formatting raised: {errors!r}"
+        assert stream.getvalue().strip() == '127.0.0.1:54076 - "GET /healthz HTTP/1.1" 200 OK'
+
+    def test_access_record_args_survive_formatting(self) -> None:
+        # The five-tuple must still be on the record after it has been formatted,
+        # so a second handler (or a re-format) sees the same structure.
+        record = logging.LogRecord(
+            name="uvicorn.access",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=1,
+            msg='%s - "%s %s HTTP/%s" %d',
+            args=("127.0.0.1:54076", "GET", "/healthz", "1.1", 200),
+            exc_info=None,
+        )
+        formatter = RedactingFormatter(AccessFormatter(self.ACCESS_FMT, use_colors=False))
+        assert formatter.format(record) == '127.0.0.1:54076 - "GET /healthz HTTP/1.1" 200 OK'
+        assert record.args == ("127.0.0.1:54076", "GET", "/healthz", "1.1", 200)
+        # Formatting twice must be stable — proof nothing was consumed in place.
+        assert formatter.format(record) == '127.0.0.1:54076 - "GET /healthz HTTP/1.1" 200 OK'
+
+    def test_redaction_still_applies_to_access_lines(self) -> None:
+        logger, stream, errors = self._access_logger()
+        self._log_access(logger, "/api/scans?api_token=SuperSecret42")
+        output = stream.getvalue()
+        assert errors == [], f"access log formatting raised: {errors!r}"
+        assert "SuperSecret42" not in output
+        assert REDACTED in output
+        # The client address and the start of the request line are preserved; the
+        # tail after the secret is consumed by the SEC-4 tempered-greedy value
+        # match (over-redacting beats leaking) — see TestRedact above.
+        assert output.startswith('127.0.0.1:54076 - "GET /api/scans?api_token=')
+
+    def test_bearer_token_in_an_access_line_is_redacted(self) -> None:
+        logger, stream, errors = self._access_logger()
+        self._log_access(logger, "/api/x?auth=Bearer%20abc")
+        self._log_access(logger, "/api/y?access_token=ghp_abcdef123")
+        output = stream.getvalue()
+        assert errors == []
+        assert "ghp_abcdef123" not in output
+
+    @pytest.mark.parametrize("logger_name", ["uvicorn", "uvicorn.access", "uvicorn.error", ""])
+    def test_configure_logging_wraps_uvicorn_handlers(self, logger_name: str) -> None:
+        """`configure_logging` must cover uvicorn's non-propagating loggers."""
+        import logging.config
+
+        from uvicorn.config import LOGGING_CONFIG
+
+        target = logging.getLogger(logger_name)
+        saved = {
+            name: (logging.getLogger(name).handlers[:], logging.getLogger(name).propagate)
+            for name in ("", "uvicorn", "uvicorn.access", "uvicorn.error")
+        }
+        try:
+            # Mirror real startup: uvicorn's dictConfig runs first (Config.__init__),
+            # then the app import reaches create_app() -> configure_logging().
+            logging.config.dictConfig(LOGGING_CONFIG)
+            configure_logging("INFO")
+            assert target.handlers or logger_name in {"uvicorn.error", ""}
+            for handler in target.handlers:
+                assert isinstance(handler.formatter, RedactingFormatter)
+        finally:
+            for name, (handlers, propagate) in saved.items():
+                restored = logging.getLogger(name)
+                restored.handlers = handlers
+                restored.propagate = propagate
 
 
 class TestMaskedSecret:

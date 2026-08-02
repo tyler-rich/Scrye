@@ -25,7 +25,7 @@ import app.scanners.credentials as credentials
 from app.api.scan_schemas import ScanCreateIn
 from app.core.config import get_settings
 from app.core.cron import CronExpression
-from app.core.logging import REDACTED, SecretRedactionFilter, redact
+from app.core.logging import REDACTED, RedactingFormatter, redact
 from app.core.registry_check import _bearer_token
 from app.db.models import GitProvider, Scanner, TargetType
 from app.scanners.base import CommandResult
@@ -63,10 +63,10 @@ class TestRedactionGaps:
             import sys
 
             record.exc_info = sys.exc_info()
-        SecretRedactionFilter().filter(record)
-        assert record.exc_text is not None
-        assert "leaked-secret-value" not in record.exc_text
-        assert REDACTED in record.exc_text
+        rendered = RedactingFormatter().format(record)
+        assert "leaked-secret-value" not in rendered
+        assert REDACTED in rendered
+        assert "ValueError" in rendered
 
 
 # --- Cron evaluator ----------------------------------------------------------

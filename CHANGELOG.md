@@ -49,6 +49,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   email match. The linked-identity card shows when the link was last used, and
   the README carries a re-link runbook.
 
+### Fixed
+
+- **Every uvicorn access log line raised a `TypeError` and printed a ~50-line
+  traceback in place of the line.** The secret-redaction layer was a
+  `logging.Filter` that rewrote each record in place — collapsing its message and
+  arguments into one pre-rendered string and clearing `record.args`. uvicorn's
+  access formatter reads `record.args` directly, unpacking it into
+  `(client_addr, method, full_path, http_version, status_code)`, so it hit
+  `cannot unpack non-iterable NoneType object` on **every request**. Scrye itself
+  was never affected — `/healthz` returned 200 throughout, because Python's
+  logging routes a formatting failure to `handleError()` and carries on — so the
+  only symptom was log volume, and it was substantial: with the container
+  healthcheck at 30 seconds, roughly **144,000 lines/day** into Docker's
+  json-file driver. On a host without log rotation that fills a disk.
+
+  Redaction now runs on each handler's **rendered output** instead of on the log
+  record, so no formatter ever sees a record we altered. Coverage is unchanged in
+  intent and slightly wider in fact: the access line's client address and request
+  line are rebuilt from the arguments and never appeared in the record's message,
+  so they are redacted now for the first time. Access lines were **not** exempted
+  — their query strings can carry a token. Present since 2026-07-04, when the
+  redaction filter was first attached to uvicorn's loggers; it affected v0.1.0 and
+  v0.2.0. See `docs/ARCHIVE.md` § Deviations (2026-08-02) for the full analysis,
+  including why no CI check could have caught it.
+
 ### Security
 
 - **`react-router-dom` bumped 7.18.1 → 7.18.2, closing GHSA-qwww-vcr4-c8h2** (HIGH) —
