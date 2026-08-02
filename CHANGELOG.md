@@ -74,6 +74,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   v0.2.0. See `docs/ARCHIVE.md` § Deviations (2026-08-02) for the full analysis,
   including why no CI check could have caught it.
 
+- **A secret in a URL query string no longer takes the rest of the log line with
+  it when redacted.** Masking a query parameter used to consume everything after
+  it — on an access line that meant the HTTP version and the **status code**,
+  leaving a log that cannot show a spike in 500s or someone probing for 401s.
+  Redaction now bounds a query value at the delimiters a query actually has
+  (`&`, `#`, whitespace, and the quote the access format puts after the path)
+  rather than running to end of line, so
+  `"GET /api/scans?api_token=[REDACTED] HTTP/1.1" 500` keeps everything but the
+  token. Every secret in a multi-parameter query is masked individually, and
+  non-secret parameters survive.
+
+  Free-form log text still redacts to end of line, because it has no delimiters
+  to stop at and a secret there may legitimately contain spaces — the bounded
+  rule applies only where a real URL or path has been identified, which is what
+  lets both behaviours coexist.
+
 ### Security
 
 - **`react-router-dom` bumped 7.18.1 → 7.18.2, closing GHSA-qwww-vcr4-c8h2** (HIGH) —

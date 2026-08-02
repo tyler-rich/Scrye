@@ -107,6 +107,96 @@ class TestRedact:
         assert redact("access_token=abc.def.ghi") == f"access_token={REDACTED}"
 
 
+class TestQueryStringRedaction:
+    """A secret query parameter is bounded by the query grammar, not eaten to EOL.
+
+    The free-text branch has to run to end-of-line (SEC-4), but a query string has
+    real delimiters, so a secret parameter inside one can be masked *and* leave the
+    rest of the line intact. On an access line that rest is the HTTP version and
+    the status code — without which the log cannot show a spike in 500s or someone
+    probing for 401s. See ``docs/ARCHIVE.md`` §14 (2026-08-02).
+    """
+
+    ACCESS = '127.0.0.1:54076 - "GET /api/scans?{query} HTTP/1.1" {status}'
+
+    def test_status_code_survives_a_redacted_query_secret(self) -> None:
+        line = self.ACCESS.format(
+            query="api_token=SuperSecret42", status="500 Internal Server Error"
+        )
+        out = redact(line)
+        assert "SuperSecret42" not in out
+        assert out == self.ACCESS.format(
+            query=f"api_token={REDACTED}", status="500 Internal Server Error"
+        )
+        # Spelled out, because these are the fields the truncation used to eat.
+        assert "HTTP/1.1" in out
+        assert "500 Internal Server Error" in out
+
+    def test_every_secret_in_a_multi_parameter_query_is_masked(self) -> None:
+        line = self.ACCESS.format(
+            query="api_token=AAA&page=2&access_token=BBB&client_secret=CCC",
+            status="401 Unauthorized",
+        )
+        out = redact(line)
+        for secret in ("AAA", "BBB", "CCC"):
+            assert secret not in out, f"{secret} survived: {out}"
+        assert out.count(REDACTED) == 3
+        # Non-secret parameters and the status code are untouched.
+        assert "page=2" in out
+        assert "401 Unauthorized" in out
+
+    def test_values_that_would_end_the_match_early_are_consumed_whole(self) -> None:
+        # Base64url/JWT-shaped tokens carry `+ / = . - ~`, and a value that really
+        # contained a space arrives percent-encoded. None of these may terminate.
+        for value in ("ab+c/d.e-f~g==", "eyJhbGciOi.J9.sig", "p%40ss%20w0rd", "a%26b"):
+            out = redact(self.ACCESS.format(query=f"access_token={value}", status="200 OK"))
+            assert value not in out, f"{value} survived: {out}"
+            assert out.endswith('HTTP/1.1" 200 OK')
+
+    def test_non_secret_parameters_are_left_alone(self) -> None:
+        line = self.ACCESS.format(query="page=2&sort=severity&token_count=42", status="200 OK")
+        assert redact(line) == line
+
+    def test_full_urls_not_just_paths(self) -> None:
+        out = redact("probing https://ghcr.io/token?service=registry&access_token=ghp_abc for tags")
+        assert "ghp_abc" not in out
+        assert (
+            out
+            == f"probing https://ghcr.io/token?service=registry&access_token={REDACTED} for tags"
+        )
+
+    def test_query_bounding_does_not_regress_the_sec4_free_text_case(self) -> None:
+        # The bounded rule is anchored to a real URL/path. A bare `?key=` in prose
+        # is NOT a query string, so the tempered-greedy branch still runs to EOL —
+        # otherwise a spaced secret would leak its tail at the first space, which
+        # is exactly the hole SEC-4 closed.
+        assert (
+            redact("form dump was ?password=my secret phrase")
+            == f"form dump was ?password={REDACTED}"
+        )
+        assert redact("password=p@ss w0rd here") == f"password={REDACTED}"
+        assert redact("smtp_password: my mail pass 123") == f"smtp_password: {REDACTED}"
+
+    def test_a_free_text_secret_later_on_the_line_is_still_redacted(self) -> None:
+        out = redact('1.2.3.4:5 - "GET /a?token=A HTTP/1.1" 500 - retrying with password=B now')
+        assert "=A " not in out and "password=B" not in out
+        assert out == (
+            f'1.2.3.4:5 - "GET /a?token={REDACTED} HTTP/1.1"'
+            f" 500 - retrying with password={REDACTED}"
+        )
+
+    def test_redaction_is_idempotent(self) -> None:
+        # The general key/value pass must not re-consume an already-masked query
+        # value; if it did, a second pass would truncate the line after all.
+        for line in (
+            self.ACCESS.format(query="api_token=SuperSecret42", status="200 OK"),
+            "password=p@ss w0rd here",
+            "probing https://h/t?access_token=ghp_abc&page=1 now",
+        ):
+            once = redact(line)
+            assert redact(once) == once, f"not idempotent: {line!r} -> {once!r}"
+
+
 class TestRedactingFormatter:
     def _capture(self) -> tuple[logging.Logger, io.StringIO]:
         stream = io.StringIO()
@@ -235,23 +325,28 @@ class TestUvicornAccessLogging:
 
     def test_redaction_still_applies_to_access_lines(self) -> None:
         logger, stream, errors = self._access_logger()
-        self._log_access(logger, "/api/scans?api_token=SuperSecret42")
-        output = stream.getvalue()
+        self._log_access(logger, "/api/scans?api_token=SuperSecret42", status=500)
+        output = stream.getvalue().strip()
         assert errors == [], f"access log formatting raised: {errors!r}"
         assert "SuperSecret42" not in output
-        assert REDACTED in output
-        # The client address and the start of the request line are preserved; the
-        # tail after the secret is consumed by the SEC-4 tempered-greedy value
-        # match (over-redacting beats leaking) — see TestRedact above.
-        assert output.startswith('127.0.0.1:54076 - "GET /api/scans?api_token=')
+        # The whole line survives the redaction — status code included, which is
+        # what the query-string bounding exists to preserve.
+        assert output == (
+            f'127.0.0.1:54076 - "GET /api/scans?api_token={REDACTED} '
+            'HTTP/1.1" 500 Internal Server Error'
+        )
 
-    def test_bearer_token_in_an_access_line_is_redacted(self) -> None:
+    def test_every_query_secret_is_masked_across_successive_access_lines(self) -> None:
         logger, stream, errors = self._access_logger()
-        self._log_access(logger, "/api/x?auth=Bearer%20abc")
-        self._log_access(logger, "/api/y?access_token=ghp_abcdef123")
+        self._log_access(logger, "/api/x?access_token=ghp_abcdef123&page=1", status=401)
+        self._log_access(logger, "/api/y?api_token=AAA&client_secret=BBB", status=403)
         output = stream.getvalue()
         assert errors == []
-        assert "ghp_abcdef123" not in output
+        for secret in ("ghp_abcdef123", "AAA", "BBB"):
+            assert secret not in output, f"{secret} survived: {output}"
+        assert "401 Unauthorized" in output
+        assert "403 Forbidden" in output
+        assert "page=1" in output
 
     @pytest.mark.parametrize("logger_name", ["uvicorn", "uvicorn.access", "uvicorn.error", ""])
     def test_configure_logging_wraps_uvicorn_handlers(self, logger_name: str) -> None:

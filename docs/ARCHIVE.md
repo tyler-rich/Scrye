@@ -763,11 +763,56 @@ wrapping is idempotent (`isinstance(handler.formatter, RedactingFormatter)`) and
 `configure_logging()` call rather than being gated behind the one-shot `_CONFIGURED` flag, which now
 guards only the `basicConfig` half.
 
-**Accepted trade-off, unchanged from SEC-4.** An access line whose query string carries a secret is
-truncated after the key, e.g.
+**The truncation this first shipped with, and why it is now fixed rather than accepted.** The
+initial fix left a secret-bearing access line reading
 `127.0.0.1:54076 - "GET /api/scans?api_token=[REDACTED]` — the tempered-greedy unquoted-value branch
-consumes to end of line because nothing after the token looks like another `key=` pair. Over-
-redacting a status code beats leaking a token; this is the same trade-off M3/SEC-4 recorded.
+consumed to end of line, taking the HTTP version and the status code with it, and that was written
+up as the same trade-off M3/SEC-4 recorded. **That framing was wrong**, and the maintainer
+rejected it before merge. Masking the token is the requirement; eating the rest of the line is
+collateral from the pattern being greedy to EOL, not a security necessity — and an access log
+without status codes cannot show a spike in 500s or someone probing for 401s, which is most of why
+it is kept. Both properties are achievable at once.
+
+**What makes them compatible: free text has no delimiter grammar, a query string does.** Redaction
+now runs a bounded query-string pass *before* the general key/value pass, as a pair of patterns:
+
+- `_URL_WITH_QUERY_PATTERN` — `(?:https?://|/)[^\s"<>?#]*\?[^\s"<>]*` — first identifies a token
+  that genuinely is a URL or an absolute path carrying a query.
+- `_QUERY_PARAM_PATTERN` — `[?&][\w.-]*(?:<secret names>)=[^&#\s"<>]*` — then masks the secret
+  parameters *inside* that token.
+
+The terminator set is structural, not heuristic. `&` separates parameters and `#` ends the query
+component outright (RFC 3986 §3.4); whitespace, `"`, `<` and `>` cannot appear in a URI unencoded at
+all, `"` being the one that matters in practice since uvicorn wraps the request line in double
+quotes. `'` is deliberately **not** a terminator: it is a legal sub-delim, so treating it as one
+could leave a byte of a secret behind — over-consuming a closing quote is the safe direction. And
+`+ / = . - ~`, the characters base64url and JWT-shaped tokens are made of, are not terminators
+either, so such a value is consumed whole.
+
+**The anchoring is the load-bearing part, and it is what keeps SEC-4 closed.** Applying the
+parameter rule to a whole line would treat any `?key=`/`&key=` appearing in prose as a query
+parameter and stop the value at the first space — re-opening exactly the hole SEC-4 fixed (a spaced,
+unquoted secret leaking its tail). The distinction that resolves it: **inside a URL a raw space is
+impossible, so stopping there is correct parsing rather than truncation** — a value that really
+contained a space arrives percent-encoded and is consumed whole. Outside a URL no such guarantee
+exists, so the tempered-greedy rule still applies there and still runs to end of line. So
+`?password=my secret phrase` in prose is redacted whole, while the same text inside a real request
+path is not, because in a URL it cannot occur. Restricting the bounded rule to genuine URLs is what
+lets both hold; **neither case has to lose.**
+
+One consequence worth stating: an unencoded `&` inside a query value splits the redaction
+(`?password=a&b` → `?password=[REDACTED]&b`). That is not a leak of anything the value owned — an
+unencoded `&` *is* a parameter separator, so the receiving server splits at the same place. The
+redaction agrees with the grammar rather than second-guessing it.
+
+`_KV_PATTERN`'s unquoted branch gained one guard, `(?!\[REDACTED\])`, so the general pass cannot
+re-consume — and thereby re-truncate — a value the query pass already masked. That also makes
+`redact()` idempotent, which is pinned by a test.
+
+**Verified against the case SEC-4 was written for.** `password=p@ss w0rd here`,
+`api_key=abc,def`, `smtp_password: my mail pass 123` and `form dump was ?password=my secret phrase`
+are all still redacted whole; `api_key=AKIA123 region=us` still bounds at the following structured
+field. Those tests were untouched and pass unchanged.
 
 **When it was introduced — it predates M3/SEC-4 and is not that entry's fault.** Two ingredients,
 neither harmful alone:
@@ -808,11 +853,22 @@ handler with the real `uvicorn.logging.AccessFormatter` and a `StreamHandler` su
 `handleError()` calls (stock `logging` swallows them, so a naive test passes against the broken
 code). It asserts that an access record formats without raising, that the exact expected line is
 emitted, that `record.args` is still the five-tuple after formatting and that re-formatting is
-stable, that a token in the query string is still redacted, and — mirroring real startup —
-that `configure_logging()` after `dictConfig(LOGGING_CONFIG)` leaves a `RedactingFormatter` on every
-handler of root and the three uvicorn loggers. The suite was verified to **fail** when
-`install_redaction` is swapped back for the old filter, so it is a real regression gate.
-`test_redaction.py::TestRedactingFormatter` additionally pins that the record is *not* mutated.
+stable, that a token in the query string is redacted **with the status code intact**, and —
+mirroring real startup — that `configure_logging()` after `dictConfig(LOGGING_CONFIG)` leaves a
+`RedactingFormatter` on every handler of root and the three uvicorn loggers. The suite was verified
+to **fail** when `install_redaction` is swapped back for the old filter, so it is a real regression
+gate. `test_redaction.py::TestRedactingFormatter` additionally pins that the record is *not*
+mutated.
+
+`TestQueryStringRedaction` covers the bounding: the status code survives a redacted query secret;
+every secret in a multi-parameter query is masked (three secrets → three masks, with `page=2` and
+the status line untouched); base64url/JWT/percent-encoded values are consumed whole; non-secret
+parameters are left alone; full `https://` URLs work as well as bare paths; a free-text secret later
+on the same line is still redacted to end of line; SEC-4's prose cases are unchanged; and `redact()`
+is idempotent. Five of those eight, plus both access-logger assertions, were verified to **fail**
+against the previous unbounded pattern. The three that pass under both are guards on behavior that
+has to hold either way (non-secret parameters, the SEC-4 prose cases, idempotence) — they exist to
+catch a future over-correction, not to detect this one.
 
 **Plan section affected:** CLAUDE.md § Hard security rules ("Add a logging redaction filter" — still
 satisfied, now implemented as a formatter). Supersedes the "Secrets/logging (§6)" bullet of the
