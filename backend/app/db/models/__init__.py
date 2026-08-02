@@ -14,7 +14,14 @@ from app.db.models.notification import (
     NotificationEvent,
     NotificationType,
 )
-from app.db.models.oidc import OIDC_CONFIG_ID, OidcConfig, OidcIdentity, OidcLoginFlow
+from app.db.models.oidc import (
+    FLOW_PURPOSE_LINK,
+    FLOW_PURPOSE_LOGIN,
+    OIDC_CONFIG_ID,
+    OidcConfig,
+    OidcIdentity,
+    OidcLoginFlow,
+)
 from app.db.models.registry import (
     CREDENTIAL_HELPERS,
     SECRET_BEARING_AUTH_TYPES,
@@ -73,6 +80,8 @@ __all__ = [
     "OidcConfig",
     "OidcIdentity",
     "OidcLoginFlow",
+    "FLOW_PURPOSE_LOGIN",
+    "FLOW_PURPOSE_LINK",
     "Registry",
     "RegistryAuthType",
     "Role",

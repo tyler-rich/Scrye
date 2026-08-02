@@ -83,11 +83,24 @@ class OidcIdentity(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
-class OidcLoginFlow(Base):
-    """Short-lived state for an in-progress authorization-code login.
+#: ``OidcLoginFlow.purpose`` values. ``login`` runs the sign-in terminal action
+#: (link-or-provision + session); ``link`` binds the verified subject to an
+#: already-authenticated account and mints nothing. ``NULL`` reads as ``login``
+#: so rows written before the column existed keep their meaning.
+FLOW_PURPOSE_LOGIN = "login"
+FLOW_PURPOSE_LINK = "link"
 
-    Rows are created when the login is initiated and deleted (or expired) once
+
+class OidcLoginFlow(Base):
+    """Short-lived state for an in-progress authorization-code flow.
+
+    Rows are created when the flow is initiated and deleted (or expired) once
     the callback is processed, so a stolen ``state`` cannot be replayed.
+
+    The same handshake serves two purposes (see ``purpose`` below). Both share
+    the one registered redirect URI deliberately: a second callback path would
+    force every operator to register an extra redirect URI at their IdP, and
+    several providers reject unregistered ones outright.
     """
 
     __tablename__ = "oidc_login_flows"
@@ -101,4 +114,15 @@ class OidcLoginFlow(Base):
     #: flow (state/code) cannot be completed in a *different* browser — this binds
     #: the flow to its initiator and defeats OIDC login-CSRF / session fixation.
     browser_binding: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: ``login`` or ``link`` (see the module constants). Nullable so the column
+    #: could be added without rewriting in-flight rows; ``None`` means ``login``.
+    purpose: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: **Link flows only.** The account the callback is permitted to bind an
+    #: identity to, captured server-side from the initiating session — never from
+    #: request input. The callback additionally requires a live session for this
+    #: same user, so possessing the flow's ``state`` is not sufficient to complete
+    #: it. ``NULL`` on every login flow.
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
