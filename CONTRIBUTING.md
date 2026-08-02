@@ -16,7 +16,8 @@ everyone.
 ### Prerequisites
 
 - **Python 3.14** (3.14.6 or later)
-- **Node 20+** (the image builds with Node 22)
+- **Node 22+** (the image and CI both build with Node 24, the Active LTS; the 20
+  line reached end-of-life on 2026-04-30)
 - **Docker** + the **Compose v2** plugin (for the integrated run; Buildx for a
   multi-arch image build)
 - For native scan runs: the **`trivy`**, **`grype`**, and **`syft`** binaries on

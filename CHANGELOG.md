@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The SPA is now built on Node 24 (`krypton`), the Active LTS.** The image's
+  `frontend-builder` stage and CI's frontend job moved together from Node 22,
+  which is in maintenance and supported only through 2027-04-30; 24 is supported
+  through 2028-04-30. Node is a build-time toolchain that never reaches the
+  runtime image, so nothing about a deployed Scrye changes — no dependency,
+  bundle or behaviour moves, and the lint/test/build gate was verified green on
+  Node 24.18.1 before the bump. The documented requirement for native
+  development is now **Node 22+** (it named the end-of-life 20 line before).
 - `docker/login-action` pinned to v4.6.0 in the GHCR publish, nightly and re-scan
   workflows. No behaviour change for Scrye — the release hardens buildx-scoped
   config-path handling, which is gated on a `scope` input none of the call sites
