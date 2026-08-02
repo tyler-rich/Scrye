@@ -48,6 +48,7 @@ from app.auth.cookies import (
 )
 from app.auth.deps import AuthContext, client_ip, get_optional_auth, require_auth, require_csrf
 from app.auth.passwords import hash_password, verify_password
+from app.auth.reauth import enforce_auth_rate_limit
 from app.core.app_settings import MfaPolicy, SettingsService
 from app.core.audit import record_audit
 from app.core.forwarded import request_is_secure
@@ -60,14 +61,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _enforce_rate_limit(request: Request) -> None:
-    """Apply the per-IP auth rate limit (429 with Retry-After when exceeded)."""
-    allowed, retry_after = request.app.state.auth_limiter.allow(client_ip(request))
-    if not allowed:
-        raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many authentication attempts; try again shortly.",
-            headers={"Retry-After": str(max(int(retry_after) + 1, 1))},
-        )
+    """Apply the per-IP auth rate limit (429 with Retry-After when exceeded).
+
+    Thin alias for the shared helper, which the OIDC link/unlink re-auth gates
+    also use so every password-checking surface shares one limiter.
+    """
+    enforce_auth_rate_limit(request)
 
 
 #: Audit action recorded when HTTPS enforcement blocks a sign-in. Deliberately

@@ -220,6 +220,17 @@ Small, self-contained work that closes a concrete gap.
 
 Features and developer-experience investments with a larger surface.
 
+- **Admin-issued OIDC link invitations.** Self-service linking shipped (a user binds their *own*
+  account to an OIDC identity through the authorization-code flow). An admin binding an identity
+  on someone *else's* behalf is deliberately absent and cannot be added as a text field: obtaining
+  another person's `sub` requires **them** to authenticate at the IdP, and a type-in-a-subject
+  fallback would reintroduce both the manual-determination problem and an arbitrary-binding
+  surface. The correct shape, if demand appears, is an **invite link**: the admin generates a
+  one-time token, the target user opens it and completes the OIDC handshake under it, and the
+  binding lands on their account with the subject still coming only from the verified token.
+  Worth doing for a bulk onboarding; not worth it for a handful of users, who can each link
+  themselves in two clicks. (Email-based auto-linking stays rejected outright — it is a
+  well-known account-takeover vector, not a missing feature.)
 - **Uploaded image-tar (`docker save`) targets.** Both Trivy and Grype can scan a local image
   archive. Add a target type that accepts an uploaded `docker save` tarball, so an image can be
   scanned without a reachable registry.
@@ -322,7 +333,11 @@ isn't surprised.
   limitation, not a planned change; gating it at Scrye's layer would lock out OIDC accounts that
   have no local password. (When group→role mapping is configured it is re-applied on each login,
   but an absent groups claim preserves the current role, and an OIDC sync can never remove the
-  last admin.)
+  last admin.) **Account linking widened this** from provisioned accounts to any linked account,
+  including MFA-enrolled admins — a linked admin's local TOTP challenge never runs on the OIDC
+  path. The bound cost is that link and unlink both require fresh full re-authentication
+  (password + current TOTP when enrolled), so a stolen session cannot create the bypass path; the
+  UI warns before linking and both events are audited. See the README security model.
 - **Cloud registry credential helpers are not bundled.** Static registry credentials and tokens
   work out of the box. The ECR / GCR / ACR credential-helper *configuration* is generated at
   scan time, but the helper binaries themselves are not shipped in the image — those registry

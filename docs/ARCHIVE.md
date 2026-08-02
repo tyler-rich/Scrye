@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (124, newest first)
+### Index of §14 entries (125, newest first)
 
+- [2026-08-02 — Post-v1 — OIDC account linking: authenticated self-link, guarded self-unlink, and stale-link detection (#114)](#2026-08-02--post-v1--oidc-account-linking-authenticated-self-link-guarded-self-unlink-and-stale-link-detection-114)
 - [2026-08-02 — Security/Process — Filesystem-gate symlink and TOCTOU residual risks closed out (neither is real); CodeQL advanced-setup migration assessed](#2026-08-02--securityprocess--filesystem-gate-symlink-and-toctou-residual-risks-closed-out-neither-is-real-codeql-advanced-setup-migration-assessed)
 - [2026-08-02 — Security/Process — CodeQL code scanning enabled via default setup; first-run triage: six alerts, all false positives](#2026-08-02--securityprocess--codeql-code-scanning-enabled-via-default-setup-first-run-triage-six-alerts-all-false-positives)
 - [2026-08-02 — Infra/Process — GHSA-qwww-vcr4-c8h2 closed by a 7.x backport (`react-router` 7.18.2), not the 8.3.0 major; the advisory's "Patched versions" field is stale](#2026-08-02--infraprocess--ghsa-qwww-vcr4-c8h2-closed-by-a-7x-backport-react-router-7182-not-the-830-major-the-advisorys-patched-versions-field-is-stale)
@@ -704,6 +705,133 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-02 — Post-v1 — OIDC account linking: authenticated self-link, guarded self-unlink, and stale-link detection (#114)
+
+**What changed:** An existing local account can now bind itself to an OIDC identity by running the
+existing authorization-code handshake **while signed in**, and can unbind itself again. Built at the
+minimal scope green-lit on 2026-07-29 in `docs/upgrades/oidc-id-autoretrieval.md`, which is
+**deleted in this PR** per the 2026-07-26 review-documents-retired decision — this entry is the
+durable record.
+
+**The premise correction that shaped it.** The request was "stop making the admin determine and
+paste their OIDC subject during setup." Scrye never had a subject field anywhere — not in
+`OidcConfigUpdateIn`, not in `AuthenticationPanel`, not in the users area. What that request was
+really describing is the one gap the automatic binding leaves: **an existing local account, above
+all the first admin, could not be linked to an OIDC identity at all.** The three available paths
+were all bad — `auto_provision` on mints a duplicate account (`tyler` plus a fresh
+`tyler-a1b2c3d4` at `default_role`); `auto_provision` off dead-ends at `not_provisioned`; or DB
+surgery into `oidc_identities`, which requires determining `sub` by hand at the IdP. That last one
+is not merely tedious: `sub` is the only identifier OIDC guarantees stable and unique per issuer,
+and on **Authentik's default hashed subject mode** and **Entra ID's pairwise subjects** it is not
+displayed anywhere and exists only inside tokens issued to our client. Auto-retrieval via a real
+flow is the only generally correct way to obtain it — a correctness fix, not a convenience.
+
+**Shape — one handshake, two terminal actions.** The link flow reuses `discover()`,
+`generate_pkce_pair()`, `build_authorization_url()`, `exchange_code()`, and `verify_id_token()`
+unchanged; only the terminal action differs. Deliberately the **same registered redirect URI**: a
+separate `/link/callback` would make every operator register a second URI at their IdP, and
+Entra/Keycloak reject unregistered ones — turning a UX fix into a reconfiguration chore.
+
+- **Schema (migration `0009_oidc_link_flows`)** — two nullable columns on `oidc_login_flows`:
+  `purpose` (`NULL` reads as `login`) and `user_id` (link flows only, FK → `users.id`). Backward
+  compatible; existing rows keep their meaning. Written with `batch_alter_table` because SQLite has
+  no `ALTER … ADD CONSTRAINT` — safe here since the table holds only in-flight handshakes with a
+  10-minute TTL and is excluded from backup bundles.
+- **`POST /api/auth/oidc/link`** — authenticated **cookie session** (not a bearer token: a link is a
+  browser round trip a token can start but never finish), `require_csrf`, the shared auth rate
+  limiter, the same `session_cookie_would_be_dropped()` transport refusal as login, and **fresh full
+  re-auth** — then a `purpose='link'` flow row and an authorization URL. A POST rather than the
+  public login GET, correctly: login binds no identity, link does.
+- **Callback** — branches on `flow.purpose` after the shared validation. For a link it requires a
+  live session whose user matches `flow.user_id`, checks the collision rules, inserts one
+  `OidcIdentity` row, records `auth.oidc_identity_linked`, and redirects to a **fixed** settings
+  path. It creates no session, assigns no role, runs no group sync, and does no provisioning.
+- **`DELETE /api/auth/oidc/link`** — same gates, plus the stranding guard.
+- **Frontend** — `OidcLinkCard` in Settings → Authentication (status, `last_login_at`, Link/Unlink,
+  the re-auth form, the MFA warning), a post-save CTA on the OIDC form, and callback-result
+  handling. `SettingsPage` opens the Authentication tab when the callback's query parameter is
+  present, since `Tabs` is `keepMounted={false}` and an unmounted panel would never show the result.
+
+**The invariants, since this is an identity-binding primitive and a bug here is admin account
+takeover.** The subject is read from exactly one expression — `claims["sub"]` of a token that
+passed `verify_id_token()` — and no request field, header, or query parameter carries a subject
+anywhere in the design; it is not returned either, since an opaque blob nobody can compare is
+noise. Linking is **insert-only** against `uq_oidc_identity_iss_sub`: an in-use identity is
+refused explicitly, never re-pointed, and re-linking your own is a no-op success. The link path
+grants nothing. And a stolen session alone can never create a login path, because the re-auth gate
+costs the password and the second factor too. `tests/test_oidc_linking.py` carries one test per
+abuse case **A1–A12** plus the new controls (42 tests).
+
+**The cost, recorded rather than buried: linking widens L2/SEC-8.** SEC-8 — mandatory-MFA policies
+enforced on local login only, OIDC delegating the second factor to the IdP — previously had a blast
+radius of OIDC-*provisioned* accounts, which carry no usable local password and no local TOTP
+enrollment, so there was nothing to bypass. A **linked** account is different: an admin with TOTP
+enrolled who links gains a sign-in path on which their local TOTP challenge never runs, and their
+effective second factor becomes whatever the IdP enforces. SEC-8 now reads "any linked account,
+including MFA-enrolled admins." The compensating control is the **fresh full re-auth gate on link
+and unlink** (current password + current TOTP when enrolled), which is why it is a hard requirement
+and not a nicety: it is what stops a session-only attacker from minting the bypass path. Plus the
+UI warning at link time, the existing `mfa_delegated_to_idp` marker on logins under a mandatory
+policy, and the new `auth.oidc_identity_linked` / `_unlinked` events making the path's creation and
+removal auditable. Documented in the README security model and `docs/ROADMAP.md`
+§ Known limitations. **Rejected:** refusing to link MFA-enrolled accounts (it guts the feature for
+exactly its target user, whose IdP likely runs passkeys/MFA stronger than Scrye's TOTP), and adding
+a local TOTP step inside the OIDC handshake (already rejected when SEC-8 was accepted — it locks
+out provisioned accounts and second-guesses the IdP).
+
+**Stale links — the failure mode this feature would otherwise have introduced.** A link row is a
+standing claim that `(issuer, sub)` keeps identifying the same person, and the IdP can break it
+silently: an account deleted and recreated gets a fresh subject, and changing an **Authentik**
+provider's subject mode **re-keys every user at once** from one un-warned toggle. The stale row
+still renders "Linked ✓", so the next sign-in either mints a duplicate account (auto-provision on)
+or dead-ends at `not_provisioned` — i.e. the operator experiences precisely the bug this feature
+was built to remove, with the settings screen asserting everything is fine, and the
+plausible-but-wrong diagnosis is "the linking feature regressed." So the login callback's
+no-identity branch now checks, *before* provisioning or dead-ending, whether the token's configured
+username/email claims match an account already holding a link for this issuer under a different
+subject; if so it fails closed with `oidc_error=identity_stale`, records
+`auth.oidc_identity_stale` (issuer, the existing row id, and which claim matched — never raw
+subject values), and the login screen points at the README re-link runbook. This is a
+**refuse-and-explain heuristic and never a binding**: auto-rebind on a claim match is the
+account-takeover vector §5 of the scoping ruled out, and it stays ruled out. Fail-closed is the
+worst an attacker extracts — someone at the same IdP who sets their email to the admin's converts
+"get provisioned a viewer account" into "get an error," strictly safer than before.
+
+**Two implementation choices worth naming, neither in the scoping doc:**
+
+1. **The unlink stranding guard is two checks, not one.** The doc says unlink is "refused when the
+   account has no usable local password." There is no such flag to test — an OIDC-provisioned
+   account simply holds a random argon2 hash nobody knows — and adding one would exceed the
+   sanctioned two-nullable-column schema change. That case is therefore enforced *by* the
+   fresh-password gate, which such an account cannot satisfy by construction (covered by a test).
+   The separately detectable stranding case — **local login disabled instance-wide**, where the
+   link is the only way in — gets an explicit `409` with an explanation, rather than a `403` the
+   operator would misread as a typo.
+2. **A second subject for an already-linked issuer is refused** (`issuer_already_linked`) rather
+   than accumulating a second identity row, so the re-link runbook has one unambiguous shape:
+   unlink, then link.
+
+Also added: `app/auth/reauth.py` (the shared gate plus `enforce_auth_rate_limit`, which
+`api/auth.py::_enforce_rate_limit` now delegates to, so every password-checking surface shares one
+limiter) and the `auth.reauth_failed` audit action.
+
+**Explicitly not built** (and recorded in `docs/ROADMAP.md` so they are not re-proposed): an admin
+binding an identity to *another* user — obtaining someone else's `sub` requires *them* to
+authenticate at the IdP, so the future shape is an invite-link flow, not a text field; **any**
+subject text-entry field anywhere; and **email-based auto-linking**, rejected outright as a
+classic account-takeover vector (email is neither verified nor stable, and an IdP that lets users
+self-set one turns "same email" into "attacker controls the admin account").
+
+**Why:** The pain was real even though the premise was slightly off, and the fix reduces almost
+entirely to controls Scrye already had — state + nonce + PKCE + browser binding + verified-token-only
+subjects — plus two new ones (session-match at the callback, fresh full re-auth to link or unlink).
+
+**Plan section affected:** §5 (OIDC/auth), §7 (data model — `oidc_login_flows` gains `purpose` and
+`user_id`), §10.1 (README: link walkthrough, per-provider subject/claim table, re-link runbook,
+security model). No locked decision changed; no job-model or distribution change.
 
 ---
 

@@ -127,8 +127,10 @@ and one normalized findings model.
 - **Metrics** — an authenticated Prometheus **`/metrics`** endpoint.
 - **Authentication** — local accounts (**argon2id**) with revocable server-side
   sessions, optional **TOTP MFA** (with an enforceable policy), personal **API
-  tokens**, and generic **OIDC** alongside local auth. **RBAC**: viewer /
-  operator / admin.
+  tokens**, and generic **OIDC** alongside local auth — including
+  [linking your existing account](#link-your-own-account-do-this-right-after-enabling-oidc)
+  to an OIDC identity, so enabling OIDC doesn't strand you with a duplicate
+  account. **RBAC**: viewer / operator / admin.
 - **Secrets handling** — stored credentials are field-encrypted with
   **AES-256-GCM**; the master key comes from a Docker secret file; secret API
   fields are write-only. (See [Security model](#security-model).)
@@ -1043,6 +1045,90 @@ Notes:
   OIDC delegates the second factor to the identity provider. If you require MFA
   for OIDC users, enforce it at the IdP. (See [Security model](#security-model).)
 
+### Link your own account (do this right after enabling OIDC)
+
+Enabling OIDC does **not** connect it to the account you are already signed in
+as. If you skip this step and simply sign in with your provider, Scrye has no
+way to know that identity is you: with auto-provision on it creates a **second,
+separate account** at the default role, and with it off the sign-in dead-ends
+with "No account is linked to that identity."
+
+So, still signed in as your existing account, go to **Settings →
+Authentication → Your linked identity**:
+
+1. Enter your **current password** — and your **authentication code**, if you
+   have MFA enrolled. Linking changes how your account can be signed into, so a
+   live session alone is deliberately not enough to do it.
+2. Click **Link my account**. You are sent to your provider to sign in once.
+3. You come back to Settings with the link confirmed. Both sign-in methods now
+   reach the same account, with your existing role, history, and settings.
+
+You never type or see an account identifier — Scrye reads it from the verified
+token the provider issues, which is the only reliable way to obtain it (see the
+table below). **Unlink** is in the same place and needs the same credentials
+again; it is refused if local login is disabled instance-wide, since that would
+leave your account with no way in.
+
+Only you can link your own account — an admin cannot bind an identity on
+someone else's behalf, because obtaining another person's identifier requires
+*them* to sign in at the provider. Each user links their own account the same
+way.
+
+### What your provider uses as the account identifier
+
+Scrye keys the link on the OIDC `sub` claim, the only identifier the spec
+guarantees is stable and unique per issuer (`email` and `preferred_username` are
+neither — both are re-assignable, and email is often unverified). What `sub`
+actually contains, and whether you could look it up by hand at all, varies a
+lot — which is why linking runs a real sign-in instead of asking you for it:
+
+| Provider | What `sub` is | Visible in the provider's own UI? |
+|---|---|---|
+| **Pocket ID** | The account's UUID | Yes — shown in the admin UI |
+| **Keycloak** | The user's UUID within the realm | Yes — on the user detail page |
+| **Authentik** | Depends on the provider's **subject mode**; the default is a *hash* derived from the user ID (other modes: ID / UUID / username / email / UPN) | **No** for the default hashed mode — it is not displayed anywhere, and changing subject mode later silently re-keys every user |
+| **Entra ID** | A **pairwise** opaque string, unique per (user, app registration) — deliberately *not* the directory object ID (`oid`) | **No** — it exists only inside tokens issued to your app registration |
+
+Claim mapping differs per provider too:
+
+- **Entra ID** — `preferred_username` is the UPN, and the `email` claim may be
+  absent entirely. Group claims arrive as **GUIDs**, not names, so **Admin
+  group** must be the group's object ID.
+- **Keycloak** — a groups claim does not appear until you add a client mapper
+  for it.
+- **Pocket ID** — the defaults (`preferred_username`, `email`, `groups`) work
+  as shipped.
+
+### If OIDC sign-in stops matching your account (re-link runbook)
+
+A link is a standing claim that your provider will keep issuing the *same* `sub`
+for you. Your provider can break that claim without telling Scrye:
+
+- **Your provider account was deleted and recreated.** The new account gets a
+  fresh `sub` — same person, same email, different identifier.
+- **An Authentik operator changed the provider's subject mode.** That single
+  toggle **re-keys every user at once**, invalidating every link on the instance
+  simultaneously. Choose the subject mode once, before rollout.
+
+Scrye detects this rather than letting it look like the duplicate-account bug
+linking exists to prevent: when a sign-in presents an unknown `sub` whose claims
+match an account that already holds a link for that provider, it **refuses** —
+"your identity provider issued a different account identifier than the one
+linked here" — and records `auth.oidc_identity_stale` in the audit log. It never
+re-binds on a name or email match, and never quietly creates a duplicate.
+
+To recover:
+
+1. Sign in with your **username and password**.
+2. Settings → Authentication → **Unlink** (current password, plus your MFA code
+   if enrolled).
+3. **Link my account** again, completing the sign-in at your provider.
+
+After an Authentik subject-mode change every linked user repeats those three
+steps for their own account. If local login is disabled instance-wide, re-enable
+it first — otherwise there is no password path to sign in through, and unlink is
+refused for exactly that reason.
+
 ---
 
 ## Usage
@@ -1239,6 +1325,30 @@ only in memory at scan time.
   carrying that second factor. When group→role mapping is configured it re-applies on each login, but an
   **absent** groups claim preserves the user's current role rather than demoting
   them, and an OIDC sync can never remove the last admin.
+
+  **Account linking widens this limitation, deliberately — know what you are
+  choosing.** Before linking existed, the population affected was only
+  OIDC-*provisioned* accounts, which hold no usable local password and no local
+  TOTP enrollment: there was nothing for the OIDC path to bypass. A **linked**
+  account is different. An admin with TOTP enrolled who links their identity
+  gains a sign-in path on which their local TOTP challenge never runs; their
+  effective second factor becomes whatever their identity provider enforces. The
+  limitation therefore now covers *any linked account, including MFA-enrolled
+  admins* — not just provisioned ones.
+
+  The compensating control is that **creating that path costs full credentials.**
+  Linking (and unlinking) requires re-entering the current password *and*, when
+  enrolled, a current TOTP code — on top of a live session and its CSRF token. A
+  stolen session alone can therefore never add a sign-in path to an account. The
+  UI states the trade plainly before you link, `auth.oidc_identity_linked` /
+  `auth.oidc_identity_unlinked` make the creation and removal of the path
+  auditable, and `mfa_delegated_to_idp` continues to mark each login that used
+  it. Two alternatives were considered and rejected: refusing to link
+  MFA-enrolled accounts (it would exclude exactly the security-conscious admins
+  the feature targets, whose IdP often enforces something stronger than Scrye's
+  TOTP), and injecting a local TOTP step into the OIDC handshake (it would lock
+  out provisioned accounts and second-guess the IdP). **Before linking an admin
+  account, confirm your identity provider enforces a second factor.**
 - **Forced-enrollment window (accepted limitation).** When a mandatory-MFA policy
   applies to an account that has never enrolled, enroll-on-first-login means
   whoever presents a valid **password** completes the first-factor setup — so
