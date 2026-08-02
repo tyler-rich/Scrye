@@ -142,30 +142,30 @@ Small, self-contained work that closes a concrete gap.
   - **Private vulnerability reporting** — enable in the repo's Security settings, so
     `SECURITY.md`'s stated channel actually exists.
 
-- **Enable GitHub code scanning (CodeQL) for Python and TypeScript.** Scrye's CI already gates on
-  *dependency* vulnerabilities — Trivy and Grype dogfood the image every PR — but nothing analyses
-  Scrye's **own source** for injection, path-traversal, unsafe-deserialization or missing-auth
-  patterns. CodeQL covers both of the languages here, and it is **free for public repositories**,
-  which this one now is.
+- ~~**Enable GitHub code scanning (CodeQL) for Python and TypeScript.**~~ **Done 2026-08-02** —
+  enabled via **default setup**, which auto-detected a third language (`actions`) alongside Python
+  and JavaScript/TypeScript. The first run covered every source file (174/174 Python, 78/78
+  TypeScript, 2/2 JavaScript, 5/5 workflows) and produced **five alerts, all Python, all assessed as
+  false positives**: two `py/path-injection` on the filesystem-scan containment gate
+  (`backend/app/scanners/targets.py:138` and `:144`) and three
+  `py/incomplete-url-substring-sanitization` on test assertions. Advanced setup was **not** taken —
+  there is no vendored or generated tree to path-exclude and no query-suite tuning wanted, so its
+  only exclusive capabilities do not apply, and default setup keeps the action and query-pack
+  versions managed rather than adding a fourth SHA-pinned workflow with its own bump stream. Full
+  reasoning per finding, the equivalence check behind the numbers, and the recommended disposition
+  for each alert are in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
 
-  **Scope it as its own session, not a settings-page click.** Two reasons:
-
-  - **Default setup adds a workflow that runs on every push and pull request**, so it joins the
-    per-PR gate the moment it is switched on. That interacts with the existing jobs (CI minutes,
-    required-check configuration, and the branch-protection item above, which is still open) and
-    should be turned on when someone is watching, not in passing.
-  - **The first run typically surfaces a batch of findings that all need triage at once.** Some
-    will be genuine, some will be false positives needing a dismissal with a written reason, and
-    some will be in generated or vendored code that should be excluded from analysis. Triaging
-    that backlog is the actual work; enabling the feature is the trivial part.
-
-  Decide during that session between **default setup** (GitHub manages the workflow and language
-  detection) and **advanced setup** (a committed `.github/workflows/codeql.yml`, which fits this
-  repo's convention of SHA-pinned, explicitly-configured workflows and is the only option that
-  allows tuning query suites or path filters). Prefer advanced setup if paths need excluding.
-  Record the triage decisions the way the scanner waivers already are — a dismissal with no
-  written reason is indistinguishable from an unread finding, which is the failure mode
-  `ARCHIVE.md` §14 (2026-08-02, governance checklist) exists to prevent.
+  **What remains is disposition, and two dependencies.** No alert has been dismissed — that is a
+  deliberate hold, since a dismissal with no written reason is indistinguishable from an unread
+  finding. The §14 entry supplies the written reason for each; applying them (and deciding whether
+  the two `targets.py` alerts warrant a code change to make the containment legible to the analyzer,
+  rather than merely a dismissal) is the open work. Beyond that: the CodeQL check **cannot gate a
+  merge** until the still-open **branch protection** item above makes it a required status check;
+  and default setup's PR trigger targets the **default branch**, so whether a PR into `dev` is
+  covered needs confirming against a real `dev` PR before CodeQL is treated as part of the per-PR
+  gate. **Converting to advanced setup** stays available without losing alert history, and the
+  trigger to revisit it is a concrete need for path filters or query-suite tuning — not a
+  preference.
 
 ## Medium-term
 
