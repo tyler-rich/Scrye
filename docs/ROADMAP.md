@@ -120,52 +120,101 @@ Small, self-contained work that closes a concrete gap.
   here as a checklist. None of them is doable from a code session, which is exactly why several
   sat invisible in `ARCHIVE.md` §14 prose for weeks before being collected here.
 
-  **Five of the original eight items were verified in GitHub Settings on 2026-08-02 and removed
-  from this list** — the GitHub profile display name, the dormant Docker Hub secrets, GHCR package
-  visibility, Dependabot security alerts, and the Actions workflow permissions. What that
-  verification actually found (including the two items that turned out to be correct already
-  rather than newly changed) is recorded in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md). Check
-  there, not here, before re-doing any of them: a settings change leaves no artifact in the
-  repository, so that entry is the only durable record it happened. The three items below are
-  what remains open.
+  **Six of the original eight items are now closed.** Five were verified in GitHub Settings on
+  2026-08-02 — the GitHub profile display name, the dormant Docker Hub secrets, GHCR package
+  visibility, Dependabot security alerts, and the Actions workflow permissions; what that
+  verification actually found (including the two that turned out to be correct already rather than
+  newly changed) is in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md). **Private vulnerability
+  reporting is the sixth** — see below. Check that entry, not this list, before re-doing any of
+  them: a settings change leaves no artifact in the repository, so §14 is the only durable record it
+  happened.
 
-  - **Branch protection** on `main` and `dev` — require a passing CI status, require a pull
-    request, require review from Code Owners, and for `main` restrict who can push tags/promote.
-    Note when scoping this: a `protect-dev` ruleset already exists with *Restrict deletions*
-    enabled, and it did **not** prevent `dev` from being deleted during the v0.2.0 promotion,
-    because the ruleset's bypass list grants Repository admin *Always allow* (`ARCHIVE.md` §14,
-    2026-08-02). Assume any rule configured here is advisory for the repository owner until the
-    bypass list says otherwise.
-  - **Signed-commit enforcement** — a decision to make. Requiring signed commits on the
+  **What remains is one decision and two tracked settings gaps.** The branch-protection item turned
+  out to be mostly done; the parts of it that are genuinely open are now issues rather than prose,
+  for exactly the reason this checklist exists.
+
+  - **Branch protection** on `main` and `dev` — **mostly done; do not re-scope from the original
+    wording.** A ruleset readout on 2026-08-02 (`ARCHIVE.md` §14) found `protect-dev` and
+    `protect-main` both `active`, each already carrying `pull_request` (1 approval,
+    dismiss-stale-on-push, thread resolution, squash-only), `required_status_checks`, `deletion`,
+    and `non_fast_forward`. So *"require a passing CI status"* and *"require a pull request"* are
+    **already in place on both branches**.
+
+    Three things are genuinely still open, two of them now tracked:
+
+    - **[#136](https://github.com/tyler-rich/Scrye/issues/136) — the dogfood self-scan is not a
+      required check.** `required_status_checks` is an allowlist naming only `Backend — lint +
+      tests` and `Frontend — lint + build`, so a PR can merge with the image scan red. Includes the
+      `paths:`-filter hazard: a required context whose workflow never triggers blocks a PR forever
+      (a job skipped by `if:` is fine — it reports `skipped`).
+    - **[#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricts tag pushes.**
+      Both rulesets are `target: "branch"`; there is no tag-targeted ruleset, and a `v*.*.*` tag push
+      is what triggers `publish.yml` (GHCR push, `:latest` move, provenance + SBOM attestation).
+      Theoretical with a sole maintainer; the trigger is **before any collaborator is added**.
+    - **Code-owner review is not required.** `require_code_owner_review` is `false` on both rulesets,
+      so `.github/CODEOWNERS` requests review but does not compel it. Untracked — it is a decision
+      rather than a gap, and on a single-maintainer repo it is close to a no-op today.
+
+    Note when working any of these: *Restrict deletions* is enabled on `protect-dev` and did **not**
+    prevent `dev` from being deleted during the v0.2.0 promotion, because the ruleset's bypass list
+    grants Repository admin *Always allow* (`ARCHIVE.md` §14, 2026-08-02). Assume any rule configured
+    here is advisory for the repository owner until the bypass list says otherwise. (The bypass list
+    is not readable at the API permission level available to a code session — the ruleset endpoint
+    returns `bypass_actors: null` — so confirm it in Settings rather than from an API dump.)
+  - **Signed-commit enforcement** — a decision to make, and **verified still open**: neither ruleset
+    carries a `required_signatures` rule (2026-08-02 readout). Requiring signed commits on the
     protected branches means contributors must sign; worth it for a security tool, so weigh the
     friction.
-  - **Private vulnerability reporting** — enable in the repo's Security settings, so
-    `SECURITY.md`'s stated channel actually exists.
+  - ~~**Private vulnerability reporting**~~ — **Done; verified 2026-08-02.**
+    `GET /repos/tyler-rich/Scrye/private-vulnerability-reporting` returns `{"enabled": true}`, so
+    `SECURITY.md`'s stated channel exists. It is not recorded when this was turned on — it may have
+    been enabled at any point since the repo went public and simply never struck from this list,
+    which is the same drift this checklist was created to stop.
 
-- **Enable GitHub code scanning (CodeQL) for Python and TypeScript.** Scrye's CI already gates on
-  *dependency* vulnerabilities — Trivy and Grype dogfood the image every PR — but nothing analyses
-  Scrye's **own source** for injection, path-traversal, unsafe-deserialization or missing-auth
-  patterns. CodeQL covers both of the languages here, and it is **free for public repositories**,
-  which this one now is.
+- ~~**Enable GitHub code scanning (CodeQL) for Python and TypeScript.**~~ **Done 2026-08-02** —
+  enabled via **default setup** on the **`security-extended`** query suite (a dropdown in the same
+  settings pane; "default setup" names the setup mode, not the suite). Language auto-detection added
+  a third language, **`actions`**, alongside Python and JavaScript/TypeScript. The first run covered
+  every source file — 174/174 Python, 78/78 TypeScript, 2/2 JavaScript, 5/5 workflows — and produced
+  **six alerts, all Python, all assessed as false positives**: two `py/path-injection` on the
+  filesystem-scan containment gate (`backend/app/scanners/targets.py:138` and `:144`), three
+  `py/incomplete-url-substring-sanitization` on test assertions, and one `py/log-injection` on an
+  `int`-typed path parameter (`backend/app/api/scans.py:574`). Advanced setup was **not** taken:
+  there is no vendored or generated tree to path-exclude and no need for custom query packs, and
+  default setup keeps the action and query-pack versions managed rather than adding a fourth
+  SHA-pinned workflow with its own bump stream. Full reasoning per alert, the reproduction method
+  behind the numbers, and the recommended disposition for each are in
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
 
-  **Scope it as its own session, not a settings-page click.** Two reasons:
+  **What remains is disposition, and two dependencies.** No alert has been dismissed — that is a
+  deliberate hold, since a dismissal with no written reason is indistinguishable from an unread
+  finding. The §14 entry supplies the written reason for each; applying them (and deciding whether
+  the two `targets.py` alerts warrant a code change to make the containment legible to the analyzer,
+  rather than merely a dismissal) is the open work.
 
-  - **Default setup adds a workflow that runs on every push and pull request**, so it joins the
-    per-PR gate the moment it is switched on. That interacts with the existing jobs (CI minutes,
-    required-check configuration, and the branch-protection item above, which is still open) and
-    should be turned on when someone is watching, not in passing.
-  - **The first run typically surfaces a batch of findings that all need triage at once.** Some
-    will be genuine, some will be false positives needing a dismissal with a written reason, and
-    some will be in generated or vendored code that should be excluded from analysis. Triaging
-    that backlog is the actual work; enabling the feature is the trivial part.
+  **CodeQL does not currently run on `dev` PRs — confirmed on #134, which got four check runs and no
+  CodeQL among them.** Default setup's PR trigger targets the **default branch**, so it covers PRs
+  into `main`; `dev`, which is where day-to-day work is actually PR'd, gets nothing. CodeQL therefore
+  analyses `main` on push — *after* a promotion has landed — and on its weekly schedule.
 
-  Decide during that session between **default setup** (GitHub manages the workflow and language
-  detection) and **advanced setup** (a committed `.github/workflows/codeql.yml`, which fits this
-  repo's convention of SHA-pinned, explicitly-configured workflows and is the only option that
-  allows tuning query suites or path filters). Prefer advanced setup if paths need excluding.
-  Record the triage decisions the way the scanner waivers already are — a dismissal with no
-  written reason is indistinguishable from an unread finding, which is the failure mode
-  `ARCHIVE.md` §14 (2026-08-02, governance checklist) exists to prevent.
+  **The advanced-setup migration was assessed on 2026-08-02; the recommendation is to do it, with no
+  sequencing dependency.** Full reasoning, the measured CI cost (≈0 added wall-clock — CodeQL's
+  longest job is 62 s against the pipeline's 121 s critical path), the maintenance cost (≈0 marginal,
+  because `dependabot.yml` already groups all action bumps into one weekly PR), what migrating does
+  and does not lose (query packs stay GitHub-managed; automatic language detection does not), and the
+  case *against* migrating are in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md). Two corrections that
+  entry makes to the framing above: `:latest` is published by a **tag push**, not by the promotion
+  merge, so CodeQL's run on `main` normally lands *before* `:latest` exists — the real
+  published-artifact gap is **`:dev`**, which the nightly builds from a branch CodeQL never sees.
+
+  **Do not assume a CodeQL check would be blocked on the branch-protection item above.** The
+  `protect-dev` ruleset is already `active` and already has `required_status_checks` — but that rule
+  is an **explicit allowlist of contexts**, currently naming only `Backend — lint + tests` and
+  `Frontend — lint + build` (neither image job is on it either). A migrated CodeQL workflow would run
+  and be visible but would not block a merge until its contexts are added to that list, which is a
+  settings edit made *alongside* the migration, not a prerequisite for it. One caveat if they are
+  added: a required context that never reports blocks a PR forever, so the CodeQL workflow must not
+  carry `paths:` filters.
 
 ## Medium-term
 

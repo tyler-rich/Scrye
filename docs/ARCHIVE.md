@@ -578,8 +578,10 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (122, newest first)
+### Index of §14 entries (124, newest first)
 
+- [2026-08-02 — Security/Process — Filesystem-gate symlink and TOCTOU residual risks closed out (neither is real); CodeQL advanced-setup migration assessed](#2026-08-02--securityprocess--filesystem-gate-symlink-and-toctou-residual-risks-closed-out-neither-is-real-codeql-advanced-setup-migration-assessed)
+- [2026-08-02 — Security/Process — CodeQL code scanning enabled via default setup; first-run triage: six alerts, all false positives](#2026-08-02--securityprocess--codeql-code-scanning-enabled-via-default-setup-first-run-triage-six-alerts-all-false-positives)
 - [2026-08-02 — Infra/Process — GHSA-qwww-vcr4-c8h2 closed by a 7.x backport (`react-router` 7.18.2), not the 8.3.0 major; the advisory's "Patched versions" field is stale](#2026-08-02--infraprocess--ghsa-qwww-vcr4-c8h2-closed-by-a-7x-backport-react-router-7182-not-the-830-major-the-advisorys-patched-versions-field-is-stale)
 - [2026-08-02 — Infra — Frontend builder and CI moved Node 22 → 24 (Active LTS); the Dependabot major-ignore re-pointed at the 24 line](#2026-08-02--infra--frontend-builder-and-ci-moved-node-22--24-active-lts-the-dependabot-major-ignore-re-pointed-at-the-24-line)
 - [2026-08-02 — Infra/Process — Post-v0.2.0 dependency cleanup: three closed Dependabot PRs reapplied, the base-branch anomaly traced to `dev`'s deletion, the brace-expansion waiver retired](#2026-08-02--infraprocess--post-v020-dependency-cleanup-three-closed-dependabot-prs-reapplied-the-base-branch-anomaly-traced-to-devs-deletion-the-brace-expansion-waiver-retired)
@@ -702,6 +704,665 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-02 — Security/Process — Filesystem-gate symlink and TOCTOU residual risks closed out (neither is real); CodeQL advanced-setup migration assessed
+
+**What changed:** Docs only. Two items: (1) the two residual risks the CodeQL entry below named "for
+the record, not as proposed work" were verified against the scanners' actual behavior and are
+**closed — neither is exploitable**; (2) the CodeQL advanced-setup migration was assessed and a
+recommendation recorded. **No code, config, workflow, or scanner version changed, and no fix was
+implemented.**
+
+---
+
+#### Item 1 — the symlink and TOCTOU residual risks on `resolve_filesystem_path()`
+
+**Why this needed verifying rather than assuming.** The claim was that Grype's `dir:` walk might
+follow a symlink planted *inside* an allowed root and read out-of-root files. That would be the same
+class as **H1/SEC-1** — a route around the containment gate to arbitrary host files — which was the
+headline HIGH of the remediation cycle. The gate is a pre-flight check on the *target argument*
+(`backend/app/scanners/targets.py:138-146`); it is not re-applied during the walk, so the concern was
+structurally plausible.
+
+**Scope: there is only one code path.** Filesystem targets are **Grype-only**
+(`backend/app/scanners/support.py:18` — `TargetType.FILESYSTEM: frozenset({Scanner.GRYPE})`), so
+Trivy cannot run a filesystem target at all. The invocation is
+`grype -o json -- dir:<resolved-path>` (`grype.py:50-68`, `:210-211`).
+
+**Verdict: the symlink escape is not real.** Four independent lines of evidence:
+
+1. **Version identity.** Grype 0.115.0's embedded Go build info records
+   `github.com/anchore/syft v1.46.0` — the same Syft version Scrye pins, and the same binary tested
+   standalone here. Grype's `dir:` source *is* Syft's directory source, so the Syft test exercises
+   the identical walk code Grype runs.
+2. **Mechanism, at the source.** Syft's directory provider defaults `base` to the scan directory
+   itself — `basePath()` in `syft/source/directorysource/directory_source_provider.go:60-65`. A
+   non-empty `base` activates chroot-style re-rooting in `addSymlinkToIndex`
+   (`syft/internal/fileresolver/directory_indexer.go:362-406`): an absolute link target becomes
+   `filepath.Join(base, Clean(target))`, and a relative one
+   `filepath.Join(base, Clean(Join("/", dir, target)))`. Both collapse to a path **under the scan
+   root**, so a link out of the root resolves to something that does not exist and is dropped.
+3. **Empirically, five variants — none followed.** Planted inside an allowed root: an absolute
+   symlink to an outside directory, a relative one (`../outside/sensitive`), an absolute symlink to
+   an outside file, a relative one, and a symlink to `/etc`. A `package-lock.json` outside the root
+   declared `lodash 4.17.15`; an identical in-root file declared `left-pad 1.3.0`. **Only `left-pad`
+   was catalogued.** Debug logging shows exactly the re-rooting from (2): `escape` →
+   `<root>/tmp/.../outside/sensitive`, `etc_escape` → `<root>/etc`, `rel_escape` →
+   `<root>/outside/sensitive`, each followed by *"points to unresolved path …, ignoring target as new
+   root."*
+4. **Trivy agrees.** `trivy fs --scanners secret` over the same fixture reported only the two real
+   in-root files and no out-of-root path. Not reachable in Scrye, but the answer does not differ
+   between the scanners.
+
+**A comment in that code says the opposite — do not stop reading at it.** `indexAllRoots`
+(`directory_indexer.go:66`) is introduced with *"why account for multiple roots? To cover cases when
+there is a symlink that references above the root path, in which case we need to additionally index
+where the link resolves to."* Read alone, that says the escape is real. It is not, because the
+re-rooting in `addSymlinkToIndex` runs **first**, so an out-of-root target never becomes a new root.
+The comment describes an intent the surrounding code no longer implements. Behavior was measured;
+the comment was not trusted.
+
+**The load-bearing caveat, and the one thing worth acting on — now tracked as [#135](https://github.com/tyler-rich/Scrye/issues/135).**
+The containment rides entirely on `basePath()` defaulting `base` to the scan location — a function
+upstream annotates:
+
+```go
+// FIXME why is the base always being set instead of left as empty string?
+```
+
+If that FIXME is ever actioned, `base` becomes `""`, the re-rooting branch is skipped
+(`directory_indexer.go:374`), and `indexAllRoots` *would* add out-of-root symlink targets as new
+roots. **The escape would become real silently, on a routine Grype/Syft version bump, with no code
+change on Scrye's side.** Nothing in this repository would notice. A regression test — plant a
+symlink in a temp root, assert the out-of-root package is absent from Grype's output — would pin the
+behavior to the dogfood/test suite and fail loudly on the bump that changes it. **Opened as
+[#135](https://github.com/tyler-rich/Scrye/issues/135) on 2026-08-02; not implemented here.** That
+issue carries the mechanism, the `FIXME` reference, the inventory-disclosure severity ceiling (so it
+is not later mis-rated against H1/SEC-1), and the positive-control requirement the false-negative
+below taught.
+
+**Hardlinks are followed, and that is fine.** A hardlink from inside an allowed root to a file
+outside **is** read — demonstrated: `lodash 4.17.15` catalogued via `/sub/package-lock.json`, same
+inode as the outside file. This is not a containment bypass. A hardlink is a second name for one
+inode, not a reference that containment could resolve; creating one requires write access inside the
+root **and** read access to the source (the kernel's `fs.protected_hardlinks`, normally `1`, blocks
+linking files you cannot read), and it cannot cross filesystems — so `/data/app_secret_key` on the
+data volume can only be linked from within that same volume. Anyone who can do it could already read
+the file.
+
+*Methodology note, because the first result was wrong:* the initial hardlink probe came back negative
+only because the planted file was named `hardlink-lock.json`, which the JavaScript cataloger does not
+glob. Renaming it to `package-lock.json` flipped the result to positive. **A negative from a
+cataloger-based probe means nothing unless the filename is one the cataloger actually looks for.**
+
+**Impact ceiling — this class cannot reproduce H1/SEC-1, even if an escape existed.** Grype `dir:`
+output carries **no file contents**. The SBOM's `files` entries expose `digests`, `id`, `location`,
+and `metadata` only; a marker string planted in a hardlinked secret file **never appeared anywhere in
+the output**. So the worst case here is disclosure of package inventory and file digests — not secret
+values. H1/SEC-1's severity came from `trivy repo <local path>` surfacing secret *contents* as
+downloadable scan output; that is a different and strictly worse primitive. Any future finding in
+this area should be severity-rated against inventory disclosure, not against H1/SEC-1.
+
+**TOCTOU: mechanism confirmed, not exploitable.** The window is real —
+`NormalizeRootDirectory` calls `filepath.EvalSymlinks(root)` at scan time
+(`chroot_context.go:69-75`), so a target directory swapped for a symlink between the worker's
+`resolve_filesystem_path()` (`backend/app/workers/inprocess.py:560`) and the walk **would** be
+followed, with `base` becoming the new real path — the containment above would then protect the
+attacker's substituted root rather than the configured one. What makes it non-exploitable is the
+preconditions, all of which must hold at once:
+
+- **Filesystem scanning must be switched on at all.** `filesystem_scan_roots` defaults to empty
+  (`config.py:243`), which disables the feature.
+- **Host write access to the parent of the scan target.** The attacker must be able to replace the
+  directory with a symlink — i.e. they already have write access to a host path the admin
+  deliberately mounted and allowlisted.
+- **A concurrent operator-triggered scan.** `POST /api/scans` requires the `operator` role and
+  passes CSRF (`scans.py:79`, `:159-166`); `operator` is rank 1 of 3 (`db/models/user.py:28`).
+- **Winning a sub-second race** between the worker's re-check and the subprocess `exec`.
+
+And the payoff is still package inventory, not file contents. Closing it properly would require
+handing the scanner an already-opened directory handle (`O_PATH`/fd) rather than a path string, which
+the subprocess interface — `grype … dir:<path>` — cannot express. **Accepted as a documented residual
+risk; no work proposed.**
+
+**Both risks are closed by this entry.** The prose in the CodeQL entry below that named them is
+superseded; do not re-open either without new evidence about scanner behavior, and re-verify against
+the pinned Grype/Syft versions if those move.
+
+---
+
+#### Item 2 — should CodeQL move to advanced setup for trigger control?
+
+**Recommendation: migrate, and do it together with a one-line ruleset edit. No sequencing dependency.**
+
+> **Corrected 2026-08-02 (same day), after reading the `protect-dev` ruleset via the API.** This
+> section originally recommended migrating *after* the branch-protection governance item, on the
+> premise that "until branch protection lands, a CodeQL check on a `dev` PR cannot block a merge."
+> **That premise was wrong** — branch protection on `dev` had already landed. The conclusion survives
+> for a sharper reason, but the sequencing does not. Both are corrected in place below, and the
+> superseded argument is marked withdrawn rather than deleted.
+
+**Correcting the premise first.** The concern was that in a dev-first workflow, findings "arrive after
+code is already published to `:latest`." That is **not** what happens for `:latest`. Publishing is
+triggered by a **semver tag push**, not by the promotion merge (`publish.yml`, locked decision §6),
+so the sequence is: promotion merges to `main` → CodeQL runs on push to `main` (~1 min) → someone
+pushes the tag → publish. Unless the tag is pushed within about a minute of the merge, CodeQL
+findings land *before* `:latest` exists. The premise **is** correct for **`:dev`**: `dev-nightly.yml`
+builds and pushes `:dev` from a branch CodeQL never analyses. So the real published-artifact gap is
+`:dev`, not `:latest`.
+
+The gap that actually justifies migrating is simpler and doesn't depend on publishing at all:
+**CodeQL never sees a change while it is still reviewable.** It runs after a promotion has landed on
+`main`, at which point the code is merged and a revert — not a review comment — is the remedy.
+
+**What the workflow needs, and whether the suite is reproducible.** Confirmed at the source, not from
+docs: `github/codeql-action/init` exposes a `queries:` input, and `security-extended` is a member of
+`defaultSuites` in `src/analyze.ts:361-367`, resolved by `resolveQuerySuiteAlias()` to
+`<language>-security-extended.qls`. So `queries: security-extended` in a committed workflow
+reproduces **exactly** what runs today. The workflow would need: SHA-pinned `init` + `analyze` (repo
+convention, H9/SC-2), `permissions:` narrowed to `security-events: write`, `contents: read`,
+`actions: read`, a three-entry language matrix (`python`, `javascript-typescript`, `actions`), and
+`on: pull_request` + `push` for **both** `dev` and `main`.
+
+**CI cost: effectively zero added wall-clock — measured, not estimated.** The first CodeQL run's
+longest job was **62 s** (javascript-typescript; python 56 s, actions 41 s, all parallel). The
+current PR pipeline's longest job is **121 s** (image build + dogfood self-scan), with a 130 s
+wall-clock across all four. CodeQL's jobs run in parallel with those and finish at roughly half the
+time of the critical-path job, so **the PR gate stays bounded by the image build either way**. Money
+cost is zero — the repository is public, so Actions minutes are free. A schedule-plus-PR trigger is
+*not* better here: the whole point is per-PR feedback, and the marginal cost of per-PR is nil.
+
+**Maintenance cost: near zero marginal, contrary to expectation.** `github/codeql-action` ships
+frequently — **40 `v4.x` releases between 2025-10-07 and 2026-07-30**, roughly four a month — which
+looks like exactly the churn this repo has been managing. It is not, because
+`.github/dependabot.yml` already **groups every `github-actions` bump into a single weekly PR**
+(`groups: github-actions: patterns: ["*"]`, `interval: weekly`). `codeql-action` would become one
+more line in a PR that already exists, not a new stream. The honest cost is that the grouped weekly
+PR becomes non-empty more often than it is today.
+
+**What migrating actually loses — less than assumed.**
+
+- **Managed query-pack updates are *not* lost.** This is the misconception worth naming: advanced
+  setup pins the **action**, not the CodeQL bundle. `init`'s `tools:` input defaults to *"the
+  recommended version of the CodeQL Bundle"*, so query packs keep updating on GitHub's schedule
+  exactly as they do now. Pinning the action does not freeze the queries.
+- **Automatic language detection *is* lost.** The matrix becomes explicit. Note that default setup's
+  auto-detection is what silently added the third language (`actions`) in the first place — a real
+  freebie that an explicit matrix would not have produced. Against that: locked decision §2 fixes the
+  stack, so a new language appearing unnoticed is close to impossible, and the matrix should carry a
+  comment tying it to §2.
+- **A fifth workflow to own.** It can break in ways a GitHub-managed one cannot, and CLAUDE.md
+  § Build performance warns that workflow shapes here are load-bearing. The repo already maintains
+  four workflows and a composite action, so this is familiar rather than new capability.
+
+**What the `protect-dev` ruleset actually says (read via `GET /repos/…/rulesets/18504510`).** The
+premise that branch protection on `dev` is "still open" does not survive contact with the API.
+`protect-dev` is **`enforcement: active`** on `refs/heads/dev` and carries four rules:
+
+| Rule | Parameters that matter |
+| --- | --- |
+| `pull_request` | 1 approving review, `dismiss_stale_reviews_on_push`, `required_review_thread_resolution`, `allowed_merge_methods: ["squash"]` |
+| `required_status_checks` | **exactly two contexts** — `Backend — lint + tests`, `Frontend — lint + build`; `strict_required_status_checks_policy: false` |
+| `deletion` | — |
+| `non_fast_forward` | — |
+
+So "Require status checks to pass" **is** live on `dev`. That kills the original sequencing argument.
+
+**But the conclusion survives, for a sharper reason: `required_status_checks` is an explicit
+allowlist of contexts, not a switch.** The list names two jobs. Neither image job is on it — note
+`Image — build + dogfood self-scan` and `Image — multi-arch build check` run on every PR and are
+**not** required — and a migrated CodeQL workflow's contexts (`Analyze (python)` &c.) would not be on
+it either. CodeQL would run, be visible, and go green or red **without blocking a merge**, until
+someone adds its contexts to that list.
+
+The difference from the original claim is the size of the remedy. "Wait for branch protection" framed
+it as a governance project; in fact it is **adding two or three strings to a ruleset that already
+exists**, done at the same time as the migration. There is no reason to sequence one behind the
+other.
+
+**Does the admin bypass change the answer? Only for one of the two things "required" buys.** For the
+repository owner it changes little — an actor who can bypass the ruleset can merge past any required
+check, so "required" is not an enforcement boundary against that person. What it still buys:
+
+1. **Real enforcement for anyone who is not that actor.** The repo is public and `CONTRIBUTING.md`
+   invites external contributions; for a contributor, a required check is a hard stop.
+2. **A deliberate bypass instead of a silent merge.** This is the part that matters most here,
+   because this project has already documented itself normalizing red: the same §14
+   (2026-07-31, flaky cancellation test) records that *"a test that reddens CI intermittently trains
+   everyone to re-run without reading the failure"*, and warns that the habit costs most on a
+   security tool. A visibly-red-but-optional check is exactly the artifact that habit erodes. Making
+   it required does not stop an admin, but it converts "merge anyway" from a non-event into an
+   explicit act.
+
+So: **a visibly-red check is not sufficient on its own**, not because of what the ruleset can enforce
+against an admin, but because this repository has written down that it stops reading advisory red.
+Required-ness is worth having even where it is bypassable.
+
+*Not independently confirmed:* the API returns `bypass_actors: null` and
+`current_user_can_bypass: "never"` for **both** rulesets, but that reflects *this session's token
+identity*, not the repository admin's — the bypass list is not readable at this permission level.
+Taking as given the maintainer's statement that Repository admin has *Always allow*, corroborated by
+§14 (2026-08-02), which records `dev` being deleted during the v0.2.0 promotion **despite** the
+`deletion` rule above being active.
+
+**One operational hazard if CodeQL's contexts are made required.** A required context that never
+**reports** blocks a PR indefinitely. A job skipped by an `if:` condition still reports a `skipped`
+conclusion and satisfies the requirement — that is why `Image — multi-arch build check` showing
+`skipped` on these PRs is harmless — but a *workflow that never triggers* reports nothing at all. So
+if the CodeQL workflow's contexts go on the required list, it must not carry `paths:`/`paths-ignore:`
+filters, or a docs-only PR will hang forever waiting on a check that was never scheduled. Given the
+suite runs in ~60 s and costs nothing on a public repo, the right answer is simply not to add path
+filters.
+
+**The case against this recommendation**, stated plainly because it is not weak:
+
+- **The empirical yield so far is 0 true positives in 6 alerts.** Every finding from the first run
+  was a false positive, three of them in test files. Paying any ongoing complexity for a check with
+  that hit rate is a bet on future regressions, not a response to demonstrated value. One more
+  scheduled run on `main` would have caught the same nothing.
+- **The `:latest` exposure argument does not survive contact with `publish.yml`** (above). Strip it
+  out and what remains is "findings arrive post-merge instead of pre-merge" — a real but ordinary
+  workflow-quality complaint, not a security gap.
+- ~~**Branch protection is still open.**~~ **Withdrawn — this argument was factually wrong.** See
+  the ruleset findings below: `protect-dev` is active and already requires status checks. The
+  surviving version of the point is much weaker: CodeQL's contexts would not be on the required list
+  *initially*, and putting them there is a settings edit made alongside the migration, not a
+  prerequisite for it.
+- **Default setup keeps giving things away for free** — the `actions` language arrived without being
+  asked for, and future additions would too. An explicit matrix ends that.
+
+**On balance:** migrate whenever convenient, and **add the CodeQL contexts to `protect-dev`'s
+required-checks list in the same change** — that is what turns it from advisory decoration into a
+gate, and it is a settings edit, not a project. Treat the **`:dev`** coverage hole, not `:latest`, as
+the concrete thing being fixed. **Not implemented in this session; the decision is the maintainer's.**
+
+---
+
+#### Follow-up (same day) — the two ruleset gaps tracked, and one checklist item found already done
+
+**The ruleset readout above produced two settings-level gaps. Both are now issues, not prose**, on
+the same reasoning that created the governance checklist in the first place: a settings gap leaves no
+artifact in the repository, so if it is not tracked it is invisible.
+
+- **[#136](https://github.com/tyler-rich/Scrye/issues/136) — `Image — build + dogfood self-scan` is
+  not a required status check**, on either ruleset, so a PR can merge into `dev` with the dogfood
+  scan red. That job is the control CLAUDE.md § Dependency hygiene mandates; it is what caught
+  CVE-2026-5773, what verifies the SC-14 dev-tree exclusion (`ci.yml:171`), and what demonstrates the
+  seven waived interpreter CVEs (#98 ×3, #116 ×3, #52 ×1) are the *only* outstanding findings — a
+  guarantee that is unverifiable if the gate can be merged past. Safe to require: the job has no
+  job-level `if:` and `ci.yml` carries no `paths:` filters, so it always reports.
+  `Image — multi-arch build check` is a different case — it is `if:`-conditioned to skip on `dev` PRs
+  (`ci.yml:316`), so requiring it on `protect-dev` would be vacuous; require it on `protect-main`
+  only, if at all.
+- **[#137](https://github.com/tyler-rich/Scrye/issues/137) — no ruleset restricts tag pushes.** Both
+  rulesets are `"target": "branch"`; there is no tag-targeted ruleset. A `v*.*.*` tag push triggers
+  `publish.yml` — multi-arch build, GHCR push, the `:latest` move, and a GitHub-signed provenance
+  attestation plus SBOM (`publish.yml:23-26`, `:52-56`). Every *branch* route to the published
+  artifact is gated; the *tag* route, which is the one that actually publishes, is not. `publish.yml`
+  does bound the blast radius on its own — the `github.repository ==` guard (`:46`) and the
+  `git merge-base --is-ancestor` main-ancestry check (`:73`) mean an arbitrary tag on an arbitrary
+  commit does not publish — but neither constrains *who* may tag, or which main-reachable commit gets
+  promoted to `:latest`, and nothing prevents a release tag being moved or deleted afterwards.
+  Theoretical with a single maintainer; the resolution trigger is **before any collaborator is
+  added**, because that is precisely the moment nobody re-audits ref rules.
+
+**Split into two issues rather than one**, following the #98/#116 precedent that an issue closes on
+its own trigger: #136 is actionable now and closes on a settings edit; #137 is latent and closes on
+an event that may be far off. One issue could not close on both.
+
+**Separately, a checklist item was found already done.** `docs/ROADMAP.md` listed *"Private
+vulnerability reporting — enable in the repo's Security settings"* as open;
+`GET /repos/tyler-rich/Scrye/private-vulnerability-reporting` returns **`{"enabled": true}`**. It is
+now struck. When it was enabled is not recorded anywhere — it may have been on since the repository
+went public and simply never removed from the list. That is the same drift the checklist exists to
+prevent, arriving from the opposite direction: not a settings change that went unrecorded, but a
+completed item that stayed listed as outstanding. **Verify checklist items against the API before
+working them, not just before closing them.**
+
+By contrast, **signed-commit enforcement is confirmed genuinely open** — neither ruleset carries a
+`required_signatures` rule.
+
+**Attribution footers on issues could not be removed.** Per this environment's convention the issue
+bodies were authored with the Claude Code footer; a subsequent `PATCH` to strip it from #135 was
+re-appended by the same ingress layer that does this to the PR body (§14 records the same behaviour
+there). #135, #136, and #137 therefore each carry a trailing
+`_Generated by [Claude Code](https://claude.ai/code)_` that has to be deleted by hand in the GitHub
+UI to match #98/#116. Noted here so the inconsistency is explained rather than looking like a style
+lapse.
+
+**Plan section affected:** §14 (this record); §4/§6 (filesystem-scan gate — verified, unchanged);
+`docs/ROADMAP.md` § Near-term (the CodeQL item's remaining work, and the governance checklist —
+branch-protection re-scoped, private vulnerability reporting struck). Issues #135, #136, #137
+opened. No code, schema, workflow, or locked-decision change.
+
+---
+
+### 2026-08-02 — Security/Process — CodeQL code scanning enabled via default setup; first-run triage: six alerts, all false positives
+
+**What changed:** GitHub **code scanning (CodeQL) was enabled on 2026-08-02** via **default setup**.
+This entry records the enablement, why default was chosen over advanced, and the full triage of the
+first scan. **Nothing was fixed, dismissed, or excluded** in this session — it is docs-only, and the
+disposition of every alert is left to the maintainer.
+
+**What the first run actually was.** Run
+[30731557142](https://github.com/tyler-rich/Scrye/actions/runs/30731557142), `dynamic` event,
+`main` @ `bb354a5` (the v0.2.0 promotion merge), 2026-08-02 03:59 UTC, 67 s wall-clock, all jobs
+green. CodeQL CLI **2.26.2**, `codeql-action` **4.37.4**, query packs `python-queries` **1.8.7** and
+`javascript-queries` **2.4.2**.
+
+**The suite is `security-extended`, not the default `code-scanning` one.** This is worth stating
+because it is easy to assume otherwise — "default setup" names the *setup mode*, not the query suite,
+and the suite is a separate dropdown in the same settings pane. The evidence is exact rather than
+inferred: the Python job interpreted **52** queries, `python-code-scanning.qls` resolves to **45**,
+and `python-security-extended.qls` resolves to **52** — and the runner's 52 interpreted query paths
+are a **set-identical** match to `security-extended`'s resolved list (zero on either side of the
+diff). The same distinction exists for the other two languages (`javascript`: 89 vs 105; `actions`:
+18 vs 24), though it changes nothing there, since both return zero findings under either suite.
+Anyone reproducing this analysis must pass `*-security-extended.qls` or they will silently run a
+smaller query set — see the reproduction note below, where exactly that happened.
+
+**Default setup enabled *three* languages, not the two that were scoped.** The roadmap item asked
+for Python and TypeScript; language auto-detection also added **`actions`** (the workflow-analysis
+pack), so the run has three analyze jobs: `Analyze (python)`, `Analyze (javascript-typescript)`,
+`Analyze (actions)`. That is a gain, not a problem — the repo's five workflow files are now analysed
+for the Actions-specific query set (untrusted checkout, script injection, artifact poisoning) that
+the SHA-pinning work of H9/SC-2 + H10/SC-3 addressed by hand — but it is worth knowing the third
+language is there before anyone reasons about which jobs a PR check covers.
+
+**Coverage was total; nothing was skipped.** The runner reported *"CodeQL scanned 78 out of 78
+TypeScript files, 5 out of 5 GitHub Actions files and 2 out of 2 JavaScript files"* and 174 Python
+files. There is no vendored or generated tree in this repository, so no path filters were needed and
+none were configured.
+
+**Why default setup over advanced.** The roadmap item left this open and said to prefer advanced *if
+paths need excluding*. They do not, and three things pointed the other way:
+
+- **Managed action versions and query packs.** Advanced setup means a committed
+  `.github/workflows/codeql.yml` pinning `github/codeql-action/*` by SHA, which this repo's
+  convention would then require Dependabot to keep current — a fourth workflow and a recurring bump
+  stream in exchange for control this repo has no use for. Default setup has GitHub track the action
+  and pack versions.
+- **A conventional layout that needs no custom queries or path filters.** Note that *choosing the
+  query suite is not an advanced-setup exclusive* — default setup exposes a Default/Extended
+  dropdown, and this repository is on **Extended** (above). What advanced setup alone buys is custom
+  query packs, path filters, and control over the trigger. Coverage is already 100% of every source
+  file, and there is no generated or vendored code to exclude, so the first two do not apply. (The
+  third turns out to matter — see the `dev`-PR note near the end of this entry, which was discovered
+  after this decision was made.)
+- **The configuration lives in repository settings, and *this entry* is its durable record.** Default
+  setup's config is not a file in git, which puts it in the same class as the branch rulesets and the
+  Dependabot security-update routing: a setting that leaves no artifact in the repository. §14 is
+  where that class of change is recorded — see the 2026-08-02 governance-checklist entry, which
+  exists precisely because settings work had been sitting invisible. **If path filters, custom queries, or a different
+  trigger are ever needed, converting to advanced setup is the trigger to revisit this**, and it can
+  be done without losing alert history.
+
+**How this triage was performed, including the mistake in the first pass.** The session token used
+here carries only `metadata=read`, so `GET /repos/tyler-rich/Scrye/code-scanning/alerts` and
+`.../analyses` both return **403 "Resource not accessible by integration"**. The alerts could not be
+read from the API. Instead the analysis was **reproduced locally at the same commit**:
+`codeql-bundle-v2.26.2` (the exact CLI the run used, hence the exact `python-queries` 1.8.7 /
+`javascript-queries` 2.4.2 packs), databases built from a worktree at `bb354a5`.
+
+**The first reproduction used the wrong suite and under-reported by one alert.** It ran
+`*-code-scanning.qls` on the assumption that "default setup" implies the default suite. That is 45 of
+the 52 Python queries, and the 7 it omits are `py/log-injection`, `py/tarslip`, `py/partial-ssrf`,
+`py/shell-command-constructed-from-input`, `py/jinja2/autoescape-false`, `py/overly-permissive-file`,
+and `py/request-without-cert-validation`. It therefore produced **five** findings and missed **#6**
+below. The gap was caught only when the Security tab was seen directly and showed six. Two lessons,
+both of which this repository has learned before in other forms: **a reproduction is not equivalent
+until its query set is checked against the run's**, and **matching file-extraction counts prove
+nothing about query coverage** — the first pass matched the runner's 174/78/5 file counts exactly
+while running seven fewer queries.
+
+The corrected run uses `*-security-extended.qls` and reproduces the Security tab **exactly**: six
+findings, same rules, same files, same lines, same severities. Extraction coverage also matches the
+runner file-for-file (**174 `.py`**, **49 `.tsx` + 29 `.ts` = 78 TypeScript**, **5 workflow `.yml`**).
+`main` and `dev` have **no** differing `.py`/`.ts`/`.tsx` files at this point, so the reproduction is
+equally valid for `dev`. The alert numbers below are the real ones, read off the Security tab.
+
+**Result: 6 alerts, all Python. 0 JavaScript/TypeScript. 0 Actions.**
+
+| Alert | Rule | Location | GitHub severity | Verdict | Recommended disposition |
+|-------|------|----------|-----------------|---------|-------------------------|
+| #1 | `py/path-injection` | `backend/app/scanners/targets.py:138` | High (7.5) | **False positive** | Dismiss — "Used in tests" is wrong; use **"False positive"** with the reasoning below |
+| #2 | `py/path-injection` | `backend/app/scanners/targets.py:144` | High (7.5) | **False positive** | Dismiss — **"False positive"**, same reasoning |
+| #3 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_credentials.py:320` | High (7.8) | **False positive** | Dismiss — **"Used in tests"** |
+| #4 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_dockerfile_supply_chain.py:71` | High (7.8) | **False positive** | Dismiss — **"Used in tests"** |
+| #5 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_redaction.py:120` | High (7.8) | **False positive** | Dismiss — **"Used in tests"** |
+| #6 | `py/log-injection` | `backend/app/api/scans.py:574` | Medium (6.1) | **False positive** | Dismiss — **"False positive"** |
+
+**Counts by severity: 5 High, 1 Medium, 0 Critical, 0 Low.** The five Highs read worse than they are
+— GitHub derives severity from each *rule's* `security-severity` property (7.5 and 7.8, both in the
+7.0–8.9 band), which is a property of the query, not of the match.
+
+---
+
+#### Alerts #1 and #2 — `py/path-injection`, `backend/app/scanners/targets.py:138` and `:144`
+
+**The flagged code** is `resolve_filesystem_path()` (`backend/app/scanners/targets.py:119-146`) — the
+filesystem-scan containment gate:
+
+```python
+resolved = Path(target).resolve()                                     # line 138  ← sink 1
+within_root = any(
+    resolved == (root := Path(raw).resolve()) or root in resolved.parents for raw in roots
+)
+if not within_root:
+    raise TargetError("The target path is not under an allowed filesystem scan root.")
+if not resolved.is_dir():                                             # line 144  ← sink 2
+    raise TargetError("The target path does not exist or is not a directory.")
+return str(resolved)
+```
+
+CodeQL's reported flow is `scans.py:161` (the `ScanCreateIn` request body) → `scans.py:200` →
+`targets.py:119` → the two sinks.
+
+**Why the code is correct.** The check canonicalizes first (`Path.resolve()` collapses `..` *and*
+resolves symlinks along every component) and only then tests containment, using **`root in
+resolved.parents`** — a component-wise membership test on path objects, not a string comparison. That
+ordering and that idiom are what make it sound:
+
+- `/allowed/../etc/shadow` resolves to `/etc/shadow` before the check runs, so it fails containment.
+- A symlink at `/allowed/link → /etc` resolves to `/etc` before the check runs, so it fails too.
+- `/data/scans-evil` is **not** accepted against a root of `/data/scans`: `Path('/data/scans-evil')
+  .parents` is `[/data, /]`, which does not contain `/data/scans`. A `startswith` check on the same
+  two strings would wrongly accept it.
+- The feature is **off** unless an admin sets `SCRYE_FILESYSTEM_SCAN_ROOTS` (`filesystem_scan_roots`
+  defaults to an empty list, `backend/app/core/config.py:243`), in which case line 138 is never
+  reached at all — the empty-roots branch raises first.
+- The reported "user-provided value" is an **authenticated operator**: `POST /api/scans` requires
+  `require_csrf` *and* the `_operator` role dependency (`backend/app/api/scans.py:159-166`).
+- The check runs **twice** — at request time (`scans.py:200`, 422 on failure) and again in the worker
+  (`backend/app/workers/inprocess.py:560`), so a row edited between queue and execution is re-gated.
+- Coverage exists: `backend/tests/test_targets.py:88-111` asserts disabled-by-default, out-of-root
+  rejection, and in-root acceptance.
+
+Sink 2 (`resolved.is_dir()`, line 144) sits **after** the containment check, so it is not even an
+existence oracle for out-of-root paths — an out-of-root target raises at line 143 and never reaches
+it.
+
+**Why CodeQL is wrong here, specifically.** This is not "the analyzer was cautious"; the query
+**cannot** clear this code as written, and the reason is mechanical. `PathInjectionQuery.qll` is a
+two-state configuration:
+
+1. A source starts in state `NotNormalized`.
+2. Only a `Path::PathNormalization` node moves it to `NormalizedUnchecked`.
+3. Only a `Path::SafeAccessCheck` barrier clears `NormalizedUnchecked`.
+
+In `python-all` 7.2.2, `Path::PathNormalization::Range` has exactly **three** implementations —
+`os.path.normpath`, `os.path.abspath`, `os.path.realpath` (`semmle/python/frameworks/Stdlib.qll`
+:1108, :1118, :1128). **`pathlib.Path.resolve()` is not one of them.** It appears in that file only
+as a Path-returning method (`pathlibPathMethod`, :2623) and as a *file-system access* whose
+vulnerable path argument is its receiver (`PathlibFileAccess`, :2713-2731) — which is precisely why
+`Path(target)` on line 138 and `resolved` on line 144 are the two reported sinks.
+
+So the taint **never leaves `NotNormalized`**, and step 3's barrier is unreachable for this code *no
+matter what check is written between the two lines*. The containment logic is invisible to the query
+by construction.
+
+And even if `resolve()` had been modelled as a normalization, it would still not have helped: the
+only `Path::SafeAccessCheck::Range` implementation in the whole pack is **`str.startswith`**
+(`Stdlib.qll:5134`). This code deliberately does not use `startswith`, because `startswith` is the
+idiom with the `/data/scans` vs `/data/scans-evil` prefix-confusion bug described above. **The code
+is flagged because it avoided the buggy pattern that is the analyzer's only recognized safe one.**
+
+**Overlap with already-resolved work — do not re-litigate this.** These two alerts land on the exact
+control that two prior §14 entries deliberately built and then deliberately kept:
+
+- [2026-07-03 — Phase P3 — Filesystem scans gated behind an allowlist](#2026-07-03--phase-p3--filesystem-scans-gated-behind-an-allowlist)
+  is where this function and `SCRYE_FILESYSTEM_SCAN_ROOTS` came from, and why "empty = feature off".
+- [2026-07-13 — H1/SEC-1 (#53)](#2026-07-13--post-release--h1sec-1-repository-scan-targets-must-be-remote-clone-urls-local-path-arbitrary-read-closed-back-fill)
+  closed the `trivy repo <local path>` route **around** this gate and records the decision that
+  `SCRYE_FILESYSTEM_SCAN_ROOTS` is the **sole** way any scan can be pointed at a local path. That was
+  the headline HIGH of the security-review batch; the design that came out of it is the design CodeQL
+  is now flagging.
+
+Accepting a local path *under an admin-configured root* is the feature, not the vulnerability. The
+open question H1/SEC-1 settled was whether any **other** code path could reach local paths, and the
+answer was made "no."
+
+**Residual risk worth naming (neither is what CodeQL found, and neither is new).** (a) A TOCTOU
+window exists between the check and the scanner subprocess reading the directory — a symlink swapped
+in that window is not caught. (b) Grype's `dir:` walk of an allowed root may follow symlinks that
+point outside it; containment covers the *target*, not the tree beneath it. Both are properties of
+handing a directory to an external scanner, both require local write access inside an
+admin-configured root, and neither is reachable by an API caller. Recording them here so they are on
+the record, not proposing work.
+
+> **Superseded 2026-08-02 — both verified and closed; (b) was wrong.** Grype/Syft do **not** follow a
+> symlink out of the scan root: Syft re-roots every link target under the scan directory, so (b) does
+> not happen at the pinned versions. (a) is a real mechanism but is not exploitable. See
+> [the entry above](#2026-08-02--securityprocess--filesystem-gate-symlink-and-toctou-residual-risks-closed-out-neither-is-real-codeql-advanced-setup-migration-assessed)
+> for the evidence, the hardlink case that *is* followed (and why it is not a bypass), and the
+> upstream `FIXME` that makes the containment worth pinning with a regression test.
+
+---
+
+#### Alerts #3, #4, and #5 — `py/incomplete-url-substring-sanitization`, all three in `backend/tests/`
+
+The three flagged lines:
+
+- `backend/tests/test_redaction.py:120` — `assert "ghcr.io" in output`
+- `backend/tests/test_credentials.py:320` — `assert "git.example.com" in strip_url_credentials(text)`
+- `backend/tests/test_dockerfile_supply_chain.py:71` — `assert "token.actions.githubusercontent.com" in text`
+
+**What the query is for.** A real `py/incomplete-url-substring-sanitization` catches a broken host
+check — `if "example.com" in url:` accepts `https://evil.com/?x=example.com` and
+`https://example.com.evil.com`. That is a genuine and common bug.
+
+**Why it is wrong about all three.** Read the query
+(`Security/CWE-020/IncompleteUrlSubstringSanitization.ql`) and the reason is unambiguous: it is
+**purely syntactic**. Its entire condition is a `Compare` using the `In` operator whose left operand
+is a `StringLiteral` matching a hostname-shaped regex. There is **no dataflow, no requirement that
+the right-hand operand is a URL, and no requirement that the comparison's result is used in a
+security decision at all.** Any `"<something>.com" in <anything>` matches.
+
+None of the three right-hand operands is a URL, and none of the three comparisons is a check:
+
+- `output` in `test_redaction.py` is **captured log text** from a `logging` stream handler. The
+  assertion's job is the opposite of sanitization: it proves the redaction filter *preserved* the
+  non-secret context (`ghcr.io`) while consuming the adjacent secret. Rewriting it as an exact-host
+  comparison would break the test's purpose.
+- `strip_url_credentials(text)` in `test_credentials.py` returns a **redacted log line**
+  (`"cloning https://deploy:tok@git.example.com/team/repo.git failed"`, defined three lines above),
+  and the assertion's trailing comment — `# host preserved` — states exactly that. Note that the
+  `assert "git.example.com" not in ...` on line 309 of the same file is **not** flagged: the query
+  matches `In` and not `NotIn`, which on its own shows how little semantics it is using.
+- `text` in `test_dockerfile_supply_chain.py` is the **contents of `docker/Dockerfile`**, and the
+  assertion checks that the cosign keyless verification is identity-pinned to
+  `token.actions.githubusercontent.com`. Substring search over a Dockerfile is the correct operation;
+  there is no URL and no parsing to be done.
+
+All three are test oracles over fixed, in-repo strings, with no attacker anywhere in the picture.
+`"Used in tests"` is the accurate dismissal reason for these three — and, importantly, **not** for
+alerts #1, #2, and #6, which are in shipped code and need the "False positive" reason plus the
+mechanical explanation.
+
+---
+
+#### Alert #6 — `py/log-injection`, `backend/app/api/scans.py:574`
+
+**The flagged line** is the last statement of `delete_scan()`:
+
+```python
+@router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_scan(
+    scan_id: int,                                                     # line 527  ← reported source
+    ...
+) -> Response:
+    ...
+    logger.info("Deleted scan %d and all associated data.", scan_id)  # line 574  ← sink
+```
+
+CodeQL's flow is two nodes long: the path parameter at `:527` straight to the logging call at `:574`.
+
+**Why it cannot be exploited.** Log injection means smuggling `\r`/`\n` into a log record to forge log
+lines. That requires attacker-controlled **string** content reaching the sink. It cannot happen here:
+
+- `scan_id` is annotated **`int`**. FastAPI validates and coerces every path parameter through
+  Pydantic **before** the handler body runs, so a non-integer path segment is rejected with a 422 and
+  line 574 is never reached. The value at the sink is a Python `int`, not the raw request bytes.
+- It is rendered with **`%d`**, which can only ever emit `[-]digits`. There is no formatting path by
+  which an `int` produces a newline.
+- The endpoint is also behind `require_csrf` and the `_operator` role, though that is beside the
+  point — the type is what closes this, and it closes it completely.
+
+**Why CodeQL is wrong here, specifically.** Its Python taint model treats a framework route parameter
+as an `ActiveThreatModelSource` **regardless of the parameter's type annotation** — there is no
+"this was coerced to `int`" step in the model, so the annotation on line 527 is not read as anything.
+And the sanitizer set for this query is small and entirely syntactic
+(`LogInjectionCustomizations.qll`): a comparison against a constant (`ConstCompareBarrier`), an
+explicit `.replace("\n", …)` / `.replace("\r\n", …)` call, and models-as-data barriers. A type
+annotation is not among them, and no rewrite of this line short of `str(scan_id).replace("\n", "")`
+— which would be nonsense on an `int` — would clear it. As with alerts #1 and #2, the analyzer is
+not being cautious about something uncertain; it simply has no way to express the fact that makes the
+code safe.
+
+**Not to be confused with the redaction filter.** `SecretRedactionFilter` (`app/core/logging.py`,
+covered by `backend/tests/test_redaction.py`) exists to keep *secrets* out of log output. It is a
+different control for a different problem and is not what makes this line safe.
+
+---
+
+**What the run did *not* flag, stated explicitly so absence is on the record.** The
+`security-extended` suites ran the full injection / traversal / deserialization / crypto / SSRF / XSS
+/ tarslip / unsafe-shell-construction sets against all 174 Python files and all 78 TypeScript files
+and returned **nothing** on the scanner subprocess-argv construction, the credential materialization
+and shredding path, the crypto and secret-store modules, the auth and CSRF layer, or the frontend.
+The Actions pack returned nothing on the five workflows. That is a clean result for exactly the code
+the roadmap item was written to get looked at — and it is a stronger result than it would have been
+under the default suite, since `security-extended` is the larger query set. It is still *coverage*,
+not proof of absence, and note that neither suite contains a "missing authorization" check for Python
+— one of the patterns the roadmap item hoped for. RBAC coverage remains the pytest suite's job.
+
+**A `dev` PR gets no CodeQL check at all — confirmed, not inferred.** Default setup's pull-request
+trigger targets the **default branch**, and `main` is the default branch here while `dev` is where
+day-to-day work is PR'd (§ Git & PR conventions). The PR carrying this entry (**#134**, into `dev`)
+was checked after its checks settled: **four check runs, none of them CodeQL.** So the roadmap item's
+worry that switching CodeQL on would "join the per-PR gate the moment it is switched on" is the
+opposite of what happened — on the branch that actually receives PRs, CodeQL does not run. In
+practice CodeQL currently analyses `main` on push (i.e. **after** a promotion has already landed) and
+on its weekly schedule. **Closing that gap needs advanced setup** — a committed workflow is the only
+way to add `dev` to the trigger — and it is the **strongest** reason to revisit the default-vs-
+advanced choice, stronger than the path-filter and custom-query reasons, since those remain
+hypothetical while this one is a live gap in coverage.
+
+**Not done here, and left to the maintainer.** No alert was dismissed, no code was changed, and no
+issue was opened. The recommended dispositions above are recommendations. One related item also stays
+open: even once CodeQL does run on the right branch, the check **cannot gate a merge** until its
+contexts are added to `protect-dev`'s required-checks list.
+
+> **Corrected 2026-08-02.** This originally attributed the gap to the "still-open **branch
+> protection** governance item." That was wrong — `protect-dev` is already active *and* already
+> carries `required_status_checks`. The rule is an explicit allowlist of contexts, so the blocker is
+> adding CodeQL's contexts to that list (a settings edit), not the governance item. See the entry
+> above for the full ruleset readout.
+
+**Plan section affected:** §14 (this record); `docs/ROADMAP.md` § Near-term (the CodeQL item, now
+struck). No code, schema, workflow, or locked-decision change.
 
 ---
 
