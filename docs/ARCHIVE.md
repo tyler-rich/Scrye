@@ -931,12 +931,21 @@ looked at — but it is *coverage of CodeQL's default suites*, not a proof of ab
 noting that the query sets do not include the "missing authorization" checks the roadmap item hoped
 for (there is no such default Python query; RBAC coverage remains the pytest suite's job).
 
+**A `dev` PR gets no CodeQL check at all — confirmed, not inferred.** Default setup's pull-request
+trigger targets the **default branch**, and `main` is the default branch here while `dev` is where
+day-to-day work is PR'd (§ Git & PR conventions). The PR carrying this entry (**#134**, into `dev`)
+was checked after its checks settled: **four check runs, none of them CodeQL.** So the roadmap item's
+worry that switching CodeQL on would "join the per-PR gate the moment it is switched on" is the
+opposite of what happened — on the branch that actually receives PRs, CodeQL does not run. In
+practice CodeQL currently analyses `main` on push (i.e. **after** a promotion has already landed) and
+on its weekly schedule. **Closing that gap needs advanced setup** — a committed workflow is the only
+way to add `dev` to the trigger — which is a second, concrete reason to revisit the default-vs-
+advanced choice, alongside path filters and query-suite tuning.
+
 **Not done here, and left to the maintainer.** No alert was dismissed, no code was changed, and no
-issue was opened. The recommended dispositions above are recommendations. Two related items also stay
-open: the CodeQL check **cannot gate a merge** until the still-open **branch protection** governance
-item makes it a required status check; and default setup's PR trigger targets the **default branch**
-(`main`), so a PR into `dev` is not necessarily covered by it — worth confirming against a real `dev`
-PR before treating CodeQL as part of the per-PR gate.
+issue was opened. The recommended dispositions above are recommendations. One related item also stays
+open: even once CodeQL does run on the right branch, the check **cannot gate a merge** until the
+still-open **branch protection** governance item makes it a required status check.
 
 **Plan section affected:** §14 (this record); `docs/ROADMAP.md` § Near-term (the CodeQL item, now
 struck). No code, schema, workflow, or locked-decision change.

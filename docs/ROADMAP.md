@@ -159,13 +159,17 @@ Small, self-contained work that closes a concrete gap.
   deliberate hold, since a dismissal with no written reason is indistinguishable from an unread
   finding. The §14 entry supplies the written reason for each; applying them (and deciding whether
   the two `targets.py` alerts warrant a code change to make the containment legible to the analyzer,
-  rather than merely a dismissal) is the open work. Beyond that: the CodeQL check **cannot gate a
-  merge** until the still-open **branch protection** item above makes it a required status check;
-  and default setup's PR trigger targets the **default branch**, so whether a PR into `dev` is
-  covered needs confirming against a real `dev` PR before CodeQL is treated as part of the per-PR
-  gate. **Converting to advanced setup** stays available without losing alert history, and the
-  trigger to revisit it is a concrete need for path filters or query-suite tuning — not a
-  preference.
+  rather than merely a dismissal) is the open work.
+
+  **CodeQL does not currently run on `dev` PRs — confirmed on #134, which got four check runs and no
+  CodeQL among them.** Default setup's PR trigger targets the **default branch**, so it covers PRs
+  into `main`; `dev`, which is where day-to-day work is actually PR'd, gets nothing. CodeQL therefore
+  analyses `main` on push — *after* a promotion has landed — and on its weekly schedule. **This is
+  now the strongest argument for converting to advanced setup**, since a committed workflow is the
+  only way to add `dev` to the trigger; it joins path filters and query-suite tuning on that list and
+  can be done without losing alert history. Separately, even once CodeQL runs on the right branch it
+  **cannot gate a merge** until the still-open **branch protection** item above makes it a required
+  status check.
 
 ## Medium-term
 
