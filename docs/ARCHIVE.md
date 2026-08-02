@@ -779,6 +779,14 @@ image — installed from `nodejs.org/dist` and checksum-verified against that re
 | `npm test` (Vitest) | **20 files, 69 tests, all passed** |
 | `npm run build` (`tsc -b && vite build`) | built in 6.5 s, 6634 modules |
 
+**CI's own frontend job confirms the change took effect**, which is worth stating separately from
+the local run: its log shows `node-version: 24` resolving to **v24.18.0** with **npm 11.16.0**,
+then the same 20 files / 69 tests and the same successful build. Note the **patch difference** —
+the runner's tool-cache carries 24.18.0 while the pinned image carries 24.18.1, because
+`node-version: "24"` is a major-line spec and `setup-node` takes whatever 24.x the runner already
+has. That is expected and is not the drift this item exists to prevent: the lockstep requirement is
+the **major**, since that is what changes language and npm behaviour.
+
 **Nothing in the toolchain broke**, so the deferred frontend-tooling sweep (`docs/ROADMAP.md`
 § Near-term, the #86 majors — TypeScript 7, ESLint 10, Vite 8, Vitest 4, jsdom 29) stayed out of
 this PR, which is the point of keeping the two separate. Vite 6.4.3, Vitest 3.2.7, jsdom 26.1.0 and
