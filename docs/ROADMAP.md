@@ -129,13 +129,25 @@ Small, self-contained work that closes a concrete gap.
   repository, so that entry is the only durable record it happened. The three items below are
   what remains open.
 
-  - **Branch protection** on `main` and `dev` — require a passing CI status, require a pull
-    request, require review from Code Owners, and for `main` restrict who can push tags/promote.
-    Note when scoping this: a `protect-dev` ruleset already exists with *Restrict deletions*
-    enabled, and it did **not** prevent `dev` from being deleted during the v0.2.0 promotion,
-    because the ruleset's bypass list grants Repository admin *Always allow* (`ARCHIVE.md` §14,
-    2026-08-02). Assume any rule configured here is advisory for the repository owner until the
-    bypass list says otherwise.
+  - **Branch protection** on `main` and `dev` — **mostly already done; re-scope before working it.**
+    A ruleset readout on 2026-08-02 (`ARCHIVE.md` §14) found `protect-dev` and `protect-main` both
+    `active`, each already carrying `pull_request` (1 approval, dismiss-stale-on-push, thread
+    resolution, squash-only), `required_status_checks`, `deletion`, and `non_fast_forward`. So
+    "require a passing CI status" and "require a pull request" are **in place on both branches**.
+
+    What is actually still open: **(a)** `require_code_owner_review` is `false` on both, so the
+    `CODEOWNERS` file requests review but does not require it; **(b)** nothing restricts who may push
+    tags on `main` — which matters, because a semver tag push is what triggers `publish.yml`;
+    **(c)** `required_status_checks` names only `Backend — lint + tests` and `Frontend — lint + build`
+    — the image build and dogfood self-scan run on every PR but are **not** required, which is worth
+    a deliberate decision either way.
+
+    Note when scoping this: *Restrict deletions* is enabled on `protect-dev` and did **not** prevent
+    `dev` from being deleted during the v0.2.0 promotion, because the ruleset's bypass list grants
+    Repository admin *Always allow* (`ARCHIVE.md` §14, 2026-08-02). Assume any rule configured here
+    is advisory for the repository owner until the bypass list says otherwise. (The bypass list is
+    not readable at the API permission level available to a code session — the ruleset endpoint
+    returns `bypass_actors: null` — so confirm it in Settings rather than from an API dump.)
   - **Signed-commit enforcement** — a decision to make. Requiring signed commits on the
     protected branches means contributors must sign; worth it for a security tool, so weigh the
     friction.
@@ -168,17 +180,24 @@ Small, self-contained work that closes a concrete gap.
   into `main`; `dev`, which is where day-to-day work is actually PR'd, gets nothing. CodeQL therefore
   analyses `main` on push — *after* a promotion has landed — and on its weekly schedule.
 
-  **The advanced-setup migration was assessed on 2026-08-02; the recommendation is to do it, but
-  *after* branch protection.** Full reasoning, the measured CI cost (≈0 added wall-clock — CodeQL's
+  **The advanced-setup migration was assessed on 2026-08-02; the recommendation is to do it, with no
+  sequencing dependency.** Full reasoning, the measured CI cost (≈0 added wall-clock — CodeQL's
   longest job is 62 s against the pipeline's 121 s critical path), the maintenance cost (≈0 marginal,
   because `dependabot.yml` already groups all action bumps into one weekly PR), what migrating does
   and does not lose (query packs stay GitHub-managed; automatic language detection does not), and the
   case *against* migrating are in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md). Two corrections that
   entry makes to the framing above: `:latest` is published by a **tag push**, not by the promotion
   merge, so CodeQL's run on `main` normally lands *before* `:latest` exists — the real
-  published-artifact gap is **`:dev`**, which the nightly builds from a branch CodeQL never sees. And
-  until the **branch protection** item above lands, a CodeQL check on a `dev` PR is advisory: it
-  cannot block a merge, which is why the sequencing matters.
+  published-artifact gap is **`:dev`**, which the nightly builds from a branch CodeQL never sees.
+
+  **Do not assume a CodeQL check would be blocked on the branch-protection item above.** The
+  `protect-dev` ruleset is already `active` and already has `required_status_checks` — but that rule
+  is an **explicit allowlist of contexts**, currently naming only `Backend — lint + tests` and
+  `Frontend — lint + build` (neither image job is on it either). A migrated CodeQL workflow would run
+  and be visible but would not block a merge until its contexts are added to that list, which is a
+  settings edit made *alongside* the migration, not a prerequisite for it. One caveat if they are
+  added: a required context that never reports blocks a PR forever, so the CodeQL workflow must not
+  carry `paths:` filters.
 
 ## Medium-term
 

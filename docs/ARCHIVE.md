@@ -764,8 +764,9 @@ re-rooting in `addSymlinkToIndex` runs **first**, so an out-of-root target never
 The comment describes an intent the surrounding code no longer implements. Behavior was measured;
 the comment was not trusted.
 
-**The load-bearing caveat, and the one thing worth acting on.** The containment rides entirely on
-`basePath()` defaulting `base` to the scan location — a function upstream annotates:
+**The load-bearing caveat, and the one thing worth acting on — now tracked as [#135](https://github.com/tyler-rich/Scrye/issues/135).**
+The containment rides entirely on `basePath()` defaulting `base` to the scan location — a function
+upstream annotates:
 
 ```go
 // FIXME why is the base always being set instead of left as empty string?
@@ -776,8 +777,11 @@ If that FIXME is ever actioned, `base` becomes `""`, the re-rooting branch is sk
 roots. **The escape would become real silently, on a routine Grype/Syft version bump, with no code
 change on Scrye's side.** Nothing in this repository would notice. A regression test — plant a
 symlink in a temp root, assert the out-of-root package is absent from Grype's output — would pin the
-behavior to the dogfood/test suite and fail loudly on the bump that changes it. **Recommended, not
-implemented.**
+behavior to the dogfood/test suite and fail loudly on the bump that changes it. **Opened as
+[#135](https://github.com/tyler-rich/Scrye/issues/135) on 2026-08-02; not implemented here.** That
+issue carries the mechanism, the `FIXME` reference, the inventory-disclosure severity ceiling (so it
+is not later mis-rated against H1/SEC-1), and the positive-control requirement the false-negative
+below taught.
 
 **Hardlinks are followed, and that is fine.** A hardlink from inside an allowed root to a file
 outside **is** read — demonstrated: `lodash 4.17.15` catalogued via `/sub/package-lock.json`, same
@@ -831,8 +835,14 @@ the pinned Grype/Syft versions if those move.
 
 #### Item 2 — should CodeQL move to advanced setup for trigger control?
 
-**Recommendation: yes, migrate — but the case is narrower than the framing suggests, and one premise
-behind it is wrong.**
+**Recommendation: migrate, and do it together with a one-line ruleset edit. No sequencing dependency.**
+
+> **Corrected 2026-08-02 (same day), after reading the `protect-dev` ruleset via the API.** This
+> section originally recommended migrating *after* the branch-protection governance item, on the
+> premise that "until branch protection lands, a CodeQL check on a `dev` PR cannot block a merge."
+> **That premise was wrong** — branch protection on `dev` had already landed. The conclusion survives
+> for a sharper reason, but the sequencing does not. Both are corrected in place below, and the
+> superseded argument is marked withdrawn rather than deleted.
 
 **Correcting the premise first.** The concern was that in a dev-first workflow, findings "arrive after
 code is already published to `:latest`." That is **not** what happens for `:latest`. Publishing is
@@ -887,6 +897,65 @@ PR becomes non-empty more often than it is today.
   § Build performance warns that workflow shapes here are load-bearing. The repo already maintains
   four workflows and a composite action, so this is familiar rather than new capability.
 
+**What the `protect-dev` ruleset actually says (read via `GET /repos/…/rulesets/18504510`).** The
+premise that branch protection on `dev` is "still open" does not survive contact with the API.
+`protect-dev` is **`enforcement: active`** on `refs/heads/dev` and carries four rules:
+
+| Rule | Parameters that matter |
+| --- | --- |
+| `pull_request` | 1 approving review, `dismiss_stale_reviews_on_push`, `required_review_thread_resolution`, `allowed_merge_methods: ["squash"]` |
+| `required_status_checks` | **exactly two contexts** — `Backend — lint + tests`, `Frontend — lint + build`; `strict_required_status_checks_policy: false` |
+| `deletion` | — |
+| `non_fast_forward` | — |
+
+So "Require status checks to pass" **is** live on `dev`. That kills the original sequencing argument.
+
+**But the conclusion survives, for a sharper reason: `required_status_checks` is an explicit
+allowlist of contexts, not a switch.** The list names two jobs. Neither image job is on it — note
+`Image — build + dogfood self-scan` and `Image — multi-arch build check` run on every PR and are
+**not** required — and a migrated CodeQL workflow's contexts (`Analyze (python)` &c.) would not be on
+it either. CodeQL would run, be visible, and go green or red **without blocking a merge**, until
+someone adds its contexts to that list.
+
+The difference from the original claim is the size of the remedy. "Wait for branch protection" framed
+it as a governance project; in fact it is **adding two or three strings to a ruleset that already
+exists**, done at the same time as the migration. There is no reason to sequence one behind the
+other.
+
+**Does the admin bypass change the answer? Only for one of the two things "required" buys.** For the
+repository owner it changes little — an actor who can bypass the ruleset can merge past any required
+check, so "required" is not an enforcement boundary against that person. What it still buys:
+
+1. **Real enforcement for anyone who is not that actor.** The repo is public and `CONTRIBUTING.md`
+   invites external contributions; for a contributor, a required check is a hard stop.
+2. **A deliberate bypass instead of a silent merge.** This is the part that matters most here,
+   because this project has already documented itself normalizing red: the same §14
+   (2026-07-31, flaky cancellation test) records that *"a test that reddens CI intermittently trains
+   everyone to re-run without reading the failure"*, and warns that the habit costs most on a
+   security tool. A visibly-red-but-optional check is exactly the artifact that habit erodes. Making
+   it required does not stop an admin, but it converts "merge anyway" from a non-event into an
+   explicit act.
+
+So: **a visibly-red check is not sufficient on its own**, not because of what the ruleset can enforce
+against an admin, but because this repository has written down that it stops reading advisory red.
+Required-ness is worth having even where it is bypassable.
+
+*Not independently confirmed:* the API returns `bypass_actors: null` and
+`current_user_can_bypass: "never"` for **both** rulesets, but that reflects *this session's token
+identity*, not the repository admin's — the bypass list is not readable at this permission level.
+Taking as given the maintainer's statement that Repository admin has *Always allow*, corroborated by
+§14 (2026-08-02), which records `dev` being deleted during the v0.2.0 promotion **despite** the
+`deletion` rule above being active.
+
+**One operational hazard if CodeQL's contexts are made required.** A required context that never
+**reports** blocks a PR indefinitely. A job skipped by an `if:` condition still reports a `skipped`
+conclusion and satisfies the requirement — that is why `Image — multi-arch build check` showing
+`skipped` on these PRs is harmless — but a *workflow that never triggers* reports nothing at all. So
+if the CodeQL workflow's contexts go on the required list, it must not carry `paths:`/`paths-ignore:`
+filters, or a docs-only PR will hang forever waiting on a check that was never scheduled. Given the
+suite runs in ~60 s and costs nothing on a public repo, the right answer is simply not to add path
+filters.
+
 **The case against this recommendation**, stated plainly because it is not weak:
 
 - **The empirical yield so far is 0 true positives in 6 alerts.** Every finding from the first run
@@ -896,16 +965,18 @@ PR becomes non-empty more often than it is today.
 - **The `:latest` exposure argument does not survive contact with `publish.yml`** (above). Strip it
   out and what remains is "findings arrive post-merge instead of pre-merge" — a real but ordinary
   workflow-quality complaint, not a security gap.
-- **Branch protection is still open.** Until that governance item lands, a CodeQL check on a `dev` PR
-  is advisory: it cannot block a merge, so migrating buys visibility, not enforcement. Doing this
-  *first* gets a check nobody is required to read. Sequencing it after branch protection would make
-  the same work actually bite.
+- ~~**Branch protection is still open.**~~ **Withdrawn — this argument was factually wrong.** See
+  the ruleset findings below: `protect-dev` is active and already requires status checks. The
+  surviving version of the point is much weaker: CodeQL's contexts would not be on the required list
+  *initially*, and putting them there is a settings edit made alongside the migration, not a
+  prerequisite for it.
 - **Default setup keeps giving things away for free** — the `actions` language arrived without being
   asked for, and future additions would too. An explicit matrix ends that.
 
-**On balance:** migrate, but **after** the branch-protection item, so the check lands as a gate
-rather than as advisory decoration — and treat the `:dev` coverage hole, not `:latest`, as the
-concrete thing being fixed. **Not implemented in this session; the decision is the maintainer's.**
+**On balance:** migrate whenever convenient, and **add the CodeQL contexts to `protect-dev`'s
+required-checks list in the same change** — that is what turns it from advisory decoration into a
+gate, and it is a settings edit, not a project. Treat the **`:dev`** coverage hole, not `:latest`, as
+the concrete thing being fixed. **Not implemented in this session; the decision is the maintainer's.**
 
 **Plan section affected:** §14 (this record); §4/§6 (filesystem-scan gate — verified, unchanged);
 `docs/ROADMAP.md` § Near-term (CodeQL item's remaining work). No code, schema, workflow, or
@@ -1226,8 +1297,14 @@ hypothetical while this one is a live gap in coverage.
 
 **Not done here, and left to the maintainer.** No alert was dismissed, no code was changed, and no
 issue was opened. The recommended dispositions above are recommendations. One related item also stays
-open: even once CodeQL does run on the right branch, the check **cannot gate a merge** until the
-still-open **branch protection** governance item makes it a required status check.
+open: even once CodeQL does run on the right branch, the check **cannot gate a merge** until its
+contexts are added to `protect-dev`'s required-checks list.
+
+> **Corrected 2026-08-02.** This originally attributed the gap to the "still-open **branch
+> protection** governance item." That was wrong — `protect-dev` is already active *and* already
+> carries `required_status_checks`. The rule is an explicit allowlist of contexts, so the blocker is
+> adding CodeQL's contexts to that list (a settings edit), not the governance item. See the entry
+> above for the full ruleset readout.
 
 **Plan section affected:** §14 (this record); `docs/ROADMAP.md` § Near-term (the CodeQL item, now
 struck). No code, schema, workflow, or locked-decision change.
