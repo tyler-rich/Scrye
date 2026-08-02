@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (120, newest first)
+### Index of §14 entries (121, newest first)
 
+- [2026-08-02 — Infra — Frontend builder and CI moved Node 22 → 24 (Active LTS); the Dependabot major-ignore re-pointed at the 24 line](#2026-08-02--infra--frontend-builder-and-ci-moved-node-22--24-active-lts-the-dependabot-major-ignore-re-pointed-at-the-24-line)
 - [2026-08-02 — Infra/Process — Post-v0.2.0 dependency cleanup: three closed Dependabot PRs reapplied, the base-branch anomaly traced to `dev`'s deletion, the brace-expansion waiver retired](#2026-08-02--infraprocess--post-v020-dependency-cleanup-three-closed-dependabot-prs-reapplied-the-base-branch-anomaly-traced-to-devs-deletion-the-brace-expansion-waiver-retired)
 - [2026-08-02 — Process/Governance — Public-repo governance checklist verified in GitHub Settings; five of eight items closed](#2026-08-02--processgovernance--public-repo-governance-checklist-verified-in-github-settings-five-of-eight-items-closed)
 - [2026-08-02 — Infra/Process — Auto-delete-on-merge deleted `dev` during the v0.2.0 promotion; the ruleset's admin bypass is why "Restrict deletions" did not stop it](#2026-08-02--infraprocess--auto-delete-on-merge-deleted-dev-during-the-v020-promotion-the-rulesets-admin-bypass-is-why-restrict-deletions-did-not-stop-it)
@@ -700,6 +701,171 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-02 — Infra — Frontend builder and CI moved Node 22 → 24 (Active LTS); the Dependabot major-ignore re-pointed at the 24 line
+
+**What changed:** the SPA is now built on **Node 24 (`krypton`)** in both places it is built — the
+image's `frontend-builder` stage and CI's `frontend` job — with the stated local-development
+requirement updated to match and `.github/dependabot.yml`'s node major-ignore re-pointed from the
+22 line to the 24 line. This is the `docs/ROADMAP.md` § Near-term item written up on 2026-08-02
+(§14, "Post-v0.2.0 dependency cleanup", part 3), executed as the standalone PR that item said it
+had to be. **No application code, dependency version, schema, API contract, security model, or
+build structure changes** — nothing in `frontend/package.json` or `package-lock.json` moves, and
+the Dockerfile's stage boundaries and layer ordering are untouched (`CLAUDE.md` § Build
+performance).
+
+---
+
+**1. Why 24, stated as a lifecycle argument rather than a preference.**
+
+Read from `nodejs/Release`'s `schedule.json` at the source, not from a release-notes page:
+
+| Line | LTS from | Maintenance from | End of life |
+| --- | --- | --- | --- |
+| **20** (`iron`) | 2023-10-24 | 2024-10-22 | **2026-04-30** — already past |
+| **22** (`jod`) | 2024-10-29 | 2025-10-21 | **2027-04-30** |
+| **24** (`krypton`) | 2025-10-28 | 2026-10-20 | **2028-04-30** |
+| **25** | never — odd lines get no LTS | 2026-04-01 | **2026-06-01** — already past |
+| **26** | **2026-10-28** | 2027-10-20 | 2029-04-30 |
+
+24 is the Active LTS today and buys the longest supported window available: twelve months more
+than 22. **26 was considered and deliberately declined for now** — it became current on 2026-05-05
+but does not enter LTS until **2026-10-28**, so adopting it today would put the builder on a
+*current* line, which is the same class of mistake as the Node 25 proposal in #126. The 24 line
+does not even enter maintenance until 2026-10-20, so there is no pressure to revisit; the roadmap
+item now says exactly that instead of holding an open "move to 24" task.
+
+**This is a support-lifecycle bump, not a security fix, and it is not recorded as one.** No CVE is
+claimed to be cleared by it — the parallel to `CLAUDE.md` § Dependency hygiene's interpreter-CVE
+rule is deliberate. Node here is a **build-time** toolchain that never reaches the runtime image
+(the `frontend-builder` stage's only output is the compiled `dist/`), so the argument for currency
+is the supported-window one and nothing more.
+
+---
+
+**2. The digest was resolved against the registry, and the interpreter inside it verified.**
+
+`docker buildx imagetools inspect node:24-bookworm-slim` resolves the tag to the multi-arch index
+**`sha256:235600a8101ab264e117b1768e925532262668dc9b581ef1dd7d96ced463b8e7`**, which is what the
+`FROM` now pins — an index digest, matching how every other base in this Dockerfile is pinned, and
+carrying both platforms the multi-arch build needs (`linux/amd64`
+`sha256:a09aabc6…` and `linux/arm64/v8` `sha256:c39335f4…`, alongside a `linux/ppc64le` leg the
+build never selects).
+
+**Which Node that digest actually contains was confirmed, not inferred from the tag.** The index's
+`org.opencontainers.image.revision` annotation points at `nodejs/docker-node` commit
+`53252eea9caacaa50bdf58f4d34f0bff8d259999`, path `24/bookworm-slim`; that file's
+`ENV NODE_VERSION=24.18.1`. So the pinned image is **Node 24.18.1**, the current 24.x release
+(2026-07-28, npm 11.16.0). The container itself could not be run to check `node --version`
+directly — this environment has the docker CLI but no daemon, and registry blob fetches through the
+proxy return 403 — so the tag→commit→`NODE_VERSION` chain is the verification, and it is stated
+that way rather than as an executed check.
+
+---
+
+**3. Verified on a real Node 24, not on the assumption that a major is a no-op.**
+
+The whole frontend gate was run against **Node v24.18.1** — the exact version inside the pinned
+image — installed from `nodejs.org/dist` and checksum-verified against that release's
+`SHASUMS256.txt` (`d6c664df…`) before use:
+
+| Step | Result |
+| --- | --- |
+| `npm ci` | clean install from the unchanged lockfile |
+| `npm run lint` (ESLint, type-aware) | clean |
+| `npm run format:check` (Prettier) | clean |
+| `npm test` (Vitest) | **20 files, 69 tests, all passed** |
+| `npm run build` (`tsc -b && vite build`) | built in 6.5 s, 6634 modules |
+
+**CI's own frontend job confirms the change took effect**, which is worth stating separately from
+the local run: its log shows `node-version: 24` resolving to **v24.18.0** with **npm 11.16.0**,
+then the same 20 files / 69 tests and the same successful build. Note the **patch difference** —
+the runner's tool-cache carries 24.18.0 while the pinned image carries 24.18.1, because
+`node-version: "24"` is a major-line spec and `setup-node` takes whatever 24.x the runner already
+has. That is expected and is not the drift this item exists to prevent: the lockstep requirement is
+the **major**, since that is what changes language and npm behaviour.
+
+**Nothing in the toolchain broke**, so the deferred frontend-tooling sweep (`docs/ROADMAP.md`
+§ Near-term, the #86 majors — TypeScript 7, ESLint 10, Vite 8, Vitest 4, jsdom 29) stayed out of
+this PR, which is the point of keeping the two separate. Vite 6.4.3, Vitest 3.2.7, jsdom 26.1.0 and
+the React Testing Library harness all run on 24 unmodified.
+
+**One behavioural difference is worth recording even though it changed nothing here.** Node 24
+ships **npm 11** (11.16.0) where 22 ships npm 10, and npm 11 no longer runs dependency install
+scripts by default — `npm ci` now prints an `allow-scripts` warning for `esbuild@0.25.12`'s
+`postinstall`. The build is unaffected because esbuild's platform binary arrives through its
+`@esbuild/linux-*` optional dependency rather than through that script, which is why the Vite build
+succeeds with the postinstall skipped. Noted because it is the kind of difference that would
+matter for a future dependency that genuinely needs its install script.
+
+---
+
+**4. The three-file lockstep, and the fourth file that had drifted.**
+
+The roadmap item's whole reason for existing is that bumping the Dockerfile alone leaves **CI on 22
+while the image builds on 24**, so a version-specific failure first appears in a published image
+instead of in a check. All of them moved together:
+
+1. `docker/Dockerfile` — `node:22-bookworm-slim@sha256:6c74791e…` → `node:24-bookworm-slim@sha256:235600a8…`, with the stage comment rewritten to state the lockstep as a rule rather than to describe a pending move.
+2. `.github/workflows/ci.yml` — `node-version: "22"` → `"24"` (and the step's display name), with a comment naming the Dockerfile as the thing it must match.
+3. `CONTRIBUTING.md` § Prerequisites and `README.md` § Requirements — the stated Node requirement.
+
+**The stated requirement was also *raised*, not just re-worded, and that is a small deviation worth
+flagging.** Both files said **"Node 20+"**, which named a line that reached end-of-life on
+**2026-04-30** — i.e. the documented floor for local development was an unsupported runtime. It is
+now **"Node 22+"** with the image/CI version (24) named alongside it. 22 is kept as the floor
+rather than 24 so a contributor on the previous LTS is not turned away by a docs change; the two
+supported lines are exactly 22 and 24.
+
+**Checked for other references before calling the sweep complete**, since the roadmap item listed
+three files but the search space is larger: there is **no `.nvmrc`** anywhere in the repo, and
+`frontend/package.json` has **no `engines` field** — so neither needed updating, and neither was
+silently left behind. `CHANGELOG.md`'s single `node:22-bookworm-slim` mention is inside the v0.1.0
+release entry describing what shipped then, which is history and must not be rewritten. The
+`@types/node` devDependency stays at 22.20.0: it is a *typings* package pinned as part of the
+frontend dependency set, and moving it is a `package.json` change that belongs with the #86
+tooling sweep, not here — the SPA is browser-targeted and does not type against Node 24 APIs.
+
+---
+
+**5. The Dependabot ignore keeps its shape and changes its target.**
+
+`.github/dependabot.yml`'s `docker` entry still carries:
+
+```yaml
+- dependency-name: "node"
+  update-types: ["version-update:semver-major"]
+```
+
+The **rule is unchanged** — block majors, let digest refreshes through — because the reason for it
+is unchanged: a major here spans four files and a lifecycle decision, and the
+`version-update:semver-major` scoping is what keeps Dependabot proposing digest refreshes of the
+pinned tag instead of going silent (the failure mode that left the 22 digest stale until #107).
+Only the **comment** moved: it now names 24 as the line in use and 2028-04-30 as its EOL, records
+the Node 26 revisit date as a deliberate decision rather than a bump to accept, and keeps the
+Node 25 / #126 history as the example of why odd lines are declined.
+
+**The open question from the 2026-08-02 entry is still open, and this PR does not close it.** That
+entry noted the ignore's digest-still-arrives behaviour was confirmed from *documented semantics*
+plus reported behaviour, not from an observed Dependabot run in this repository, and that the next
+scheduled `docker` run is the test. Re-pointing the ignore at 24 does not change that: the same
+test applies, now against the `24-bookworm-slim` tag. If no `node` update ever arrives, the
+fallback remains the one #107 used — refresh the digest by hand and say so here.
+
+---
+
+**Verification.** Frontend lint, format, Vitest and build all green on Node v24.18.1 as tabled
+above. **CI's image build is the real gate** and is reported from the PR's actual run, not
+predicted here — the local checks exercise the SPA toolchain but not the multi-stage image build,
+and this environment has no docker daemon to build it with.
+
+**Files touched:** `docker/Dockerfile`, `.github/workflows/ci.yml`, `.github/dependabot.yml`,
+`CONTRIBUTING.md`, `README.md`, `docs/ROADMAP.md` (item struck as done, Node 26 revisit retained),
+`docs/ARCHIVE.md` (this entry).
+
+**Plan section affected:** §9.1 (image build), process.
 
 ---
 

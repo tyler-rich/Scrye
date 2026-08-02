@@ -103,17 +103,19 @@ updates:
       prefix: "docker"
     ignore:
       # Node MAJOR bumps are declined here on a support-lifecycle argument, not
-      # a preference. Node's odd-numbered lines never become LTS: 25 (proposed
-      # as #126) reached end-of-life on 2026-06-01 — before the PR was even
-      # opened, and years before the 22 line the builder is on today
-      # (2027-04-30) — so taking it would have moved the build onto an
-      # UNSUPPORTED runtime, not extended anything. The wanted move is 22 -> 24
-      # (Active LTS, supported through 2028-04-30), and it is tracked in
-      # docs/ROADMAP.md § Near-term because it spans three files that must
-      # change together — it is not something a Dependabot bump can carry.
+      # a preference. The builder is on 24 (`krypton`), the Active LTS, which is
+      # supported through 2028-04-30 — the longest window available today.
+      # Node's odd-numbered lines never become LTS: 25 (proposed as #126)
+      # reached end-of-life on 2026-06-01, so taking it would have moved the
+      # build onto an UNSUPPORTED runtime, not extended anything. Node 26 does
+      # not enter LTS until 2026-10-28; it is a deliberate decision to make
+      # after that date, not a bump to accept from a PR. A major here also
+      # spans three files that must change together (this Dockerfile stage,
+      # ci.yml's `node-version`, and the CONTRIBUTING/README requirement), so it
+      # is not something a Dependabot bump can carry regardless.
       #
       # Scoped to `version-update:semver-major` on purpose: DIGEST refreshes of
-      # the pinned `node:22-bookworm-slim` tag are NOT a semver version update
+      # the pinned `node:24-bookworm-slim` tag are NOT a semver version update
       # and still come through. That matters — declining the major previously
       # left Dependabot offering nothing at all for this image and the pinned
       # digest went stale until it was refreshed by hand in #107

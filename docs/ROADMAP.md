@@ -44,37 +44,22 @@ Small, self-contained work that closes a concrete gap.
   been updated since then is still column-only. That fallback can only be dropped once every
   row has been re-encrypted, which is exactly what this action would do — one eager pass
   instead of waiting for each record's next write.
-- **Move the frontend build from Node 22 to Node 24.** The image's `frontend-builder` stage and
-  CI both run Node 22 (`jod`), which entered maintenance on 2025-10-21 and is supported only
-  through **2027-04-30**. Node 24 (`krypton`) is the **Active LTS**, supported through
-  **2028-04-30**, and is the correct target.
+- ~~**Move the frontend build from Node 22 to Node 24.**~~ **Done 2026-08-02** — the image's
+  `frontend-builder` stage, CI's `setup-node`, and the stated requirement in `CONTRIBUTING.md` /
+  `README.md` all moved to Node 24 (`krypton`, Active LTS, supported through **2028-04-30**) in
+  one PR, with `.github/dependabot.yml`'s major-ignore re-pointed at the 24 line. See
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
 
-  **This must be its own PR.** The move spans **three files that have to change together**:
-
-  1. `docker/Dockerfile` — the `frontend-builder` stage's pinned `node:22-bookworm-slim` digest.
-  2. `.github/workflows/ci.yml` — the frontend job's `node-version: "22"` on `setup-node`.
-  3. `CONTRIBUTING.md` — the stated Node requirement for local development (plus the matching
-     line in `README.md` § Requirements).
-
-  Bumping the Dockerfile alone would leave **CI building on 22 while the image builds on 24**, so
-  a lint or build failure that only reproduces on one of the two versions would surface in the
-  published image rather than in CI. Pin the new base by **digest, resolved against the registry**
-  — not by tag, and not from a bump description — the same way every other base image in the
-  Dockerfile is pinned.
-
-  **Node majors are now ignored for the `docker` ecosystem in `.github/dependabot.yml`,** so
-  nothing arrives here automatically. That ignore is why the odd-numbered lines stop showing up:
-  **#126** proposed **Node 25**, which never becomes LTS and reached end-of-life on
-  **2026-06-01** — *earlier* than the 22 line already in use — so accepting it would have
-  shortened the supported window, not extended it. The ignore is scoped to
-  `version-update:semver-major`, so **digest refreshes of the pinned 22 tag still come through**;
-  that matters because declining a major previously left Dependabot offering nothing for this
-  image and the digest went stale until it was refreshed by hand in #107 (`ARCHIVE.md` §14,
-  2026-07-26 and 2026-08-02).
-
-  Node **26** is not the target today — it became current on 2026-05-05 but does not enter LTS
-  until **2026-10-28**. It is worth revisiting after that date (its EOL is 2029-04-30), but that
-  is a decision to make deliberately when this item is picked up, not a reason to wait.
+  **What remains is the Node 26 decision, and it is not due yet.** 26 became current on
+  2026-05-05 but does not enter LTS until **2026-10-28** (EOL 2029-04-30). Revisit it
+  deliberately after that date — the 24 line does not go to maintenance until 2026-10-20 and is
+  supported for eighteen months past it, so there is no pressure. The same three-file lockstep
+  applies to any future major: the Dockerfile stage, `ci.yml`'s `node-version`, and the
+  CONTRIBUTING/README requirement move together, or a version-specific failure surfaces in a
+  published image instead of in a check. Node majors stay ignored for the `docker` ecosystem in
+  `.github/dependabot.yml` — scoped to `version-update:semver-major`, so digest refreshes of the
+  pinned 24 tag still arrive — which is why odd-numbered lines like the **#126** Node 25 proposal
+  (never LTS, EOL 2026-06-01) do not show up here.
 - **Frontend tooling majors from Dependabot #86.** After the Mantine/React ignores landed
   (locked decision §2 — `ARCHIVE.md` §14, 2026-07-26), the rest of that grouped PR is still
   wanted and still unapplied: **TypeScript 5.7 → 7.0**, **ESLint 9 → 10**, **`typescript-eslint`
