@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Link your existing account to an OIDC identity** (Settings → Authentication →
+  *Your linked identity*). Enabling OIDC never connected it to the account you
+  were already signed in as: the first OIDC sign-in either created a **second,
+  separate account** (auto-provision on) or dead-ended at "no account is linked
+  to that identity" (auto-provision off). The only workaround was to determine
+  your provider's opaque `sub` by hand and write it into the database — which
+  Authentik's default hashed subject mode and Entra ID's pairwise subjects do not
+  let you look up at all.
+
+  Linking now runs the same authorization-code handshake *while you are signed
+  in* and binds the identity from the verified ID token to your own account.
+  **Nobody types or sees a subject** — there is no such field in the API or the
+  UI, by design. A guarded self-unlink completes the lifecycle.
+
+  Both actions require **fresh full re-authentication** — your current password,
+  plus a current TOTP code when enrolled — because each one changes how your
+  account can be signed into, and a stolen session alone must never be able to
+  add a sign-in path. Linking also **widens the accepted MFA-delegation
+  limitation** from OIDC-provisioned accounts to any linked account, including
+  MFA-enrolled admins: the UI warns before you link and the README security model
+  documents the trade in full. Confirm your identity provider enforces a second
+  factor before linking an admin account.
+
+  Scope is deliberately minimal: an admin cannot bind an identity to *another*
+  user (that needs the other person to authenticate at the provider), and
+  email-based auto-linking is not built and not configurable — it is a
+  well-known account-takeover vector. See #114.
+
+- **A stale link now announces itself instead of resurfacing as the duplicate-account
+  bug.** If your provider re-issues your identifier — the account was deleted and
+  recreated, or an Authentik operator changed the provider's subject mode, which
+  re-keys every user at once — the stored link silently stops matching while the
+  settings screen still reads "Linked". Scrye now detects that case at sign-in
+  and **refuses with a specific error** ("your identity provider issued a
+  different account identifier than the one linked here"), recording
+  `auth.oidc_identity_stale` in the audit log, instead of quietly minting a
+  duplicate account or emitting a generic failure. It never re-binds on a name or
+  email match. The linked-identity card shows when the link was last used, and
+  the README carries a re-link runbook.
+
 ### Security
 
 - **`react-router-dom` bumped 7.18.1 → 7.18.2, closing GHSA-qwww-vcr4-c8h2** (HIGH) —
