@@ -578,8 +578,11 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (116, newest first)
+### Index of §14 entries (119, newest first)
 
+- [2026-08-02 — Process/Governance — Public-repo governance checklist verified in GitHub Settings; five of eight items closed](#2026-08-02--processgovernance--public-repo-governance-checklist-verified-in-github-settings-five-of-eight-items-closed)
+- [2026-08-02 — Infra/Process — Auto-delete-on-merge deleted `dev` during the v0.2.0 promotion; the ruleset's admin bypass is why "Restrict deletions" did not stop it](#2026-08-02--infraprocess--auto-delete-on-merge-deleted-dev-during-the-v020-promotion-the-rulesets-admin-bypass-is-why-restrict-deletions-did-not-stop-it)
+- [2026-08-02 — Infra — Dependabot's docker run fails on our own local build tag `scrye:0.2.0`](#2026-08-02--infra--dependabots-docker-run-fails-on-our-own-local-build-tag-scrye020)
 - [2026-07-31 — Process — `dev` → `main` promotions merge with a merge commit, not a squash](#2026-07-31--process--dev--main-promotions-merge-with-a-merge-commit-not-a-squash)
 - [2026-07-31 — Release/Process — v0.2.0 release prep: CHANGELOG cut, brace-expansion reapplied on `dev`, Dependabot security-PR routing documented](#2026-07-31--releaseprocess--v020-release-prep-changelog-cut-brace-expansion-reapplied-on-dev-dependabot-security-pr-routing-documented)
 - [2026-07-31 — Infra/Process — Grype gate keeps its verdict *and* lists its waivers, from one scan](#2026-07-31--infraprocess--grype-gate-keeps-its-verdict-and-lists-its-waivers-from-one-scan)
@@ -696,6 +699,145 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-02 — Process/Governance — Public-repo governance checklist verified in GitHub Settings; five of eight items closed
+
+**What changed:** the public-repo governance checklist under `docs/ROADMAP.md` § Near-term was
+worked through in GitHub Settings and **five of its eight items are now closed**; those five were
+struck from the checklist and the three that remain open were left in place. Nothing in the
+repository changed as a consequence — this entry *is* the change, for the reason given under
+**Why** below. No code, schema, API contract, security model, job model, auth, or CI behavior is
+affected.
+
+**Closed — verified, and the state each is now in:**
+
+1. **GitHub profile display name set to `tyler-rich`.** This closes **R7/D4** (the 2026-07-13
+   squash-merge-authorship entry). GitHub authors a merge performed through the web UI — the
+   squashed commit of a feature PR, and the merge commit of a promotion — as the merging account's
+   *profile display name*, which repo-local `git config user.name` cannot override. While the
+   profile read "Tyler Richardson", every such merge silently violated `CLAUDE.md`'s
+   author-identity rule no matter how carefully the branch commits were authored. With the display
+   name changed, the rule now holds end-to-end.
+2. **`DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` repo secrets deleted.** Unreferenced by any workflow
+   since the GHCR consolidation (§14 2026-07-09) — dormant registry credentials sitting on a
+   public security-tool repo.
+3. **GHCR package `ghcr.io/tyler-rich/scrye` confirmed public.** §14 2026-07-06 asked to confirm it
+   was *private*, which inverted when the repo went public on 2026-07-09; it is public, as locked
+   decision §6 requires.
+4. **Dependabot security alerts confirmed enabled, and Dependabot malware alerts enabled.** The
+   `.github/dependabot.yml` file only schedules *version* updates; alerting is a separate repo
+   setting. Malware alerts were not on the original checklist and were switched on in the same
+   pass.
+5. **Actions workflow permissions confirmed set to "read repository contents and packages"
+   only, with "Allow GitHub Actions to create and approve pull requests" unchecked.** Both were
+   **already correct — verified, not changed.** Recording that distinction is the point: an item
+   found already-correct and an item never looked at are indistinguishable from inside the
+   repository, and this checklist existed because exactly that ambiguity let items sit. The
+   restrictive default breaks nothing, including GHCR push, because every workflow declares its
+   own explicit `permissions:` block and an explicit block takes precedence over the repo default
+   rather than being capped by it.
+
+**Still open — unchanged, and not to be treated as done:** branch protection on `main` and `dev`;
+the signed-commit-enforcement decision; enabling private vulnerability reporting so `SECURITY.md`'s
+stated channel actually exists. The branch-protection item picked up a scoping note from the
+auto-delete finding in the entry below — an existing ruleset's *Restrict deletions* did not hold
+against an admin — but the item itself is untouched.
+
+**Why this is logged here at all:** a repository-settings change produces **no artifact in the
+codebase**. There is no diff, no file, no CI run, nothing a later session can grep for. That
+invisibility is not incidental — it is precisely why several of these items sat undone for weeks
+after first being written down in §14 prose, until they were collected into a ROADMAP checklist so
+they were at least visible in one place. Striking an item from that checklist without a dated
+record here would restore the original failure mode in a worse form: the list would say "done"
+with nothing behind it, and no way to tell a verified setting from an assumed one. So the rule
+this entry establishes is that **the checklist tracks what is open; §14 records what was actually
+verified and when** — including, explicitly, which items were found already correct.
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (governance checklist reduced to its
+three open items, with a pointer here and a scoping note on branch protection). Closes R7/D4 from
+the 2026-07-13 squash-merge-authorship entry, and the settings-side items carried from §14
+2026-07-06, 2026-07-09, and 2026-07-20.
+
+---
+
+### 2026-08-02 — Infra/Process — Auto-delete-on-merge deleted `dev` during the v0.2.0 promotion; the ruleset's admin bypass is why "Restrict deletions" did not stop it
+
+**What changed:** the repository setting **"Automatically delete head branches" has been
+disabled**. Stale branches are pruned by hand instead. No repository content changed; this entry
+is the record.
+
+**What happened:** merging the v0.2.0 `dev` → `main` promotion PR (#122) **deleted the `dev`
+branch**. `dev` is the *head* branch of a promotion PR, so auto-delete-on-merge treated it as a
+spent feature branch. The ref was still available and `dev` was recovered with GitHub's **Restore
+branch**.
+
+**Why the ruleset did not prevent it — this is the part worth remembering:** the `protect-dev`
+ruleset has **"Restrict deletions" enabled**, and it made no difference. The ruleset's **bypass
+list grants Repository admin "Always allow"**, and auto-delete-on-merge runs with the **merging
+user's** authority — an admin. So the deletion was performed by a principal the ruleset
+unconditionally exempts, and the restriction was never evaluated as a block. Nothing was
+misconfigured in the ruleset; it did exactly what its bypass list says.
+
+Two consequences follow, and both matter more than the one-off recovery:
+
+- **This would recur on every release.** It is not a fluke of #122. Every `dev` → `main`
+  promotion PR has `dev` as its head branch, and promotions are merged by an admin by
+  construction — so with auto-delete on, `dev` gets deleted at each release, and each recovery
+  depends on the ref still being restorable.
+- **The ruleset alone is not protection while admin bypass is on.** Do **not** re-enable
+  "Automatically delete head branches" on the belief that *Restrict deletions* covers it. It does
+  not, for the repository owner, which is the only account that merges promotions. Re-enabling it
+  would need the bypass list narrowed first — and that is a separate decision with its own
+  friction, since the same bypass is what makes ordinary admin operations possible on a
+  single-maintainer repo. The chosen mitigation is the cheap one: leave auto-delete off.
+
+This also sharpens the still-open branch-protection item in `docs/ROADMAP.md` § Near-term, which
+now carries a pointer to this entry: a rule configured on a protected branch should be assumed
+**advisory for the repository owner** until the bypass list has been examined. A ruleset that
+reads "enabled" in the UI is not evidence that it will stop an action taken by an admin.
+
+**Plan section affected:** none of the plan proper — repository settings and operational process.
+`docs/ROADMAP.md` § Near-term gains the scoping note on branch protection. Related: the
+2026-07-31 promotion-merge-method entry above, which is what made the v0.2.0 promotion a merge
+commit; the deletion is independent of the merge method.
+
+---
+
+### 2026-08-02 — Infra — Dependabot's docker run fails on our own local build tag `scrye:0.2.0`
+
+**What changed:** nothing yet in this PR — this records the diagnosis. The fix (an `ignore` entry
+for `dependency-name: "scrye"` in `.github/dependabot.yml`) is being applied in the follow-up
+dependency PR.
+
+**The failure:** Dependabot's docker run reports
+**`private_source_authentication_failure`**. The cause is `docker/docker-compose.yml`'s app
+service, which pins `image: scrye:0.2.0` — Scrye's **own local build tag**, built from
+`docker/Dockerfile` by whoever runs the stack (released images publish to
+`ghcr.io/tyler-rich/scrye`, per locked decision §6). Dependabot has no way to know that tag is
+local: an unqualified name resolves to Docker Hub, so it looks up `library/scrye`, gets a **401**,
+and reports the run as an authentication failure against a private source.
+
+**Why the diagnosis is confident:** the other two images in the same file —
+`aquasec/trivy` and `wollomatic/socket-proxy`, both fully qualified and both public — resolve
+fine. So the ecosystem, the directory configuration, and Dependabot's access to the file are all
+working; the failure is specific to the one reference that does not name a real registry image.
+This has never affected the images Dependabot is actually there to track.
+
+**The fix, and where it goes:** an `ignore` entry for `dependency-name: "scrye"` on the ecosystem
+entry that scans `docker/docker-compose.yml` — in this repo that is the **`docker-compose`**
+entry (`.github/dependabot.yml` has both a `docker` entry for `docker/Dockerfile`'s base images
+and a `docker-compose` entry for the compose file's sidecars). If the failing run is surfaced
+under `docker` rather than `docker-compose` in the UI, adding the same ignore to both entries is
+harmless — the Dockerfile has no `scrye` reference for it to suppress. The alternative fixes were
+rejected: qualifying the tag as `ghcr.io/tyler-rich/scrye:0.2.0` would make the compose file pull
+a published image instead of the locally-built one, changing what the documented quick start does,
+and dropping the tag entirely loses the version pin.
+
+**Plan section affected:** `.github/dependabot.yml` (in the follow-up PR). No effect on the build,
+the image, or locked decision §6 — `docker/docker-compose.yml` keeps building the app image
+locally.
 
 ---
 
