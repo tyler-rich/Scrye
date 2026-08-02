@@ -855,6 +855,38 @@ on pushes to `main` and a weekly cron, and no push to `main` is involved in any 
 inverts what the maintainer asked for: the workflow would be merged, and the ruleset possibly
 edited, on the strength of a run that had never been allowed to complete.
 
+**Two things the *Switch to advanced* flow does that are easy to misread. Both were hit live.**
+
+- **It opens a workflow-file editor pre-filled with GitHub's generic template. Do not commit it.**
+  Disabling default setup is the *first* half of that flow; the editor is the second, and it is
+  redundant here because this repository supplies its own `codeql.yml`. Committing the template
+  would (a) land a workflow directly on `main`, which per the branching model receives only
+  promotions, (b) collide at the identical path with the migration PR, and (c) name its job
+  `Analyze (${{ matrix.language }})` — producing contexts `Analyze (python)` &c., **not** the
+  `CodeQL — <language>` strings the rulesets are being pointed at. It also carries a `schedule`
+  cron, unpinned `@v4` action refs and `packages: read`. The correct action on that page is
+  **Cancel changes**; the disable has already taken effect by the time it is shown, which was
+  confirmed by re-running the PR's CodeQL jobs immediately afterwards — they went green with no
+  file committed.
+- **Settings will then report CodeQL as "not configured" / off, and that is not a failure.**
+  The Settings → Code security row determines the CodeQL status from a workflow present on the
+  **default branch** (`main`). With default setup off and `codeql.yml` living only on a feature
+  branch — or, after the merge, only on `dev` — the row has nothing to point at and reads as
+  though scanning were disabled. It is not: advanced setup is not an enablement flag anywhere, just
+  a workflow holding `security-events: write` that uploads SARIF, and the uploads demonstrably
+  process. **Expect the row to keep reading "not configured" until a `dev` → `main` promotion
+  carries the workflow to the default branch.** Judge the migration by whether the analysis jobs
+  go green and their results appear under the PR/branch in Security → Code scanning, never by that
+  row.
+
+**The sequence above was executed, not just proposed.** Attempts 1 and 2 of the PR's CodeQL run
+(08:29 and 08:44 UTC) failed identically with the configuration error while default setup was still
+enabled. Default setup was then disabled via *Switch to advanced*, the template editor cancelled
+without committing, and attempt 3 (09:21 UTC) re-ran the same three jobs unchanged: **all green** —
+`CodeQL — python` 51 s, `CodeQL — javascript-typescript` 60 s, `CodeQL — actions` 41 s. That is the
+step-3 confirmation: the committed workflow uploads *and processes* results, proven on the PR before
+the merge and before any ruleset edit.
+
 #### What this PR's CodeQL run actually found
 
 The analysis ran to completion on all three languages before the rejected upload, so the run itself
