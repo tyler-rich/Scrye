@@ -179,42 +179,48 @@ Small, self-contained work that closes a concrete gap.
   **six alerts, all Python, all assessed as false positives**: two `py/path-injection` on the
   filesystem-scan containment gate (`backend/app/scanners/targets.py:138` and `:144`), three
   `py/incomplete-url-substring-sanitization` on test assertions, and one `py/log-injection` on an
-  `int`-typed path parameter (`backend/app/api/scans.py:574`). Advanced setup was **not** taken:
-  there is no vendored or generated tree to path-exclude and no need for custom query packs, and
-  default setup keeps the action and query-pack versions managed rather than adding a fourth
-  SHA-pinned workflow with its own bump stream. Full reasoning per alert, the reproduction method
-  behind the numbers, and the recommended disposition for each are in
+  `int`-typed path parameter (`backend/app/api/scans.py:574`). Full reasoning per alert, the
+  reproduction method behind the numbers, and the recommended disposition for each are in
   [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
 
-  **What remains is disposition, and two dependencies.** No alert has been dismissed — that is a
+  ~~**Advanced setup was not taken.**~~ **Reversed 2026-08-02 — the migration is done.** Default
+  setup's pull-request trigger targets the **default branch**, so PRs into `dev` — where day-to-day
+  work is actually PR'd — got no CodeQL check at all (confirmed on #134, which got four check runs
+  and no CodeQL among them). CodeQL therefore analysed `main` on push, *after* a promotion had
+  landed, where a finding's remedy is a revert rather than a review comment, and where with several
+  PRs in flight it is attributable to a batch rather than to the PR that introduced it.
+  `.github/workflows/codeql.yml` now runs on `pull_request` and `push` for both `dev` and `main`, on
+  the same `security-extended` suite, the same three languages and the same SHA-pinned
+  `codeql-action` v4.37.4 default setup was running — so nothing about the analysis changed, only
+  when it runs. Pinning the action does not pin the query packs (`init`'s `tools:` defaults to the
+  recommended bundle), and Dependabot's existing grouped weekly `github-actions` PR carries the SHAs
+  forward. One thing the migration gives up is recorded rather than hidden: there is no `schedule:`
+  trigger, so default setup's weekly scan is gone and a newly published query only fires the next
+  time a file in that language is touched. See [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
+
+  **What remains is disposition, and two settings edits.** No alert has been dismissed — that is a
   deliberate hold, since a dismissal with no written reason is indistinguishable from an unread
   finding. The §14 entry supplies the written reason for each; applying them (and deciding whether
   the two `targets.py` alerts warrant a code change to make the containment legible to the analyzer,
   rather than merely a dismissal) is the open work.
 
-  **CodeQL does not currently run on `dev` PRs — confirmed on #134, which got four check runs and no
-  CodeQL among them.** Default setup's PR trigger targets the **default branch**, so it covers PRs
-  into `main`; `dev`, which is where day-to-day work is actually PR'd, gets nothing. CodeQL therefore
-  analyses `main` on push — *after* a promotion has landed — and on its weekly schedule.
-
-  **The advanced-setup migration was assessed on 2026-08-02; the recommendation is to do it, with no
-  sequencing dependency.** Full reasoning, the measured CI cost (≈0 added wall-clock — CodeQL's
-  longest job is 62 s against the pipeline's 121 s critical path), the maintenance cost (≈0 marginal,
-  because `dependabot.yml` already groups all action bumps into one weekly PR), what migrating does
-  and does not lose (query packs stay GitHub-managed; automatic language detection does not), and the
-  case *against* migrating are in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md). Two corrections that
-  entry makes to the framing above: `:latest` is published by a **tag push**, not by the promotion
-  merge, so CodeQL's run on `main` normally lands *before* `:latest` exists — the real
-  published-artifact gap is **`:dev`**, which the nightly builds from a branch CodeQL never sees.
-
-  **Do not assume a CodeQL check would be blocked on the branch-protection item above.** The
-  `protect-dev` ruleset is already `active` and already has `required_status_checks` — but that rule
-  is an **explicit allowlist of contexts**, currently naming only `Backend — lint + tests` and
-  `Frontend — lint + build` (neither image job is on it either). A migrated CodeQL workflow would run
-  and be visible but would not block a merge until its contexts are added to that list, which is a
-  settings edit made *alongside* the migration, not a prerequisite for it. One caveat if they are
-  added: a required context that never reports blocks a PR forever, so the CodeQL workflow must not
-  carry `paths:` filters.
+  - **Disable default setup** (Settings → Code security → Code scanning → CodeQL analysis → ⋯ →
+    *Switch to advanced*). This is **not optional and not cosmetic**: the two configurations are
+    mutually exclusive server-side — while default setup is enabled the API rejects the committed
+    workflow's SARIF with *"CodeQL analyses from advanced configurations cannot be processed when the
+    default setup is enabled"*, so the new workflow's checks stay red. Alert history is preserved
+    across the conversion. The §14 entry gives the exact order (disable → re-run the PR's failed
+    CodeQL jobs to prove they go green → merge → *then* edit the rulesets), which keeps the
+    unscanned window to about a minute.
+  - **Add the three contexts to `protect-dev`'s — and `protect-main`'s — required status checks**:
+    `CodeQL — python`, `CodeQL — javascript-typescript`, `CodeQL — actions` (U+2014 em dash, one
+    ordinary space each side, exactly as in `Backend — lint + tests`). `required_status_checks` is an
+    **explicit allowlist of contexts**, currently naming only `Backend — lint + tests` and
+    `Frontend — lint + build` on both rulesets, so until these are added CodeQL runs and is visible
+    but does not block a merge. Do it **after** the merge, never before: a required context with
+    nothing reporting blocks a PR forever, and an open PR that predates the workflow has no CodeQL
+    run to report. Same hazard, same fix as [#136](https://github.com/tyler-rich/Scrye/issues/136);
+    both edits can be made in one pass.
 
 ## Medium-term
 

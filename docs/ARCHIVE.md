@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (127, newest first)
+### Index of §14 entries (128, newest first)
 
+- [2026-08-02 — Security/Process — CodeQL migrated from default setup to a committed workflow; the two settings edits that finish it](#2026-08-02--securityprocess--codeql-migrated-from-default-setup-to-a-committed-workflow-the-two-settings-edits-that-finish-it)
 - [2026-08-02 — Security/Process — Symlink-containment regression guard for filesystem scans (#135); Syft is the probe, and it runs against the binaries the image ships](#2026-08-02--securityprocess--symlink-containment-regression-guard-for-filesystem-scans-135-syft-is-the-probe-and-it-runs-against-the-binaries-the-image-ships)
 - [2026-08-02 — Post-v1 — Log redaction moved from the `LogRecord` to the formatted line; uvicorn's access logger stops raising on every request](#2026-08-02--post-v1--log-redaction-moved-from-the-logrecord-to-the-formatted-line-uvicorns-access-logger-stops-raising-on-every-request)
 - [2026-08-02 — Post-v1 — OIDC account linking: authenticated self-link, guarded self-unlink, and stale-link detection (#114)](#2026-08-02--post-v1--oidc-account-linking-authenticated-self-link-guarded-self-unlink-and-stale-link-detection-114)
@@ -707,6 +708,213 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-02 — Security/Process — CodeQL migrated from default setup to a committed workflow; the two settings edits that finish it
+
+**What changed:** `.github/workflows/codeql.yml` (new — the repository's fifth workflow). CodeQL moves
+from GitHub's **default setup** (configured in repository settings, no artifact in git) to **advanced
+setup**: a workflow this repository owns, pins and reviews. This implements the recommendation the
+assessment entry below reached and deliberately left to the maintainer. No application code changed,
+and **nothing about the analysis changed** — same query suite, same three languages, same CodeQL
+bundle, same action version. The only thing that moves is *when* CodeQL runs.
+
+**Why: the trigger, not the queries.** Default setup's pull-request trigger targets the repository's
+**default branch**. `main` is the default branch here and PRs go to `dev`
+(CLAUDE.md § Git & PR conventions), so CodeQL never ran on a pull request at all — it ran on `main`
+on push, *after* a promotion had already landed. At that point the change is merged and the remedy
+for a finding is a revert, not a review comment. With several PRs regularly in flight, a finding that
+surfaces on `main` is attributable to a **batch** rather than to the PR that introduced it. The
+secondary gap is `:dev`: `dev-nightly.yml` builds and pushes that image from a branch CodeQL never
+analysed. (`:latest` was **not** a gap — it is published by a tag push, not by the promotion merge;
+the assessment entry below corrects that framing.)
+
+#### The workflow's shape, element by element
+
+| Element | Value | Why this and not something else |
+| --- | --- | --- |
+| Query suite | `queries: security-extended` | Reproduces **exactly** what default setup ran. `security-extended` is a member of `defaultSuites` in codeql-action's `src/analyze.ts` and resolves through `resolveQuerySuiteAlias()` to `<language>-security-extended.qls`. Omit it and the analysis silently falls back to the smaller `code-scanning` suite — 45 Python queries instead of 52. §14's triage entry below records a reproduction that made exactly that mistake and under-reported by one alert. |
+| Languages | explicit 3-entry matrix: `python`, `javascript-typescript`, `actions`, each `build-mode: none` | Advanced setup **loses** default setup's automatic language detection, which is what added `actions` in the first place. The matrix is now the whole list, and it carries an inline comment tying it to **locked decision §2** so the stack pinning is visible at the point a language would be added. `build-mode: none` on all three: nothing here is a compiled language. |
+| Action pins | `github/codeql-action/init` and `.../analyze` at `ea14db8afdef5d462e69d78c4ca45002d4522418` (`# v4.37.4`) | Repo convention (H9/SC-2): SHA-pinned with the tag as a trailing comment. v4.37.4 is the same action version default setup was running. **Pinning the action does not pin the queries** — `init`'s `tools:` input defaults to the recommended CodeQL bundle, so the CLI and query packs keep updating on GitHub's schedule. Dependabot's existing grouped weekly `github-actions` PR carries the SHAs forward. |
+| Permissions | `security-events: write`, `contents: read`, `actions: read` | Least privilege, declared at both the workflow and the job level so the grant is visible where it is used. `security-events: write` is the SARIF upload; `actions: read` is what codeql-action needs to read run metadata on `pull_request`. |
+| Triggers | `pull_request` **and** `push`, each filtered to `[main, dev]` | The whole point of the migration. `pull_request` is the per-PR gate on the branch that actually receives PRs; `push` keeps the post-merge analysis on both branches, which is what closes the `:dev` hole. |
+| Path filters | **none, deliberately** | These contexts are destined for `protect-dev`'s required list. A job skipped by an `if:` still reports a `skipped` conclusion and satisfies a required check — that is why `Image — multi-arch build check` showing `skipped` on `dev` PRs is harmless. A **workflow that never triggers reports nothing at all**, so a `paths:` filter would make a docs-only PR hang forever on a check that was never scheduled. The suite runs in ~60 s and Actions minutes are free on a public repo; there is nothing here worth saving. |
+| `concurrency` | `codeql-${{ github.workflow }}-${{ github.ref }}`, `cancel-in-progress: true` | Mirrors `ci.yml`. Superseded runs on the same ref are cancelled. |
+| `fail-fast` | `false` | One language failing must not cancel the other two. A partial result is still worth having, and the failure names its own language. |
+
+**Deliberate omission worth naming: there is no `schedule:` trigger, so the weekly scan is gone.**
+Default setup ran on a weekly cron in addition to its push/PR triggers. This workflow does not,
+because the migration spec was `pull_request` + `push` for `dev` and `main`, and the assessment below
+rejected a schedule *as a substitute* for per-PR feedback. The cost is narrow but real and is
+recorded here rather than discovered later: query packs keep updating (see the pin row above), and
+without a cron a **newly published query never runs against unchanged code** — it only fires the next
+time a file in that language is touched. On a repository with this commit rate that delay is short,
+which is why this was not treated as blocking. Adding `schedule: - cron: "0 4 * * 1"` alongside the
+existing triggers is a one-line follow-up if the gap is judged worth closing.
+
+#### Settings edit 1 — the exact required-status-check context strings
+
+Required status checks are an **explicit allowlist of context strings**, and a string that matches no
+reporting check is a context that never reports — which blocks every PR indefinitely. These are the
+three, **verified against the check runs GitHub actually created** for run
+[30739872403](https://github.com/tyler-rich/Scrye/actions/runs/30739872403) rather than derived from
+the YAML:
+
+```
+CodeQL — python
+CodeQL — javascript-typescript
+CodeQL — actions
+```
+
+The separator is **U+2014 EM DASH with one ordinary space on each side** — the same character
+`ci.yml`'s `Backend — lint + tests` and `Image — build + dogfood self-scan` use. Copy these strings
+rather than retyping them; an en dash or a hyphen produces a context that never reports.
+
+They come from the matrix job's `name: CodeQL — ${{ matrix.language }}`. **Renaming that job, or
+changing a matrix `language:` value, renames the contexts and silently breaks the ruleset** — the
+workflow keeps passing while the required check hangs. The workflow carries a comment saying so at
+the job name.
+
+**Add them to `protect-main` as well as `protect-dev`.** Both are safe and both are useful:
+
+- **`protect-dev`** is the point of the exercise — it is where PRs land, and per §14 below its
+  `required_status_checks` currently names only `Backend — lint + tests` and
+  `Frontend — lint + build`. Until these three are on that list CodeQL runs, is visible, and goes red
+  **without blocking a merge**.
+- **`protect-main`** gets them for a different reason: the only PR that ever targets `main` is a
+  `dev` → `main` promotion, i.e. the last reviewable moment before a release tag triggers
+  `publish.yml`. The workflow triggers on `pull_request` with base `main` and on `push` to `main`
+  with no job-level `if:`, so all three contexts always report there — unlike
+  `Image — multi-arch build check`, which is `if:`-conditioned and is the reason #136 recommends
+  requiring that one on `protect-main` only.
+
+This differs from the `Image — build + dogfood self-scan` gap tracked as
+[#136](https://github.com/tyler-rich/Scrye/issues/136) only in which strings get added; the hazard
+and the reasoning are identical, and both edits can be made in one pass.
+
+#### Settings edit 2 — when to disable default setup (and why there cannot be an overlap)
+
+**The two setups are mutually exclusive. This is enforced server-side, and it was verified twice
+rather than assumed.** In codeql-action's `src/upload-lib.ts`, `shouldConsiderConfigurationError()`
+lists the API's rejection message verbatim:
+
+```
+CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled
+```
+
+and this repository then reproduced it live. The three CodeQL jobs on PR #141 ran the full analysis,
+exported SARIF, and **uploaded successfully** — and the upload was then rejected at processing:
+
+```
+Uploading results
+Successfully uploaded results
+Waiting for processing to finish
+Analysis upload status is failed.
+##[error]Code Scanning could not process the submitted SARIF file:
+CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled
+...
+CodeQL job status was configuration error.
+```
+
+So the answer to *"before or after merging?"* is neither of the naive options, and the stated goal —
+"a gap of zero rather than a window with no scanning" — **is not achievable as literally stated**:
+GitHub will not let both configurations produce results at the same time, so there is no overlap to
+arrange. What *is* achievable is a gap measured in minutes, with the new workflow proven working
+before the old one is switched off. The order below does that:
+
+1. **Leave default setup enabled while the PR is open.** It keeps analysing `main` on push and on its
+   weekly cron exactly as before. The PR's three CodeQL contexts will be **red**, with the
+   configuration error above — expected, and *not* a defect in the workflow: everything up to and
+   including the upload succeeds.
+2. **Disable default setup** — Settings → Code security → Code scanning → CodeQL analysis → **⋯** →
+   *Switch to advanced* (or *Disable CodeQL*). **Alert history is preserved** across the conversion;
+   the six triaged alerts do not disappear.
+3. **Re-run the failed CodeQL jobs on the PR** (Actions → the failed run → *Re-run failed jobs*).
+   With default setup off, the upload processes and the three contexts go green. **This is the
+   confirmation step** — it proves the committed workflow produces results *before* anything is
+   merged and before any ruleset depends on it. If it does not go green, re-enabling default setup
+   restores the previous state immediately.
+4. **Merge the PR into `dev`** (squash, per the ruleset's `allowed_merge_methods`). Note
+   `protect-dev` now also has **"Require branches to be up to date before merging"**
+   (`strict_required_status_checks_policy`), so if `dev` has moved the branch must be updated first —
+   which fires a `synchronize` and re-runs everything, including CodeQL, against the merged state.
+   That is a feature here, not friction: the green run that gates the merge is a run against the
+   code that will actually land.
+5. **Only then add the three contexts to `protect-dev` and `protect-main`.** Doing this *before*
+   step 4 would hang every other open PR: a PR whose branch predates the workflow has no CodeQL run
+   to report, and a required context with nothing reporting blocks the merge. After step 4 the strict
+   up-to-date rule forces every open PR to re-sync onto a `dev` that carries the workflow, so each
+   one picks the checks up on its next run.
+
+**The actual scanning gap** is therefore step 2 → step 3: roughly the ~60 s the re-run takes, plus
+however long passes between the two clicks. Nothing is lost in that window — default setup only ran
+on pushes to `main` and a weekly cron, and no push to `main` is involved in any of these steps.
+
+**Do not skip step 3 and disable default setup after merging instead.** That order works, but it
+inverts what the maintainer asked for: the workflow would be merged, and the ruleset possibly
+edited, on the strength of a run that had never been allowed to complete.
+
+#### What this PR's CodeQL run actually found
+
+The analysis ran to completion on all three languages before the rejected upload, so the run itself
+is evidence about the workflow; it is not evidence about the *findings*, because rejected SARIF never
+reaches the Security tab and the alert list could not be read from the API at this session's token
+scope (`metadata=read` — `GET /code-scanning/alerts` returns 403, the same limitation the triage
+entry below hit). The findings were therefore obtained the same way that entry obtained them:
+**reproduced locally at the PR's head commit** (`1b4dcd9`) with `codeql-bundle-v2.26.2` — the exact
+CLI version the runner used, per the runner's `/opt/hostedtoolcache/CodeQL/2.26.2/` tool path — and
+the `*-security-extended.qls` suites, matching the workflow's `queries:` input rather than assuming
+the default suite.
+
+**Result: parity with the six alerts already triaged — nothing new surfaced.** 6 findings, all
+Python; **0** JavaScript/TypeScript; **0** Actions. Same rules, same files, same
+`security-severity` values as the triage table below:
+
+| Rule | Location | `security-severity` |
+|------|----------|---------------------|
+| `py/path-injection` | `backend/app/scanners/targets.py:138` | 7.5 |
+| `py/path-injection` | `backend/app/scanners/targets.py:144` | 7.5 |
+| `py/incomplete-url-substring-sanitization` | `backend/tests/test_credentials.py:320` | 7.8 |
+| `py/incomplete-url-substring-sanitization` | `backend/tests/test_dockerfile_supply_chain.py:71` | 7.8 |
+| `py/incomplete-url-substring-sanitization` | `backend/tests/test_redaction.py:222` | 7.8 |
+| `py/log-injection` | `backend/app/api/scans.py:574` | 6.1 |
+
+**One line number moved, and it is not a new finding.** The triage below recorded the third
+`py/incomplete-url-substring-sanitization` at `test_redaction.py:120`; it is now `:222`. That file's
+most recent change is `2e1e3ac` (#139, the log-redaction fix), which rewrote it — the flagged
+assertion is the same one at a new line. Every other rule/file/line pair is unchanged. **Parity was
+checked rather than assumed**, which is the point of saying so: the whole reason to reproduce is that
+a migration could quietly change the query set, and "it looks the same" is not a check.
+
+**Suite parity was verified at the source, not inferred from the workflow input.** Resolving the
+suites with the same CLI gives `python-security-extended.qls` → **52** queries vs
+`python-code-scanning.qls` → **45**; `javascript` → **105** vs **89**; `actions` → **24** vs **18** —
+matching the counts the triage entry recorded for the default-setup run exactly. So
+`queries: security-extended` in the committed workflow is running the same query set default setup
+was.
+
+**The workflow analyses itself, and comes back clean.** The `actions` database extracted six files —
+the five workflows plus the composite `build-image` action — including the newly added `codeql.yml`,
+and the Actions security queries (untrusted checkout, script injection, artifact poisoning) returned
+nothing on any of them.
+
+#### Verification performed
+
+- Workflow YAML parses; the three check runs GitHub created are named exactly as the strings above
+  (read back from the run's jobs API, not from the YAML).
+- The rest of CI is unaffected — `Backend — lint + tests`, `Frontend — lint + build` and
+  `Image — build + dogfood self-scan` all green on the PR; `Image — multi-arch build check` reports
+  `skipped`, as it does on every `dev` PR.
+- The default-setup/advanced-setup mutual exclusion confirmed both in `codeql-action`'s source and in
+  the live job log (quoted above), rather than from documentation.
+- `codeql-action` v4.37.4's commit SHA taken from `git ls-remote --tags` against the upstream
+  repository, not from a docs snippet.
+
+**Plan section affected:** §14 (this record); `docs/ROADMAP.md` § Near-term (the CodeQL item — the
+migration sub-item struck, the remaining work restated); `CHANGELOG.md` § Unreleased → Changed. No
+application code, schema, or locked-decision change. `.github/workflows/codeql.yml` is new; no
+existing workflow was touched.
 
 ---
 
