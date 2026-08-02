@@ -106,32 +106,27 @@ Small, self-contained work that closes a concrete gap.
   here as a checklist. None of them is doable from a code session, which is exactly why several
   sat invisible in `ARCHIVE.md` §14 prose for weeks before being collected here.
 
+  **Five of the original eight items were verified in GitHub Settings on 2026-08-02 and removed
+  from this list** — the GitHub profile display name, the dormant Docker Hub secrets, GHCR package
+  visibility, Dependabot security alerts, and the Actions workflow permissions. What that
+  verification actually found (including the two items that turned out to be correct already
+  rather than newly changed) is recorded in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md). Check
+  there, not here, before re-doing any of them: a settings change leaves no artifact in the
+  repository, so that entry is the only durable record it happened. The three items below are
+  what remains open.
+
   - **Branch protection** on `main` and `dev` — require a passing CI status, require a pull
     request, require review from Code Owners, and for `main` restrict who can push tags/promote.
+    Note when scoping this: a `protect-dev` ruleset already exists with *Restrict deletions*
+    enabled, and it did **not** prevent `dev` from being deleted during the v0.2.0 promotion,
+    because the ruleset's bypass list grants Repository admin *Always allow* (`ARCHIVE.md` §14,
+    2026-08-02). Assume any rule configured here is advisory for the repository owner until the
+    bypass list says otherwise.
   - **Signed-commit enforcement** — a decision to make. Requiring signed commits on the
     protected branches means contributors must sign; worth it for a security tool, so weigh the
     friction.
   - **Private vulnerability reporting** — enable in the repo's Security settings, so
     `SECURITY.md`'s stated channel actually exists.
-  - **Confirm Dependabot security alerts are enabled** (Security tab). The config file only
-    schedules *version* updates; security alerts are a separate repo setting. (§14 2026-07-20
-    context; carried from the remediation tracker.)
-  - **Settings → Actions → General → Workflow permissions → read-only.** Every workflow already
-    declares its own explicit `permissions:` block, and an explicit block takes precedence over
-    the repo default rather than being capped by it, so the restrictive default breaks nothing —
-    including GHCR push. Logged in §14 2026-07-06 and never carried anywhere until now.
-  - **Confirm the GHCR package `ghcr.io/tyler-rich/scrye` is public.** §14 2026-07-06 asked to
-    confirm it was *Private* (it inherited a private repo); the repo went public on 2026-07-09,
-    so the check is now the inverse — it should be **public**, per `CLAUDE.md` locked decision §6.
-    Still unverified in either direction.
-  - **Delete the unused `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` repo secrets.** No workflow has
-    referenced them since the GHCR consolidation (§14 2026-07-09); `grep -r DOCKERHUB .github/`
-    returns nothing. Dormant registry credentials on a public security-tool repo.
-  - **Set the GitHub profile display name to `tyler-rich`.** A squash-merge authors the squashed
-    commit with the merging account's *profile display name*, which repo-local `git config
-    user.name` cannot override — so while the profile reads "Tyler Richardson", every
-    squash-merged promotion silently breaks `CLAUDE.md`'s author-identity rule (R7/D4, §14
-    2026-07-13).
 
 ## Medium-term
 
