@@ -166,12 +166,19 @@ Small, self-contained work that closes a concrete gap.
   **CodeQL does not currently run on `dev` PRs — confirmed on #134, which got four check runs and no
   CodeQL among them.** Default setup's PR trigger targets the **default branch**, so it covers PRs
   into `main`; `dev`, which is where day-to-day work is actually PR'd, gets nothing. CodeQL therefore
-  analyses `main` on push — *after* a promotion has landed — and on its weekly schedule. **This is
-  now the strongest argument for converting to advanced setup**, since a committed workflow is the
-  only way to add `dev` to the trigger, and it is a live gap rather than the hypothetical
-  path-filter and custom-query reasons; the conversion can be done without losing alert history.
-  Separately, even once CodeQL runs on the right branch it **cannot gate a merge** until the
-  still-open **branch protection** item above makes it a required status check.
+  analyses `main` on push — *after* a promotion has landed — and on its weekly schedule.
+
+  **The advanced-setup migration was assessed on 2026-08-02; the recommendation is to do it, but
+  *after* branch protection.** Full reasoning, the measured CI cost (≈0 added wall-clock — CodeQL's
+  longest job is 62 s against the pipeline's 121 s critical path), the maintenance cost (≈0 marginal,
+  because `dependabot.yml` already groups all action bumps into one weekly PR), what migrating does
+  and does not lose (query packs stay GitHub-managed; automatic language detection does not), and the
+  case *against* migrating are in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md). Two corrections that
+  entry makes to the framing above: `:latest` is published by a **tag push**, not by the promotion
+  merge, so CodeQL's run on `main` normally lands *before* `:latest` exists — the real
+  published-artifact gap is **`:dev`**, which the nightly builds from a branch CodeQL never sees. And
+  until the **branch protection** item above lands, a CodeQL check on a `dev` PR is advisory: it
+  cannot block a merge, which is why the sequencing matters.
 
 ## Medium-term
 

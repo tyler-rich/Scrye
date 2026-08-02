@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (123, newest first)
+### Index of §14 entries (124, newest first)
 
+- [2026-08-02 — Security/Process — Filesystem-gate symlink and TOCTOU residual risks closed out (neither is real); CodeQL advanced-setup migration assessed](#2026-08-02--securityprocess--filesystem-gate-symlink-and-toctou-residual-risks-closed-out-neither-is-real-codeql-advanced-setup-migration-assessed)
 - [2026-08-02 — Security/Process — CodeQL code scanning enabled via default setup; first-run triage: six alerts, all false positives](#2026-08-02--securityprocess--codeql-code-scanning-enabled-via-default-setup-first-run-triage-six-alerts-all-false-positives)
 - [2026-08-02 — Infra/Process — GHSA-qwww-vcr4-c8h2 closed by a 7.x backport (`react-router` 7.18.2), not the 8.3.0 major; the advisory's "Patched versions" field is stale](#2026-08-02--infraprocess--ghsa-qwww-vcr4-c8h2-closed-by-a-7x-backport-react-router-7182-not-the-830-major-the-advisorys-patched-versions-field-is-stale)
 - [2026-08-02 — Infra — Frontend builder and CI moved Node 22 → 24 (Active LTS); the Dependabot major-ignore re-pointed at the 24 line](#2026-08-02--infra--frontend-builder-and-ci-moved-node-22--24-active-lts-the-dependabot-major-ignore-re-pointed-at-the-24-line)
@@ -703,6 +704,212 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-02 — Security/Process — Filesystem-gate symlink and TOCTOU residual risks closed out (neither is real); CodeQL advanced-setup migration assessed
+
+**What changed:** Docs only. Two items: (1) the two residual risks the CodeQL entry below named "for
+the record, not as proposed work" were verified against the scanners' actual behavior and are
+**closed — neither is exploitable**; (2) the CodeQL advanced-setup migration was assessed and a
+recommendation recorded. **No code, config, workflow, or scanner version changed, and no fix was
+implemented.**
+
+---
+
+#### Item 1 — the symlink and TOCTOU residual risks on `resolve_filesystem_path()`
+
+**Why this needed verifying rather than assuming.** The claim was that Grype's `dir:` walk might
+follow a symlink planted *inside* an allowed root and read out-of-root files. That would be the same
+class as **H1/SEC-1** — a route around the containment gate to arbitrary host files — which was the
+headline HIGH of the remediation cycle. The gate is a pre-flight check on the *target argument*
+(`backend/app/scanners/targets.py:138-146`); it is not re-applied during the walk, so the concern was
+structurally plausible.
+
+**Scope: there is only one code path.** Filesystem targets are **Grype-only**
+(`backend/app/scanners/support.py:18` — `TargetType.FILESYSTEM: frozenset({Scanner.GRYPE})`), so
+Trivy cannot run a filesystem target at all. The invocation is
+`grype -o json -- dir:<resolved-path>` (`grype.py:50-68`, `:210-211`).
+
+**Verdict: the symlink escape is not real.** Four independent lines of evidence:
+
+1. **Version identity.** Grype 0.115.0's embedded Go build info records
+   `github.com/anchore/syft v1.46.0` — the same Syft version Scrye pins, and the same binary tested
+   standalone here. Grype's `dir:` source *is* Syft's directory source, so the Syft test exercises
+   the identical walk code Grype runs.
+2. **Mechanism, at the source.** Syft's directory provider defaults `base` to the scan directory
+   itself — `basePath()` in `syft/source/directorysource/directory_source_provider.go:60-65`. A
+   non-empty `base` activates chroot-style re-rooting in `addSymlinkToIndex`
+   (`syft/internal/fileresolver/directory_indexer.go:362-406`): an absolute link target becomes
+   `filepath.Join(base, Clean(target))`, and a relative one
+   `filepath.Join(base, Clean(Join("/", dir, target)))`. Both collapse to a path **under the scan
+   root**, so a link out of the root resolves to something that does not exist and is dropped.
+3. **Empirically, five variants — none followed.** Planted inside an allowed root: an absolute
+   symlink to an outside directory, a relative one (`../outside/sensitive`), an absolute symlink to
+   an outside file, a relative one, and a symlink to `/etc`. A `package-lock.json` outside the root
+   declared `lodash 4.17.15`; an identical in-root file declared `left-pad 1.3.0`. **Only `left-pad`
+   was catalogued.** Debug logging shows exactly the re-rooting from (2): `escape` →
+   `<root>/tmp/.../outside/sensitive`, `etc_escape` → `<root>/etc`, `rel_escape` →
+   `<root>/outside/sensitive`, each followed by *"points to unresolved path …, ignoring target as new
+   root."*
+4. **Trivy agrees.** `trivy fs --scanners secret` over the same fixture reported only the two real
+   in-root files and no out-of-root path. Not reachable in Scrye, but the answer does not differ
+   between the scanners.
+
+**A comment in that code says the opposite — do not stop reading at it.** `indexAllRoots`
+(`directory_indexer.go:66`) is introduced with *"why account for multiple roots? To cover cases when
+there is a symlink that references above the root path, in which case we need to additionally index
+where the link resolves to."* Read alone, that says the escape is real. It is not, because the
+re-rooting in `addSymlinkToIndex` runs **first**, so an out-of-root target never becomes a new root.
+The comment describes an intent the surrounding code no longer implements. Behavior was measured;
+the comment was not trusted.
+
+**The load-bearing caveat, and the one thing worth acting on.** The containment rides entirely on
+`basePath()` defaulting `base` to the scan location — a function upstream annotates:
+
+```go
+// FIXME why is the base always being set instead of left as empty string?
+```
+
+If that FIXME is ever actioned, `base` becomes `""`, the re-rooting branch is skipped
+(`directory_indexer.go:374`), and `indexAllRoots` *would* add out-of-root symlink targets as new
+roots. **The escape would become real silently, on a routine Grype/Syft version bump, with no code
+change on Scrye's side.** Nothing in this repository would notice. A regression test — plant a
+symlink in a temp root, assert the out-of-root package is absent from Grype's output — would pin the
+behavior to the dogfood/test suite and fail loudly on the bump that changes it. **Recommended, not
+implemented.**
+
+**Hardlinks are followed, and that is fine.** A hardlink from inside an allowed root to a file
+outside **is** read — demonstrated: `lodash 4.17.15` catalogued via `/sub/package-lock.json`, same
+inode as the outside file. This is not a containment bypass. A hardlink is a second name for one
+inode, not a reference that containment could resolve; creating one requires write access inside the
+root **and** read access to the source (the kernel's `fs.protected_hardlinks`, normally `1`, blocks
+linking files you cannot read), and it cannot cross filesystems — so `/data/app_secret_key` on the
+data volume can only be linked from within that same volume. Anyone who can do it could already read
+the file.
+
+*Methodology note, because the first result was wrong:* the initial hardlink probe came back negative
+only because the planted file was named `hardlink-lock.json`, which the JavaScript cataloger does not
+glob. Renaming it to `package-lock.json` flipped the result to positive. **A negative from a
+cataloger-based probe means nothing unless the filename is one the cataloger actually looks for.**
+
+**Impact ceiling — this class cannot reproduce H1/SEC-1, even if an escape existed.** Grype `dir:`
+output carries **no file contents**. The SBOM's `files` entries expose `digests`, `id`, `location`,
+and `metadata` only; a marker string planted in a hardlinked secret file **never appeared anywhere in
+the output**. So the worst case here is disclosure of package inventory and file digests — not secret
+values. H1/SEC-1's severity came from `trivy repo <local path>` surfacing secret *contents* as
+downloadable scan output; that is a different and strictly worse primitive. Any future finding in
+this area should be severity-rated against inventory disclosure, not against H1/SEC-1.
+
+**TOCTOU: mechanism confirmed, not exploitable.** The window is real —
+`NormalizeRootDirectory` calls `filepath.EvalSymlinks(root)` at scan time
+(`chroot_context.go:69-75`), so a target directory swapped for a symlink between the worker's
+`resolve_filesystem_path()` (`backend/app/workers/inprocess.py:560`) and the walk **would** be
+followed, with `base` becoming the new real path — the containment above would then protect the
+attacker's substituted root rather than the configured one. What makes it non-exploitable is the
+preconditions, all of which must hold at once:
+
+- **Filesystem scanning must be switched on at all.** `filesystem_scan_roots` defaults to empty
+  (`config.py:243`), which disables the feature.
+- **Host write access to the parent of the scan target.** The attacker must be able to replace the
+  directory with a symlink — i.e. they already have write access to a host path the admin
+  deliberately mounted and allowlisted.
+- **A concurrent operator-triggered scan.** `POST /api/scans` requires the `operator` role and
+  passes CSRF (`scans.py:79`, `:159-166`); `operator` is rank 1 of 3 (`db/models/user.py:28`).
+- **Winning a sub-second race** between the worker's re-check and the subprocess `exec`.
+
+And the payoff is still package inventory, not file contents. Closing it properly would require
+handing the scanner an already-opened directory handle (`O_PATH`/fd) rather than a path string, which
+the subprocess interface — `grype … dir:<path>` — cannot express. **Accepted as a documented residual
+risk; no work proposed.**
+
+**Both risks are closed by this entry.** The prose in the CodeQL entry below that named them is
+superseded; do not re-open either without new evidence about scanner behavior, and re-verify against
+the pinned Grype/Syft versions if those move.
+
+---
+
+#### Item 2 — should CodeQL move to advanced setup for trigger control?
+
+**Recommendation: yes, migrate — but the case is narrower than the framing suggests, and one premise
+behind it is wrong.**
+
+**Correcting the premise first.** The concern was that in a dev-first workflow, findings "arrive after
+code is already published to `:latest`." That is **not** what happens for `:latest`. Publishing is
+triggered by a **semver tag push**, not by the promotion merge (`publish.yml`, locked decision §6),
+so the sequence is: promotion merges to `main` → CodeQL runs on push to `main` (~1 min) → someone
+pushes the tag → publish. Unless the tag is pushed within about a minute of the merge, CodeQL
+findings land *before* `:latest` exists. The premise **is** correct for **`:dev`**: `dev-nightly.yml`
+builds and pushes `:dev` from a branch CodeQL never analyses. So the real published-artifact gap is
+`:dev`, not `:latest`.
+
+The gap that actually justifies migrating is simpler and doesn't depend on publishing at all:
+**CodeQL never sees a change while it is still reviewable.** It runs after a promotion has landed on
+`main`, at which point the code is merged and a revert — not a review comment — is the remedy.
+
+**What the workflow needs, and whether the suite is reproducible.** Confirmed at the source, not from
+docs: `github/codeql-action/init` exposes a `queries:` input, and `security-extended` is a member of
+`defaultSuites` in `src/analyze.ts:361-367`, resolved by `resolveQuerySuiteAlias()` to
+`<language>-security-extended.qls`. So `queries: security-extended` in a committed workflow
+reproduces **exactly** what runs today. The workflow would need: SHA-pinned `init` + `analyze` (repo
+convention, H9/SC-2), `permissions:` narrowed to `security-events: write`, `contents: read`,
+`actions: read`, a three-entry language matrix (`python`, `javascript-typescript`, `actions`), and
+`on: pull_request` + `push` for **both** `dev` and `main`.
+
+**CI cost: effectively zero added wall-clock — measured, not estimated.** The first CodeQL run's
+longest job was **62 s** (javascript-typescript; python 56 s, actions 41 s, all parallel). The
+current PR pipeline's longest job is **121 s** (image build + dogfood self-scan), with a 130 s
+wall-clock across all four. CodeQL's jobs run in parallel with those and finish at roughly half the
+time of the critical-path job, so **the PR gate stays bounded by the image build either way**. Money
+cost is zero — the repository is public, so Actions minutes are free. A schedule-plus-PR trigger is
+*not* better here: the whole point is per-PR feedback, and the marginal cost of per-PR is nil.
+
+**Maintenance cost: near zero marginal, contrary to expectation.** `github/codeql-action` ships
+frequently — **40 `v4.x` releases between 2025-10-07 and 2026-07-30**, roughly four a month — which
+looks like exactly the churn this repo has been managing. It is not, because
+`.github/dependabot.yml` already **groups every `github-actions` bump into a single weekly PR**
+(`groups: github-actions: patterns: ["*"]`, `interval: weekly`). `codeql-action` would become one
+more line in a PR that already exists, not a new stream. The honest cost is that the grouped weekly
+PR becomes non-empty more often than it is today.
+
+**What migrating actually loses — less than assumed.**
+
+- **Managed query-pack updates are *not* lost.** This is the misconception worth naming: advanced
+  setup pins the **action**, not the CodeQL bundle. `init`'s `tools:` input defaults to *"the
+  recommended version of the CodeQL Bundle"*, so query packs keep updating on GitHub's schedule
+  exactly as they do now. Pinning the action does not freeze the queries.
+- **Automatic language detection *is* lost.** The matrix becomes explicit. Note that default setup's
+  auto-detection is what silently added the third language (`actions`) in the first place — a real
+  freebie that an explicit matrix would not have produced. Against that: locked decision §2 fixes the
+  stack, so a new language appearing unnoticed is close to impossible, and the matrix should carry a
+  comment tying it to §2.
+- **A fifth workflow to own.** It can break in ways a GitHub-managed one cannot, and CLAUDE.md
+  § Build performance warns that workflow shapes here are load-bearing. The repo already maintains
+  four workflows and a composite action, so this is familiar rather than new capability.
+
+**The case against this recommendation**, stated plainly because it is not weak:
+
+- **The empirical yield so far is 0 true positives in 6 alerts.** Every finding from the first run
+  was a false positive, three of them in test files. Paying any ongoing complexity for a check with
+  that hit rate is a bet on future regressions, not a response to demonstrated value. One more
+  scheduled run on `main` would have caught the same nothing.
+- **The `:latest` exposure argument does not survive contact with `publish.yml`** (above). Strip it
+  out and what remains is "findings arrive post-merge instead of pre-merge" — a real but ordinary
+  workflow-quality complaint, not a security gap.
+- **Branch protection is still open.** Until that governance item lands, a CodeQL check on a `dev` PR
+  is advisory: it cannot block a merge, so migrating buys visibility, not enforcement. Doing this
+  *first* gets a check nobody is required to read. Sequencing it after branch protection would make
+  the same work actually bite.
+- **Default setup keeps giving things away for free** — the `actions` language arrived without being
+  asked for, and future additions would too. An explicit matrix ends that.
+
+**On balance:** migrate, but **after** the branch-protection item, so the check lands as a gate
+rather than as advisory decoration — and treat the `:dev` coverage hole, not `:latest`, as the
+concrete thing being fixed. **Not implemented in this session; the decision is the maintainer's.**
+
+**Plan section affected:** §14 (this record); §4/§6 (filesystem-scan gate — verified, unchanged);
+`docs/ROADMAP.md` § Near-term (CodeQL item's remaining work). No code, schema, workflow, or
+locked-decision change.
 
 ---
 
@@ -898,6 +1105,13 @@ point outside it; containment covers the *target*, not the tree beneath it. Both
 handing a directory to an external scanner, both require local write access inside an
 admin-configured root, and neither is reachable by an API caller. Recording them here so they are on
 the record, not proposing work.
+
+> **Superseded 2026-08-02 — both verified and closed; (b) was wrong.** Grype/Syft do **not** follow a
+> symlink out of the scan root: Syft re-roots every link target under the scan directory, so (b) does
+> not happen at the pinned versions. (a) is a real mechanism but is not exploitable. See
+> [the entry above](#2026-08-02--securityprocess--filesystem-gate-symlink-and-toctou-residual-risks-closed-out-neither-is-real-codeql-advanced-setup-migration-assessed)
+> for the evidence, the hardlink case that *is* followed (and why it is not a bypass), and the
+> upstream `FIXME` that makes the containment worth pinning with a regression test.
 
 ---
 
