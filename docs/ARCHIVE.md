@@ -792,13 +792,21 @@ So `.github/dependabot.yml`'s `docker` entry now ignores `node` majors:
   update-types: ["version-update:semver-major"]
 ```
 
-**Scoped so digest refreshes still arrive — this was checked, not assumed.** An `ignore` condition
-whose `update-types` are all of the `version-update:semver-*` form suppresses only *semver version*
-updates; a digest refresh of the same `22-bookworm-slim` tag is not one, and still comes through.
-That scoping is load-bearing rather than incidental: the previous round of declining a major left
-Dependabot offering nothing at all for this image, and the pinned digest went stale until it was
-refreshed by hand in **#107** (§14, 2026-07-26). The config *can* express "ignore majors, allow
-digests", so no workaround was needed.
+**Scoped so digest refreshes still arrive.** An `ignore` condition whose `update-types` are all of
+the `version-update:semver-*` form suppresses only *semver version* updates; a digest refresh of
+the same `22-bookworm-slim` tag is not one, and still comes through. That scoping is load-bearing
+rather than incidental: the previous round of declining a major left Dependabot offering nothing at
+all for this image, and the pinned digest went stale until it was refreshed by hand in **#107**
+(§14, 2026-07-26). The config *can* express "ignore majors, allow digests", so no workaround was
+needed and the question the ignore had to answer does not need reopening.
+
+**Stated evidence, since this repo does not accept "the docs say so" as proof.** What is confirmed
+is the *documented semantics* of `update-types` (it filters semver version updates) plus reported
+behaviour of the docker updater continuing to raise digest-only PRs against ignored majors. What
+is **not** yet confirmed is an observed Dependabot run *in this repository* doing so — the first
+scheduled `docker` run after this lands is the actual test. **If the next run produces no `node`
+update at all, the assumption is wrong** and the fallback is the one #107 already used: refresh the
+digest by hand, and say so here.
 
 The `docs/ROADMAP.md` § Near-term Node item was rewritten rather than left as it was. It now states
 plainly that the move is **22 → 24** (Active LTS, supported to **2028-04-30**), that it **must be
