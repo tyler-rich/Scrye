@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (121, newest first)
+### Index of §14 entries (122, newest first)
 
+- [2026-08-02 — Infra/Process — GHSA-qwww-vcr4-c8h2 closed by a 7.x backport (`react-router` 7.18.2), not the 8.3.0 major; the advisory's "Patched versions" field is stale](#2026-08-02--infraprocess--ghsa-qwww-vcr4-c8h2-closed-by-a-7x-backport-react-router-7182-not-the-830-major-the-advisorys-patched-versions-field-is-stale)
 - [2026-08-02 — Infra — Frontend builder and CI moved Node 22 → 24 (Active LTS); the Dependabot major-ignore re-pointed at the 24 line](#2026-08-02--infra--frontend-builder-and-ci-moved-node-22--24-active-lts-the-dependabot-major-ignore-re-pointed-at-the-24-line)
 - [2026-08-02 — Infra/Process — Post-v0.2.0 dependency cleanup: three closed Dependabot PRs reapplied, the base-branch anomaly traced to `dev`'s deletion, the brace-expansion waiver retired](#2026-08-02--infraprocess--post-v020-dependency-cleanup-three-closed-dependabot-prs-reapplied-the-base-branch-anomaly-traced-to-devs-deletion-the-brace-expansion-waiver-retired)
 - [2026-08-02 — Process/Governance — Public-repo governance checklist verified in GitHub Settings; five of eight items closed](#2026-08-02--processgovernance--public-repo-governance-checklist-verified-in-github-settings-five-of-eight-items-closed)
@@ -701,6 +702,165 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-02 — Infra/Process — GHSA-qwww-vcr4-c8h2 closed by a 7.x backport (`react-router` 7.18.2), not the 8.3.0 major; the advisory's "Patched versions" field is stale
+
+**What changed:** `react-router-dom` bumped **7.18.1 → 7.18.2** in `frontend/package.json`, with
+`package-lock.json` regenerated (`react-router` moves 7.18.1 → 7.18.2 with it — `react-router-dom`
+pins its core exactly). **Issue #123 is closed.** No application code changes; no other dependency
+moves; the runtime image is byte-identical in everything but the hashed asset name.
+
+The bump is taken because **the fix for GHSA-qwww-vcr4-c8h2 exists on the 7 line** — verified in the
+published tarball, not inferred from a version number. The react-router 7 → 8 major migration #123
+contemplated is **not needed for this advisory** and is not part of this change.
+
+---
+
+**1. The 7.x patch exists, and it was already published when #123 last said it was not.**
+
+`react-router@7.18.2` and `react-router-dom@7.18.2` were published **2026-07-28T21:53Z**. The
+per-release re-confirmation comment posted on **2026-08-02T02:25Z** — five days later — states *"No
+7.x fix has appeared, so the cheap exit still does not exist."* That was wrong at the moment it was
+written.
+
+**How it went wrong is the reusable part.** The check was made against the **advisory's own
+metadata**, and that metadata is stale: GHSA-qwww-vcr4-c8h2 still reads
+
+| Field | Value (as of 2026-08-02) |
+| --- | --- |
+| Affected versions | `>= 7.12.0, < 8.3.0` |
+| Patched versions | `8.3.0` |
+
+There is no 7.x entry in the "Patched versions" field, and the affected range still swallows 7.18.2.
+Reading the advisory therefore produces exactly the false statement that landed in the issue. The
+registry is what actually answers the question — `dist-tags` on `react-router` carry a
+**`version-7: 7.18.2`** line alongside `latest: 8.3.0`, and `react-router-dom`'s own `latest` **is**
+7.18.2 (the package does not exist on the 8 line at all; v8 consolidates into `react-router`). This
+is the npm-side counterpart of the interpreter-CVE rule already in `CLAUDE.md` § Dependency hygiene:
+**an advisory's "first patched version" is a claim about one release line, not a survey of every
+maintained line.** The maintainers backported without asking GitHub to re-cut the range, which they
+are under no obligation to do.
+
+**2. Verified at the source: 7.18.2 carries the same fix as 8.3.0, and nothing else.**
+
+Per `CLAUDE.md` § Dependency hygiene, the changelog line was treated as evidence and not proof. Both
+changelogs claim the fix, under *different PR numbers* — 8.3.0 cites
+[#15311](https://github.com/remix-run/react-router/pull/15311) (the PR the advisory itself
+references), 7.18.2 cites [#15353](https://github.com/remix-run/react-router/pull/15353), the shape
+of a backport. So all four tarballs (7.18.1, 7.18.2, 8.2.0, 8.3.0) were unpacked and the vulnerable
+function diffed directly.
+
+The vulnerable path is `generateRenderResponse`'s mutation branch in `dist/*/index-react-server.*` —
+the RSC server entry. **7.18.1 and 8.2.0 are identical here**, and both are shaped like this:
+
+```js
+if (isMutationMethod(request.method)) try {
+  throwIfPotentialCSRFAttack(request, allowedActionOrigins);
+  ctx.runningAction = true;
+  let result = await processServerAction(request, /* … */);   // ← inside the same try
+  // …
+} catch (error) {
+  potentialCSRFAttackError = error;                            // ← catches *any* of the above
+}
+let staticContext = await query(
+  request,                                                     // ← still the mutation request
+  skipRevalidation || !!potentialCSRFAttackError ? { filterMatchesToLoad: () => false } : void 0,
+);
+if (potentialCSRFAttackError) { /* … */ staticContext.statusCode = 400; }
+```
+
+Two defects, both matching the advisory's title — *action execution before a 400 response*. The
+`catch` cannot distinguish "the origin check rejected this request" from "the action ran and threw",
+so an error raised by an **already-executed** server action is relabelled a CSRF error and served as
+a 400: the response asserts the request was blocked when its side effects have already happened. And
+on a genuine origin-check failure the **unmodified mutation-method request** is still handed to
+`query()`, so downstream sees a rejected mutation as a mutation.
+
+**7.18.2 and 8.3.0 are, again, identical to each other** — and fix both:
+
+```js
+if (isMutationMethod(request.method)) {
+  try {
+    throwIfPotentialCSRFAttack(request, allowedActionOrigins);  // ← alone in the try
+  } catch (error) {
+    onError?.(error);
+    potentialCSRFAttackError = error;
+    request = new Request(request.url, {                        // ← neutralized to GET
+      method: "GET", headers: request.headers, signal: request.signal,
+    });
+  }
+  if (!potentialCSRFAttackError) {                              // ← action gated on the check
+    ctx.runningAction = true;
+    let result = await processServerAction(request, /* … */);
+    // …
+  }
+}
+let staticContext = await query(request, skipRevalidation ? { filterMatchesToLoad: () => false } : void 0);
+```
+
+The origin check is alone in its `try`, so only it can set `potentialCSRFAttackError`; the action is
+gated behind `!potentialCSRFAttackError`, so it cannot run in a request that will answer 400; the
+rejection is surfaced through `onError`; and the rejected request is rewritten to `GET` before it
+reaches `query()`. Same four changes, same order, in both releases.
+
+**The backport is also the *entire* 7.18.1 → 7.18.2 diff.** Normalizing the hashed chunk filenames,
+the only textual differences across every published bundle are the version banner and the block
+above. No API surface moves, no dependency moves, no behaviour outside the RSC server entry changes.
+As patch bumps go this is the lowest-risk shape available — which is precisely why it is worth
+taking even for an unreachable path.
+
+**3. The reachability assessment in #123 was independently re-verified, and holds.**
+
+Checked against the tree rather than carried forward from the issue text. Every `react-router-dom`
+import in `frontend/src/` is declarative — `BrowserRouter` (`main.tsx`), `Routes`/`Route`/`Link`/
+`Navigate`/`useLocation` (`App.tsx`), `useNavigate`/`useParams`/`useSearchParams` in the five pages,
+and `MemoryRouter` in `src/test/render.tsx`. There is **no** `createBrowserRouter`, no
+`react-router.config.ts`, no `@react-router/*` package, and no route `action` export anywhere. The
+vulnerable code lives behind the `index-react-server` entry point, which nothing in the SPA imports,
+so Vite never pulls it into the bundle. Beyond that, `docker/Dockerfile` copies only
+`/build/frontend/dist` out of the `frontend-builder` stage — no `node_modules`, no `package.json` —
+so the npm dependency graph is not in the runtime image at all, and the CI dogfood Trivy/Grype image
+scan was never going to see this advisory in the first place. It surfaced only through `npm audit`
+and Dependabot against the source tree.
+
+So #123's central claim was correct. What it got wrong was the *cost of exiting* — it framed the
+only way out as a major migration, and on that basis set up a long-lived acceptance with a
+per-release review. The exit was a patch bump.
+
+**4. The Dependabot/`npm audit` alert will *not* clear, and that is expected.**
+
+Because the advisory's affected range still reads `>= 7.12.0, < 8.3.0`, `npm audit` continues to
+report both `react-router` and `react-router-dom` as HIGH at 7.18.2, and still proposes the same
+`react-router-dom@7.11.0` **downgrade** as its "fix". That proposal was wrong before and is now
+doubly wrong: 7.11.0 is *below* the fix as well as below the range. **The alert is a metadata
+artifact, not a code finding** — the vulnerable code is gone from the tree, verified above.
+
+Nothing is being waived to suppress it. It gates nothing: `npm audit` is not run in CI, and the
+image-level dogfood gate never saw the package (point 3). The correct upstream resolution is for the
+advisory to gain a `>= 7.12.0, < 7.18.2 → 7.18.2` range; until it does, this entry is the record of
+why the alert can be left alone. **Do not "fix" it by downgrading, and do not scope a react-router 8
+migration in response to it.**
+
+**5. What react-router 8 now is, and is not.**
+
+Removing this advisory from the argument leaves the 7 → 8 major as a pure **currency** decision,
+which is where it belongs — alongside the other frontend majors tracked from #86 in
+`docs/ROADMAP.md` (TypeScript 7, ESLint 10, Vite 8, Vitest 4, jsdom 29) and gated on that toolchain
+sweep, since v8 folds `react-router-dom` back into `react-router` and would touch every import site
+in `frontend/src/`. It is not security work and carries no deadline. Per `CLAUDE.md` § Dependency
+hygiene it must not be sold as a fix for GHSA-qwww-vcr4-c8h2 — as of 7.18.2 there is nothing left
+for it to fix.
+
+**Verified:** `npm ci` installs `react-router@7.18.2` / `react-router-dom@7.18.2`; the installed
+`node_modules/react-router/dist/development/index-react-server.mjs` carries the gated-action fix;
+`npm run build` succeeds; ESLint, Prettier and the 20-file / 69-test Vitest suite all pass — the
+four page-level suites (`ScansPage.urlstate`, `ScansPage.compare`, `ScanDetailPage.poller`,
+`ScanDetailPage.latestwins`) included, since they mount real routers.
+
+**Plan section affected:** `CLAUDE.md` § Dependency hygiene; §14 (2026-08-02, item 6 of the
+post-v0.2.0 cleanup entry, whose #123 re-confirmation this corrects); `docs/ROADMAP.md`.
 
 ---
 

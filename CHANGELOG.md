@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **`react-router-dom` bumped 7.18.1 → 7.18.2, closing GHSA-qwww-vcr4-c8h2** (HIGH) —
+  an RSC-mode CSRF bypass in which a server action could execute before the
+  request was rejected with a 400. The fix was **backported to the 7 line** in
+  7.18.2; the react-router 8.3.0 major that the advisory names as its only patched
+  version is not required. Verified in the published tarballs rather than from the
+  advisory: 7.18.2's RSC server entry is identical to 8.3.0's — the origin check is
+  isolated in its own `try`, the server action is gated behind it, and a rejected
+  request is rewritten to `GET` — and that backport is the entire 7.18.1 → 7.18.2
+  diff.
+
+  Scrye was never exposed: the SPA is declarative-only (`<BrowserRouter>`, no
+  data-mode router, no server actions, no `@react-router/*` package), so the
+  vulnerable RSC entry point is not imported and never enters the bundle, and the
+  runtime image copies only the built `dist/` output. **`npm audit` and Dependabot
+  will keep reporting this at 7.18.2** — the advisory's affected range still reads
+  `< 8.3.0` and has not been re-cut for the backport. That is a metadata artifact,
+  not a code finding; the downgrade to 7.11.0 that `npm audit fix --force` proposes
+  remains the wrong move. Tracked in #123, now closed.
 - **`postcss` bumped 8.5.16 → 8.5.25, closing GHSA-r28c-9q8g-f849** (HIGH) — path
   traversal in PostCSS's previous-source-map auto-loading, where a crafted
   `sourceMappingURL` comment could make PostCSS read an arbitrary `.map` file from
