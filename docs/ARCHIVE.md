@@ -708,8 +708,10 @@ entry, and the anchors jump straight to it.
 **What changed:** the three Dependabot PRs closed on 2026-08-02 as unmergeable-as-built (#126, #127,
 #128) applied by hand and correctly; `.github/dependabot.yml` given the two `ignore` entries that
 stop the same PRs recurring; the base-branch question those closures raised diagnosed to a root
-cause; and the three advisory tracking issues re-verified against the tree after the v0.2.0 tag.
-No application code, schema, API contract, security model, job model, or auth behavior changes.
+cause; and the three advisory tracking issues re-verified against the tree after the v0.2.0 tag —
+with **`postcss` bumped by hand to close #124**, because with the Dependabot queue empty nothing
+was going to propose it. No application code, schema, API contract, security model, job model, or
+auth behavior changes.
 
 ---
 
@@ -750,29 +752,52 @@ has to be green.
 
 ---
 
-**2. `docker/login-action` 4.5.1 → 4.5.2, SHA-pinned (was #128).**
+**2. `docker/login-action` 4.5.1 → 4.6.0, SHA-pinned (#128 proposed 4.5.2).**
 
-Pinned at `371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2` in all three workflows that
+Pinned at `dbcb813823bdd20940b903addbd779551569679f # v4.6.0` in all three workflows that
 authenticate to GHCR — `publish.yml`, `dev-nightly.yml`, `rescan.yml` — keeping the tag as a
 trailing comment per the convention every other `uses:` in this repo follows (H9/SC-2).
 
-**The SHA was resolved from upstream, not read off the bump description.** `git ls-remote --tags
-https://github.com/docker/login-action` maps `refs/tags/v4.5.2` to that commit. Trusting a bot's
-rendering of a SHA is precisely the substitution a SHA pin exists to prevent; the tag→commit
-mapping has to come from the repository that owns it.
+**Why 4.6.0 rather than the 4.5.2 that #128 proposed.** 4.5.2's only substantive commit,
+["surface Docker Hub OIDC error responses"](https://github.com/docker/login-action/pull/1058),
+improves the error text when a **Docker Hub OIDC** login fails — a path none of the three call
+sites can reach, since all three log in to `ghcr.io` with the built-in `GITHUB_TOKEN` as
+username/password. 4.6.0 supersedes it a day later and is the one whose changed code is at least
+*adjacent* to what this repo does: it hardens the **buildx-scoped config path** used by the
+login → buildx-builder → push chain, and it carries the action's own bundled dependency bumps
+(`@aws-sdk/client-ecr`, `js-yaml`, `postcss`). Taking the newer release also avoids pinning to a
+version that was already superseded on the day it was applied.
+
+**The SHA was resolved from upstream, not read off a changelog or release page.** `git ls-remote
+--tags https://github.com/docker/login-action` maps `refs/tags/v4.6.0` to that commit. Trusting a
+rendered SHA is precisely the substitution a SHA pin exists to prevent; the tag→commit mapping has
+to come from the repository that owns it. Note that upstream's **moving `v4` tag currently points
+at the same commit** — the pin here is the immutable `v4.6.0` commit, not the alias.
 
 **The changelog matters more than usual here**, because this action runs only on the tag-gated
 publish path and the nightly — paths CI *cannot* exercise, so a breaking change would surface at
-release time on a protected branch. v4.5.2 contains exactly one commit of substance,
-["surface Docker Hub OIDC error responses"](https://github.com/docker/login-action/pull/1058): it
-improves the error text returned when a **Docker Hub OIDC** login fails. Scrye's three call sites
-log in to **`ghcr.io`** with the built-in `GITHUB_TOKEN` as username/password — not Docker Hub, not
-OIDC — so the changed code path is never entered. No breaking changes, no input or output changes.
+release time on a protected branch. So 4.6.0 was read at the source rather than from its release
+notes, comparing `v4.5.2...v4.6.0`:
 
-**Noted, not taken: v4.6.0 exists** (published a day after 4.5.2) and carries a buildx
-config-path hardening plus AWS SDK / js-yaml / postcss dependency bumps. It was left for a
-deliberate decision rather than folded in here — this entry is about applying what the closed PRs
-proposed, and 4.5.2 is what #128 proposed.
+- **`action.yml` is byte-identical.** No input added, removed, renamed, or re-defaulted.
+- **`src/main.ts` and `src/docker.ts` are unchanged.** The login flow itself does not move.
+- **The entire change is in `src/context.ts`'s buildx-scoped config-dir helper.** It now resolves
+  the buildx config root and the per-registry directory with `path.resolve` and rejects a
+  `registry` whose resolved path escapes the config root; validates the `scope` input (at most one
+  `@` separator, actions matching `^[a-z]+(,[a-z]+)*$`); and rejects a scope path that escapes the
+  registry directory — via a new `isChildPath()` helper doing the usual `relative()` /
+  `startsWith('..')` / `isAbsolute()` containment test.
+
+**And the honest reading of what that buys Scrye: nothing behavioural, today.** That helper
+short-circuits on its first line — `if (scopeDisabled() || !scope || scope === '') return ''` —
+and none of the three call sites passes a `scope` input (each passes exactly `registry`,
+`username`, `password`; no `ecr`, no `logout`, no OIDC, and no `DOCKER_CONFIG` is set anywhere in
+the repo). So every line 4.6.0 adds sits behind a gate this repo does not open. Two of the three
+sites (`publish.yml`, `dev-nightly.yml`) do go on to run buildx through
+`.github/actions/build-image`, so the hardened area is on the chain they use; `rescan.yml` only
+does a plain `docker pull` afterwards. The bump is therefore **currency plus defence-in-depth
+against a future `scope` being introduced** — not a fix for anything currently reachable, and it
+is not recorded as one.
 
 ---
 
@@ -933,10 +958,12 @@ timeline event) for telling the two causes apart.
 
 ---
 
-**6. The three advisory tracking issues re-verified after the v0.2.0 tag — and #125 is wrong.**
+**6. The three advisory tracking issues re-verified after the v0.2.0 tag — two of the three closed.**
 
 v0.2.0 was released 2026-08-02T00:03:32Z, so the "re-confirm at each release" cadence each issue
 sets for itself is due. All three were checked against the tree and against current advisory data.
+**#124 and #125 both closed** — the first by applying the bump, the second because the advisory had
+moved under it. #123 stays open, unchanged.
 
 - **#123 (GHSA-qwww-vcr4-c8h2, `react-router`) — still accurate, no change.** `react-router-dom` is
   still pinned 7.18.1 resolving `react-router@7.18.1`; `frontend/src/main.tsx` still uses
@@ -944,14 +971,68 @@ sets for itself is due. All three were checked against the tree and against curr
   The advisory range is unchanged at `>=7.12.0 <8.3.0`, no 7.x fix has appeared, and `npm audit`
   still offers only the `react-router-dom@7.11.0` **downgrade** as its "fix". The acceptance holds
   exactly as written.
-- **#124 (GHSA-r28c-9q8g-f849, `postcss`) — still accurate, no change.** Still pinned 8.5.16, still
-  a `devDependency`, advisory range still `<=8.5.17`, fix still the in-major patch **8.5.25**.
-  Worth noting for whoever picks it up: Dependabot has **not** proposed it, and there are no open
-  Dependabot PRs at all right now — the queue was emptied by the closures above, so the bump needs
-  applying by hand rather than waiting for a proposal. Deliberately not folded into this PR: it is
-  a frontend dependency change with its own build and Vitest verification, and this PR is already
-  a backend-plus-config change.
+- **#124 (GHSA-r28c-9q8g-f849, `postcss`) — bumped by hand, 8.5.16 → 8.5.25, and closed.**
+  Detailed below.
 - **#125 (GHSA-mh99-v99m-4gvg, `brace-expansion`) — materially wrong, corrected and closed.**
+
+---
+
+**`postcss` 8.5.16 → 8.5.25, applied by hand (closes #124).**
+
+**Why by hand.** `.github/dependabot.yml` targets `dev` for npm version updates and would normally
+propose this, but it has **not**, and after the three closures above there are **no open Dependabot
+PRs at all**. A HIGH advisory waiting on a bot that is not going to act is worse than the small
+diff, so the bump was applied directly. The original plan to defer it to its own PR was wrong for
+the same reason.
+
+**Which version actually clears it — verified in the published source, not from the range.** The
+advisory reports affected `<=8.5.17`, first patched **8.5.18**. That number was checked rather than
+taken, because the `brace-expansion` case immediately above is a live example of an advisory range
+being wrong mid-flight. Unpacking the tarballs, `lib/previous-map.js`'s `loadFile()` in **8.5.18**
+gains the containment check the advisory describes and 8.5.17 does not have:
+
+```js
+if (cssFile) {
+  let relativePath = relative(dirname(cssFile), path)
+  if (relativePath === '..' || relativePath.startsWith('..' + sep) || isAbsolute(relativePath)) {
+    return undefined
+  }
+}
+```
+
+That is exactly the fix for "path traversal in previous source-map auto-loading" — a
+`sourceMappingURL` can no longer point outside the stylesheet's own directory. **8.5.18 is
+therefore the real floor**, confirmed independently of the advisory metadata. The same check is
+still present in **8.5.25** (renamed `relativePath` → `rel`, semantics identical), which is what
+was pinned: it is the current release on the pinned 8.5 line, and `CLAUDE.md` § Dependency hygiene
+asks for current, actively-maintained pins rather than the bare minimum that clears a finding.
+
+**No `overrides` entry was needed, and no parent was bumped.** `postcss` is a **direct
+`devDependency`** in `frontend/package.json`, not only transitive as first assumed — the six
+packages that also reach it (`vite`, `postcss-preset-mantine`, `postcss-mixins`, `postcss-js`,
+`postcss-nested`, `postcss-simple-vars`, `sugarss`) declare it as a **peer** or caret range
+(`^8.4.21`, `^8.2.14`, `>=8.0.0`, `vite`'s `^8.5.3`), all of which 8.5.25 satisfies. So raising the
+single direct pin lifts the whole tree, and `npm ls postcss --all` shows every consumer deduped
+onto one 8.5.25 copy. The escalation condition — *"if the fix requires a major bump of a parent
+package, stop"* — did not arise.
+
+**Regenerated with npm, not by editing version strings** (`npm pkg set` + `npm install
+--package-lock-only`), so `resolved` URLs and `integrity` hashes moved with the version. The diff
+is three lock hunks and one `package.json` line: `postcss` 8.5.16 → 8.5.25, its `nanoid` floor
+`^3.3.12` → `^3.3.16`, and the resulting `nanoid` 3.3.15 → 3.3.16 — all `dev: true`, no new
+packages.
+
+**Verified after:** `npm ci` installs 8.5.25 and the installed
+`node_modules/postcss/lib/previous-map.js` carries the containment check; ESLint, Prettier, the
+20-file / 69-test Vitest suite and `npm run build` all pass; and **`npm audit` no longer reports
+`postcss`** — the remaining two highs are the `react-router` / `react-router-dom` pair from #123.
+Nothing ships either way: PostCSS runs during `vite build` and the runtime image copies only
+`dist/`.
+
+#124 was closed on its own stated criterion — *"close by hand once `postcss` is pinned at 8.5.25+
+and the frontend build and Vitest suite pass"* — the same standard applied to #125.
+
+---
 
 **What #125 asserted**, on 2026-07-31: the advisory covers `<=5.0.7`, so Scrye's 1.1.18 and 2.1.4
 are both still inside the affected range; there is no fixed release on the 1.x or 2.x lines; the
@@ -1022,14 +1103,15 @@ a dismissal with no recorded reason is indistinguishable from an unread finding.
 ---
 
 **Plan section affected:** `backend/pyproject.toml` + `backend/requirements.lock` (fastapi);
+`frontend/package.json` + `frontend/package-lock.json` (postcss);
 `.github/workflows/{publish,dev-nightly,rescan}.yml` (login-action SHA);
 `.github/dependabot.yml` (node-major and `scrye` ignores); `docker/Dockerfile` (comment pointer);
 `docs/ROADMAP.md` (Node 22→24 item rewritten, CodeQL item added); `CLAUDE.md` § Dependency hygiene
 and `CONTRIBUTING.md` § Releasing (the version-update-on-`main` cause). No locked decision is
-touched: the runtime stays Python 3.14.6, the frontend builder stays Node 22, distribution stays
-GHCR-only, and `docker/docker-compose.yml` still builds the app image locally. Extends the two
-2026-08-02 entries below — the auto-delete finding (whose second blast radius is item 5) and the
-`scrye:0.2.0` diagnosis (whose fix is item 4).
+touched: the runtime stays Python 3.14.6, the frontend builder stays Node 22, Mantine v7 and React
+18 are untouched, distribution stays GHCR-only, and `docker/docker-compose.yml` still builds the
+app image locally. Extends the two 2026-08-02 entries below — the auto-delete finding (whose second
+blast radius is item 5) and the `scrye:0.2.0` diagnosis (whose fix is item 4).
 
 ---
 
