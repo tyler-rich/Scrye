@@ -143,17 +143,19 @@ Small, self-contained work that closes a concrete gap.
     `SECURITY.md`'s stated channel actually exists.
 
 - ~~**Enable GitHub code scanning (CodeQL) for Python and TypeScript.**~~ **Done 2026-08-02** —
-  enabled via **default setup**, which auto-detected a third language (`actions`) alongside Python
-  and JavaScript/TypeScript. The first run covered every source file (174/174 Python, 78/78
-  TypeScript, 2/2 JavaScript, 5/5 workflows) and produced **five alerts, all Python, all assessed as
-  false positives**: two `py/path-injection` on the filesystem-scan containment gate
-  (`backend/app/scanners/targets.py:138` and `:144`) and three
-  `py/incomplete-url-substring-sanitization` on test assertions. Advanced setup was **not** taken —
-  there is no vendored or generated tree to path-exclude and no query-suite tuning wanted, so its
-  only exclusive capabilities do not apply, and default setup keeps the action and query-pack
-  versions managed rather than adding a fourth SHA-pinned workflow with its own bump stream. Full
-  reasoning per finding, the equivalence check behind the numbers, and the recommended disposition
-  for each alert are in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
+  enabled via **default setup** on the **`security-extended`** query suite (a dropdown in the same
+  settings pane; "default setup" names the setup mode, not the suite). Language auto-detection added
+  a third language, **`actions`**, alongside Python and JavaScript/TypeScript. The first run covered
+  every source file — 174/174 Python, 78/78 TypeScript, 2/2 JavaScript, 5/5 workflows — and produced
+  **six alerts, all Python, all assessed as false positives**: two `py/path-injection` on the
+  filesystem-scan containment gate (`backend/app/scanners/targets.py:138` and `:144`), three
+  `py/incomplete-url-substring-sanitization` on test assertions, and one `py/log-injection` on an
+  `int`-typed path parameter (`backend/app/api/scans.py:574`). Advanced setup was **not** taken:
+  there is no vendored or generated tree to path-exclude and no need for custom query packs, and
+  default setup keeps the action and query-pack versions managed rather than adding a fourth
+  SHA-pinned workflow with its own bump stream. Full reasoning per alert, the reproduction method
+  behind the numbers, and the recommended disposition for each are in
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
 
   **What remains is disposition, and two dependencies.** No alert has been dismissed — that is a
   deliberate hold, since a dismissal with no written reason is indistinguishable from an unread
@@ -166,10 +168,10 @@ Small, self-contained work that closes a concrete gap.
   into `main`; `dev`, which is where day-to-day work is actually PR'd, gets nothing. CodeQL therefore
   analyses `main` on push — *after* a promotion has landed — and on its weekly schedule. **This is
   now the strongest argument for converting to advanced setup**, since a committed workflow is the
-  only way to add `dev` to the trigger; it joins path filters and query-suite tuning on that list and
-  can be done without losing alert history. Separately, even once CodeQL runs on the right branch it
-  **cannot gate a merge** until the still-open **branch protection** item above makes it a required
-  status check.
+  only way to add `dev` to the trigger, and it is a live gap rather than the hypothetical
+  path-filter and custom-query reasons; the conversion can be done without losing alert history.
+  Separately, even once CodeQL runs on the right branch it **cannot gate a merge** until the
+  still-open **branch protection** item above makes it a required status check.
 
 ## Medium-term
 

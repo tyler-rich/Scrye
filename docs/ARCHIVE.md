@@ -580,7 +580,7 @@ entry, and the anchors jump straight to it.
 
 ### Index of §14 entries (123, newest first)
 
-- [2026-08-02 — Security/Process — CodeQL code scanning enabled via default setup; first-run triage: five alerts, all false positives](#2026-08-02--securityprocess--codeql-code-scanning-enabled-via-default-setup-first-run-triage-five-alerts-all-false-positives)
+- [2026-08-02 — Security/Process — CodeQL code scanning enabled via default setup; first-run triage: six alerts, all false positives](#2026-08-02--securityprocess--codeql-code-scanning-enabled-via-default-setup-first-run-triage-six-alerts-all-false-positives)
 - [2026-08-02 — Infra/Process — GHSA-qwww-vcr4-c8h2 closed by a 7.x backport (`react-router` 7.18.2), not the 8.3.0 major; the advisory's "Patched versions" field is stale](#2026-08-02--infraprocess--ghsa-qwww-vcr4-c8h2-closed-by-a-7x-backport-react-router-7182-not-the-830-major-the-advisorys-patched-versions-field-is-stale)
 - [2026-08-02 — Infra — Frontend builder and CI moved Node 22 → 24 (Active LTS); the Dependabot major-ignore re-pointed at the 24 line](#2026-08-02--infra--frontend-builder-and-ci-moved-node-22--24-active-lts-the-dependabot-major-ignore-re-pointed-at-the-24-line)
 - [2026-08-02 — Infra/Process — Post-v0.2.0 dependency cleanup: three closed Dependabot PRs reapplied, the base-branch anomaly traced to `dev`'s deletion, the brace-expansion waiver retired](#2026-08-02--infraprocess--post-v020-dependency-cleanup-three-closed-dependabot-prs-reapplied-the-base-branch-anomaly-traced-to-devs-deletion-the-brace-expansion-waiver-retired)
@@ -706,7 +706,7 @@ entry, and the anchors jump straight to it.
 
 ---
 
-### 2026-08-02 — Security/Process — CodeQL code scanning enabled via default setup; first-run triage: five alerts, all false positives
+### 2026-08-02 — Security/Process — CodeQL code scanning enabled via default setup; first-run triage: six alerts, all false positives
 
 **What changed:** GitHub **code scanning (CodeQL) was enabled on 2026-08-02** via **default setup**.
 This entry records the enablement, why default was chosen over advanced, and the full triage of the
@@ -717,7 +717,18 @@ disposition of every alert is left to the maintainer.
 [30731557142](https://github.com/tyler-rich/Scrye/actions/runs/30731557142), `dynamic` event,
 `main` @ `bb354a5` (the v0.2.0 promotion merge), 2026-08-02 03:59 UTC, 67 s wall-clock, all jobs
 green. CodeQL CLI **2.26.2**, `codeql-action` **4.37.4**, query packs `python-queries` **1.8.7** and
-`javascript-queries` **2.4.2**, each language's **default** (`*-code-scanning.qls`) suite.
+`javascript-queries` **2.4.2**.
+
+**The suite is `security-extended`, not the default `code-scanning` one.** This is worth stating
+because it is easy to assume otherwise — "default setup" names the *setup mode*, not the query suite,
+and the suite is a separate dropdown in the same settings pane. The evidence is exact rather than
+inferred: the Python job interpreted **52** queries, `python-code-scanning.qls` resolves to **45**,
+and `python-security-extended.qls` resolves to **52** — and the runner's 52 interpreted query paths
+are a **set-identical** match to `security-extended`'s resolved list (zero on either side of the
+diff). The same distinction exists for the other two languages (`javascript`: 89 vs 105; `actions`:
+18 vs 24), though it changes nothing there, since both return zero findings under either suite.
+Anyone reproducing this analysis must pass `*-security-extended.qls` or they will silently run a
+smaller query set — see the reproduction note below, where exactly that happened.
 
 **Default setup enabled *three* languages, not the two that were scoped.** The roadmap item asked
 for Python and TypeScript; language auto-detection also added **`actions`** (the workflow-analysis
@@ -740,52 +751,63 @@ paths need excluding*. They do not, and three things pointed the other way:
   convention would then require Dependabot to keep current — a fourth workflow and a recurring bump
   stream in exchange for control this repo has no use for. Default setup has GitHub track the action
   and pack versions.
-- **A conventional layout that needs no custom queries or path filters.** Advanced setup's only
-  exclusive capabilities are tuning the query suite and filtering paths. Coverage is already 100% of
-  every source file (above), the default suites are what is wanted, and there is no generated or
-  vendored code to exclude — so the sole reason to take on a hand-maintained workflow does not apply.
+- **A conventional layout that needs no custom queries or path filters.** Note that *choosing the
+  query suite is not an advanced-setup exclusive* — default setup exposes a Default/Extended
+  dropdown, and this repository is on **Extended** (above). What advanced setup alone buys is custom
+  query packs, path filters, and control over the trigger. Coverage is already 100% of every source
+  file, and there is no generated or vendored code to exclude, so the first two do not apply. (The
+  third turns out to matter — see the `dev`-PR note near the end of this entry, which was discovered
+  after this decision was made.)
 - **The configuration lives in repository settings, and *this entry* is its durable record.** Default
   setup's config is not a file in git, which puts it in the same class as the branch rulesets and the
   Dependabot security-update routing: a setting that leaves no artifact in the repository. §14 is
   where that class of change is recorded — see the 2026-08-02 governance-checklist entry, which
-  exists precisely because settings work had been sitting invisible. **If path filters or query-suite
-  tuning are ever needed, converting to advanced setup is the trigger to revisit this**, and it can
+  exists precisely because settings work had been sitting invisible. **If path filters, custom queries, or a different
+  trigger are ever needed, converting to advanced setup is the trigger to revisit this**, and it can
   be done without losing alert history.
 
-**How this triage was performed — read this before trusting the numbers.** The session token used
+**How this triage was performed, including the mistake in the first pass.** The session token used
 here carries only `metadata=read`, so `GET /repos/tyler-rich/Scrye/code-scanning/alerts` and
-`.../analyses` both return **403 "Resource not accessible by integration"**. The alerts were
-therefore **not** read from the Security tab. Instead the analysis was **reproduced locally at the
-same commit**: `codeql-bundle-v2.26.2` (the exact CLI the run used, hence the exact `python-queries`
-1.8.7 / `javascript-queries` 2.4.2 packs), databases built from a worktree at `bb354a5`, each
-analysed with its default `*-code-scanning.qls` suite. Equivalence was then checked against the
-runner's own logs rather than assumed: the local databases extracted **174 `.py`**, **49 `.tsx` + 29
-`.ts` = 78 TypeScript**, and **5 workflow `.yml`** files — matching the runner's reported counts
-exactly, file-for-file. `main` and `dev` have **no** differing `.py`/`.ts`/`.tsx` files at this
-point, so the reproduction is equally valid for `dev`.
+`.../analyses` both return **403 "Resource not accessible by integration"**. The alerts could not be
+read from the API. Instead the analysis was **reproduced locally at the same commit**:
+`codeql-bundle-v2.26.2` (the exact CLI the run used, hence the exact `python-queries` 1.8.7 /
+`javascript-queries` 2.4.2 packs), databases built from a worktree at `bb354a5`.
 
-The consequence to keep in mind: **the alert numbers on the Security tab are not cited below**,
-because this session never saw them. Findings are identified by rule ID and `file:line`, which is
-stable across both.
+**The first reproduction used the wrong suite and under-reported by one alert.** It ran
+`*-code-scanning.qls` on the assumption that "default setup" implies the default suite. That is 45 of
+the 52 Python queries, and the 7 it omits are `py/log-injection`, `py/tarslip`, `py/partial-ssrf`,
+`py/shell-command-constructed-from-input`, `py/jinja2/autoescape-false`, `py/overly-permissive-file`,
+and `py/request-without-cert-validation`. It therefore produced **five** findings and missed **#6**
+below. The gap was caught only when the Security tab was seen directly and showed six. Two lessons,
+both of which this repository has learned before in other forms: **a reproduction is not equivalent
+until its query set is checked against the run's**, and **matching file-extraction counts prove
+nothing about query coverage** — the first pass matched the runner's 174/78/5 file counts exactly
+while running seven fewer queries.
 
-**Result: 5 alerts, all Python. 0 JavaScript/TypeScript. 0 Actions.**
+The corrected run uses `*-security-extended.qls` and reproduces the Security tab **exactly**: six
+findings, same rules, same files, same lines, same severities. Extraction coverage also matches the
+runner file-for-file (**174 `.py`**, **49 `.tsx` + 29 `.ts` = 78 TypeScript**, **5 workflow `.yml`**).
+`main` and `dev` have **no** differing `.py`/`.ts`/`.tsx` files at this point, so the reproduction is
+equally valid for `dev`. The alert numbers below are the real ones, read off the Security tab.
 
-| # | Rule | Location | GitHub severity | SARIF level | Verdict | Recommended disposition |
-|---|------|----------|-----------------|-------------|---------|-------------------------|
-| 1 | `py/path-injection` | `backend/app/scanners/targets.py:138` | High (7.5) | error | **False positive** | Dismiss — "Used in tests" is wrong; use **"False positive"** with the reasoning below |
-| 2 | `py/path-injection` | `backend/app/scanners/targets.py:144` | High (7.5) | error | **False positive** | Dismiss — **"False positive"**, same reasoning |
-| 3 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_redaction.py:120` | High (7.8) | warning | **False positive** | Dismiss — **"Used in tests"** |
-| 4 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_credentials.py:320` | High (7.8) | warning | **False positive** | Dismiss — **"Used in tests"** |
-| 5 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_dockerfile_supply_chain.py:71` | High (7.8) | warning | **False positive** | Dismiss — **"Used in tests"** |
+**Result: 6 alerts, all Python. 0 JavaScript/TypeScript. 0 Actions.**
 
-**Counts by severity: 5 High, 0 Critical, 0 Medium, 0 Low.** The "5 High" reads worse than it is —
-GitHub derives its severity from each *rule's* `security-severity` property (7.5 and 7.8, both in the
-7.0–8.9 High band), which is a property of the query, not of the match. The SARIF `level` field
-splits the same five into 2 `error` and 3 `warning`.
+| Alert | Rule | Location | GitHub severity | Verdict | Recommended disposition |
+|-------|------|----------|-----------------|---------|-------------------------|
+| #1 | `py/path-injection` | `backend/app/scanners/targets.py:138` | High (7.5) | **False positive** | Dismiss — "Used in tests" is wrong; use **"False positive"** with the reasoning below |
+| #2 | `py/path-injection` | `backend/app/scanners/targets.py:144` | High (7.5) | **False positive** | Dismiss — **"False positive"**, same reasoning |
+| #3 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_credentials.py:320` | High (7.8) | **False positive** | Dismiss — **"Used in tests"** |
+| #4 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_dockerfile_supply_chain.py:71` | High (7.8) | **False positive** | Dismiss — **"Used in tests"** |
+| #5 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_redaction.py:120` | High (7.8) | **False positive** | Dismiss — **"Used in tests"** |
+| #6 | `py/log-injection` | `backend/app/api/scans.py:574` | Medium (6.1) | **False positive** | Dismiss — **"False positive"** |
+
+**Counts by severity: 5 High, 1 Medium, 0 Critical, 0 Low.** The five Highs read worse than they are
+— GitHub derives severity from each *rule's* `security-severity` property (7.5 and 7.8, both in the
+7.0–8.9 band), which is a property of the query, not of the match.
 
 ---
 
-#### Findings 1 and 2 — `py/path-injection`, `backend/app/scanners/targets.py:138` and `:144`
+#### Alerts #1 and #2 — `py/path-injection`, `backend/app/scanners/targets.py:138` and `:144`
 
 **The flagged code** is `resolve_filesystem_path()` (`backend/app/scanners/targets.py:119-146`) — the
 filesystem-scan containment gate:
@@ -879,7 +901,7 @@ the record, not proposing work.
 
 ---
 
-#### Findings 3, 4, and 5 — `py/incomplete-url-substring-sanitization`, all three in `backend/tests/`
+#### Alerts #3, #4, and #5 — `py/incomplete-url-substring-sanitization`, all three in `backend/tests/`
 
 The three flagged lines:
 
@@ -916,20 +938,65 @@ None of the three right-hand operands is a URL, and none of the three comparison
 
 All three are test oracles over fixed, in-repo strings, with no attacker anywhere in the picture.
 `"Used in tests"` is the accurate dismissal reason for these three — and, importantly, **not** for
-findings 1 and 2, which are in shipped code and need the "False positive" reason plus the mechanical
-explanation above.
+alerts #1, #2, and #6, which are in shipped code and need the "False positive" reason plus the
+mechanical explanation.
 
 ---
 
-**Two things this triage did *not* find, stated explicitly so absence is on the record.** The default
-suites ran the full injection/traversal/deserialization/crypto/SSRF/XSS/log-injection sets against
-all 174 Python files and all 78 TypeScript files and returned **nothing** on the scanner
-subprocess-argv construction, the credential materialization and shredding path, the crypto and
-secret-store modules, the auth and CSRF layer, or the frontend. And the Actions pack returned nothing
-on the five workflows. That is a clean result for the code the ROADMAP item was written to get
-looked at — but it is *coverage of CodeQL's default suites*, not a proof of absence, and it is worth
-noting that the query sets do not include the "missing authorization" checks the roadmap item hoped
-for (there is no such default Python query; RBAC coverage remains the pytest suite's job).
+#### Alert #6 — `py/log-injection`, `backend/app/api/scans.py:574`
+
+**The flagged line** is the last statement of `delete_scan()`:
+
+```python
+@router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_scan(
+    scan_id: int,                                                     # line 527  ← reported source
+    ...
+) -> Response:
+    ...
+    logger.info("Deleted scan %d and all associated data.", scan_id)  # line 574  ← sink
+```
+
+CodeQL's flow is two nodes long: the path parameter at `:527` straight to the logging call at `:574`.
+
+**Why it cannot be exploited.** Log injection means smuggling `\r`/`\n` into a log record to forge log
+lines. That requires attacker-controlled **string** content reaching the sink. It cannot happen here:
+
+- `scan_id` is annotated **`int`**. FastAPI validates and coerces every path parameter through
+  Pydantic **before** the handler body runs, so a non-integer path segment is rejected with a 422 and
+  line 574 is never reached. The value at the sink is a Python `int`, not the raw request bytes.
+- It is rendered with **`%d`**, which can only ever emit `[-]digits`. There is no formatting path by
+  which an `int` produces a newline.
+- The endpoint is also behind `require_csrf` and the `_operator` role, though that is beside the
+  point — the type is what closes this, and it closes it completely.
+
+**Why CodeQL is wrong here, specifically.** Its Python taint model treats a framework route parameter
+as an `ActiveThreatModelSource` **regardless of the parameter's type annotation** — there is no
+"this was coerced to `int`" step in the model, so the annotation on line 527 is not read as anything.
+And the sanitizer set for this query is small and entirely syntactic
+(`LogInjectionCustomizations.qll`): a comparison against a constant (`ConstCompareBarrier`), an
+explicit `.replace("\n", …)` / `.replace("\r\n", …)` call, and models-as-data barriers. A type
+annotation is not among them, and no rewrite of this line short of `str(scan_id).replace("\n", "")`
+— which would be nonsense on an `int` — would clear it. As with alerts #1 and #2, the analyzer is
+not being cautious about something uncertain; it simply has no way to express the fact that makes the
+code safe.
+
+**Not to be confused with the redaction filter.** `SecretRedactionFilter` (`app/core/logging.py`,
+covered by `backend/tests/test_redaction.py`) exists to keep *secrets* out of log output. It is a
+different control for a different problem and is not what makes this line safe.
+
+---
+
+**What the run did *not* flag, stated explicitly so absence is on the record.** The
+`security-extended` suites ran the full injection / traversal / deserialization / crypto / SSRF / XSS
+/ tarslip / unsafe-shell-construction sets against all 174 Python files and all 78 TypeScript files
+and returned **nothing** on the scanner subprocess-argv construction, the credential materialization
+and shredding path, the crypto and secret-store modules, the auth and CSRF layer, or the frontend.
+The Actions pack returned nothing on the five workflows. That is a clean result for exactly the code
+the roadmap item was written to get looked at — and it is a stronger result than it would have been
+under the default suite, since `security-extended` is the larger query set. It is still *coverage*,
+not proof of absence, and note that neither suite contains a "missing authorization" check for Python
+— one of the patterns the roadmap item hoped for. RBAC coverage remains the pytest suite's job.
 
 **A `dev` PR gets no CodeQL check at all — confirmed, not inferred.** Default setup's pull-request
 trigger targets the **default branch**, and `main` is the default branch here while `dev` is where
@@ -939,8 +1006,9 @@ worry that switching CodeQL on would "join the per-PR gate the moment it is swit
 opposite of what happened — on the branch that actually receives PRs, CodeQL does not run. In
 practice CodeQL currently analyses `main` on push (i.e. **after** a promotion has already landed) and
 on its weekly schedule. **Closing that gap needs advanced setup** — a committed workflow is the only
-way to add `dev` to the trigger — which is a second, concrete reason to revisit the default-vs-
-advanced choice, alongside path filters and query-suite tuning.
+way to add `dev` to the trigger — and it is the **strongest** reason to revisit the default-vs-
+advanced choice, stronger than the path-filter and custom-query reasons, since those remain
+hypothetical while this one is a live gap in coverage.
 
 **Not done here, and left to the maintainer.** No alert was dismissed, no code was changed, and no
 issue was opened. The recommended dispositions above are recommendations. One related item also stays
