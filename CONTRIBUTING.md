@@ -564,7 +564,11 @@ tell them apart before reaching for either response above:
 | Signal | Security update (targets `main` by design) | Retargeted version update |
 | --- | --- | --- |
 | Head branch name | no target-branch segment, e.g. `dependabot/npm_and_yarn/frontend/…` | carries `/dev/`, e.g. `dependabot/pip/backend/dev/…` |
-| PR timeline | no base-change event | `automatic_base_change_succeeded` |
+| PR timeline | no `automatic_base_change_succeeded` | `automatic_base_change_succeeded`, timestamped seconds after the promotion merged |
+
+Read the timeline event type precisely: a plain **`base_ref_changed`** is someone changing the base
+by hand, which is what #120 shows and is a different (and discouraged — see above) situation.
+**`automatic_base_change_succeeded`** is the one GitHub emits for retarget-on-deletion.
 
 A retargeted version update is not stale in the way #120 was — it was simply moved. Close it and
 reapply the bump on `dev`, or wait for Dependabot's next run to re-open it against `dev` once the

@@ -882,7 +882,14 @@ Three facts rule it out:
 
 The v0.2.0 promotion PR **#122** merged at **2026-08-01T23:56:07Z**. All three base changes land
 **two to three seconds later**, and all three PRs' `base.sha` is `bb354a5` — the promotion's merge
-commit. #110 and #120 have no such event.
+commit.
+
+Neither #110 nor #120 carries an `automatic_base_change_succeeded` event. Note the distinction
+that matters when reading a timeline: #120 *does* carry two ordinary **`base_ref_changed`** events
+(2026-07-31T05:06:53Z by `tyler-rich`, 05:09:23Z by `dependabot[bot]`) — that is the **manual**
+retarget-to-`dev`-and-back already documented in the 2026-07-31 release-prep entry, a different
+event type produced by a person changing the base in the UI. `automatic_base_change_succeeded` is
+emitted only by GitHub's retarget-on-base-branch-deletion, and it is the one to look for.
 
 GitHub **automatically retargets open pull requests whose base branch is deleted**, moving them to
 the merged pull request's base. A `dev` → `main` promotion has `dev` as its **head** branch; with
