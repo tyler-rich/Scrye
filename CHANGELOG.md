@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`postcss` bumped 8.5.16 → 8.5.25, closing GHSA-r28c-9q8g-f849** (HIGH) — path
+  traversal in PostCSS's previous-source-map auto-loading, where a crafted
+  `sourceMappingURL` comment could make PostCSS read an arbitrary `.map` file from
+  disk and inline it into the generated source map. Unlike the `brace-expansion`
+  bump in 0.2.0, this one **does** clear its advisory: the containment check in
+  `lib/previous-map.js` was verified present in the published 8.5.18 source (the
+  real fix floor) and still present in the pinned 8.5.25.
+
+  `postcss` is a `devDependency` that runs during `vite build`; the runtime image
+  copies only the built `dist/` output, so no deployed Scrye was ever exposed and
+  nothing about the shipped image changes. Tracked in #124.
+
+### Changed
+
+- `docker/login-action` pinned to v4.6.0 in the GHCR publish, nightly and re-scan
+  workflows. No behaviour change for Scrye — the release hardens buildx-scoped
+  config-path handling, which is gated on a `scope` input none of the call sites
+  passes.
+- `fastapi` bumped 0.140.0 → 0.140.13 (dependency currency; the intervening fixes
+  are all on streaming, `jsonable_encoder` and OpenAPI-flattening paths Scrye does
+  not use), with `backend/requirements.lock` regenerated.
+
 ## [0.2.0] - 2026-07-31
 
 ### Added

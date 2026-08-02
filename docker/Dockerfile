@@ -20,7 +20,9 @@
 # CONTRIBUTING, so it is tracked as its own item in docs/ROADMAP.md rather than
 # ridden in on a digest refresh. Node 26 is not LTS until 2026-10-28 and is not a
 # candidate. Refresh this digest against the registry (the `22-bookworm-slim` tag
-# moves with each 22.x patch); do not let a Dependabot major stand in for it.
+# moves with each 22.x patch); do not let a Dependabot major stand in for it —
+# node majors are now ignored in .github/dependabot.yml precisely so the digest
+# refresh is what Dependabot offers here.
 FROM node:22-bookworm-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS frontend-builder
 WORKDIR /build/frontend
 
