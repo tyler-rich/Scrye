@@ -28,6 +28,13 @@ const OIDC_ERRORS: Record<string, string> = {
   expired: 'The sign-in attempt expired; please try again.',
   validation: 'The identity provider response failed validation.',
   not_provisioned: 'No account is linked to that identity.',
+  // The identity provider issued a subject that matches no link, but the claims
+  // match an account that already holds one for this provider — i.e. the stored
+  // link went stale (the IdP account was recreated, or its subject mode changed).
+  // Refusing beats the alternatives: silently creating a duplicate account, or a
+  // generic error that reads like the linking feature regressed.
+  identity_stale:
+    'Your identity provider issued a different account identifier than the one linked here, so the stored link is stale. Sign in with your password, then unlink and re-link in Settings → Authentication.',
   inactive: 'Your account is inactive.',
   config: 'OIDC is misconfigured; contact an administrator.',
   insecure_transport:
