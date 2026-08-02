@@ -187,6 +187,49 @@ jobs:
             echo "SC-14 OK: backend/tests and backend/scripts absent; runtime trees present"
           '
 
+      # Issue #135: containment of a symlink planted inside an allowed filesystem
+      # scan root is not enforced by Scrye at all — it is inherited from Syft's
+      # directory resolver, whose re-rooting hangs on a line upstream annotates
+      # with "FIXME why is the base always being set instead of left as empty
+      # string?". If that FIXME is actioned, out-of-root symlink targets become
+      # additional scan roots and the escape is real, silently, on a routine
+      # scanner bump. backend/tests/test_scanner_symlink_containment.py is the
+      # guard. It needs real scanner binaries, so it runs HERE rather than in the
+      # backend job: this job already has the built image, whose trivy/grype/syft
+      # are cosign- AND checksum-verified at build time (docker/Dockerfile) and
+      # pinned by the same ARGs the test asserts against — strictly better
+      # provenance than downloading a second copy, and it guards the binaries the
+      # product actually ships. The plain `pytest` run in the backend job skips
+      # these tests; SCRYE_TEST_REQUIRE_SCANNER_BINARIES makes a missing binary a
+      # failure instead of a skip, so the guard cannot quietly stop running.
+      - name: Extract the image's pinned Syft + Grype binaries
+        run: |
+          mkdir -p "${RUNNER_TEMP}/scanner-bin"
+          cid="$(docker create scrye:ci)"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid:/usr/local/bin/syft" "${RUNNER_TEMP}/scanner-bin/syft"
+          docker cp "$cid:/usr/local/bin/grype" "${RUNNER_TEMP}/scanner-bin/grype"
+          chmod +x "${RUNNER_TEMP}/scanner-bin/syft" "${RUNNER_TEMP}/scanner-bin/grype"
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend (with dev extras)
+        working-directory: backend
+        run: pip install -e ".[dev]"
+
+      - name: Filesystem-scan symlink containment guard (#135)
+        working-directory: backend
+        env:
+          SCRYE_SYFT_BINARY: ${{ runner.temp }}/scanner-bin/syft
+          SCRYE_GRYPE_BINARY: ${{ runner.temp }}/scanner-bin/grype
+          SCRYE_TEST_REQUIRE_SCANNER_BINARIES: "1"
+        run: pytest -q tests/test_scanner_symlink_containment.py
+
       - name: Export image to a tar for offline scanning
         run: docker save scrye:ci -o /tmp/scrye-image.tar
 

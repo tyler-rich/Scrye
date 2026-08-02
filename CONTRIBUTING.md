@@ -390,6 +390,31 @@ cd backend && pytest
 cd frontend && npm test && npm run build && npm run lint && npm run format:check
 ```
 
+### Tests that need the real scanner binaries
+
+`backend/tests/test_scanner_symlink_containment.py` is a regression guard against a
+**scanner** change rather than a Scrye change: containment of a symlink planted inside an
+allowed filesystem scan root is inherited entirely from Syft's directory resolver, and
+upstream marks the line it hangs on with a `FIXME` (issue #135, `docs/ARCHIVE.md` §14,
+2026-08-02). It therefore has to run the real pinned binaries; a plain `pytest` skips it.
+
+Point it at the versions `docker/Dockerfile` pins — the test asserts the versions match,
+so a stale local copy fails rather than passing quietly:
+
+```bash
+cd backend
+SCRYE_SYFT_BINARY=/path/to/syft \
+SCRYE_GRYPE_BINARY=/path/to/grype \
+SCRYE_TEST_REQUIRE_SCANNER_BINARIES=1 \
+  pytest tests/test_scanner_symlink_containment.py
+```
+
+`SCRYE_TEST_REQUIRE_SCANNER_BINARIES` turns "binary not found" from a skip into a failure.
+CI sets it in the `image` job, which extracts `syft`/`grype` from the image it just built,
+so the guard runs on every PR against exactly the binaries the image ships. **Re-run it on
+every Grype/Syft bump** — that is what it exists for. If it ever fails, treat it as a live
+finding and read the severity ceiling in issue #135 before rating it.
+
 Frontend tests run under **Vitest** (`npm test`); place them next to the code
 they cover. The suite runs in two environments, chosen automatically by file
 extension (see `frontend/vite.config.ts`):
