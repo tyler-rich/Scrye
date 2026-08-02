@@ -220,9 +220,9 @@ cryptography==49.0.0 \
     #   scrye (pyproject.toml)
     #   authlib
     #   joserfc
-fastapi==0.140.0 \
-    --hash=sha256:e951c0a0d9540bf5d9a2a9e078fd415da2ab7e312d435139e7d9e2e7fe9f0b23 \
-    --hash=sha256:f338951b82fd74ca8f843163aec43ea1a1ce84d515415a50fa98fa25572a5544
+fastapi==0.140.13 \
+    --hash=sha256:500172a08cf1459901f90b05c37d93060dada3b573fec8f0862445db52ba6b4b \
+    --hash=sha256:8b017110e1e9f30a95e8bdb8f71fbe2f0fe3af5717109e5b14f9e069df54f6d4
     # via scrye (pyproject.toml)
 greenlet==3.5.4 \
     --hash=sha256:0232ae1de90a8e07867bb127d7a6ba2301e859145489f25cda8a6096dabe1d20 \
