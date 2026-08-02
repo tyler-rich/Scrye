@@ -738,20 +738,32 @@ the assessment entry below corrects that framing.)
 | Languages | explicit 3-entry matrix: `python`, `javascript-typescript`, `actions`, each `build-mode: none` | Advanced setup **loses** default setup's automatic language detection, which is what added `actions` in the first place. The matrix is now the whole list, and it carries an inline comment tying it to **locked decision §2** so the stack pinning is visible at the point a language would be added. `build-mode: none` on all three: nothing here is a compiled language. |
 | Action pins | `github/codeql-action/init` and `.../analyze` at `ea14db8afdef5d462e69d78c4ca45002d4522418` (`# v4.37.4`) | Repo convention (H9/SC-2): SHA-pinned with the tag as a trailing comment. v4.37.4 is the same action version default setup was running. **Pinning the action does not pin the queries** — `init`'s `tools:` input defaults to the recommended CodeQL bundle, so the CLI and query packs keep updating on GitHub's schedule. Dependabot's existing grouped weekly `github-actions` PR carries the SHAs forward. |
 | Permissions | `security-events: write`, `contents: read`, `actions: read` | Least privilege, declared at both the workflow and the job level so the grant is visible where it is used. `security-events: write` is the SARIF upload; `actions: read` is what codeql-action needs to read run metadata on `pull_request`. |
-| Triggers | `pull_request` **and** `push`, each filtered to `[main, dev]` | The whole point of the migration. `pull_request` is the per-PR gate on the branch that actually receives PRs; `push` keeps the post-merge analysis on both branches, which is what closes the `:dev` hole. |
+| Triggers | `pull_request` **and** `push`, each filtered to `[main, dev]`, plus a weekly `schedule` | The whole point of the migration. `pull_request` is the per-PR gate on the branch that actually receives PRs; `push` keeps the post-merge analysis on both branches, which is what closes the `:dev` hole. The cron carries over default setup's weekly scan — see below for its scope, which is narrower than it looks. |
 | Path filters | **none, deliberately** | These contexts are destined for `protect-dev`'s required list. A job skipped by an `if:` still reports a `skipped` conclusion and satisfies a required check — that is why `Image — multi-arch build check` showing `skipped` on `dev` PRs is harmless. A **workflow that never triggers reports nothing at all**, so a `paths:` filter would make a docs-only PR hang forever on a check that was never scheduled. The suite runs in ~60 s and Actions minutes are free on a public repo; there is nothing here worth saving. |
 | `concurrency` | `codeql-${{ github.workflow }}-${{ github.ref }}`, `cancel-in-progress: true` | Mirrors `ci.yml`. Superseded runs on the same ref are cancelled. |
 | `fail-fast` | `false` | One language failing must not cancel the other two. A partial result is still worth having, and the failure names its own language. |
 
-**Deliberate omission worth naming: there is no `schedule:` trigger, so the weekly scan is gone.**
-Default setup ran on a weekly cron in addition to its push/PR triggers. This workflow does not,
-because the migration spec was `pull_request` + `push` for `dev` and `main`, and the assessment below
-rejected a schedule *as a substitute* for per-PR feedback. The cost is narrow but real and is
-recorded here rather than discovered later: query packs keep updating (see the pin row above), and
-without a cron a **newly published query never runs against unchanged code** — it only fires the next
-time a file in that language is touched. On a repository with this commit rate that delay is short,
-which is why this was not treated as blocking. Adding `schedule: - cron: "0 4 * * 1"` alongside the
-existing triggers is a one-line follow-up if the gap is judged worth closing.
+**Default setup's weekly scan is carried over, not dropped — `schedule: - cron: "0 4 * * 1"`.**
+The migration spec named `pull_request` + `push` for `dev` and `main`, and the workflow was first
+built to exactly that, with the missing cron flagged rather than silently added; the maintainer then
+asked for it in the same PR. It matters for a reason the push/PR triggers cannot cover: query packs
+keep updating independently of the pinned action (see the pin row above), so **a newly published
+query never runs against unchanged code** unless something schedules it — it would otherwise wait for
+the next commit touching that language, which for a quiet subsystem can be a long time. Note this is
+*not* the schedule-instead-of-per-PR arrangement the assessment below rejected; it is a supplement to
+per-PR feedback, not a replacement.
+
+**Its scope is narrower than it reads, and the difference is worth knowing before relying on it.**
+`on: schedule` **always runs against the default branch**. The `branches: [main, dev]` filters apply
+to `push` and `pull_request` only and do not constrain a cron, so this weekly run analyses **`main`,
+never `dev`** — and, like the Settings row discussed below, **it does not fire at all until
+`codeql.yml` has reached `main` via a `dev` → `main` promotion.** Merging into `dev` does not start
+it. That is an acceptable shape rather than a gap: `dev` is covered continuously and at much higher
+frequency by the push/PR triggers, and the cron's purpose is catching *new queries* against a stable
+tree, which is precisely what `main` is. But do not read the cron as a safety net over `dev`.
+
+04:00 UTC Monday is the same off-hours slot `dev-nightly.yml` uses. They share no runner, no GHA
+cache scope and no registry, so the Monday overlap costs nothing.
 
 #### Settings edit 1 — the exact required-status-check context strings
 

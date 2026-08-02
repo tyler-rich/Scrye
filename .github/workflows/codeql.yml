@@ -45,6 +45,22 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+  # Carried over from default setup, which ran a weekly cron alongside its
+  # push/PR triggers. Without it a newly published query never runs against
+  # unchanged code — it only fires the next time a file in that language is
+  # touched, which for a quiet subsystem can be a long time.
+  #
+  # Scope, stated because it is not obvious: `schedule` ALWAYS runs against the
+  # DEFAULT BRANCH. The `branches:` filters above apply to push/pull_request
+  # only, so this cron analyses `main` — not `dev` — and it does not fire at all
+  # until `codeql.yml` has reached `main` via a promotion. `dev` stays covered
+  # continuously by the push/PR triggers, which is the higher-frequency path
+  # anyway; the cron's job is catching new queries, not new code.
+  #
+  # 04:00 UTC Monday. Same off-hours slot dev-nightly.yml uses; they share no
+  # runner, cache scope or registry, so the overlap costs nothing.
+  schedule:
+    - cron: "0 4 * * 1"
 
 # Least privilege at the top level; the analyze job re-declares the same set so
 # the grant is visible where it is used.

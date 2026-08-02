@@ -194,9 +194,12 @@ Small, self-contained work that closes a concrete gap.
   `codeql-action` v4.37.4 default setup was running — so nothing about the analysis changed, only
   when it runs. Pinning the action does not pin the query packs (`init`'s `tools:` defaults to the
   recommended bundle), and Dependabot's existing grouped weekly `github-actions` PR carries the SHAs
-  forward. One thing the migration gives up is recorded rather than hidden: there is no `schedule:`
-  trigger, so default setup's weekly scan is gone and a newly published query only fires the next
-  time a file in that language is touched. See [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
+  forward. **Default setup's weekly scan is carried over too** — `schedule: - cron: "0 4 * * 1"` —
+  so a newly published query fires on its own rather than waiting for someone to touch a file in
+  that language. One scope note, because it is not obvious: `on: schedule` **always runs against the
+  default branch**, so that cron analyses `main`, not `dev`, and does not fire until `codeql.yml`
+  reaches `main` via a promotion. `dev` is covered continuously by the push/PR triggers instead. See
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
 
   **What remains is disposition, and two settings edits.** No alert has been dismissed — that is a
   deliberate hold, since a dismissal with no written reason is indistinguishable from an unread
