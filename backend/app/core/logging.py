@@ -1,11 +1,14 @@
 """Logging configuration with secret redaction.
 
-Every log record passes through :class:`SecretRedactionFilter`, which masks
-values attached to known secret-ish field names (``password=...``,
-``"token": "..."``, ``Authorization: Bearer ...``) so plaintext secrets can
-never leak through log output, even from third-party libraries or accidental
-debug statements. This implements the "logging filter redacts known secret
-fields" requirement of ``docs/ARCHIVE.md`` §6.
+Every log line passes through :class:`RedactingFormatter`, which masks values
+attached to known secret-ish field names (``password=...``, ``"token": "..."``,
+``Authorization: Bearer ...``) so plaintext secrets can never leak through log
+output, even from third-party libraries or accidental debug statements. This
+implements the "logging filter redacts known secret fields" requirement of
+``docs/ARCHIVE.md`` §6.
+
+Redaction runs on the **rendered line**, not on the :class:`logging.LogRecord`.
+See :class:`RedactingFormatter` for why that distinction is load-bearing.
 """
 
 from __future__ import annotations
@@ -63,10 +66,49 @@ REDACTED = "[REDACTED]"
 # so the engine can't give back the key's trailing space and start the value on
 # it (which would slip past the Bearer/Basic guard). Scheme keywords
 # (Bearer/Basic) are excluded from the unquoted form so header-style credentials
-# are handled (whole-token) by the bearer pattern below instead.
+# are handled (whole-token) by the bearer pattern below instead. An already-masked
+# value is excluded too, so this pattern cannot re-consume — and thereby truncate
+# — a line the bounded query-string pass below has already redacted.
 _KV_PATTERN = re.compile(
     r"(?i)([\"']?\b[\w.-]*(?:" + "|".join(_SECRET_FIELD_NAMES) + r")\b[\"']?\s*[:=]\s*)"
-    r"(?:\"([^\"]*)\"|'([^']*)'|((?!(?:bearer|basic)\b)\S(?:(?!\s+[\w.-]+\s*[:=]).)*))"
+    r"(?:\"([^\"]*)\"|'([^']*)'|((?!(?:bearer|basic)\b|"
+    + re.escape(REDACTED)
+    + r")\S(?:(?!\s+[\w.-]+\s*[:=]).)*))"
+)
+
+# --- URL query strings -------------------------------------------------------
+# A query string has a real delimiter grammar; free-form log text does not. That
+# single difference is what lets a secret query parameter be bounded precisely
+# instead of being consumed to end-of-line the way `_KV_PATTERN`'s unquoted
+# branch must be. Without it an access line reads
+#   127.0.0.1 - "GET /api/scans?api_token=[REDACTED]
+# with the HTTP version and the status code eaten as collateral — and an access
+# log with no status codes cannot show a spike in 500s or someone probing for
+# 401s, which is most of why it is kept.
+#
+# Two patterns applied as a pair: `_URL_WITH_QUERY_PATTERN` first identifies a
+# token that genuinely is a URL or an absolute path carrying a query, then
+# `_QUERY_PARAM_PATTERN` masks the secret parameters *inside* it.
+#
+# The anchoring is the load-bearing part, not incidental tightening. Applying the
+# parameter rule to a whole line would treat any `?key=`/`&key=` in prose as a
+# query parameter and stop the value at the first space — re-opening exactly the
+# SEC-4 hole (a spaced unquoted secret leaking its tail). Inside a URL a raw space
+# is impossible, so stopping there is *correct parsing*, not truncation: a value
+# that really contained a space arrives percent-encoded and is consumed whole.
+# Outside a URL there is no such guarantee, so the tempered-greedy rule still
+# applies there. Restricting the bounded rule to real URLs is what lets both hold
+# at once.
+_URL_WITH_QUERY_PATTERN = re.compile(r"(?i)(?:https?://|/)[^\s\"<>?#]*\?[^\s\"<>]*")
+# Value terminators inside the query, each structural rather than heuristic: `&`
+# separates parameters and `#` ends the query component outright (RFC 3986 §3.4),
+# and whitespace / `"` / `<` / `>` cannot appear in a URI unencoded at all — `"`
+# being the one that matters in practice, since uvicorn's access format wraps the
+# request line in double quotes. `'` is deliberately NOT a terminator: it is a
+# legal sub-delim, so treating it as one could leave a byte of a secret behind.
+# Over-consuming a closing quote is the safe direction; leaking is not.
+_QUERY_PARAM_PATTERN = re.compile(
+    r"(?i)([?&][\w.-]*(?:" + "|".join(_SECRET_FIELD_NAMES) + r")=)[^&#\s\"<>]*"
 )
 # Authorization header style bearer/basic tokens.
 _BEARER_PATTERN = re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+")
@@ -86,6 +128,11 @@ def _kv_replacement(match: re.Match[str]) -> str:
     if match.group(3) is not None:  # single-quoted value
         return f"{key}'{REDACTED}'"
     return f"{key}{REDACTED}"  # unquoted value
+
+
+def _redact_query_params(match: re.Match[str]) -> str:
+    """Mask secret parameters inside one matched URL, leaving the rest of it intact."""
+    return _QUERY_PARAM_PATTERN.sub(rf"\g<1>{REDACTED}", match.group(0))
 
 
 def strip_url_credentials(text: str) -> str:
@@ -108,70 +155,91 @@ def redact(text: str) -> str:
     # (which would leave the token itself exposed).
     text = _BEARER_PATTERN.sub(rf"\g<1> {REDACTED}", text)
     text = strip_url_credentials(text)
+    # Query parameters before the general key/value pass: the bounded rule can
+    # only apply where a delimiter grammar exists, and running it first means the
+    # general pass finds an already-masked value it is forbidden to re-consume.
+    text = _URL_WITH_QUERY_PATTERN.sub(_redact_query_params, text)
     return _KV_PATTERN.sub(_kv_replacement, text)
 
 
-class SecretRedactionFilter(logging.Filter):
-    """Logging filter that redacts secret values from every record.
+class RedactingFormatter(logging.Formatter):
+    """Formatter wrapper that redacts a handler's fully rendered output.
 
-    Redacts the rendered message **and** any attached exception traceback /
-    stack info — the stdlib ``Formatter`` appends those from ``exc_info`` /
-    ``stack_info`` separately from the message, so a secret embedded in an
-    exception string (e.g. an ``httpx``/``smtplib`` error carrying a webhook URL
-    or SMTP password) would otherwise bypass message-only redaction.
+    Redaction runs on the **formatted line**, never on the
+    :class:`logging.LogRecord`. That distinction is load-bearing, and getting it
+    wrong is what broke uvicorn's access logger (see ``docs/ARCHIVE.md`` §14,
+    2026-08-02).
+
+    A secret routinely straddles the boundary between a record's format string
+    and its args — ``log.info("password=%s", pw)`` has neither half matching
+    :data:`_KV_PATTERN` on its own — so :func:`redact` can only work *after*
+    ``%``-interpolation. Redacting a record in place therefore forces collapsing
+    ``msg``/``args`` into one pre-rendered string and clearing ``args``, and a
+    cleared ``args`` is fatal to any formatter that reads it: uvicorn's
+    ``AccessFormatter`` unpacks ``record.args`` into a five-tuple
+    (``client_addr``, ``method``, ``full_path``, ``http_version``,
+    ``status_code``) and raises ``TypeError: cannot unpack non-iterable NoneType
+    object`` on every request.
+
+    Formatting the output instead leaves the record untouched, so every
+    formatter still sees the structure it expects — and it redacts strictly
+    *more* than the record-level approach did: the access line's
+    ``client_addr``/``request_line`` fields, which are rebuilt from ``args`` and
+    never appear in ``getMessage()``, plus any exception traceback or stack info
+    the inner formatter appends, are all covered by the same single pass.
     """
 
-    def filter(self, record: logging.LogRecord) -> bool:
-        """Redact the record's message and traceback; always keep the record."""
-        try:
-            message = record.getMessage()
-        except (TypeError, ValueError):
-            # Malformed format args; leave the record untouched rather than drop it.
-            return True
-        redacted = redact(message)
-        if redacted != message or record.args:
-            record.msg = redacted
-            record.args = None
-        if record.exc_info:
-            # Pre-format the traceback now and redact it; setting exc_text makes
-            # the handler's Formatter reuse this (already-masked) text verbatim.
-            exc_text = record.exc_text or logging.Formatter().formatException(record.exc_info)
-            record.exc_text = redact(exc_text)
-        if record.stack_info:
-            record.stack_info = redact(record.stack_info)
-        return True
+    def __init__(self, inner: logging.Formatter | None = None) -> None:
+        """Wrap ``inner`` (the handler's real formatter; a plain one if ``None``)."""
+        super().__init__()
+        self.inner = inner if inner is not None else logging.Formatter()
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Render ``record`` with the wrapped formatter, then mask secrets."""
+        return redact(self.inner.format(record))
+
+
+def install_redaction(handler: logging.Handler) -> None:
+    """Wrap ``handler``'s formatter so its output is redacted. Idempotent.
+
+    Args:
+        handler: The handler to protect. Its existing formatter (including
+            uvicorn's ``DefaultFormatter``/``AccessFormatter``) is preserved and
+            delegated to, so log layout and colouring are unchanged.
+    """
+    if isinstance(handler.formatter, RedactingFormatter):
+        return
+    handler.setFormatter(RedactingFormatter(handler.formatter))
 
 
 #: Loggers that configure their own handlers with ``propagate=False`` (so records
-#: never reach the root handlers our filter is attached to). uvicorn's access
-#: logger in particular emits full request lines — query strings can carry an
-#: OIDC ``code``/``state`` or a token — so it must be filtered directly.
+#: never reach the root handlers), plus their parent. uvicorn's access logger in
+#: particular emits full request lines — query strings can carry an OIDC
+#: ``code``/``state`` or a token — so its handlers must be wrapped directly.
 _INDEPENDENT_LOGGERS = ("uvicorn", "uvicorn.access", "uvicorn.error")
 
 
 def configure_logging(level: str = "INFO") -> None:
     """Configure root logging once, idempotently, with secret redaction.
 
+    Must run *after* uvicorn has installed its own handlers, which it does: the
+    CLI builds ``uvicorn.Config`` (whose ``__init__`` applies uvicorn's
+    ``LOGGING_CONFIG`` via ``dictConfig``) before ``Config.load()`` imports
+    ``app.main`` and reaches :func:`~app.main.create_app`. Wrapping is idempotent
+    and re-applied on every call, so a later reconfiguration can be re-covered by
+    calling this again.
+
     Args:
         level: Root log level name (e.g. ``"INFO"``).
     """
     global _CONFIGURED
-    if _CONFIGURED:
-        return
+    if not _CONFIGURED:
+        logging.basicConfig(
+            level=getattr(logging, level.upper(), logging.INFO),
+            format="%(asctime)s %(levelname)-8s %(name)s | %(message)s",
+        )
+        _CONFIGURED = True
 
-    logging.basicConfig(
-        level=getattr(logging, level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)-8s %(name)s | %(message)s",
-    )
-    redaction = SecretRedactionFilter()
-    for handler in logging.getLogger().handlers:
-        handler.addFilter(redaction)
-    # Cover loggers that don't propagate to root (notably uvicorn.access): attach
-    # to both the logger (applies regardless of when its handlers are added) and
-    # any handlers it already has.
-    for name in _INDEPENDENT_LOGGERS:
-        independent = logging.getLogger(name)
-        independent.addFilter(redaction)
-        for handler in independent.handlers:
-            handler.addFilter(redaction)
-    _CONFIGURED = True
+    for name in ("", *_INDEPENDENT_LOGGERS):
+        for handler in logging.getLogger(name).handlers:
+            install_redaction(handler)

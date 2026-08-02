@@ -49,6 +49,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   email match. The linked-identity card shows when the link was last used, and
   the README carries a re-link runbook.
 
+### Fixed
+
+- **Every uvicorn access log line raised a `TypeError` and printed a ~50-line
+  traceback in place of the line.** The secret-redaction layer was a
+  `logging.Filter` that rewrote each record in place — collapsing its message and
+  arguments into one pre-rendered string and clearing `record.args`. uvicorn's
+  access formatter reads `record.args` directly, unpacking it into
+  `(client_addr, method, full_path, http_version, status_code)`, so it hit
+  `cannot unpack non-iterable NoneType object` on **every request**. Scrye itself
+  was never affected — `/healthz` returned 200 throughout, because Python's
+  logging routes a formatting failure to `handleError()` and carries on — so the
+  only symptom was log volume, and it was substantial: with the container
+  healthcheck at 30 seconds, roughly **144,000 lines/day** into Docker's
+  json-file driver. On a host without log rotation that fills a disk.
+
+  Redaction now runs on each handler's **rendered output** instead of on the log
+  record, so no formatter ever sees a record we altered. Coverage is unchanged in
+  intent and slightly wider in fact: the access line's client address and request
+  line are rebuilt from the arguments and never appeared in the record's message,
+  so they are redacted now for the first time. Access lines were **not** exempted
+  — their query strings can carry a token. Present since 2026-07-04, when the
+  redaction filter was first attached to uvicorn's loggers; it affected v0.1.0 and
+  v0.2.0. See `docs/ARCHIVE.md` § Deviations (2026-08-02) for the full analysis,
+  including why no CI check could have caught it.
+
+- **A secret in a URL query string no longer takes the rest of the log line with
+  it when redacted.** Masking a query parameter used to consume everything after
+  it — on an access line that meant the HTTP version and the **status code**,
+  leaving a log that cannot show a spike in 500s or someone probing for 401s.
+  Redaction now bounds a query value at the delimiters a query actually has
+  (`&`, `#`, whitespace, and the quote the access format puts after the path)
+  rather than running to end of line, so
+  `"GET /api/scans?api_token=[REDACTED] HTTP/1.1" 500` keeps everything but the
+  token. Every secret in a multi-parameter query is masked individually, and
+  non-secret parameters survive.
+
+  Free-form log text still redacts to end of line, because it has no delimiters
+  to stop at and a secret there may legitimately contain spaces — the bounded
+  rule applies only where a real URL or path has been identified, which is what
+  lets both behaviours coexist.
+
 ### Security
 
 - **`react-router-dom` bumped 7.18.1 → 7.18.2, closing GHSA-qwww-vcr4-c8h2** (HIGH) —

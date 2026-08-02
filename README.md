@@ -1226,10 +1226,10 @@ only in memory at scan time.
   deployment behind a TLS-terminating proxy); turning it off is an explicit
   operator decision. See [If you're not using HTTPS](#if-youre-not-using-https).
 - **Write-only secret API + log redaction.** Secret fields accept values on write
-  and return a mask + timestamp on read. A logging filter redacts secret fields,
-  bearer/basic tokens, and URL userinfo across messages and tracebacks (and is
-  attached to uvicorn's loggers). Scanner subprocesses don't inherit Scrye's
-  `SCRYE_*` config.
+  and return a mask + timestamp on read. A logging formatter redacts secret
+  fields, bearer/basic tokens, and URL userinfo from every rendered log line —
+  messages, tracebacks, and uvicorn's access lines alike. Scanner subprocesses
+  don't inherit Scrye's `SCRYE_*` config.
 - **Baseline security headers.** Every response carries `X-Frame-Options: DENY`,
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
   and a **Content-Security-Policy** tuned for the SPA (`script-src 'self'` with no
