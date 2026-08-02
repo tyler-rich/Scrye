@@ -120,39 +120,56 @@ Small, self-contained work that closes a concrete gap.
   here as a checklist. None of them is doable from a code session, which is exactly why several
   sat invisible in `ARCHIVE.md` §14 prose for weeks before being collected here.
 
-  **Five of the original eight items were verified in GitHub Settings on 2026-08-02 and removed
-  from this list** — the GitHub profile display name, the dormant Docker Hub secrets, GHCR package
-  visibility, Dependabot security alerts, and the Actions workflow permissions. What that
-  verification actually found (including the two items that turned out to be correct already
-  rather than newly changed) is recorded in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md). Check
-  there, not here, before re-doing any of them: a settings change leaves no artifact in the
-  repository, so that entry is the only durable record it happened. The three items below are
-  what remains open.
+  **Six of the original eight items are now closed.** Five were verified in GitHub Settings on
+  2026-08-02 — the GitHub profile display name, the dormant Docker Hub secrets, GHCR package
+  visibility, Dependabot security alerts, and the Actions workflow permissions; what that
+  verification actually found (including the two that turned out to be correct already rather than
+  newly changed) is in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md). **Private vulnerability
+  reporting is the sixth** — see below. Check that entry, not this list, before re-doing any of
+  them: a settings change leaves no artifact in the repository, so §14 is the only durable record it
+  happened.
 
-  - **Branch protection** on `main` and `dev` — **mostly already done; re-scope before working it.**
-    A ruleset readout on 2026-08-02 (`ARCHIVE.md` §14) found `protect-dev` and `protect-main` both
-    `active`, each already carrying `pull_request` (1 approval, dismiss-stale-on-push, thread
-    resolution, squash-only), `required_status_checks`, `deletion`, and `non_fast_forward`. So
-    "require a passing CI status" and "require a pull request" are **in place on both branches**.
+  **What remains is one decision and two tracked settings gaps.** The branch-protection item turned
+  out to be mostly done; the parts of it that are genuinely open are now issues rather than prose,
+  for exactly the reason this checklist exists.
 
-    What is actually still open: **(a)** `require_code_owner_review` is `false` on both, so the
-    `CODEOWNERS` file requests review but does not require it; **(b)** nothing restricts who may push
-    tags on `main` — which matters, because a semver tag push is what triggers `publish.yml`;
-    **(c)** `required_status_checks` names only `Backend — lint + tests` and `Frontend — lint + build`
-    — the image build and dogfood self-scan run on every PR but are **not** required, which is worth
-    a deliberate decision either way.
+  - **Branch protection** on `main` and `dev` — **mostly done; do not re-scope from the original
+    wording.** A ruleset readout on 2026-08-02 (`ARCHIVE.md` §14) found `protect-dev` and
+    `protect-main` both `active`, each already carrying `pull_request` (1 approval,
+    dismiss-stale-on-push, thread resolution, squash-only), `required_status_checks`, `deletion`,
+    and `non_fast_forward`. So *"require a passing CI status"* and *"require a pull request"* are
+    **already in place on both branches**.
 
-    Note when scoping this: *Restrict deletions* is enabled on `protect-dev` and did **not** prevent
-    `dev` from being deleted during the v0.2.0 promotion, because the ruleset's bypass list grants
-    Repository admin *Always allow* (`ARCHIVE.md` §14, 2026-08-02). Assume any rule configured here
-    is advisory for the repository owner until the bypass list says otherwise. (The bypass list is
-    not readable at the API permission level available to a code session — the ruleset endpoint
+    Three things are genuinely still open, two of them now tracked:
+
+    - **[#136](https://github.com/tyler-rich/Scrye/issues/136) — the dogfood self-scan is not a
+      required check.** `required_status_checks` is an allowlist naming only `Backend — lint +
+      tests` and `Frontend — lint + build`, so a PR can merge with the image scan red. Includes the
+      `paths:`-filter hazard: a required context whose workflow never triggers blocks a PR forever
+      (a job skipped by `if:` is fine — it reports `skipped`).
+    - **[#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricts tag pushes.**
+      Both rulesets are `target: "branch"`; there is no tag-targeted ruleset, and a `v*.*.*` tag push
+      is what triggers `publish.yml` (GHCR push, `:latest` move, provenance + SBOM attestation).
+      Theoretical with a sole maintainer; the trigger is **before any collaborator is added**.
+    - **Code-owner review is not required.** `require_code_owner_review` is `false` on both rulesets,
+      so `.github/CODEOWNERS` requests review but does not compel it. Untracked — it is a decision
+      rather than a gap, and on a single-maintainer repo it is close to a no-op today.
+
+    Note when working any of these: *Restrict deletions* is enabled on `protect-dev` and did **not**
+    prevent `dev` from being deleted during the v0.2.0 promotion, because the ruleset's bypass list
+    grants Repository admin *Always allow* (`ARCHIVE.md` §14, 2026-08-02). Assume any rule configured
+    here is advisory for the repository owner until the bypass list says otherwise. (The bypass list
+    is not readable at the API permission level available to a code session — the ruleset endpoint
     returns `bypass_actors: null` — so confirm it in Settings rather than from an API dump.)
-  - **Signed-commit enforcement** — a decision to make. Requiring signed commits on the
+  - **Signed-commit enforcement** — a decision to make, and **verified still open**: neither ruleset
+    carries a `required_signatures` rule (2026-08-02 readout). Requiring signed commits on the
     protected branches means contributors must sign; worth it for a security tool, so weigh the
     friction.
-  - **Private vulnerability reporting** — enable in the repo's Security settings, so
-    `SECURITY.md`'s stated channel actually exists.
+  - ~~**Private vulnerability reporting**~~ — **Done; verified 2026-08-02.**
+    `GET /repos/tyler-rich/Scrye/private-vulnerability-reporting` returns `{"enabled": true}`, so
+    `SECURITY.md`'s stated channel exists. It is not recorded when this was turned on — it may have
+    been enabled at any point since the repo went public and simply never struck from this list,
+    which is the same drift this checklist was created to stop.
 
 - ~~**Enable GitHub code scanning (CodeQL) for Python and TypeScript.**~~ **Done 2026-08-02** —
   enabled via **default setup** on the **`security-extended`** query suite (a dropdown in the same
