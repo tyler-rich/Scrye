@@ -68,6 +68,15 @@ Small, self-contained work that closes a concrete gap.
   every one of them lands on the **type-aware ESLint gate** turned on 2026-07-24, so the real
   work is the lint-config churn they shake out, not the version numbers. Best done as a single
   deliberate PR rather than folded into an unrelated change.
+- **`react-router` 7 → 8.** Belongs with the tooling majors above, and is now a **pure currency
+  item with no security component**. It was previously coupled to GHSA-qwww-vcr4-c8h2 (#123),
+  whose only recorded fix was the 8.3.0 major; that advisory was closed on 2026-08-02 by the
+  **7.18.2 backport** instead, so nothing about the 8 line is required (see
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md)). Do not re-argue it as a security fix — as of
+  7.18.2 there is nothing left for it to fix. The migration's actual cost is that v8 folds
+  `react-router-dom` back into `react-router`, so **every import site in `frontend/src/` moves**
+  (twelve files today), plus whatever the type-aware ESLint gate makes of the new type surface —
+  which is the same risk the bumps above share, and the reason to do them together.
 - **Retire the deprecated Starlette status-code constants.** `status.HTTP_422_UNPROCESSABLE_ENTITY`
   raises a `StarletteDeprecationWarning` on every attribute access — Starlette renamed it to
   `HTTP_422_UNPROCESSABLE_CONTENT` — and it is referenced at **22 call sites** across seven routers
