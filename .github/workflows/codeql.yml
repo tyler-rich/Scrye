@@ -1,0 +1,127 @@
+# Scrye — CodeQL code scanning (advanced setup).
+#
+# Migrated from GitHub's *default setup* on 2026-08-02. Default setup's config
+# lived in repository settings rather than in git, and — the reason for the
+# move — its pull-request trigger targets the **default branch only**. This repo
+# PRs into `dev` (CLAUDE.md § Git & PR conventions), so CodeQL never saw a change
+# while it was still reviewable: it ran on `main` *after* a promotion had already
+# landed, at which point the remedy for a finding is a revert rather than a review
+# comment. With several PRs regularly in flight, a finding on `main` is
+# attributable to a batch rather than to the PR that introduced it. See
+# docs/ARCHIVE.md §14 (2026-08-02) for the full assessment, the measured CI cost,
+# and what the migration does and does not give up.
+#
+# Two properties of this file are load-bearing and should not be "tidied":
+#
+#  1. NO `paths:`/`paths-ignore:` FILTERS. These jobs' contexts are on the
+#     `protect-dev` required-status-checks list. A required context whose
+#     workflow never triggers reports *nothing* and blocks the PR forever — a
+#     docs-only PR would hang. (A job skipped by an `if:` is fine: it reports a
+#     `skipped` conclusion, which satisfies the requirement. A workflow that
+#     never fires does not.) The suite runs in ~60 s and Actions minutes are free
+#     on a public repo, so there is nothing to save here.
+#  2. THE LANGUAGE MATRIX IS EXPLICIT. Advanced setup loses default setup's
+#     automatic language detection — which is what silently added `actions`
+#     alongside `python` and `javascript-typescript` in the first place. The
+#     matrix below is the whole list and must be kept in step with CLAUDE.md
+#     locked decision §2 (React 18 + TS + Vite frontend, Python 3.14 backend);
+#     a new language cannot appear here on its own.
+#
+# `queries: security-extended` reproduces exactly what default setup ran:
+# `security-extended` is a member of `defaultSuites` in codeql-action's
+# src/analyze.ts and resolves via resolveQuerySuiteAlias() to
+# `<language>-security-extended.qls`. Dropping it would silently fall back to the
+# smaller `code-scanning` suite (45 vs 52 Python queries) — see docs/ARCHIVE.md
+# §14, where a first-pass reproduction did exactly that and under-reported.
+#
+# Pinning the ACTION does not pin the query packs: `init`'s `tools:` input
+# defaults to the recommended CodeQL bundle, so GitHub keeps the CLI and packs
+# current. Dependabot's grouped weekly `github-actions` PR keeps the pinned SHAs
+# below moving (.github/dependabot.yml).
+name: CodeQL
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  # Carried over from default setup, which ran a weekly cron alongside its
+  # push/PR triggers. Without it a newly published query never runs against
+  # unchanged code — it only fires the next time a file in that language is
+  # touched, which for a quiet subsystem can be a long time.
+  #
+  # Scope, stated because it is not obvious: `schedule` ALWAYS runs against the
+  # DEFAULT BRANCH. The `branches:` filters above apply to push/pull_request
+  # only, so this cron analyses `main` — not `dev` — and it does not fire at all
+  # until `codeql.yml` has reached `main` via a promotion. `dev` stays covered
+  # continuously by the push/PR triggers, which is the higher-frequency path
+  # anyway; the cron's job is catching new queries, not new code.
+  #
+  # 04:00 UTC Monday. Same off-hours slot dev-nightly.yml uses; they share no
+  # runner, cache scope or registry, so the overlap costs nothing.
+  schedule:
+    - cron: "0 4 * * 1"
+
+# Least privilege at the top level; the analyze job re-declares the same set so
+# the grant is visible where it is used.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref, matching ci.yml.
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    # This name IS the required-status-check context string, per language:
+    #   CodeQL — python
+    #   CodeQL — javascript-typescript
+    #   CodeQL — actions
+    # Renaming this job (or the matrix values) renames those contexts and breaks
+    # the `protect-dev` ruleset until the strings are edited to match.
+    name: CodeQL — ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    permissions:
+      # Upload the SARIF results to the Security tab.
+      security-events: write
+      contents: read
+      # Read workflow run metadata (required by codeql-action on pull_request).
+      actions: read
+    strategy:
+      # One language failing must not cancel the other two — a partial result is
+      # still worth having, and the failure should name its own language.
+      fail-fast: false
+      matrix:
+        include:
+          # `build-mode: none` for all three: Python and TypeScript are
+          # interpreted, and `actions` analyses workflow YAML. Nothing here is a
+          # compiled language, so there is no build to observe.
+          - language: python
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+          - language: actions
+            build-mode: none
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step here pushes or authenticates to the remote, so drop the
+          # persisted token rather than leave it in .git/config (SC-11).
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@ea14db8afdef5d462e69d78c4ca45002d4522418 # v4.37.4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # See the header note: this is what default setup ran, and omitting it
+          # silently shrinks the query set.
+          queries: security-extended
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@ea14db8afdef5d462e69d78c4ca45002d4522418 # v4.37.4
+        with:
+          category: "/language:${{ matrix.language }}"

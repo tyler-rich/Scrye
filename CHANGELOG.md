@@ -124,6 +124,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CodeQL code scanning moved from GitHub's default setup to a committed
+  workflow** (`.github/workflows/codeql.yml`). Nothing about the analysis
+  changed — same `security-extended` suite, same three languages (`python`,
+  `javascript-typescript`, `actions`), same `codeql-action` version, now
+  SHA-pinned. What changed is when it runs: default setup's pull-request trigger
+  targets the repository's **default branch**, so PRs into `dev` — where all
+  day-to-day work is PR'd — got no CodeQL check at all, and findings only
+  surfaced on `main` after a promotion had already landed. It now runs on every
+  pull request and push for both `dev` and `main`, plus default setup's weekly
+  scan (Mondays, 04:00 UTC) so a newly published query fires on its own instead
+  of waiting for someone to touch a file in that language — that cron runs
+  against the default branch, as all scheduled workflows do. Deliberately
+  carries no `paths:` filters: a required check whose workflow never triggers
+  blocks a PR forever. No change to a deployed Scrye.
 - **The SPA is now built on Node 24 (`krypton`), the Active LTS.** The image's
   `frontend-builder` stage and CI's frontend job moved together from Node 22,
   which is in maintenance and supported only through 2027-04-30; 24 is supported
