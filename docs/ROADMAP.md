@@ -46,15 +46,35 @@ Small, self-contained work that closes a concrete gap.
   instead of waiting for each record's next write.
 - **Move the frontend build from Node 22 to Node 24.** The image's `frontend-builder` stage and
   CI both run Node 22 (`jod`), which entered maintenance on 2025-10-21 and is supported only
-  through **2027-04-30**. Node 24 (`krypton`) is the Active LTS and is supported through
-  **2028-04-30**, so it is where this should land. Node **26** is deliberately not the target: it
-  does not become LTS until **2026-10-28**. The move spans three places that must change together
-  — `docker/Dockerfile`'s pinned `node:22-bookworm-slim` digest, `.github/workflows/ci.yml`'s
-  `node-version: "22"`, and `CONTRIBUTING.md`'s stated Node floor (plus the matching line in
-  `README.md` § Requirements) — which is exactly why it is its own item and not something a
-  Dependabot digest bump can carry. Until it happens, the 22 digest still needs refreshing on its
-  own schedule; Dependabot offers the 26 major instead of a 22 digest refresh, so declining the
-  major leaves the builder stale (see `ARCHIVE.md` §14, 2026-07-26).
+  through **2027-04-30**. Node 24 (`krypton`) is the **Active LTS**, supported through
+  **2028-04-30**, and is the correct target.
+
+  **This must be its own PR.** The move spans **three files that have to change together**:
+
+  1. `docker/Dockerfile` — the `frontend-builder` stage's pinned `node:22-bookworm-slim` digest.
+  2. `.github/workflows/ci.yml` — the frontend job's `node-version: "22"` on `setup-node`.
+  3. `CONTRIBUTING.md` — the stated Node requirement for local development (plus the matching
+     line in `README.md` § Requirements).
+
+  Bumping the Dockerfile alone would leave **CI building on 22 while the image builds on 24**, so
+  a lint or build failure that only reproduces on one of the two versions would surface in the
+  published image rather than in CI. Pin the new base by **digest, resolved against the registry**
+  — not by tag, and not from a bump description — the same way every other base image in the
+  Dockerfile is pinned.
+
+  **Node majors are now ignored for the `docker` ecosystem in `.github/dependabot.yml`,** so
+  nothing arrives here automatically. That ignore is why the odd-numbered lines stop showing up:
+  **#126** proposed **Node 25**, which never becomes LTS and reached end-of-life on
+  **2026-06-01** — *earlier* than the 22 line already in use — so accepting it would have
+  shortened the supported window, not extended it. The ignore is scoped to
+  `version-update:semver-major`, so **digest refreshes of the pinned 22 tag still come through**;
+  that matters because declining a major previously left Dependabot offering nothing for this
+  image and the digest went stale until it was refreshed by hand in #107 (`ARCHIVE.md` §14,
+  2026-07-26 and 2026-08-02).
+
+  Node **26** is not the target today — it became current on 2026-05-05 but does not enter LTS
+  until **2026-10-28**. It is worth revisiting after that date (its EOL is 2029-04-30), but that
+  is a decision to make deliberately when this item is picked up, not a reason to wait.
 - **Frontend tooling majors from Dependabot #86.** After the Mantine/React ignores landed
   (locked decision §2 — `ARCHIVE.md` §14, 2026-07-26), the rest of that grouped PR is still
   wanted and still unapplied: **TypeScript 5.7 → 7.0**, **ESLint 9 → 10**, **`typescript-eslint`
@@ -127,6 +147,31 @@ Small, self-contained work that closes a concrete gap.
     friction.
   - **Private vulnerability reporting** — enable in the repo's Security settings, so
     `SECURITY.md`'s stated channel actually exists.
+
+- **Enable GitHub code scanning (CodeQL) for Python and TypeScript.** Scrye's CI already gates on
+  *dependency* vulnerabilities — Trivy and Grype dogfood the image every PR — but nothing analyses
+  Scrye's **own source** for injection, path-traversal, unsafe-deserialization or missing-auth
+  patterns. CodeQL covers both of the languages here, and it is **free for public repositories**,
+  which this one now is.
+
+  **Scope it as its own session, not a settings-page click.** Two reasons:
+
+  - **Default setup adds a workflow that runs on every push and pull request**, so it joins the
+    per-PR gate the moment it is switched on. That interacts with the existing jobs (CI minutes,
+    required-check configuration, and the branch-protection item above, which is still open) and
+    should be turned on when someone is watching, not in passing.
+  - **The first run typically surfaces a batch of findings that all need triage at once.** Some
+    will be genuine, some will be false positives needing a dismissal with a written reason, and
+    some will be in generated or vendored code that should be excluded from analysis. Triaging
+    that backlog is the actual work; enabling the feature is the trivial part.
+
+  Decide during that session between **default setup** (GitHub manages the workflow and language
+  detection) and **advanced setup** (a committed `.github/workflows/codeql.yml`, which fits this
+  repo's convention of SHA-pinned, explicitly-configured workflows and is the only option that
+  allows tuning query suites or path filters). Prefer advanced setup if paths need excluding.
+  Record the triage decisions the way the scanner waivers already are — a dismissal with no
+  written reason is indistinguishable from an unread finding, which is the failure mode
+  `ARCHIVE.md` §14 (2026-08-02, governance checklist) exists to prevent.
 
 ## Medium-term
 

@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (119, newest first)
+### Index of §14 entries (120, newest first)
 
+- [2026-08-02 — Infra/Process — Post-v0.2.0 dependency cleanup: three closed Dependabot PRs reapplied, the base-branch anomaly traced to `dev`'s deletion, the brace-expansion waiver retired](#2026-08-02--infraprocess--post-v020-dependency-cleanup-three-closed-dependabot-prs-reapplied-the-base-branch-anomaly-traced-to-devs-deletion-the-brace-expansion-waiver-retired)
 - [2026-08-02 — Process/Governance — Public-repo governance checklist verified in GitHub Settings; five of eight items closed](#2026-08-02--processgovernance--public-repo-governance-checklist-verified-in-github-settings-five-of-eight-items-closed)
 - [2026-08-02 — Infra/Process — Auto-delete-on-merge deleted `dev` during the v0.2.0 promotion; the ruleset's admin bypass is why "Restrict deletions" did not stop it](#2026-08-02--infraprocess--auto-delete-on-merge-deleted-dev-during-the-v020-promotion-the-rulesets-admin-bypass-is-why-restrict-deletions-did-not-stop-it)
 - [2026-08-02 — Infra — Dependabot's docker run fails on our own local build tag `scrye:0.2.0`](#2026-08-02--infra--dependabots-docker-run-fails-on-our-own-local-build-tag-scrye020)
@@ -702,6 +703,321 @@ entry, and the anchors jump straight to it.
 
 ---
 
+### 2026-08-02 — Infra/Process — Post-v0.2.0 dependency cleanup: three closed Dependabot PRs reapplied, the base-branch anomaly traced to `dev`'s deletion, the brace-expansion waiver retired
+
+**What changed:** the three Dependabot PRs closed on 2026-08-02 as unmergeable-as-built (#126, #127,
+#128) applied by hand and correctly; `.github/dependabot.yml` given the two `ignore` entries that
+stop the same PRs recurring; the base-branch question those closures raised diagnosed to a root
+cause; and the three advisory tracking issues re-verified against the tree after the v0.2.0 tag.
+No application code, schema, API contract, security model, job model, or auth behavior changes.
+
+---
+
+**1. `fastapi` 0.140.0 → 0.140.13, with `requirements.lock` regenerated (was #127).**
+
+#127 failed CI because Dependabot edits `pyproject.toml` without touching
+`backend/requirements.lock`, and CI's drift gate recompiles the lock and fails on any difference.
+That is the gate working — a Dependabot pip bump in this repo is *never* mergeable as opened, and
+the fix is always to reapply the bump and regenerate the lock with the pinned command from
+`CONTRIBUTING.md` § Backend dependency lock (`uv pip compile pyproject.toml --group build
+--generate-hashes --python-version 3.14`, uv 0.8.17). The regenerated lock moves **three lines** —
+`fastapi`'s version and its two wheel hashes — and nothing else; `starlette` stays at the
+explicitly-pinned 1.3.1, which 0.140.13 still accepts.
+
+**The thirteen patch releases were read before applying, and none of them touches a path Scrye
+uses.** Grouped by what they are:
+
+| Releases | Change | Reaches Scrye? |
+| --- | --- | --- |
+| 0.140.1 – 0.140.7 | Internal refactors: stop retaining flat dependency trees, avoid re-flattening for OpenAPI/body/param handling, retune the dependency `lru_cache` limit | No behavior change — memory/OpenAPI-generation performance only |
+| 0.140.8, .11, .12, .13 | Streaming fixes: stream item type lost through `include_router()`, `response_model_*` ignored for `Iterable[…]` returns, SSE line-splitting, `status_code` ignored on SSE/JSONL endpoints | **No** — the backend has no SSE, JSONL, or streaming endpoint, and no `response_model_*` parameter anywhere |
+| 0.140.9 | `exclude_defaults` not propagated to dict keys/values in `jsonable_encoder` | **No** — `jsonable_encoder` is never called |
+| 0.140.10 | Sequences with nested `Annotated` types mishandled | **No** — the only nested `Annotated[list[str], …]` in the tree is `pydantic-settings`' `NoDecode` in `app/core/config.py`, not a request parameter |
+
+Verified by grep across `backend/app/`: no `jsonable_encoder`, no `StreamingResponse`, no SSE
+helper, no `response_model_*`. Every response in `app/api/` is a plain `Response`,
+`PlainTextResponse`, `RedirectResponse`, or `FileResponse`. So this is a currency bump that fixes
+nothing Scrye was hitting and risks nothing either — which is the honest way to describe it.
+
+**Confirmed against the regenerated lock, not just against the version pin.** A throwaway venv on
+**CPython 3.14.6** was built the way the image builds: `pip install --require-hashes -r
+requirements.lock`, then `pip install --no-deps --no-build-isolation .`. The full backend suite
+passes there — **666 passed, 5 skipped**, byte-identical to the pre-bump baseline on the same
+interpreter, with the same 18 warnings (the standing Starlette `HTTP_422_UNPROCESSABLE_ENTITY`
+deprecations already tracked in `docs/ROADMAP.md`). Running the suite against the hash-verified
+closure rather than against an editable install is the point: the lock is what ships, so it is what
+has to be green.
+
+---
+
+**2. `docker/login-action` 4.5.1 → 4.5.2, SHA-pinned (was #128).**
+
+Pinned at `371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2` in all three workflows that
+authenticate to GHCR — `publish.yml`, `dev-nightly.yml`, `rescan.yml` — keeping the tag as a
+trailing comment per the convention every other `uses:` in this repo follows (H9/SC-2).
+
+**The SHA was resolved from upstream, not read off the bump description.** `git ls-remote --tags
+https://github.com/docker/login-action` maps `refs/tags/v4.5.2` to that commit. Trusting a bot's
+rendering of a SHA is precisely the substitution a SHA pin exists to prevent; the tag→commit
+mapping has to come from the repository that owns it.
+
+**The changelog matters more than usual here**, because this action runs only on the tag-gated
+publish path and the nightly — paths CI *cannot* exercise, so a breaking change would surface at
+release time on a protected branch. v4.5.2 contains exactly one commit of substance,
+["surface Docker Hub OIDC error responses"](https://github.com/docker/login-action/pull/1058): it
+improves the error text returned when a **Docker Hub OIDC** login fails. Scrye's three call sites
+log in to **`ghcr.io`** with the built-in `GITHUB_TOKEN` as username/password — not Docker Hub, not
+OIDC — so the changed code path is never entered. No breaking changes, no input or output changes.
+
+**Noted, not taken: v4.6.0 exists** (published a day after 4.5.2) and carries a buildx
+config-path hardening plus AWS SDK / js-yaml / postcss dependency bumps. It was left for a
+deliberate decision rather than folded in here — this entry is about applying what the closed PRs
+proposed, and 4.5.2 is what #128 proposed.
+
+---
+
+**3. Node: majors ignored, and the 22 → 24 move written up as tracked work (was #126).**
+
+#126 proposed **`node:22-bookworm-slim` → `25-bookworm-slim`**. Declining it is a lifecycle
+argument, not a preference: per the [Node release schedule](https://github.com/nodejs/Release),
+**v25 has no LTS date at all** — odd-numbered lines never get one — and its `end` is
+**2026-06-01**, i.e. it was *already end-of-life* when the PR was opened on 2026-07-31. The 22 line
+Scrye builds on runs to **2027-04-30**. Accepting the "upgrade" would have moved the builder from a
+supported runtime to an unsupported one.
+
+So `.github/dependabot.yml`'s `docker` entry now ignores `node` majors:
+
+```yaml
+- dependency-name: "node"
+  update-types: ["version-update:semver-major"]
+```
+
+**Scoped so digest refreshes still arrive — this was checked, not assumed.** An `ignore` condition
+whose `update-types` are all of the `version-update:semver-*` form suppresses only *semver version*
+updates; a digest refresh of the same `22-bookworm-slim` tag is not one, and still comes through.
+That scoping is load-bearing rather than incidental: the previous round of declining a major left
+Dependabot offering nothing at all for this image, and the pinned digest went stale until it was
+refreshed by hand in **#107** (§14, 2026-07-26). The config *can* express "ignore majors, allow
+digests", so no workaround was needed.
+
+The `docs/ROADMAP.md` § Near-term Node item was rewritten rather than left as it was. It now states
+plainly that the move is **22 → 24** (Active LTS, supported to **2028-04-30**), that it **must be
+its own PR**, and that it spans **three files which have to change together** —
+`docker/Dockerfile`'s `frontend-builder` digest, `.github/workflows/ci.yml`'s
+`node-version: "22"`, and `CONTRIBUTING.md`'s stated Node requirement (plus `README.md`
+§ Requirements). The reason is spelled out because it is the failure mode, not a formality:
+**bumping the Dockerfile alone leaves CI building on 22 while the image builds on 24**, so a
+version-specific build or lint failure would first appear in a published image rather than in a
+check. The new base must be **digest-pinned, resolved against the registry**. Node **26** is
+recorded as a post-2026-10-28 reconsideration (it becomes LTS then), not as a competing target
+today.
+
+---
+
+**4. The self-referencing image tag ignored (`scrye`).**
+
+Dependabot's docker run has been failing with **`private_source_authentication_failure`** because
+`docker/docker-compose.yml` pins `image: scrye:0.2.0` — Scrye's own **locally built** tag, which
+Dependabot resolves as Docker Hub's `library/scrye` and gets a 401 for. The diagnosis is the
+2026-08-02 entry below; this is the fix it said would land here.
+
+**Which ecosystem entry actually scans the file was verified, not assumed.** `.github/dependabot.yml`
+has *separate* `docker` and `docker-compose` entries, both on `directory: "/docker"`. Reading the
+files: `docker/docker-compose.yml` carries the only `image: scrye:0.2.0` reference (its other two
+images, `aquasec/trivy` and `wollomatic/socket-proxy`, are fully qualified and public), and
+`docker/Dockerfile` contains **no** `scrye` image reference at all — its `scrye` occurrences are a
+build-command comment, the `groupadd`/`useradd` for the runtime user, and `SCRYE_*` env vars, none
+of which any updater parses as a dependency. So the compose file is scanned by the
+**`docker-compose`** entry, and that is where the substantive ignore and its explanation live.
+
+The ignore was added to the **`docker` entry as well**, deliberately. The failing run's ecosystem is
+visible only in the Dependabot UI/job logs, which are not reachable from a code session and are not
+in the public API — so the entry the UI attributes it to could not be verified from here. Adding
+the same `dependency-name: "scrye"` to an entry whose only file never mentions `scrye` suppresses
+nothing and costs nothing, and it removes the failure mode where the fix is filed against the wrong
+half of a two-entry pair. Both entries carry a comment saying the tag is a local build artifact
+rather than a registry dependency.
+
+**The image tag itself was deliberately left alone.** Qualifying it as
+`ghcr.io/tyler-rich/scrye:0.2.0` would make the compose file **pull a published image instead of
+building locally**, changing what the documented quick start does; dropping the tag loses the
+version pin. Both were rejected in the diagnosis entry and both are still rejected.
+
+---
+
+**5. Why #110, #120, #126, #127 and #128 all opened against `main` — two different causes, and only
+one of them was the documented one.**
+
+This is the finding with the longest reach, so it is written out in full.
+
+**#110 and #120 are the documented case.** Both are npm **security** updates. `target-branch` is
+honoured for version updates only; security updates always open against the repository's default
+branch. Their head-branch names corroborate it —
+`dependabot/npm_and_yarn/frontend/npm_and_yarn-…`, with **no target-branch segment**, because
+Dependabot never intended `dev` for them. Nothing new here; this is the rule added to `CLAUDE.md`
+§ Dependency hygiene on 2026-07-31.
+
+**#126, #127 and #128 are not that case, and the "grouped security updates" hypothesis is wrong.**
+Three facts rule it out:
+
+- All three are **version** updates. `node` 22→25, `fastapi` 0.140.0→0.140.13 and
+  `docker/login-action` 4.5.1→4.5.2 are none of them security-advisory-driven, and Dependabot's own
+  closing comment on #128 says the PR "was built based on a group rule" — a version-update group.
+- All **three different ecosystems** (`docker`, `pip`, `github-actions`) were affected identically
+  and simultaneously. A grouped-security override would hit only ecosystems that actually had a
+  security update to group.
+- Their head branches **do** carry the target-branch segment —
+  `dependabot/docker/docker/dev/docker-images-…`, `dependabot/pip/backend/dev/backend-dependencies-…`,
+  `dependabot/github_actions/dev/github-actions-…`. Dependabot reads `target-branch: dev` and
+  encodes it in the branch name. **The configuration worked.**
+
+**The actual cause, with direct evidence.** Each of the three PRs' timelines carries an
+**`automatic_base_change_succeeded`** event:
+
+| PR | Head branch | Base-change event |
+| --- | --- | --- |
+| #126 | `dependabot/docker/docker/dev/docker-images-0e8fc498de` | 2026-08-01T23:56:09Z |
+| #127 | `dependabot/pip/backend/dev/backend-dependencies-fd4d557a46` | 2026-08-01T23:56:09Z |
+| #128 | `dependabot/github_actions/dev/github-actions-85123b4e12` | 2026-08-01T23:56:10Z |
+
+The v0.2.0 promotion PR **#122** merged at **2026-08-01T23:56:07Z**. All three base changes land
+**two to three seconds later**, and all three PRs' `base.sha` is `bb354a5` — the promotion's merge
+commit. #110 and #120 have no such event.
+
+GitHub **automatically retargets open pull requests whose base branch is deleted**, moving them to
+the merged pull request's base. A `dev` → `main` promotion has `dev` as its **head** branch; with
+"Automatically delete head branches" enabled, merging it deleted `dev`, and every open PR based on
+`dev` was silently moved to `main` in the same instant. The three Dependabot PRs were opened
+against `dev` **correctly** on 2026-07-31 and were moved afterwards by GitHub, not by Dependabot,
+not by `.github/dependabot.yml`, and not by any repository security setting.
+
+**This is the same incident as the entry below**, which recorded that the v0.2.0 promotion deleted
+`dev` and that the `protect-dev` ruleset's admin bypass is why *Restrict deletions* did not stop
+it. What was not appreciated then is that the branch deletion had a **second blast radius**: it did
+not only remove a branch that had to be restored, it re-based the entire open-PR queue onto the
+protected release branch. Three PRs were then closed as "opened against main despite the head
+branch being built for dev" — a description that is accurate about the symptom and wrong about the
+cause.
+
+**Recommended fix: nothing further to change, and specifically not `target-branch`.** The remedy is
+already in place — "Automatically delete head branches" was disabled on 2026-08-02 — and it
+addresses this directly, because with no head-branch deletion there is no retarget. Concretely:
+
+- **Do not** alter `target-branch: dev` on any ecosystem. It is doing exactly what it should; the
+  branch names prove Dependabot honoured it.
+- **Do not** trade grouped security updates for one-PR-per-advisory. Grouping is not implicated,
+  and unpicking it would multiply the PR volume for no benefit.
+- **Do not** re-enable auto-delete-on-merge. The entry below already says this for the
+  branch-recovery reason; this entry adds a second, independent reason.
+- If a promotion is ever merged with auto-delete re-enabled by accident, expect the whole open-PR
+  queue on `main` afterwards and **check the head-branch name before assuming a routing bug**.
+
+Written into `CLAUDE.md` § Dependency hygiene and a new `CONTRIBUTING.md` subsection, § *A version
+update on `main` means something else went wrong*, with the two-signal table (head-branch segment,
+timeline event) for telling the two causes apart.
+
+---
+
+**6. The three advisory tracking issues re-verified after the v0.2.0 tag — and #125 is wrong.**
+
+v0.2.0 was released 2026-08-02T00:03:32Z, so the "re-confirm at each release" cadence each issue
+sets for itself is due. All three were checked against the tree and against current advisory data.
+
+- **#123 (GHSA-qwww-vcr4-c8h2, `react-router`) — still accurate, no change.** `react-router-dom` is
+  still pinned 7.18.1 resolving `react-router@7.18.1`; `frontend/src/main.tsx` still uses
+  `<BrowserRouter>`; there is still no `react-router.config.ts` and no `@react-router/*` package.
+  The advisory range is unchanged at `>=7.12.0 <8.3.0`, no 7.x fix has appeared, and `npm audit`
+  still offers only the `react-router-dom@7.11.0` **downgrade** as its "fix". The acceptance holds
+  exactly as written.
+- **#124 (GHSA-r28c-9q8g-f849, `postcss`) — still accurate, no change.** Still pinned 8.5.16, still
+  a `devDependency`, advisory range still `<=8.5.17`, fix still the in-major patch **8.5.25**.
+  Worth noting for whoever picks it up: Dependabot has **not** proposed it, and there are no open
+  Dependabot PRs at all right now — the queue was emptied by the closures above, so the bump needs
+  applying by hand rather than waiting for a proposal. Deliberately not folded into this PR: it is
+  a frontend dependency change with its own build and Vitest verification, and this PR is already
+  a backend-plus-config change.
+- **#125 (GHSA-mh99-v99m-4gvg, `brace-expansion`) — materially wrong, corrected and closed.**
+
+**What #125 asserted**, on 2026-07-31: the advisory covers `<=5.0.7`, so Scrye's 1.1.18 and 2.1.4
+are both still inside the affected range; there is no fixed release on the 1.x or 2.x lines; the
+bump taken in #121 is "currency, not a clearance" and "clears nothing"; the only route out is
+ESLint 10.
+
+**What is actually true.** The advisory was **revised on 2026-07-31**, the same day #125 was
+written, from a single flat `<=5.0.7` range into per-major ranges:
+
+| Affected | First patched |
+| --- | --- |
+| `>= 4.0.0, < 5.0.8` | 5.0.8 |
+| `>= 3.0.0, < 3.0.3` | 3.0.3 |
+| `>= 2.0.0, < 2.1.3` | 2.1.3 |
+| `< 1.1.17` | 1.1.17 |
+
+Scrye carries **1.1.18** and **2.1.4**. Both are at or above their line's first patched version, so
+**neither copy is affected** — the #121 bump did clear the advisory after all. `npm audit` agrees:
+`brace-expansion` no longer appears in its output at all (the three remaining highs are the
+`postcss` and `react-router`/`react-router-dom` entries from #123 and #124).
+
+**Verified at the source, not from the advisory metadata** — which is the whole point of `CLAUDE.md`
+§ Dependency hygiene, and doubly so here, since it was believing a flat advisory range that put the
+wrong claim into #125 in the first place. Unpacking the published tarballs: **1.1.17** adds
+`EXPANSION_MAX_LENGTH = 4000000`, bounding the total character count the expansion accumulator may
+hold, and rewrites `expand()` to iterate rather than recurse — with the code comments naming
+**CVE-2026-14257**, the CVE behind this GHSA, explicitly. 1.1.16 has none of it. **2.1.3** carries
+the identical fix. 1.1.18 and 2.1.4 extend the same bound to sequence expansion. Both copies
+installed under `frontend/node_modules/` were checked directly and contain `EXPANSION_MAX_LENGTH`.
+
+**#125 was corrected and closed** rather than left open with a note, on its own stated criterion:
+"close by hand once every `brace-expansion` copy resolves to 5.0.8+, **or a backport lands on the
+1.x and 2.x lines**." The backport landed. Its "review cadence" section had also anticipated this
+exact outcome — "check whether a 1.x or 2.x backport has appeared (which would close this cheaply)
+before assuming the major is still the only route" — so the issue contained the instruction that
+resolves it. No duplicate was opened.
+
+**What this does *not* change:** the ESLint 10 / frontend-tooling-majors item in
+`docs/ROADMAP.md` stands on tooling-currency grounds, exactly as #125 said it should. It was never
+justified by this advisory, so retiring the advisory does not touch it.
+
+**And the shipped `CHANGELOG.md` is left as published.** Its `[0.2.0]` § Security text describes
+the brace-expansion bump as currency that clears nothing, which was true against the advisory data
+available when v0.2.0 was tagged and is a published release record. Rewriting shipped release notes
+to match later advisory revisions would make the changelog a moving document; this entry is the
+correction, and it is where a reader is pointed.
+
+---
+
+**7. A roadmap item added for GitHub code scanning (CodeQL).**
+
+Scrye gates on *dependency* vulnerabilities every PR — Trivy and Grype dogfood the image — but
+nothing analyses Scrye's own source for injection, path-traversal, unsafe-deserialization or
+missing-authorization patterns. CodeQL covers both languages in this repo and is **free for public
+repositories**, which this one is.
+
+Recorded in `docs/ROADMAP.md` § Near-term as work needing **its own scoped session**, not a
+settings-page click, for two stated reasons: default setup **adds a workflow that runs on every
+push and pull request**, so it joins the per-PR gate immediately and interacts with the
+still-open branch-protection item; and the first run **typically surfaces a batch of findings that
+all need triage at once** — genuine issues, false positives needing written dismissals, and
+generated or vendored code that should be excluded from analysis. The item also flags the
+default-vs-advanced-setup decision (advanced fits this repo's SHA-pinned, explicitly-configured
+workflow convention and is the only option that can tune query suites or path filters), and
+requires triage decisions to be written down, on the same reasoning as the governance entry below:
+a dismissal with no recorded reason is indistinguishable from an unread finding.
+
+---
+
+**Plan section affected:** `backend/pyproject.toml` + `backend/requirements.lock` (fastapi);
+`.github/workflows/{publish,dev-nightly,rescan}.yml` (login-action SHA);
+`.github/dependabot.yml` (node-major and `scrye` ignores); `docker/Dockerfile` (comment pointer);
+`docs/ROADMAP.md` (Node 22→24 item rewritten, CodeQL item added); `CLAUDE.md` § Dependency hygiene
+and `CONTRIBUTING.md` § Releasing (the version-update-on-`main` cause). No locked decision is
+touched: the runtime stays Python 3.14.6, the frontend builder stays Node 22, distribution stays
+GHCR-only, and `docker/docker-compose.yml` still builds the app image locally. Extends the two
+2026-08-02 entries below — the auto-delete finding (whose second blast radius is item 5) and the
+`scrye:0.2.0` diagnosis (whose fix is item 4).
+
+---
+
 ### 2026-08-02 — Process/Governance — Public-repo governance checklist verified in GitHub Settings; five of eight items closed
 
 **What changed:** the public-repo governance checklist under `docs/ROADMAP.md` § Near-term was
@@ -809,7 +1125,9 @@ commit; the deletion is independent of the merge method.
 
 **What changed:** nothing yet in this PR — this records the diagnosis. The fix (an `ignore` entry
 for `dependency-name: "scrye"` in `.github/dependabot.yml`) is being applied in the follow-up
-dependency PR.
+dependency PR. **It landed** — see the 2026-08-02 post-v0.2.0 dependency-cleanup entry above,
+item 4, which also confirms by reading both files that the compose file is the one carrying the
+reference and adds the ignore to both docker entries.
 
 **The failure:** Dependabot's docker run reports
 **`private_source_authentication_failure`**. The cause is `docker/docker-compose.yml`'s app

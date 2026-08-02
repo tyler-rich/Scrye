@@ -544,6 +544,32 @@ very fix the PR exists to deliver. It also does not re-run CI (`on: pull_request
 `edited`), so the green check shown after a retarget is from the old base. PR #120 on 2026-07-31 is
 the worked example: retargeted, went stale, closed, and the bump was reapplied on `dev` instead.
 
+### A *version* update on `main` means something else went wrong
+
+The rule above explains a **security** update on `main`. It does **not** explain a routine version
+update there, and if you find one, the cause is not `target-branch`.
+
+**Merging a promotion PR retargets every open PR based on `dev`.** GitHub automatically retargets
+open pull requests whose base branch is deleted, moving them to the merged PR's base. A `dev` →
+`main` promotion has `dev` as its *head* branch, so if the head branch is deleted on merge, every
+open PR based on `dev` — including all of Dependabot's — is silently moved to `main`. This is what
+happened to **#126, #127 and #128** on 2026-08-01: all three were opened against `dev` correctly,
+and all three recorded an `automatic_base_change_succeeded` event within three seconds of the
+v0.2.0 promotion merging. Nothing in `.github/dependabot.yml` was involved.
+
+**"Automatically delete head branches" is already disabled** for this reason (`ARCHIVE.md` §14,
+2026-08-02), so this should not recur — but the two failure modes look identical in the PR list, so
+tell them apart before reaching for either response above:
+
+| Signal | Security update (targets `main` by design) | Retargeted version update |
+| --- | --- | --- |
+| Head branch name | no target-branch segment, e.g. `dependabot/npm_and_yarn/frontend/…` | carries `/dev/`, e.g. `dependabot/pip/backend/dev/…` |
+| PR timeline | no base-change event | `automatic_base_change_succeeded` |
+
+A retargeted version update is not stale in the way #120 was — it was simply moved. Close it and
+reapply the bump on `dev`, or wait for Dependabot's next run to re-open it against `dev` once the
+branch exists again.
+
 ### What gets published
 
 CI (`.github/workflows/ci.yml`) never publishes — it only lints, tests, and proves the image
