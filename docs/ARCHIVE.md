@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (126, newest first)
+### Index of §14 entries (127, newest first)
 
+- [2026-08-02 — Security/Process — Symlink-containment regression guard for filesystem scans (#135); Syft is the probe, and it runs against the binaries the image ships](#2026-08-02--securityprocess--symlink-containment-regression-guard-for-filesystem-scans-135-syft-is-the-probe-and-it-runs-against-the-binaries-the-image-ships)
 - [2026-08-02 — Post-v1 — Log redaction moved from the `LogRecord` to the formatted line; uvicorn's access logger stops raising on every request](#2026-08-02--post-v1--log-redaction-moved-from-the-logrecord-to-the-formatted-line-uvicorns-access-logger-stops-raising-on-every-request)
 - [2026-08-02 — Post-v1 — OIDC account linking: authenticated self-link, guarded self-unlink, and stale-link detection (#114)](#2026-08-02--post-v1--oidc-account-linking-authenticated-self-link-guarded-self-unlink-and-stale-link-detection-114)
 - [2026-08-02 — Security/Process — Filesystem-gate symlink and TOCTOU residual risks closed out (neither is real); CodeQL advanced-setup migration assessed](#2026-08-02--securityprocess--filesystem-gate-symlink-and-toctou-residual-risks-closed-out-neither-is-real-codeql-advanced-setup-migration-assessed)
@@ -706,6 +707,98 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-02 — Security/Process — Symlink-containment regression guard for filesystem scans (#135); Syft is the probe, and it runs against the binaries the image ships
+
+**What changed:** `backend/tests/test_scanner_symlink_containment.py` (new, 7 tests) plus four steps
+in CI's `image` job that run it. No application code changed — this is the regression test the
+2026-08-02 verification entry above proposed and deliberately did not write.
+
+**Why it exists.** Containment of a symlink planted *inside* an allowed filesystem scan root is not
+enforced by Scrye at all. `resolve_filesystem_path()` validates the target argument and is never
+re-applied during the walk, so the guarantee is inherited from Syft's directory resolver — and it
+hangs on `basePath()` defaulting `base` to the scan location, a line upstream itself annotates
+`// FIXME why is the base always being set instead of left as empty string?`. Action that FIXME and
+the re-rooting branch in `addSymlinkToIndex` is skipped, `indexAllRoots` starts adding out-of-root
+link targets as additional roots, and the escape is real — silently, on a routine scanner bump, with
+nothing in this repository that would notice. The full evidence chain is in the entry above.
+
+---
+
+#### Deviation 1 — Syft is the probe binary, not Grype
+
+**#135 says "run the scan the way Scrye runs it (`dir:`)"**, which reads as "invoke `grype dir:`".
+The test invokes `syft dir:` instead. Grype is unusable as the *instrument* here: its JSON carries
+only vulnerability **matches**, never a package catalogue, so "was the out-of-root package
+catalogued?" could only be observed through it by planting packages that carry live CVEs — making
+the assertion depend on a vulnerability database that changes daily, in a test whose entire job is to
+fail only when scanner *behaviour* changes. Syft's JSON lists the catalogue directly, needs no
+database, and runs offline in ~1 s.
+
+The substitution is sound because Grype's `dir:` source **is** Syft's directory source — the same
+argument the verification entry above already rests on. It is pinned rather than assumed, by two
+tests that need no fixture:
+
+- `test_grype_embeds_the_pinned_syft` — `grype version -o json` reports `syftVersion`, and it must
+  equal the `SYFT_VERSION` the Dockerfile pins (measured: grype 0.115.0 → `v1.46.0`). If a bump ever
+  breaks that identity, the guard would be exercising code Scrye does not run, and this fails first.
+- `test_scrye_scans_filesystems_through_the_directory_source` — `GrypeScanner.scan_filesystem()`
+  must still emit `dir:<path>`, so the premise that a filesystem scan is a Syft directory source at
+  all stays pinned. (No binary needed; this one runs in the ordinary backend suite.)
+
+`test_syft_binary_is_the_version_the_image_pins` closes the loop from the other side, so a stale
+local binary fails instead of passing quietly.
+
+#### Deviation 2 — a sensitivity control beyond the positive control #135 requires
+
+#135 requires a positive control asserted in the same run, because the 2026-08-02 verification hit a
+false negative caused purely by a filename the JS cataloger does not glob. That control is present
+(`left-pad 1.3.0` in-root must be catalogued), and a second one asserts the out-of-root manifest is
+catalogued when scanned directly — so its absence is containment, not a cataloger blind spot.
+
+A third was added: `test_probe_detects_an_escape_when_re_rooting_is_widened` passes
+`--base-path <parent-of-root>`, moving the re-rooting anchor above the scan root. That is the closest
+reachable analogue of the FIXME being actioned, and it flips the result — `lodash 4.17.15` is then
+catalogued at `/outside/package-lock.json`. Measured, not assumed. Without it, "the out-of-root
+package is absent" is an absence with no demonstration that the probe could ever have seen it.
+
+**Hardlinks are asserted on nowhere**, per #135: they *are* followed, that is correct behaviour, and
+a test that asserted against it would fail on a scanner doing the right thing.
+
+#### Deviation 3 — the guard runs in CI's `image` job, not the backend `pytest` job
+
+The tests need real binaries; the backend job has none, and downloading a second copy there would
+mean either a same-origin checksum (weaker than the cosign-verified path `docker/Dockerfile` uses) or
+reproducing cosign verification in YAML, plus duplicating the pinned versions. The `image` job
+already holds the built image, so it extracts `/usr/local/bin/{syft,grype}` from it with
+`docker create` + `docker cp` and runs the test against **the binaries the product actually ships** —
+cosign- and checksum-verified at build time, and guaranteed to match the Dockerfile's ARGs. Cost is
+one `setup-python` + `pip install -e ".[dev]"` in that job (~40 s, pip cache shared with the backend
+job); the scan itself is ~1 s over a two-file fixture.
+
+**Skips are made loud rather than tolerated.** A plain `pytest` run skips these tests with a reason;
+setting `SCRYE_TEST_REQUIRE_SCANNER_BINARIES` turns a missing binary into a failure, and CI sets it.
+So the guard cannot degrade into a permanent silent skip — the failure mode that makes
+binary-gated tests worthless.
+
+**Open item for the repository owner, not a code change.** `protect-dev`'s
+`required_status_checks` lists exactly two contexts — `Backend — lint + tests` and
+`Frontend — lint + build` (see the ruleset table in the CodeQL entry above). `Image — build +
+dogfood self-scan` is **not** among them, so this guard runs and reports red on every PR but does not
+*block* a merge. Adding that third context to the ruleset would close the gap; it is a GitHub
+Settings change and is recorded here rather than done silently.
+
+#### Verification performed
+
+Against the pinned binaries (`syft` 1.46.0, `grype` 0.115.0), downloaded and `sha256sum -c`-verified
+against each release's own `checksums.txt`: all 7 tests pass; the full backend suite is
+**734 passed, 5 skipped**; `ruff` and `black --check` clean. Confirmed by hand that a bare `pytest`
+skips 6 of the 7 with a reason and that `SCRYE_TEST_REQUIRE_SCANNER_BINARIES=1` with no binaries
+present turns those into hard errors.
+
+Closes #135 (closed by hand — a `Closes` keyword in a PR body targeting `dev` never fires).
 
 ---
 
@@ -1079,7 +1172,9 @@ behavior to the dogfood/test suite and fail loudly on the bump that changes it. 
 [#135](https://github.com/tyler-rich/Scrye/issues/135) on 2026-08-02; not implemented here.** That
 issue carries the mechanism, the `FIXME` reference, the inventory-disclosure severity ceiling (so it
 is not later mis-rated against H1/SEC-1), and the positive-control requirement the false-negative
-below taught.
+below taught. **Built later the same day** as
+`backend/tests/test_scanner_symlink_containment.py` — see the entry above, which records why Syft
+rather than Grype is the probe and where in CI it runs.
 
 **Hardlinks are followed, and that is fine.** A hardlink from inside an allowed root to a file
 outside **is** read — demonstrated: `lodash 4.17.15` catalogued via `/sub/package-lock.json`, same
