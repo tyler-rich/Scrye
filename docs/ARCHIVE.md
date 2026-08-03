@@ -792,8 +792,9 @@ Closes #136.
 ### 2026-08-03 — Process/Governance — protect-tags ruleset created, closing #137
 
 **What changed:** a new GitHub ruleset, **`protect-tags`**, was created (`target: "tag"`,
-pattern `v*.*.*`). It restricts tag creation, update, and deletion to the bypass list, and blocks
-force pushes to matching tags. **Repository admin** is on the bypass list, consistent with how
+pattern `v*` — matches any tag beginning with `v`, not only the dotted semver form). It restricts
+tag creation, update, and deletion to the bypass list, and blocks force pushes to matching tags.
+**Repository admin** is on the bypass list, consistent with how
 `protect-dev` and `protect-main` are configured (§14, 2026-08-02 — the admin bypass on those
 rulesets is what let `dev` be deleted during the v0.2.0 promotion despite "Restrict deletions").
 No repository content changed; this entry is the record, for the same reason the rest of the

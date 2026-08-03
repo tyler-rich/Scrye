@@ -138,10 +138,10 @@ Small, self-contained work that closes a concrete gap.
       `Image — build + dogfood self-scan`, with "Require branches to be up to date before merging"
       also enabled. See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
     - ~~**[#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricts tag
-      pushes.**~~ **Done 2026-08-03** — a `protect-tags` ruleset now targets `v*.*.*`, restricting
-      creation/update/deletion and blocking force pushes, with Repository admin on the bypass list
-      (same bypass shape as `protect-dev`/`protect-main`). See
-      [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
+      pushes.**~~ **Done 2026-08-03** — a `protect-tags` ruleset now targets `v*` (any tag
+      beginning with `v`, not only the dotted semver form), restricting creation/update/deletion
+      and blocking force pushes, with Repository admin on the bypass list (same bypass shape as
+      `protect-dev`/`protect-main`). See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
     - **Code-owner review is not required.** `require_code_owner_review` is `false` on both rulesets,
       so `.github/CODEOWNERS` requests review but does not compel it. Untracked — it is a decision
       rather than a gap, and on a single-maintainer repo it is close to a no-op today.
