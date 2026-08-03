@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (133, newest first)
+### Index of §14 entries (134, newest first)
 
+- [2026-08-03 — Post-v1 — PR #142 verified green on the pinned Python 3.14.6 in CI; `test_undeterminable_presence_fails_startup`'s local-sandbox failure was 3.13-specific](#2026-08-03--post-v1--pr-142-verified-green-on-the-pinned-python-3146-in-ci-test_undeterminable_presence_fails_startups-local-sandbox-failure-was-313-specific)
 - [2026-08-03 — Post-v1 — `test_cancel_queued_scan` de-flaked: worker slot acquisition made observable, sleep removed](#2026-08-03--post-v1--test_cancel_queued_scan-de-flaked-worker-slot-acquisition-made-observable-sleep-removed)
 - [2026-08-03 — Post-v1 — Deprecated Starlette status-code constants retired across 24 call sites](#2026-08-03--post-v1--deprecated-starlette-status-code-constants-retired-across-24-call-sites)
 - [2026-08-03 — Process/Governance — Dogfood self-scan added to required status checks, closing #136](#2026-08-03--processgovernance--dogfood-self-scan-added-to-required-status-checks-closing-136)
@@ -713,6 +714,41 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-03 — Post-v1 — PR #142 verified green on the pinned Python 3.14.6 in CI; `test_undeterminable_presence_fails_startup`'s local-sandbox failure was 3.13-specific
+
+**What changed:** nothing in the repository — this entry records a verification, not a code change.
+PR #142's development-agent session had no Python 3.14.6 available locally (only 3.13.12 and a
+3.14.0rc2 that fails to even import FastAPI/Pydantic under this codebase's dependency versions), so
+its local test run was done under 3.13 with `requires-python` temporarily loosened in an uncommitted,
+reverted copy of `pyproject.toml`. That run passed except for one failure,
+`tests/test_master_key_autogeneration.py::TestExistingKeyIsNeverReplaced::test_undeterminable_presence_fails_startup`,
+confirmed to reproduce identically on an unmodified checkout under the same 3.13 sandbox — i.e.
+unrelated to the PR's own changes, but still unverified against the actual pinned runtime.
+
+**CI on the real pinned interpreter is what settles it.** The `Backend — lint + tests` job on PR
+#142's final commit (`74ce83d`) ran on `pythonLocation: /opt/hostedtoolcache/Python/3.14.6/x64` — the
+exact pinned floor — and the suite came back **730 passed, 9 skipped, 0 failed**, including the test
+above. So the failure is confirmed **sandbox-specific to Python 3.13's `pathlib`**, not a real defect:
+`test_undeterminable_presence_fails_startup` monkeypatches `crypto.os.stat` to raise
+`PermissionError` for one specific path, but because `os` is a shared module object, that patch is
+visible to *every* caller of `os.stat` in the process — including the test's own
+`assert not autogen.exists()`, which calls `pathlib`'s `Path.exists()` → `os.stat()` internally. On
+3.13's `pathlib` implementation that assertion routes through the patched `os.stat` and raises instead
+of returning `False`; on 3.14.6 it evidently does not (a `pathlib` internal-implementation difference
+between the two versions, not tracked further here). **Do not re-diagnose this test as broken from a
+future local run under Python 3.13** — check which interpreter is running first.
+
+**Recorded so it isn't re-diagnosed:** this is a note, not a fix and not a new tracked item — the test
+passed on the pinned interpreter, which is the bar this PR was held to. If a *future* local run under
+Python 3.13 (or any interpreter where `pathlib.Path.exists()` routes through `os.stat`) reproduces this
+failure, the cause is the sandbox's interpreter, not a regression in this test or in `crypto.py`.
+
+**Plan section affected:** none (verification-only). Documented here per CLAUDE.md's rule that a
+settings-adjacent or environment-specific finding with no code diff still needs a durable record so
+it isn't re-diagnosed from scratch later.
 
 ---
 
