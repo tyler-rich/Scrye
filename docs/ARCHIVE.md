@@ -578,8 +578,10 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (128, newest first)
+### Index of §14 entries (130, newest first)
 
+- [2026-08-03 — Process/Governance — protect-tags ruleset created, closing #137](#2026-08-03--processgovernance--protect-tags-ruleset-created-closing-137)
+- [2026-08-03 — Process/Governance — Signed-commit enforcement declined, not deferred](#2026-08-03--processgovernance--signed-commit-enforcement-declined-not-deferred)
 - [2026-08-02 — Security/Process — CodeQL migrated from default setup to a committed workflow; the two settings edits that finish it](#2026-08-02--securityprocess--codeql-migrated-from-default-setup-to-a-committed-workflow-the-two-settings-edits-that-finish-it)
 - [2026-08-02 — Security/Process — Symlink-containment regression guard for filesystem scans (#135); Syft is the probe, and it runs against the binaries the image ships](#2026-08-02--securityprocess--symlink-containment-regression-guard-for-filesystem-scans-135-syft-is-the-probe-and-it-runs-against-the-binaries-the-image-ships)
 - [2026-08-02 — Post-v1 — Log redaction moved from the `LogRecord` to the formatted line; uvicorn's access logger stops raising on every request](#2026-08-02--post-v1--log-redaction-moved-from-the-logrecord-to-the-formatted-line-uvicorns-access-logger-stops-raising-on-every-request)
@@ -708,6 +710,66 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-03 — Process/Governance — protect-tags ruleset created, closing #137
+
+**What changed:** a new GitHub ruleset, **`protect-tags`**, was created (`target: "tag"`,
+pattern `v*.*.*`). It restricts tag creation, update, and deletion to the bypass list, and blocks
+force pushes to matching tags. **Repository admin** is on the bypass list, consistent with how
+`protect-dev` and `protect-main` are configured (§14, 2026-08-02 — the admin bypass on those
+rulesets is what let `dev` be deleted during the v0.2.0 promotion despite "Restrict deletions").
+No repository content changed; this entry is the record, for the same reason the rest of the
+public-repo governance checklist is recorded here rather than only in the ROADMAP — a settings
+change leaves no artifact in git.
+
+**Why:** [#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricted tag pushes,
+and a `v*.*.*` tag push is exactly what triggers `publish.yml` (GHCR push, the `:latest` move, and
+provenance + SBOM attestation, per locked decision §6). Before this ruleset, anyone with write
+access could push or force-move a `v*.*.*` tag and trigger a publish outside the normal `dev` →
+`main` → tag flow. Theoretical on a sole-maintainer repo, but the fix belongs in place *before* any
+collaborator is added, not after.
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the public-repo governance checklist —
+this closes the second of the two remaining tracked settings gaps; struck from the checklist).
+Closes #137.
+
+---
+
+### 2026-08-03 — Process/Governance — Signed-commit enforcement declined, not deferred
+
+**What changed:** the "require signed commits" item under the public-repo governance checklist is
+**struck from `docs/ROADMAP.md`** as a declined decision, not left open as pending work. Neither
+`protect-dev` nor `protect-main` carries a `required_signatures` rule, and none will be added under
+the current commit workflow.
+
+**Why:** every commit in this repository is authored by a Claude Code session committing locally
+via `git` and pushing over the repository's normal push path — there is no signing key present in
+those environments (that absence is exactly why every commit here shows GitHub's "Unverified"
+badge today). Turning on "Require signed commits" on either protected-branch ruleset would reject
+every one of those pushes outright, breaking the development workflow entirely rather than adding
+friction to it.
+
+The two workarounds available are both worse than the problem they'd solve:
+- **Provisioning a GPG or SSH signing key into a sandboxed session** is precisely the kind of
+  environment a signing key should not be placed into — it turns the key into something that
+  exists in an ephemeral, non-interactive container rather than under a maintainer's direct
+  control, which undermines the point of requiring a signature in the first place.
+- **Switching sessions to create commits via the GitHub API** (which GitHub auto-signs on behalf
+  of the authenticated actor) would work, but it is a significant change to how these sessions
+  operate — moving off local `git commit`/`git push` entirely — for a benefit that is modest on a
+  repository with a single maintainer and no other committers to authenticate against.
+
+**Revisit trigger:** this decision is not permanent. Revisit it if either condition changes — a
+collaborator with write access is added (at which point signed commits start doing real work,
+distinguishing a maintainer's commits from a contributor's), or the commit workflow stops going
+through local `git` (e.g. a move to API-authored commits for some other reason removes the cost
+side of this trade-off).
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the public-repo governance checklist —
+this closes the last of its three previously-open items; struck from the checklist as declined,
+not done).
 
 ---
 

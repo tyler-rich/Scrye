@@ -147,10 +147,11 @@ Small, self-contained work that closes a concrete gap.
       tests` and `Frontend — lint + build`, so a PR can merge with the image scan red. Includes the
       `paths:`-filter hazard: a required context whose workflow never triggers blocks a PR forever
       (a job skipped by `if:` is fine — it reports `skipped`).
-    - **[#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricts tag pushes.**
-      Both rulesets are `target: "branch"`; there is no tag-targeted ruleset, and a `v*.*.*` tag push
-      is what triggers `publish.yml` (GHCR push, `:latest` move, provenance + SBOM attestation).
-      Theoretical with a sole maintainer; the trigger is **before any collaborator is added**.
+    - ~~**[#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricts tag
+      pushes.**~~ **Done 2026-08-03** — a `protect-tags` ruleset now targets `v*.*.*`, restricting
+      creation/update/deletion and blocking force pushes, with Repository admin on the bypass list
+      (same bypass shape as `protect-dev`/`protect-main`). See
+      [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
     - **Code-owner review is not required.** `require_code_owner_review` is `false` on both rulesets,
       so `.github/CODEOWNERS` requests review but does not compel it. Untracked — it is a decision
       rather than a gap, and on a single-maintainer repo it is close to a no-op today.
@@ -161,10 +162,13 @@ Small, self-contained work that closes a concrete gap.
     here is advisory for the repository owner until the bypass list says otherwise. (The bypass list
     is not readable at the API permission level available to a code session — the ruleset endpoint
     returns `bypass_actors: null` — so confirm it in Settings rather than from an API dump.)
-  - **Signed-commit enforcement** — a decision to make, and **verified still open**: neither ruleset
-    carries a `required_signatures` rule (2026-08-02 readout). Requiring signed commits on the
-    protected branches means contributors must sign; worth it for a security tool, so weigh the
-    friction.
+  - ~~**Signed-commit enforcement**~~ **Declined 2026-08-03** — every commit in this repo is
+    authored by a Claude Code session pushing over local `git`, with no signing key present in that
+    environment; requiring signed commits would reject every session push outright, and both
+    workarounds (provisioning a signing key into a sandboxed session, or moving to API-authored
+    commits) cost more than the friction they'd remove on a solo-maintainer repo. Revisit if a
+    collaborator with write access is added, or if the commit workflow stops going through local
+    git. See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
   - ~~**Private vulnerability reporting**~~ — **Done; verified 2026-08-02.**
     `GET /repos/tyler-rich/Scrye/private-vulnerability-reporting` returns `{"enabled": true}`, so
     `SECURITY.md`'s stated channel exists. It is not recorded when this was turned on — it may have
