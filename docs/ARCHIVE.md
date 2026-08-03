@@ -578,8 +578,10 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (131, newest first)
+### Index of §14 entries (133, newest first)
 
+- [2026-08-03 — Post-v1 — `test_cancel_queued_scan` de-flaked: worker slot acquisition made observable, sleep removed](#2026-08-03--post-v1--test_cancel_queued_scan-de-flaked-worker-slot-acquisition-made-observable-sleep-removed)
+- [2026-08-03 — Post-v1 — Deprecated Starlette status-code constants retired across 24 call sites](#2026-08-03--post-v1--deprecated-starlette-status-code-constants-retired-across-24-call-sites)
 - [2026-08-03 — Process/Governance — Dogfood self-scan added to required status checks, closing #136](#2026-08-03--processgovernance--dogfood-self-scan-added-to-required-status-checks-closing-136)
 - [2026-08-03 — Process/Governance — protect-tags ruleset created, closing #137](#2026-08-03--processgovernance--protect-tags-ruleset-created-closing-137)
 - [2026-08-03 — Process/Governance — Signed-commit enforcement declined, not deferred](#2026-08-03--processgovernance--signed-commit-enforcement-declined-not-deferred)
@@ -711,6 +713,50 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-03 — Post-v1 — `test_cancel_queued_scan` de-flaked: worker slot acquisition made observable, sleep removed
+
+**What changed:** `backend/tests/test_scans_api.py::test_cancel_queued_scan` no longer holds the
+worker's only concurrency slot with a fixed `await asyncio.sleep(0.2)`. The fake scanner now blocks
+on a `threading.Event` the test controls, and a second `threading.Event` fires the instant
+`scan_image` actually starts executing — which only happens after the worker's semaphore has been
+acquired, so it doubles as "the first scan now holds the only slot." The test waits on that signal
+before submitting the second scan, so the second scan is deterministically still `queued` at the
+moment it's canceled. Test-only change — no worker or production code touched.
+
+**Why:** the ROADMAP item this closes explained the failure mode precisely: the old test's
+correctness depended on the whole round-trip (submit first, submit second, cancel second) finishing
+inside the 0.2 s window before the first scan's fake sleep ended and released the semaphore to the
+second. Under a loaded CI runner that window could close before the cancel POST was processed, the
+second scan would have already left `queued`, and the endpoint correctly returned 409 — the test was
+wrong, not the code. Widening the sleep would only have lengthened the odds without removing the
+race; making the first scan's execution point observable removes the wall-clock dependency entirely.
+Run 20× locally with no failures, in ~0.35 s per run (down from a sleep-bound floor of 0.2 s per run
+plus the race).
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the de-flake item — struck).
+
+---
+
+### 2026-08-03 — Post-v1 — Deprecated Starlette status-code constants retired across 24 call sites
+
+**What changed:** `status.HTTP_422_UNPROCESSABLE_ENTITY` → `status.HTTP_422_UNPROCESSABLE_CONTENT`
+and `status.HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `status.HTTP_413_CONTENT_TOO_LARGE` across all 24
+call sites in the 8 files that used them (`scans.py` ×10, `scan_schedules.py` ×4, `registries.py`
+×3, `notifications.py` ×2, and one each in `trivy_policy.py`, `git_credentials.py`, `backups.py`,
+`uploads.py`).
+
+**Why:** both old constants raised a `StarletteDeprecationWarning` on every attribute access and
+have been standing warnings in the backend suite's output since at least the 2026-07-03 interpreter
+bump. Before renaming, both old/new pairs were checked against the pinned `starlette==1.3.1` to
+confirm the rename can't move a status code: `HTTP_422_UNPROCESSABLE_ENTITY` and
+`HTTP_422_UNPROCESSABLE_CONTENT` both resolve to `422`; `HTTP_413_REQUEST_ENTITY_TOO_LARGE` and
+`HTTP_413_CONTENT_TOO_LARGE` both resolve to `413`. Purely mechanical — no response behavior
+changed.
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the Starlette-constants item — struck).
 
 ---
 

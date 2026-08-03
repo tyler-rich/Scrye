@@ -77,43 +77,25 @@ Small, self-contained work that closes a concrete gap.
   `react-router-dom` back into `react-router`, so **every import site in `frontend/src/` moves**
   (twelve files today), plus whatever the type-aware ESLint gate makes of the new type surface —
   which is the same risk the bumps above share, and the reason to do them together.
-- **Retire the deprecated Starlette status-code constants.** `status.HTTP_422_UNPROCESSABLE_ENTITY`
-  raises a `StarletteDeprecationWarning` on every attribute access — Starlette renamed it to
-  `HTTP_422_UNPROCESSABLE_CONTENT` — and it is referenced at **22 call sites** across seven routers
-  (`scans.py` ×10, `scan_schedules.py` ×4, `registries.py` ×3, `notifications.py` ×2, and one each
-  in `trivy_policy.py`, `git_credentials.py`, `backups.py`). The same rename hit
-  `HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `HTTP_413_CONTENT_TOO_LARGE`, at 2 more call sites in
-  `uploads.py`. These are the backend suite's standing deprecation warnings, recorded as
-  pre-existing at each of the last two interpreter bumps (`ARCHIVE.md` §14, 2026-07-03 and
-  2026-07-25) and never actually cleared. The change is mechanical — the constants are equal
-  integers, so no status code or behavior moves — and it takes the suite's warning output down to
-  the Starlette-TestClient httpx notice, so a genuinely new warning becomes visible instead of
-  being lost in known noise.
+- ~~**Retire the deprecated Starlette status-code constants.**~~ **Done 2026-08-03** —
+  `HTTP_422_UNPROCESSABLE_ENTITY` → `HTTP_422_UNPROCESSABLE_CONTENT` and
+  `HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `HTTP_413_CONTENT_TOO_LARGE` across all 24 call sites in the
+  8 files that used them. Both constants verified equal to their predecessor before the rename (422
+  and 413 respectively, checked against the pinned `starlette==1.3.1`), so no status code or
+  response behavior moved. See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
 - **Offline / air-gapped scanner-DB import.** The Scanners settings already drive scheduled
   online DB refreshes (`trivy image --download-db-only`, `grype db update`). Add an import path
   for environments with no outbound access to `mirror.gcr.io` / `grype.anchore.io`, so the Trivy
   and Grype vulnerability databases can be side-loaded from a file.
-- **De-flake `test_cancel_queued_scan` (make slot acquisition observable).**
-  `backend/tests/test_scans_api.py::test_cancel_queued_scan` is timing-dependent **by
-  construction**: it monkeypatches a scanner whose `scan_image` does `await asyncio.sleep(0.2)`,
-  forces the worker semaphore to a single slot, queues two scans, and cancels the second — which
-  only works while that second scan is still `queued`. On a loaded CI runner the 0.2 s window
-  closes before the cancel POST is processed, the scan has left `queued`, and the endpoint
-  correctly returns **409**. So the failure is the *test* being wrong, not the code: queued-only
-  cancellation is a deliberate design decision (`docs/ARCHIVE.md` §14, 2026-07-03 — the in-process
-  worker has no channel to interrupt a live scanner subprocess; lifting that limit is the separate
-  "Cancel a running scan" item under Medium-term).
-
-  **Fix by making the worker's slot acquisition observable to the test** — e.g. an event/future the
-  test can await to know the first scan actually holds the only slot, so the cancel is issued at a
-  known state instead of inside a sleep window. **Do not just widen the sleep**: a longer sleep only
-  lengthens the odds, leaves the race in place, and slows the suite on every run.
-
-  **Why it matters more than one red check:** a test that reddens CI intermittently trains everyone
-  to re-run without reading the failure. That habit is exactly how a real regression gets waved
-  through — and it costs the most on a security tool, where the dogfood gate's output is the thing
-  nobody should learn to skim. Observed 2026-07-31 on a docs-and-workflow-only PR (#118), where it
-  failed once and passed on re-run of the identical commit.
+- ~~**De-flake `test_cancel_queued_scan` (make slot acquisition observable).**~~ **Done 2026-08-03**
+  — the fixed `await asyncio.sleep(0.2)` the fake scanner used to hold the worker's only slot is
+  replaced with a `threading.Event` pair: the first scan's `scan_image` blocks until the test
+  releases it, and a second event fires the instant `scan_image` actually starts (which only
+  happens once the worker's semaphore is acquired), so the test knows the second scan is
+  deterministically still `queued` before it cancels it — no wall-clock window to race under a
+  loaded CI runner. Test-only change; queued-only cancellation itself is unchanged (still gated on
+  the separate "Cancel a running scan" item under Medium-term). See
+  [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
 - **Retire `GET /api/scans` (deprecation-window decision, not yet scheduled).** The bare-array
   `GET /api/scans` was frozen and marked `deprecated=True` rather than reshaped when the list
   envelope landed (`backend/app/api/scans.py:276`, `docs/ARCHIVE.md` §14, 2026-07-25) — its
