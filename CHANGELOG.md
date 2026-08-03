@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Routine dependency currency across the backend, frontend and CI**, triaged
+  from the three grouped Dependabot PRs opened after v0.3.0 (#144, #145, #146)
+  and reapplied by hand rather than merged as-built. No change to a deployed
+  Scrye's behaviour, configuration or schema.
+  - **Backend.** `fastapi` 0.140.13 → 0.141.1 (the release adds an
+    `app.frontend()` dev-server convenience Scrye does not use) and
+    `uvicorn[standard]` 0.51.0 → 0.52.0 (adds an **opt-in** experimental
+    `--http zttp` parser, which upstream marks not-for-production and the image
+    never selects — `docker/entrypoint.sh` passes no `--http` flag, so the
+    default parser is unchanged). `starlette` holds at 1.3.1 and
+    `backend/requirements.lock` was regenerated with the pinned `uv`. `ruff`
+    0.16.0 → 0.16.1 (dev tooling only).
+  - **Frontend.** `@mantine/*` 7.15.2 → 7.17.8 (a minor inside the locked v7
+    line), `@tabler/icons-react` 3.46.0, `@testing-library/react` 16.3.2,
+    `@testing-library/jest-dom` 7.0.0, `postcss-preset-mantine` 1.18.0,
+    `globals` 17.8.0, `prettier` 3.9.6, and `@types/node` 22.20.0 → 24.13.3 to
+    match the Node 24 the SPA is built on. All are build- or test-time packages
+    except Mantine and the icon set; the shipped bundle changes only by
+    Mantine's own 7.15 → 7.17 fixes. Prettier 3.9 reformats short union types
+    onto one line, which is why three source files show whitespace-only edits.
+  - **CI.** `github/codeql-action` re-pinned from the `v4.37.4` annotated *tag
+    object* to the commit that tag dereferences to. Same release, same CodeQL
+    bundle, same `security-extended` suite — a SHA-pin correctness fix, not a
+    version bump.
+
 ## [0.3.0] - 2026-08-03
 
 ### Upgrade notes
