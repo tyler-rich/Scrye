@@ -173,12 +173,7 @@ export function artifactDownloadUrl(scanId: number, artifactId: number): string 
 
 export type ExportFormat = 'json' | 'csv' | 'markdown';
 export type HistorySort =
-  | 'created_at'
-  | 'findings_count'
-  | 'target'
-  | 'status'
-  | 'scanner'
-  | 'severity';
+  'created_at' | 'findings_count' | 'target' | 'status' | 'scanner' | 'severity';
 export type SortOrder = 'asc' | 'desc';
 
 /** The full scan-history filter set (docs/ARCHIVE.md §4.4). */

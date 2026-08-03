@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (135, newest first)
+### Index of §14 entries (136, newest first)
 
+- [2026-08-03 — Infra/Process — Post-v0.3.0 Dependabot triage: three grouped PRs reapplied on `dev`, an annotated-tag SHA-pin corrected, eight toolchain majors held back](#2026-08-03--infraprocess--post-v030-dependabot-triage-three-grouped-prs-reapplied-on-dev-an-annotated-tag-sha-pin-corrected-eight-toolchain-majors-held-back)
 - [2026-08-03 — Release/Process — v0.3.0 release prep: version bumped to 0.3.0, CHANGELOG cut with an upgrade-notes block for migration 0009](#2026-08-03--releaseprocess--v030-release-prep-version-bumped-to-030-changelog-cut-with-an-upgrade-notes-block-for-migration-0009)
 - [2026-08-03 — Post-v1 — PR #142 verified green on the pinned Python 3.14.6 in CI; `test_undeterminable_presence_fails_startup`'s local-sandbox failure was 3.13-specific](#2026-08-03--post-v1--pr-142-verified-green-on-the-pinned-python-3146-in-ci-test_undeterminable_presence_fails_startups-local-sandbox-failure-was-313-specific)
 - [2026-08-03 — Post-v1 — `test_cancel_queued_scan` de-flaked: worker slot acquisition made observable, sleep removed](#2026-08-03--post-v1--test_cancel_queued_scan-de-flaked-worker-slot-acquisition-made-observable-sleep-removed)
@@ -715,6 +716,206 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-03 — Infra/Process — Post-v0.3.0 Dependabot triage: three grouped PRs reapplied on `dev`, an annotated-tag SHA-pin corrected, eight toolchain majors held back
+
+**What changed:** the three Dependabot group PRs opened against `dev` after the v0.3.0 release —
+**#144** (pip), **#145** (npm), **#146** (github-actions) — were triaged and their content
+reapplied by hand in one PR rather than merged as-built. None was merged directly.
+
+**Base branches checked first, and all three were correct.** Per § Dependency hygiene's two-signal
+test: every head branch carries the `/dev/` `target-branch` segment
+(`dependabot/pip/backend/dev/…`, `dependabot/npm_and_yarn/frontend/dev/…`,
+`dependabot/github_actions/dev/…`) and no timeline carries `automatic_base_change_succeeded`. So
+these are **version** updates routed as configured — neither the security-update-on-`main` case
+(#120) nor the auto-retarget case (#126/#127/#128) applies. Nothing needed to be closed for
+routing reasons.
+
+---
+
+**#144 — backend (pip). Applied in full, with the lockfile regenerated.**
+
+Three bumps: `fastapi` 0.140.13 → **0.141.1**, `uvicorn[standard]` 0.51.0 → **0.52.0** (both
+runtime), and `ruff` 0.16.0 → **0.16.1** (dev extra). Changelogs were read for both runtime deps,
+since both move more than a patch:
+
+- **FastAPI 0.141.x** adds `app.frontend(check_dir="auto")`, a `fastapi dev` convenience, plus a
+  0.141.1 fix for background tasks/headers in that same new code path. No breaking changes and
+  nothing touching routing, dependency injection, or response-model handling. Scrye does not call
+  `app.frontend()` — the SPA is served by the existing static-files mount — so the added surface
+  is unused.
+- **uvicorn 0.52.0** adds an **experimental, opt-in** HTTP/1.1 parser (`--http zttp`, a sans-IO
+  parser with Zig bindings) that upstream explicitly marks not-for-production, and fixes non-ASCII
+  WebSocket request headers under websockets 13.0. Default parser selection is unchanged, and
+  `docker/entrypoint.sh` passes no `--http` flag — verified, not assumed — so the default
+  (`auto` → httptools) is what the image keeps running. No behavior change for Scrye.
+
+`backend/requirements.lock` was regenerated with the pinned command from `CONTRIBUTING.md`
+§ Backend dependency lock (`uv pip compile pyproject.toml --group build --generate-hashes
+--python-version 3.14`, uv **0.8.17** — the same pin `ci.yml` installs). The resulting diff is
+exactly two packages and their hashes; `starlette` held at **1.3.1**, which independently confirms
+FastAPI 0.141.1 still accepts the pin carried for CVE-2025-62727 / CVE-2026-48818 /
+CVE-2026-54283. **This is the step Dependabot cannot do** — it edits `pyproject.toml` only, so its
+branch would have failed CI's lock-drift gate.
+
+One thing Dependabot left stale and was fixed by hand: the comment above the `uvicorn` pin still
+read *"0.51.0 is the current release."* Dependabot rewrites version strings, not the prose that
+justifies them.
+
+---
+
+**#146 — github-actions. Not a version bump at all: it corrects an annotated-tag SHA-pin.**
+
+The PR moves `github/codeql-action/init` and `.../analyze` from
+`ea14db8afdef5d462e69d78c4ca45002d4522418` to `f205ea1c3313d32999d8d6a48b4f6530d4437b38` while
+leaving the trailing comment at `# v4.37.4` — which reads like a bot error and is not. Resolving
+the tag against upstream rather than trusting the bump description
+(`git ls-remote --tags https://github.com/github/codeql-action`) shows both SHAs belong to the
+**same release**:
+
+```
+ea14db8afdef5d462e69d78c4ca45002d4522418  refs/tags/v4.37.4
+f205ea1c3313d32999d8d6a48b4f6530d4437b38  refs/tags/v4.37.4^{}
+```
+
+`codeql-action` publishes **annotated** tags, so `refs/tags/v4.37.4` is a *tag object* and
+`refs/tags/v4.37.4^{}` is the commit it dereferences to. The advanced-setup migration
+(#141, 2026-08-02) pinned the tag object; Dependabot is re-pinning to the commit. The two refs
+name the same tree, so the content delta is **empty** — Dependabot's own "compare view" link spans
+no commits.
+
+**Consequences, stated precisely so this is not over- or under-sold:**
+- **It did not fix an outage.** Actions dereferences a tag object fine, and the CodeQL workflow
+  has been green on the old pin since #141 landed. This is pin *hygiene* — a SHA-pin is supposed
+  to name an immutable commit, which is what the convention in § Git & PR conventions means and
+  what every other pin in this repo does.
+- **It changes nothing about code scanning.** Same release ⇒ same CodeQL bundle (2.26.2) and the
+  same `queries: security-extended` suite. No query-suite or bundle-resolution change, despite
+  `codeql-action` having joined this group only with the advanced-setup migration.
+- **`codeql.yml` is not on the tag-gated publish path**, and nothing on that path moved. It runs
+  on `push`/`pull_request` for `main` and `dev`, so this PR's own CI exercises the corrected pin
+  directly. The publish-path actions (`checkout`, `login-action`, `attest-build-provenance`, and
+  the `build-image` composite's `setup-qemu`/`setup-buildx`/`build-push`) were untouched by #146,
+  so there is no CI-unexercisable change to reason about this round.
+
+**Why only this one action was affected:** every other action pinned here — `actions/checkout`,
+`actions/setup-python`, `actions/setup-node`, `actions/attest-build-provenance`,
+`docker/login-action`, `docker/setup-buildx-action`, `docker/setup-qemu-action`,
+`docker/build-push-action` — publishes **lightweight** tags, where `refs/tags/vX` *is* the commit
+and there is no `^{}` to get wrong. All eight were re-resolved against their upstreams during this
+triage and all eight already name commits. So this was a single-repo trap, not a systemic
+mis-pinning, and it is not detectable by eyeballing the pins — only by dereferencing them.
+
+---
+
+**#145 — frontend (npm). 20 proposals: 8 applied, 1 narrowed, 11 held back.**
+
+The Mantine/React ignores added 2026-07-26 did their job — the PR proposed **no** `@mantine/*`,
+`react`, `react-dom`, or `@types/react*` major, so nothing in it was blocked by locked
+decision §2. `@mantine/*` moved 7.15.2 → **7.17.8**, a minor *inside* v7, which is exactly what
+those ignores were scoped to allow.
+
+**Applied (8):** `@mantine/core`/`form`/`hooks` 7.17.8, `@tabler/icons-react` 3.46.0,
+`@testing-library/react` 16.3.2, `postcss-preset-mantine` 1.18.0, `prettier` 3.9.6,
+`globals` 17.8.0, `@testing-library/jest-dom` 7.0.0.
+
+Two of those are majors and were checked rather than waved through:
+- **`@testing-library/jest-dom` 6 → 7** breaks in exactly two ways: `@testing-library/dom` becomes
+  a required *peer* (already a direct devDependency here at 10.4.1, so satisfied), and the Node
+  floor moves to 22 (the builder and `ci.yml` are on 24). No matchers were removed — 7.0.0 only
+  *adds* `toContainAnyBy*`/`toContainOneBy*`. All 79 tests pass.
+- **`globals` 15 → 17** feeds `eslint.config.js`'s `globals.browser`. A globals major can silently
+  *shrink* a set, which would leave lint passing while losing coverage, so the set was inspected
+  rather than inferred from a green run: 1191 browser globals, `window`/`document`/`fetch` all
+  present.
+
+**`prettier` 3.4.2 → 3.9.6 reformats three source files** — `src/api/scans.ts`,
+`src/api/targets.ts`, `src/pages/Dashboard.tsx`. Prettier 3.9 collapses short union types onto one
+line instead of the leading-`|` multiline form. It is mechanical whitespace, 17 lines, no semantic
+change, and it is simply what taking the bump means; the files are reformatted in this PR so
+`format:check` stays the gate rather than being pinned to a stale formatter.
+
+**Narrowed (1): `@types/node` 22.20.0 → proposed 26.1.2, applied 24.13.3.** `@types/node`'s major
+tracks Node's, and this repo builds and runs on **Node 24** — the Dockerfile builder stage and
+`ci.yml`'s `node-version` — with Node majors already declined for the `docker` ecosystem on a
+support-lifecycle argument (24 is Active LTS to 2028-04-30; 26 does not enter LTS until
+2026-10-28). `tsconfig.node.json` sets `"types": ["node"]`, so types ahead of the pinned runtime
+describe APIs the build does not have and feed them straight into the type-aware ESLint gate
+turned on 2026-07-24 — the same failure mode that put `@types/react*` in the ignore list. 24.13.3
+is the current 24 line, aligns the types *with* the runtime (22 was behind it), and lints and
+builds clean.
+
+**Held back (11) — the deferred #86 toolchain sweep, unchanged in character since 2026-07-26:**
+`typescript` 5.7.2 → 7.0.2, `eslint` 9.39.4 → 10.8.0, `@eslint/js` 9.39.4 → 10.0.1,
+`typescript-eslint` 8.19.0 → 8.65.0, `vite` 6.4.3 → 8.2.0, `@vitejs/plugin-react` 4.3.4 → 6.0.5,
+`vitest` 3.2.7 → 4.1.10, `jsdom` 26.1.0 → 30.0.1, `eslint-plugin-react-hooks` 5.1.0 → 7.1.1,
+`eslint-plugin-react-refresh` 0.4.16 → 0.5.3, and `@types/node` 26 (narrowed above).
+
+These are **not** blocked by any ignore rule and are not unwanted — they are tracked work in
+`docs/ROADMAP.md`. They are held because they share one risk: every one lands on the type-aware
+ESLint gate, and several cannot move alone. `@eslint/js` is ESLint's own package and must move
+with `eslint`; `@vitejs/plugin-react` 6 is a Vite-major companion; `eslint-plugin-react-hooks` 7
+pulls the React Compiler rules into its recommended set. `typescript-eslint` 8.19 → 8.65 is a
+*minor* and would look routine in isolation — it is held anyway, because its support matrix pairs
+with the TypeScript version the sweep is about to move, so taking it now means bumping it twice
+and reviewing the lint churn twice. Picking off the members that happen to be minors is what makes
+a sweep like this never happen.
+
+---
+
+**Two config/doc changes made alongside the bumps.**
+
+1. **`.github/dependabot.yml` gains an `@types/node` major ignore**, beside the existing
+   `@types/react*` ones and for the identical reason — a types major tracking a runtime major this
+   repo has deliberately pinned. Without it, #145's `@types/node` 26 returns every week inside the
+   grouped PR. The comment also records what is deliberately **not** ignored: the toolchain
+   majors, which should keep being surfaced until the sweep lands. An ignore rule states that a
+   bot may not make a decision; it is not a parking space for work we intend to do.
+2. **`docs/ROADMAP.md`'s #86 sweep entry** is refreshed to the versions #145 actually surfaced
+   (jsdom's target moved 29 → 30 since #86) and gains the four members that were not on the
+   original list: `@eslint/js`, `@vitejs/plugin-react`, `eslint-plugin-react-hooks`, and
+   `eslint-plugin-react-refresh`.
+
+---
+
+**Verification.** Backend: `ruff` and `black --check` clean, `.env.example` in sync,
+`requirements.lock` regenerated with the pinned uv and byte-identical to what CI recomputes, and
+**728 passed / 11 skipped** on **CPython 3.14.6** — the pinned runtime floor, obtained as a
+python-build-standalone build because the sandbox's package sources offer no 3.14 at or above it.
+Worth recording for the next person: the suite **cannot** run on **3.14.0rc2** (what `uv python
+install 3.14` resolves to here). `typing._eval_type()` gained its `prefer_fwd_module` keyword
+between rc2 and final, and pydantic 2.13.4 passes it unconditionally, so every model construction
+raises `TypeError` at import. That failure was confirmed to be interpreter-caused, not
+bump-caused, by reproducing it with the *pre-bump* `fastapi`/`uvicorn` pins in the same venv
+before concluding anything — the rule from § Interpreter CVEs applied to a test failure rather
+than an advisory: check it against the interpreter before blaming the diff.
+Frontend: ESLint, Prettier, **79 tests across 21 files**, and `npm run build` all pass.
+`npm audit`'s only finding is the pre-existing `react-router` HIGH (GHSA-qwww-vcr4-c8h2, #123),
+unchanged by this PR and still fixable only by a downgrade.
+
+**Version numbers held at 0.3.0** — confirmed after the regenerations in all five places that
+carry one: `backend/pyproject.toml`, `backend/app/__init__.py`, `frontend/package.json`,
+`frontend/package-lock.json`, and `docker/docker-compose.yml`'s `image: scrye:0.3.0`. A lockfile
+regen must not move the app version, and neither `uv pip compile` nor `npm install` did.
+
+**Why:** Dependabot's proposals are evidence about what is available, not decisions about what
+this repo should take. Three specific gaps make merging them as-built wrong here: it does not
+regenerate `backend/requirements.lock` (CI's drift gate rejects the branch), it cannot tell a
+locked or deferred version policy from a stale pin, and — as #146 shows — its own description of a
+bump ("from `ea14db8…` to `f205ea1c…`") can be true and still describe something entirely
+different from what it looks like. Resolving the tag against upstream, reading the changelog for
+anything moving more than a patch, and regenerating lockfiles with the real package manager is the
+work; the version strings are the easy part.
+
+**Plan section affected:** `CLAUDE.md` § Dependency hygiene (Dependabot triage, backend lockfile
+regeneration); `.github/dependabot.yml` (npm `@types/node` major ignore);
+`.github/workflows/codeql.yml` (SHA-pin corrected to the commit behind `v4.37.4`);
+`backend/pyproject.toml` + `backend/requirements.lock`; `frontend/package.json` +
+`frontend/package-lock.json`; `docs/ROADMAP.md` (#86 sweep list refreshed). No schema, API
+contract, security model, job model, or auth change, and no locked decision re-opened — Mantine
+stays on v7 and React on 18.
 
 ---
 

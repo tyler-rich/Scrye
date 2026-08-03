@@ -76,6 +76,23 @@ updates:
     # Minor/patch updates within v7 / React 18 are NOT ignored and still flow.
     # @types/react* are majors-locked too because their major tracks React's:
     # @types/react 19 against react 18 breaks the type-aware ESLint gate.
+    #
+    # @types/node is majors-locked for the SAME reason, against a different
+    # runtime: its major tracks Node's, and this repo builds and runs on Node 24
+    # (docker/Dockerfile's builder stage, ci.yml's `node-version`), with Node
+    # majors already declined on a support-lifecycle argument in the `docker`
+    # entry below. tsconfig.node.json sets `"types": ["node"]`, so a @types/node
+    # ahead of the pinned runtime describes APIs the build does not have and
+    # feeds them straight into the type-aware ESLint gate. #145 proposed
+    # @types/node 26 against Node 24; 24.x was applied instead. Lifting this line
+    # is part of moving the Node major, not a bump to take on its own.
+    #
+    # Deliberately NOT ignored: the frontend tooling majors (typescript, eslint,
+    # typescript-eslint, vite, vitest, jsdom and friends). Those are *wanted* —
+    # they are the deferred #86 sweep tracked in docs/ROADMAP.md — so Dependabot
+    # should keep surfacing them until that PR is done. An ignore rule says "a
+    # bot may not make this decision"; it is not a parking space for work we
+    # intend to do.
     ignore:
       - dependency-name: "@mantine/*"
         update-types: ["version-update:semver-major"]
@@ -86,6 +103,8 @@ updates:
       - dependency-name: "@types/react"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
     groups:
       frontend-dependencies:

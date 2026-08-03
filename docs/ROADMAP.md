@@ -62,12 +62,19 @@ Small, self-contained work that closes a concrete gap.
   (never LTS, EOL 2026-06-01) do not show up here.
 - **Frontend tooling majors from Dependabot #86.** After the Mantine/React ignores landed
   (locked decision §2 — `ARCHIVE.md` §14, 2026-07-26), the rest of that grouped PR is still
-  wanted and still unapplied: **TypeScript 5.7 → 7.0**, **ESLint 9 → 10**, **`typescript-eslint`
-  8.19 → 8.65**, **Vite 6 → 8**, **Vitest 3 → 4**, **jsdom 26 → 29**, and the smaller bumps
-  alongside them. None of these is locked. They are grouped here because they share one risk:
-  every one of them lands on the **type-aware ESLint gate** turned on 2026-07-24, so the real
-  work is the lint-config churn they shake out, not the version numbers. Best done as a single
-  deliberate PR rather than folded into an unrelated change.
+  wanted and still unapplied. **#145** (2026-08-03) re-proposed the same set at newer targets,
+  which is the current shopping list: **TypeScript 5.7 → 7.0**, **ESLint 9 → 10** (with
+  **`@eslint/js` 9 → 10** moving in lockstep), **`typescript-eslint` 8.19 → 8.65**,
+  **Vite 6 → 8** (with **`@vitejs/plugin-react` 4 → 6**), **Vitest 3 → 4**, **jsdom 26 → 30**,
+  **`eslint-plugin-react-hooks` 5 → 7**, and **`eslint-plugin-react-refresh` 0.4 → 0.5**. None of
+  these is locked. They are grouped here because they share one risk: every one of them lands on
+  the **type-aware ESLint gate** turned on 2026-07-24, so the real work is the lint-config churn
+  they shake out, not the version numbers. `eslint-plugin-react-hooks` 7 is the sharpest edge —
+  its recommended set pulls in the React Compiler rules — and `@eslint/js`/`@vitejs/plugin-react`
+  cannot move independently of ESLint/Vite, which is why the routine triage in #147 left all eight
+  behind rather than picking off the ones that happened to be minors. Best done as a single
+  deliberate PR rather than folded into an unrelated change. These are deliberately **not** added
+  to `.github/dependabot.yml`'s `ignore` list — they should keep being surfaced until this is done.
 - **`react-router` 7 → 8.** Belongs with the tooling majors above, and is now a **pure currency
   item with no security component**. It was previously coupled to GHSA-qwww-vcr4-c8h2 (#123),
   whose only recorded fix was the 8.3.0 major; that advisory was closed on 2026-08-02 by the
