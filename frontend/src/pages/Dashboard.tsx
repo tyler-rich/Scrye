@@ -21,9 +21,7 @@ import { ScanStatusBadge } from '../components/ScanStatusBadge';
 import { SEVERITY_COLOR, SeverityBadge } from '../components/SeverityBadge';
 
 type LoadState =
-  | { kind: 'loading' }
-  | { kind: 'ok'; data: DashboardData }
-  | { kind: 'error'; message: string };
+  { kind: 'loading' } | { kind: 'ok'; data: DashboardData } | { kind: 'error'; message: string };
 
 /** A single headline metric tile. */
 function StatCard({ label, value, color }: { label: string; value: number; color?: string }) {
