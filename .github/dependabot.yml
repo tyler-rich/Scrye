@@ -144,7 +144,7 @@ updates:
     commit-message:
       prefix: "docker"
     ignore:
-      # docker/docker-compose.yml pins `image: scrye:0.2.0` — Scrye's own image,
+      # docker/docker-compose.yml pins `image: scrye:0.3.0` — Scrye's own image,
       # BUILT LOCALLY from docker/Dockerfile by whoever runs the stack. It is not
       # a registry dependency: released images publish to
       # ghcr.io/tyler-rich/scrye (locked decision §6). Dependabot cannot know
@@ -153,7 +153,7 @@ updates:
       # `private_source_authentication_failure`.
       #
       # Ignoring the name is the fix. The alternatives were rejected: qualifying
-      # the tag as ghcr.io/tyler-rich/scrye:0.2.0 would make the compose file
+      # the tag as ghcr.io/tyler-rich/scrye:0.3.0 would make the compose file
       # PULL a published image instead of building locally, changing what the
       # documented quick start does, and dropping the tag loses the version pin.
       # See docs/ARCHIVE.md §14, 2026-08-02.

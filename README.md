@@ -358,7 +358,7 @@ docker compose up -d
 
 # Verify health
 curl -fsS http://127.0.0.1:8089/healthz
-# {"status":"healthy","version":"0.2.0","database":"ok"}
+# {"status":"healthy","version":"0.3.0","database":"ok"}
 ```
 
 On startup the container applies database migrations (`alembic upgrade head`) and
@@ -468,7 +468,7 @@ Everything publishes to GHCR (`ghcr.io/tyler-rich/scrye`):
 | Tag | What it is | Use it for |
 | --- | ---------- | ---------- |
 | `:latest` | The most recent tagged release (built from `main`). | **Production.** Tracks the newest release. |
-| `:<version>` (e.g. `:0.2.0`) | A specific tagged release. | **Production, pinned** — reproducible, no surprise upgrades. |
+| `:<version>` (e.g. `:0.3.0`) | A specific tagged release. | **Production, pinned** — reproducible, no surprise upgrades. |
 | `:dev` | A **moving** tag rebuilt nightly from the `dev` branch. | **Testing HEAD-of-dev only.** Not a release; may be unstable. Do not run in production. |
 
 Pin `:<version>` for anything you care about; use `:latest` if you want to track
@@ -477,7 +477,7 @@ releases and re-`pull` on your own cadence. All tags are multi-arch
 
 ```bash
 docker pull ghcr.io/tyler-rich/scrye:latest
-# docker pull ghcr.io/tyler-rich/scrye:0.2.0   # pin a release
+# docker pull ghcr.io/tyler-rich/scrye:0.3.0   # pin a release
 # docker pull ghcr.io/tyler-rich/scrye:dev     # test the dev branch
 ```
 
@@ -1444,7 +1444,7 @@ The published image lives on GHCR as **`ghcr.io/tyler-rich/scrye`** (`:latest` a
 instead — single-arch for the host you're on:
 
 ```bash
-docker build -f docker/Dockerfile -t scrye:0.2.0 .
+docker build -f docker/Dockerfile -t scrye:0.3.0 .
 ```
 
 For a **multi-arch** image (`linux/amd64` + `linux/arm64`), use Buildx; the
@@ -1455,7 +1455,7 @@ target platform:
 docker buildx create --use --name scrye-builder   # once
 docker buildx build -f docker/Dockerfile \
   --platform linux/amd64,linux/arm64 \
-  -t scrye:0.2.0 .
+  -t scrye:0.3.0 .
 ```
 
 CI builds both architectures and **dogfoods** the result: it scans Scrye's own
