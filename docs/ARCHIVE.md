@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (134, newest first)
+### Index of §14 entries (135, newest first)
 
+- [2026-08-03 — Release/Process — v0.3.0 release prep: version bumped to 0.3.0, CHANGELOG cut with an upgrade-notes block for migration 0009](#2026-08-03--releaseprocess--v030-release-prep-version-bumped-to-030-changelog-cut-with-an-upgrade-notes-block-for-migration-0009)
 - [2026-08-03 — Post-v1 — PR #142 verified green on the pinned Python 3.14.6 in CI; `test_undeterminable_presence_fails_startup`'s local-sandbox failure was 3.13-specific](#2026-08-03--post-v1--pr-142-verified-green-on-the-pinned-python-3146-in-ci-test_undeterminable_presence_fails_startups-local-sandbox-failure-was-313-specific)
 - [2026-08-03 — Post-v1 — `test_cancel_queued_scan` de-flaked: worker slot acquisition made observable, sleep removed](#2026-08-03--post-v1--test_cancel_queued_scan-de-flaked-worker-slot-acquisition-made-observable-sleep-removed)
 - [2026-08-03 — Post-v1 — Deprecated Starlette status-code constants retired across 24 call sites](#2026-08-03--post-v1--deprecated-starlette-status-code-constants-retired-across-24-call-sites)
@@ -714,6 +715,130 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-03 — Release/Process — v0.3.0 release prep: version bumped to 0.3.0, CHANGELOG cut with an upgrade-notes block for migration 0009
+
+**What changed:** the `CONTRIBUTING.md` § Releasing "Before you tag" checklist run for **v0.3.0**,
+plus the version bump and the CHANGELOG cut, landing on `dev` before the promotion PR is opened. No
+application code, schema, API-contract, security-model, job-model, auth, or CI-behavior change.
+
+**1. Version bumped `0.2.0` → `0.3.0`, not `0.2.1`.** The release carries a new user-facing feature
+(OIDC account linking) **and** a schema migration, so it is a minor under SemVer, not a patch — a
+patch release should not move the database schema, and `0009_oidc_link_flows` is not reversible
+except by dropping the columns it added.
+
+Bumped in the three independent declarations the 2026-07-29 entry identified — `backend/app/__init__.py`
+(`__version__`, the only runtime-load-bearing copy), `backend/pyproject.toml`, and
+`frontend/package.json` plus `package-lock.json`'s two root fields (written by
+`npm version 0.3.0 --no-git-tag-version`, not by hand) — and in the five documentation/Compose
+references to the example image tag and the `/healthz` sample output (`docker/docker-compose.yml`,
+`docker/Dockerfile`'s build-command comment, `README.md` ×3). `backend/tests/test_version.py` passes
+on the result.
+
+**Two occurrences were bumped that the 2026-07-29 list does not name**, found by grepping the whole
+repo rather than working from that list:
+
+- `.github/dependabot.yml` ×2 — the docker-ecosystem `ignore:` block's comment quotes the Compose
+  pin verbatim (`pins \`image: scrye:0.2.0\``, and the rejected `ghcr.io/tyler-rich/scrye:0.2.0`
+  alternative). The `dependency-name: "scrye"` rule itself is version-independent, so nothing
+  behavioural moves; the comment would simply have stopped describing the file it cites.
+- `frontend/src/components/settings/AboutPanel.test.tsx` ×2 — the `BASE_ABOUT` fixture's `version`
+  and the version-stat assertion bound to it. Bumped on the precedent of the 0.1.0 → 0.2.0 bump
+  (#115), which moved the same fixture. Nothing forces it — `test_version.py` does not reach the
+  frontend fixture — but a mocked About response a release behind the app is the same trap the
+  drift guard exists to prevent.
+
+**Deliberately left at `0.2.0`,** matching the 2026-07-29 entry's reasoning: the `## [0.2.0]`
+CHANGELOG section and its compare links, the prior §14 entries and `CONTRIBUTING.md` §
+Releasing / `docs/ROADMAP.md` references to the *v0.2.0 promotion* (all release history — rewriting
+them falsifies the record), and `backend/tests/test_trivy_policy.py:19`'s
+`https://openvex.dev/ns/v0.2.0`, which is the OpenVEX spec's context version and has nothing to do
+with Scrye's.
+
+**2. `CHANGELOG.md` `[Unreleased]` cut to `[0.3.0] - 2026-08-03`,** with a fresh empty
+`[Unreleased]` above it and the reference-link block gaining
+`[0.3.0]: …/compare/v0.2.0...v0.3.0` with `[Unreleased]` re-pointed at `…/compare/v0.3.0...HEAD`.
+As in the v0.2.0 cut, doing this **before** the promotion means `main` receives an already-correct
+CHANGELOG rather than a commit landing on `main` after the fact.
+
+**3. A new `### Upgrade notes` block opens the `[0.3.0]` section.** This release is the first since
+v0.1.0 to change the schema, and nothing in the section said so — the OIDC-linking entry describes
+the feature, not its deployment consequence. Three bullets: that starting 0.3.0 applies
+`0009_oidc_link_flows` (two nullable columns on `oidc_login_flows`, no data rewritten, a transient
+table excluded from backups, nothing to run by hand); that **downgrading to 0.2.0 is not
+supported**, because the 0.2.0 image's migration history ends at `0008` and `alembic upgrade head`
+fails on an unknown revision rather than starting against a mismatched schema, so the recovery path
+is a backup bundle taken *before* the upgrade; and that no configuration or environment variable
+moved. Placed above `Added` rather than folded into a bullet, because it is the only part of the
+section a reader has to act on.
+
+**4. `[Unreleased]` re-verified claim by claim rather than trusted,** per the checklist's first
+item and the v0.2.0 cycle's false-CVE precedent. It held up; every externally-dependent claim was
+re-checked at its source this session:
+
+- **`react-router-dom` 7.18.2 "closes GHSA-qwww-vcr4-c8h2".** Verified in the published tarballs,
+  not from the advisory. `throwIfPotentialCSRFAttack()` is byte-identical across 7.18.1, 7.18.2 and
+  8.3.0 — the fix is entirely at the **call site** in `index-react-server.js`'s
+  `generateMiddlewareResponse`. 7.18.1 runs the check and `processServerAction()` inside one `try`;
+  7.18.2 isolates the check in its own `try`, records `potentialCSRFAttackError`, rewrites the
+  request to `method: "GET"`, and gates the action behind `if (!potentialCSRFAttackError)` — and
+  8.3.0's is the same code, differing only in the bundler's formatting and one local's name
+  (`result2` vs `result`). Upstream's own `CHANGELOG.md` at 7.18.2 lists exactly one patch change,
+  "Harden RSC CSRF codepaths (#15353)", confirming the entry's claim that the backport *is* the
+  whole 7.18.1 → 7.18.2 diff.
+- **The same entry's claim that `npm audit` will keep reporting it.** Still true: `npm audit`
+  against the current lockfile reports `react-router` HIGH with range `7.12.0 - 8.2.0` — 7.18.2 is
+  inside it — so the advisory has not been re-cut for the backport. The entry says so explicitly,
+  which is what keeps the next reader from "fixing" it with the `npm audit fix --force` downgrade.
+- **`postcss` 8.5.25.** The containment check the advisory names is present in the installed
+  `node_modules/postcss/lib/previous-map.js` (`relative(dirname(cssFile), path)` guarded on `'..'`,
+  `'..' + sep` and `isAbsolute`).
+- **Pins and workflow claims** at the file: `fastapi==0.140.13` (was `0.140.0` on `main`),
+  `react-router-dom@7.18.2`, `postcss@8.5.25`, `docker/login-action` at the v4.6.0 SHA in
+  `publish.yml`/`dev-nightly.yml`/`rescan.yml`, `node:24-bookworm-slim` in the Dockerfile with
+  `node-version: "24"` in `ci.yml`, CONTRIBUTING's "Node 22+" floor, and `codeql.yml`'s
+  `security-extended` suite / three languages / `push`+`pull_request` on `main` and `dev` / Monday
+  04:00 UTC cron / no `paths:` filters.
+- **The OIDC entries against the implementation:** the `Your linked identity` card title, the
+  `auth.oidc_identity_linked` / `_unlinked` / `_stale` audit actions, the quoted stale-link error
+  matching `LoginPage.tsx`'s `identity_stale` text, and the README's re-link runbook and
+  security-model widening.
+- **The uvicorn log-volume entry's dating.** "Present since 2026-07-04" matches
+  `git log -S "uvicorn.access"` on `backend/app/core/logging.py` (`f2806d6`), which precedes both
+  v0.1.0 (2026-07-09) and v0.2.0 (2026-07-31) as the entry states; the ~144k lines/day figure is
+  consistent with the 30s `HEALTHCHECK` interval in the Dockerfile and Compose file.
+- **The SEC-8 widening** was already described substantively; the entry was expanded to name the
+  concrete consequence (an MFA-enrolled admin's local TOTP challenge never runs on the linked path)
+  and to cite `L2 / SEC-8` with the §15 decoder link, matching the one existing finding-ID citation
+  in the file. It is the feature's main trade-off and should not need §14 to be legible.
+
+**Not added to the CHANGELOG, deliberately.** Four items in the `main..dev` range change nothing a
+user can observe and are recorded in §14 instead: the filesystem-scan symlink containment guard
+(#135/#140 — a test), the Starlette status-code constant retirement (#142), the
+`test_cancel_queued_scan` de-flake, and the docs/governance work. `brace-expansion` is **not** part
+of this release despite appearing in the release-prep brief — it was reapplied on `dev` before the
+v0.2.0 promotion and ships in `[0.2.0]`; `git diff origin/main..origin/dev -- frontend/package-lock.json`
+carries no `brace-expansion` change.
+
+**5. `THIRD_PARTY_LICENSES/` re-verified,** repeating rather than inheriting the 2026-07-31 check.
+The version table still matches `docker/Dockerfile`'s `TRIVY_VERSION=0.72.0` / `GRYPE_VERSION=0.115.0`
+/ `SYFT_VERSION=1.46.0` — none moved this cycle; the only Dockerfile change in the range is the Node
+builder — and all four bundled files were re-fetched from upstream at those tags and compared with
+`cmp`: `trivy/LICENSE`, `trivy/NOTICE`, `grype/LICENSE` and `syft/LICENSE` are byte-identical.
+Grype and Syft still 404 on `NOTICE`, as the directory's README says.
+
+**Why:** every item is one the "Before you tag" checklist exists to catch, and each is permanent or
+expensive to undo once the tag exists. The version bump in particular has to land before the
+promotion: nothing derives the app's version from the git tag, so tagging `v0.3.0` on an unbumped
+`main` would publish `ghcr.io/tyler-rich/scrye:0.3.0` running an app that reports `0.2.0` on the
+About tab, `/healthz`, the OpenAPI document, every backup bundle's `app_version`, and the
+`scrye_build_info` metric.
+
+**Plan section affected:** `CHANGELOG.md` (`[0.3.0]` cut, new `### Upgrade notes`, SEC-8 expansion);
+`CONTRIBUTING.md` § Releasing (pre-tag checklist run); §10.1 (README image-tag and `/healthz`
+examples). No locked decision changed.
 
 ---
 

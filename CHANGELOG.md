@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-03
+
+### Upgrade notes
+
+- **Upgrading applies a database migration.** The container runs
+  `alembic upgrade head` on start as it always has; on first start of 0.3.0 that
+  applies `0009_oidc_link_flows`, which adds two nullable columns (`purpose`,
+  `user_id`) to `oidc_login_flows` — the table holding in-flight OIDC handshakes.
+  No other table changes and no existing data is rewritten. The table is
+  transient (10-minute TTL) and excluded from backup bundles, so the migration is
+  fast on a database of any size. Nothing to run by hand: pull the image and
+  restart.
+
+- **Downgrading to 0.2.0 after upgrading is not supported.** The 0.2.0 image's
+  migration history ends at `0008`, so it cannot start against a database
+  stamped `0009` — `alembic upgrade head` fails with an unknown revision rather
+  than starting with a mismatched schema. The migration's only reversal is
+  dropping the two columns it added. If you may need to go back, **take a backup
+  bundle before upgrading** and restore that onto 0.2.0; see
+  [Backup & restore](README.md#backup--restore).
+
+- No configuration change is required and no environment variable was added,
+  removed, or renamed.
+
 ### Added
 
 - **Link your existing account to an OIDC identity** (Settings → Authentication →
@@ -28,9 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   account can be signed into, and a stolen session alone must never be able to
   add a sign-in path. Linking also **widens the accepted MFA-delegation
   limitation** from OIDC-provisioned accounts to any linked account, including
-  MFA-enrolled admins: the UI warns before you link and the README security model
-  documents the trade in full. Confirm your identity provider enforces a second
-  factor before linking an admin account.
+  MFA-enrolled admins — an admin with TOTP enrolled who links gains a sign-in
+  path on which their local TOTP challenge never runs, so their effective second
+  factor becomes whatever the identity provider enforces. This is the feature's
+  main trade-off. The UI warns before you link, `auth.oidc_identity_linked` and
+  `_unlinked` make the path's creation and removal auditable, and the README
+  security model documents the trade in full. Confirm your identity provider
+  enforces a second factor before linking an admin account. (L2 / SEC-8 — see
+  [`docs/ARCHIVE.md` §15](docs/ARCHIVE.md#15-finding-id-index-decoder-for-14s-citations))
 
   Scope is deliberately minimal: an admin cannot bind an identity to *another*
   user (that needs the other person to authenticate at the provider), and
@@ -690,6 +719,7 @@ model, in a single hardened container.
   + tmpfs, resource limits, healthcheck, loopback-only port binding); CSRF
   protection, rate-limited auth, and an audit log.
 
-[Unreleased]: https://github.com/tyler-rich/Scrye/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tyler-rich/Scrye/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/tyler-rich/Scrye/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tyler-rich/Scrye/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tyler-rich/Scrye/releases/tag/v0.1.0
