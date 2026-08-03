@@ -77,6 +77,41 @@ Small, self-contained work that closes a concrete gap.
   `react-router-dom` back into `react-router`, so **every import site in `frontend/src/` moves**
   (twelve files today), plus whatever the type-aware ESLint gate makes of the new type surface —
   which is the same risk the bumps above share, and the reason to do them together.
+- **Ask GitHub to re-cut GHSA-qwww-vcr4-c8h2's affected range for the 7.18.2 backport.** The
+  advisory still ranges **`>= 7.12.0, < 8.3.0`** — re-confirmed during the v0.3.0 release prep on
+  2026-08-03, where `npm audit` against the current lockfile reported `react-router` HIGH at
+  `7.12.0 - 8.2.0`. `react-router` 7.18.2 is inside that range while *carrying the fix*, so
+  `npm audit` and Dependabot will report a HIGH against a package we have actually patched,
+  indefinitely and with no version we can move to that silences it short of the 8 major above.
+  The follow-up is an **advisory-improvement request** (the *Suggest improvements for this
+  vulnerability* path on the GHSA page) asking for the range to be re-cut to
+  **`>= 7.12.0, < 7.18.2`**, with the 8.x range left as it is.
+
+  **Why it is worth the effort rather than something to live with.** A permanent false HIGH on a
+  dependency we have already fixed is not a cosmetic annoyance: it trains everyone reading the
+  output — us, and anyone reviewing a Dependabot queue — to dismiss that package's alerts on
+  sight, which is exactly how a *real* future `react-router` advisory gets waved through. Scrye is
+  a vulnerability scanner that gates its own CI on its own findings; a standing known-bogus HIGH in
+  that pipeline is a direct hit on the signal the project exists to produce. It also is not only
+  our problem — **every consumer on 7.18.2 sees the same false positive**, so the fix is worth
+  making upstream rather than papering over locally with an ignore rule.
+
+  **The evidence is already gathered; do not re-derive it.** The tarball comparison is recorded in
+  [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md) (v0.3.0 release prep): `throwIfPotentialCSRFAttack()`
+  is byte-identical across 7.18.1, 7.18.2 and 8.3.0, and the fix is entirely at the call site in
+  `index-react-server.js`'s `generateMiddlewareResponse` — 7.18.1 runs the origin check and
+  `processServerAction()` inside one `try`, while 7.18.2 isolates the check in its own `try`,
+  rewrites the rejected request to `method: "GET"`, and gates the action behind
+  `if (!potentialCSRFAttackError)`, which is the same code 8.3.0 ships. Upstream's `CHANGELOG.md`
+  at 7.18.2 lists exactly one patch change, *"Harden RSC CSRF codepaths"*
+  ([remix-run/react-router#15353](https://github.com/remix-run/react-router/pull/15353)), so the
+  backport is the entire 7.18.1 → 7.18.2 diff. Background and the reachability assessment are in
+  [#123](https://github.com/tyler-rich/Scrye/issues/123) (closed) and
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
+
+  Independent of Scrye's own exposure, which is nil either way: the SPA is declarative-only, so the
+  vulnerable RSC entry point is never imported and never enters the bundle. This item is about the
+  advisory's metadata, not about risk.
 - ~~**Retire the deprecated Starlette status-code constants.**~~ **Done 2026-08-03** —
   `HTTP_422_UNPROCESSABLE_ENTITY` → `HTTP_422_UNPROCESSABLE_CONTENT` and
   `HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `HTTP_413_CONTENT_TOO_LARGE` across all 24 call sites in the
