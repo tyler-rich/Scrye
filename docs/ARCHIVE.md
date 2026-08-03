@@ -578,8 +578,27 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (116, newest first)
+### Index of §14 entries (135, newest first)
 
+- [2026-08-03 — Release/Process — v0.3.0 release prep: version bumped to 0.3.0, CHANGELOG cut with an upgrade-notes block for migration 0009](#2026-08-03--releaseprocess--v030-release-prep-version-bumped-to-030-changelog-cut-with-an-upgrade-notes-block-for-migration-0009)
+- [2026-08-03 — Post-v1 — PR #142 verified green on the pinned Python 3.14.6 in CI; `test_undeterminable_presence_fails_startup`'s local-sandbox failure was 3.13-specific](#2026-08-03--post-v1--pr-142-verified-green-on-the-pinned-python-3146-in-ci-test_undeterminable_presence_fails_startups-local-sandbox-failure-was-313-specific)
+- [2026-08-03 — Post-v1 — `test_cancel_queued_scan` de-flaked: worker slot acquisition made observable, sleep removed](#2026-08-03--post-v1--test_cancel_queued_scan-de-flaked-worker-slot-acquisition-made-observable-sleep-removed)
+- [2026-08-03 — Post-v1 — Deprecated Starlette status-code constants retired across 24 call sites](#2026-08-03--post-v1--deprecated-starlette-status-code-constants-retired-across-24-call-sites)
+- [2026-08-03 — Process/Governance — Dogfood self-scan added to required status checks, closing #136](#2026-08-03--processgovernance--dogfood-self-scan-added-to-required-status-checks-closing-136)
+- [2026-08-03 — Process/Governance — protect-tags ruleset created, closing #137](#2026-08-03--processgovernance--protect-tags-ruleset-created-closing-137)
+- [2026-08-03 — Process/Governance — Signed-commit enforcement declined, not deferred](#2026-08-03--processgovernance--signed-commit-enforcement-declined-not-deferred)
+- [2026-08-02 — Security/Process — CodeQL migrated from default setup to a committed workflow; the two settings edits that finish it](#2026-08-02--securityprocess--codeql-migrated-from-default-setup-to-a-committed-workflow-the-two-settings-edits-that-finish-it)
+- [2026-08-02 — Security/Process — Symlink-containment regression guard for filesystem scans (#135); Syft is the probe, and it runs against the binaries the image ships](#2026-08-02--securityprocess--symlink-containment-regression-guard-for-filesystem-scans-135-syft-is-the-probe-and-it-runs-against-the-binaries-the-image-ships)
+- [2026-08-02 — Post-v1 — Log redaction moved from the `LogRecord` to the formatted line; uvicorn's access logger stops raising on every request](#2026-08-02--post-v1--log-redaction-moved-from-the-logrecord-to-the-formatted-line-uvicorns-access-logger-stops-raising-on-every-request)
+- [2026-08-02 — Post-v1 — OIDC account linking: authenticated self-link, guarded self-unlink, and stale-link detection (#114)](#2026-08-02--post-v1--oidc-account-linking-authenticated-self-link-guarded-self-unlink-and-stale-link-detection-114)
+- [2026-08-02 — Security/Process — Filesystem-gate symlink and TOCTOU residual risks closed out (neither is real); CodeQL advanced-setup migration assessed](#2026-08-02--securityprocess--filesystem-gate-symlink-and-toctou-residual-risks-closed-out-neither-is-real-codeql-advanced-setup-migration-assessed)
+- [2026-08-02 — Security/Process — CodeQL code scanning enabled via default setup; first-run triage: six alerts, all false positives](#2026-08-02--securityprocess--codeql-code-scanning-enabled-via-default-setup-first-run-triage-six-alerts-all-false-positives)
+- [2026-08-02 — Infra/Process — GHSA-qwww-vcr4-c8h2 closed by a 7.x backport (`react-router` 7.18.2), not the 8.3.0 major; the advisory's "Patched versions" field is stale](#2026-08-02--infraprocess--ghsa-qwww-vcr4-c8h2-closed-by-a-7x-backport-react-router-7182-not-the-830-major-the-advisorys-patched-versions-field-is-stale)
+- [2026-08-02 — Infra — Frontend builder and CI moved Node 22 → 24 (Active LTS); the Dependabot major-ignore re-pointed at the 24 line](#2026-08-02--infra--frontend-builder-and-ci-moved-node-22--24-active-lts-the-dependabot-major-ignore-re-pointed-at-the-24-line)
+- [2026-08-02 — Infra/Process — Post-v0.2.0 dependency cleanup: three closed Dependabot PRs reapplied, the base-branch anomaly traced to `dev`'s deletion, the brace-expansion waiver retired](#2026-08-02--infraprocess--post-v020-dependency-cleanup-three-closed-dependabot-prs-reapplied-the-base-branch-anomaly-traced-to-devs-deletion-the-brace-expansion-waiver-retired)
+- [2026-08-02 — Process/Governance — Public-repo governance checklist verified in GitHub Settings; five of eight items closed](#2026-08-02--processgovernance--public-repo-governance-checklist-verified-in-github-settings-five-of-eight-items-closed)
+- [2026-08-02 — Infra/Process — Auto-delete-on-merge deleted `dev` during the v0.2.0 promotion; the ruleset's admin bypass is why "Restrict deletions" did not stop it](#2026-08-02--infraprocess--auto-delete-on-merge-deleted-dev-during-the-v020-promotion-the-rulesets-admin-bypass-is-why-restrict-deletions-did-not-stop-it)
+- [2026-08-02 — Infra — Dependabot's docker run fails on our own local build tag `scrye:0.2.0`](#2026-08-02--infra--dependabots-docker-run-fails-on-our-own-local-build-tag-scrye020)
 - [2026-07-31 — Process — `dev` → `main` promotions merge with a merge commit, not a squash](#2026-07-31--process--dev--main-promotions-merge-with-a-merge-commit-not-a-squash)
 - [2026-07-31 — Release/Process — v0.2.0 release prep: CHANGELOG cut, brace-expansion reapplied on `dev`, Dependabot security-PR routing documented](#2026-07-31--releaseprocess--v020-release-prep-changelog-cut-brace-expansion-reapplied-on-dev-dependabot-security-pr-routing-documented)
 - [2026-07-31 — Infra/Process — Grype gate keeps its verdict *and* lists its waivers, from one scan](#2026-07-31--infraprocess--grype-gate-keeps-its-verdict-and-lists-its-waivers-from-one-scan)
@@ -696,6 +715,2477 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-03 — Release/Process — v0.3.0 release prep: version bumped to 0.3.0, CHANGELOG cut with an upgrade-notes block for migration 0009
+
+**What changed:** the `CONTRIBUTING.md` § Releasing "Before you tag" checklist run for **v0.3.0**,
+plus the version bump and the CHANGELOG cut, landing on `dev` before the promotion PR is opened. No
+application code, schema, API-contract, security-model, job-model, auth, or CI-behavior change.
+
+**1. Version bumped `0.2.0` → `0.3.0`, not `0.2.1`.** The release carries a new user-facing feature
+(OIDC account linking) **and** a schema migration, so it is a minor under SemVer, not a patch — a
+patch release should not move the database schema, and `0009_oidc_link_flows` is not reversible
+except by dropping the columns it added.
+
+Bumped in the three independent declarations the 2026-07-29 entry identified — `backend/app/__init__.py`
+(`__version__`, the only runtime-load-bearing copy), `backend/pyproject.toml`, and
+`frontend/package.json` plus `package-lock.json`'s two root fields (written by
+`npm version 0.3.0 --no-git-tag-version`, not by hand) — and in the five documentation/Compose
+references to the example image tag and the `/healthz` sample output (`docker/docker-compose.yml`,
+`docker/Dockerfile`'s build-command comment, `README.md` ×3). `backend/tests/test_version.py` passes
+on the result.
+
+**Two occurrences were bumped that the 2026-07-29 list does not name**, found by grepping the whole
+repo rather than working from that list:
+
+- `.github/dependabot.yml` ×2 — the docker-ecosystem `ignore:` block's comment quotes the Compose
+  pin verbatim (`pins \`image: scrye:0.2.0\``, and the rejected `ghcr.io/tyler-rich/scrye:0.2.0`
+  alternative). The `dependency-name: "scrye"` rule itself is version-independent, so nothing
+  behavioural moves; the comment would simply have stopped describing the file it cites.
+- `frontend/src/components/settings/AboutPanel.test.tsx` ×2 — the `BASE_ABOUT` fixture's `version`
+  and the version-stat assertion bound to it. Bumped on the precedent of the 0.1.0 → 0.2.0 bump
+  (#115), which moved the same fixture. Nothing forces it — `test_version.py` does not reach the
+  frontend fixture — but a mocked About response a release behind the app is the same trap the
+  drift guard exists to prevent.
+
+**Deliberately left at `0.2.0`,** matching the 2026-07-29 entry's reasoning: the `## [0.2.0]`
+CHANGELOG section and its compare links, the prior §14 entries and `CONTRIBUTING.md` §
+Releasing / `docs/ROADMAP.md` references to the *v0.2.0 promotion* (all release history — rewriting
+them falsifies the record), and `backend/tests/test_trivy_policy.py:19`'s
+`https://openvex.dev/ns/v0.2.0`, which is the OpenVEX spec's context version and has nothing to do
+with Scrye's.
+
+**2. `CHANGELOG.md` `[Unreleased]` cut to `[0.3.0] - 2026-08-03`,** with a fresh empty
+`[Unreleased]` above it and the reference-link block gaining
+`[0.3.0]: …/compare/v0.2.0...v0.3.0` with `[Unreleased]` re-pointed at `…/compare/v0.3.0...HEAD`.
+As in the v0.2.0 cut, doing this **before** the promotion means `main` receives an already-correct
+CHANGELOG rather than a commit landing on `main` after the fact.
+
+**3. A new `### Upgrade notes` block opens the `[0.3.0]` section.** This release is the first since
+v0.1.0 to change the schema, and nothing in the section said so — the OIDC-linking entry describes
+the feature, not its deployment consequence. Three bullets: that starting 0.3.0 applies
+`0009_oidc_link_flows` (two nullable columns on `oidc_login_flows`, no data rewritten, a transient
+table excluded from backups, nothing to run by hand); that **downgrading to 0.2.0 is not
+supported**, because the 0.2.0 image's migration history ends at `0008` and `alembic upgrade head`
+fails on an unknown revision rather than starting against a mismatched schema, so the recovery path
+is a backup bundle taken *before* the upgrade; and that no configuration or environment variable
+moved. Placed above `Added` rather than folded into a bullet, because it is the only part of the
+section a reader has to act on.
+
+**4. `[Unreleased]` re-verified claim by claim rather than trusted,** per the checklist's first
+item and the v0.2.0 cycle's false-CVE precedent. It held up; every externally-dependent claim was
+re-checked at its source this session:
+
+- **`react-router-dom` 7.18.2 "closes GHSA-qwww-vcr4-c8h2".** Verified in the published tarballs,
+  not from the advisory. `throwIfPotentialCSRFAttack()` is byte-identical across 7.18.1, 7.18.2 and
+  8.3.0 — the fix is entirely at the **call site** in `index-react-server.js`'s
+  `generateMiddlewareResponse`. 7.18.1 runs the check and `processServerAction()` inside one `try`;
+  7.18.2 isolates the check in its own `try`, records `potentialCSRFAttackError`, rewrites the
+  request to `method: "GET"`, and gates the action behind `if (!potentialCSRFAttackError)` — and
+  8.3.0's is the same code, differing only in the bundler's formatting and one local's name
+  (`result2` vs `result`). Upstream's own `CHANGELOG.md` at 7.18.2 lists exactly one patch change,
+  "Harden RSC CSRF codepaths (#15353)", confirming the entry's claim that the backport *is* the
+  whole 7.18.1 → 7.18.2 diff.
+- **The same entry's claim that `npm audit` will keep reporting it.** Still true: `npm audit`
+  against the current lockfile reports `react-router` HIGH with range `7.12.0 - 8.2.0` — 7.18.2 is
+  inside it — so the advisory has not been re-cut for the backport. The entry says so explicitly,
+  which is what keeps the next reader from "fixing" it with the `npm audit fix --force` downgrade.
+- **`postcss` 8.5.25.** The containment check the advisory names is present in the installed
+  `node_modules/postcss/lib/previous-map.js` (`relative(dirname(cssFile), path)` guarded on `'..'`,
+  `'..' + sep` and `isAbsolute`).
+- **Pins and workflow claims** at the file: `fastapi==0.140.13` (was `0.140.0` on `main`),
+  `react-router-dom@7.18.2`, `postcss@8.5.25`, `docker/login-action` at the v4.6.0 SHA in
+  `publish.yml`/`dev-nightly.yml`/`rescan.yml`, `node:24-bookworm-slim` in the Dockerfile with
+  `node-version: "24"` in `ci.yml`, CONTRIBUTING's "Node 22+" floor, and `codeql.yml`'s
+  `security-extended` suite / three languages / `push`+`pull_request` on `main` and `dev` / Monday
+  04:00 UTC cron / no `paths:` filters.
+- **The OIDC entries against the implementation:** the `Your linked identity` card title, the
+  `auth.oidc_identity_linked` / `_unlinked` / `_stale` audit actions, the quoted stale-link error
+  matching `LoginPage.tsx`'s `identity_stale` text, and the README's re-link runbook and
+  security-model widening.
+- **The uvicorn log-volume entry's dating.** "Present since 2026-07-04" matches
+  `git log -S "uvicorn.access"` on `backend/app/core/logging.py` (`f2806d6`), which precedes both
+  v0.1.0 (2026-07-09) and v0.2.0 (2026-07-31) as the entry states; the ~144k lines/day figure is
+  consistent with the 30s `HEALTHCHECK` interval in the Dockerfile and Compose file.
+- **The SEC-8 widening** was already described substantively; the entry was expanded to name the
+  concrete consequence (an MFA-enrolled admin's local TOTP challenge never runs on the linked path)
+  and to cite `L2 / SEC-8` with the §15 decoder link, matching the one existing finding-ID citation
+  in the file. It is the feature's main trade-off and should not need §14 to be legible.
+
+**Not added to the CHANGELOG, deliberately.** Four items in the `main..dev` range change nothing a
+user can observe and are recorded in §14 instead: the filesystem-scan symlink containment guard
+(#135/#140 — a test), the Starlette status-code constant retirement (#142), the
+`test_cancel_queued_scan` de-flake, and the docs/governance work. `brace-expansion` is **not** part
+of this release despite appearing in the release-prep brief — it was reapplied on `dev` before the
+v0.2.0 promotion and ships in `[0.2.0]`; `git diff origin/main..origin/dev -- frontend/package-lock.json`
+carries no `brace-expansion` change.
+
+**5. `THIRD_PARTY_LICENSES/` re-verified,** repeating rather than inheriting the 2026-07-31 check.
+The version table still matches `docker/Dockerfile`'s `TRIVY_VERSION=0.72.0` / `GRYPE_VERSION=0.115.0`
+/ `SYFT_VERSION=1.46.0` — none moved this cycle; the only Dockerfile change in the range is the Node
+builder — and all four bundled files were re-fetched from upstream at those tags and compared with
+`cmp`: `trivy/LICENSE`, `trivy/NOTICE`, `grype/LICENSE` and `syft/LICENSE` are byte-identical.
+Grype and Syft still 404 on `NOTICE`, as the directory's README says.
+
+**Why:** every item is one the "Before you tag" checklist exists to catch, and each is permanent or
+expensive to undo once the tag exists. The version bump in particular has to land before the
+promotion: nothing derives the app's version from the git tag, so tagging `v0.3.0` on an unbumped
+`main` would publish `ghcr.io/tyler-rich/scrye:0.3.0` running an app that reports `0.2.0` on the
+About tab, `/healthz`, the OpenAPI document, every backup bundle's `app_version`, and the
+`scrye_build_info` metric.
+
+**Plan section affected:** `CHANGELOG.md` (`[0.3.0]` cut, new `### Upgrade notes`, SEC-8 expansion);
+`CONTRIBUTING.md` § Releasing (pre-tag checklist run); §10.1 (README image-tag and `/healthz`
+examples). No locked decision changed.
+
+---
+
+### 2026-08-03 — Post-v1 — PR #142 verified green on the pinned Python 3.14.6 in CI; `test_undeterminable_presence_fails_startup`'s local-sandbox failure was 3.13-specific
+
+**What changed:** nothing in the repository — this entry records a verification, not a code change.
+PR #142's development-agent session had no Python 3.14.6 available locally (only 3.13.12 and a
+3.14.0rc2 that fails to even import FastAPI/Pydantic under this codebase's dependency versions), so
+its local test run was done under 3.13 with `requires-python` temporarily loosened in an uncommitted,
+reverted copy of `pyproject.toml`. That run passed except for one failure,
+`tests/test_master_key_autogeneration.py::TestExistingKeyIsNeverReplaced::test_undeterminable_presence_fails_startup`,
+confirmed to reproduce identically on an unmodified checkout under the same 3.13 sandbox — i.e.
+unrelated to the PR's own changes, but still unverified against the actual pinned runtime.
+
+**CI on the real pinned interpreter is what settles it.** The `Backend — lint + tests` job on PR
+#142's final commit (`74ce83d`) ran on `pythonLocation: /opt/hostedtoolcache/Python/3.14.6/x64` — the
+exact pinned floor — and the suite came back **730 passed, 9 skipped, 0 failed**, including the test
+above. So the failure is confirmed **sandbox-specific to Python 3.13's `pathlib`**, not a real defect:
+`test_undeterminable_presence_fails_startup` monkeypatches `crypto.os.stat` to raise
+`PermissionError` for one specific path, but because `os` is a shared module object, that patch is
+visible to *every* caller of `os.stat` in the process — including the test's own
+`assert not autogen.exists()`, which calls `pathlib`'s `Path.exists()` → `os.stat()` internally. On
+3.13's `pathlib` implementation that assertion routes through the patched `os.stat` and raises instead
+of returning `False`; on 3.14.6 it evidently does not (a `pathlib` internal-implementation difference
+between the two versions, not tracked further here). **Do not re-diagnose this test as broken from a
+future local run under Python 3.13** — check which interpreter is running first.
+
+**Recorded so it isn't re-diagnosed:** this is a note, not a fix and not a new tracked item — the test
+passed on the pinned interpreter, which is the bar this PR was held to. If a *future* local run under
+Python 3.13 (or any interpreter where `pathlib.Path.exists()` routes through `os.stat`) reproduces this
+failure, the cause is the sandbox's interpreter, not a regression in this test or in `crypto.py`.
+
+**Plan section affected:** none (verification-only). Documented here per CLAUDE.md's rule that a
+settings-adjacent or environment-specific finding with no code diff still needs a durable record so
+it isn't re-diagnosed from scratch later.
+
+---
+
+### 2026-08-03 — Post-v1 — `test_cancel_queued_scan` de-flaked: worker slot acquisition made observable, sleep removed
+
+**What changed:** `backend/tests/test_scans_api.py::test_cancel_queued_scan` no longer holds the
+worker's only concurrency slot with a fixed `await asyncio.sleep(0.2)`. The fake scanner now blocks
+on a `threading.Event` the test controls, and a second `threading.Event` fires the instant
+`scan_image` actually starts executing — which only happens after the worker's semaphore has been
+acquired, so it doubles as "the first scan now holds the only slot." The test waits on that signal
+before submitting the second scan, so the second scan is deterministically still `queued` at the
+moment it's canceled. Test-only change — no worker or production code touched.
+
+**Why:** the ROADMAP item this closes explained the failure mode precisely: the old test's
+correctness depended on the whole round-trip (submit first, submit second, cancel second) finishing
+inside the 0.2 s window before the first scan's fake sleep ended and released the semaphore to the
+second. Under a loaded CI runner that window could close before the cancel POST was processed, the
+second scan would have already left `queued`, and the endpoint correctly returned 409 — the test was
+wrong, not the code. Widening the sleep would only have lengthened the odds without removing the
+race; making the first scan's execution point observable removes the wall-clock dependency entirely.
+Run 20× locally with no failures, in ~0.35 s per run (down from a sleep-bound floor of 0.2 s per run
+plus the race).
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the de-flake item — struck).
+
+---
+
+### 2026-08-03 — Post-v1 — Deprecated Starlette status-code constants retired across 24 call sites
+
+**What changed:** `status.HTTP_422_UNPROCESSABLE_ENTITY` → `status.HTTP_422_UNPROCESSABLE_CONTENT`
+and `status.HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `status.HTTP_413_CONTENT_TOO_LARGE` across all 24
+call sites in the 8 files that used them (`scans.py` ×10, `scan_schedules.py` ×4, `registries.py`
+×3, `notifications.py` ×2, and one each in `trivy_policy.py`, `git_credentials.py`, `backups.py`,
+`uploads.py`).
+
+**Why:** both old constants raised a `StarletteDeprecationWarning` on every attribute access and
+have been standing warnings in the backend suite's output since at least the 2026-07-03 interpreter
+bump. Before renaming, both old/new pairs were checked against the pinned `starlette==1.3.1` to
+confirm the rename can't move a status code: `HTTP_422_UNPROCESSABLE_ENTITY` and
+`HTTP_422_UNPROCESSABLE_CONTENT` both resolve to `422`; `HTTP_413_REQUEST_ENTITY_TOO_LARGE` and
+`HTTP_413_CONTENT_TOO_LARGE` both resolve to `413`. Purely mechanical — no response behavior
+changed.
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the Starlette-constants item — struck).
+
+---
+
+### 2026-08-03 — Process/Governance — Dogfood self-scan added to required status checks, closing #136
+
+**What changed:** `protect-dev`'s `required_status_checks` now lists three contexts —
+`Backend — lint + tests`, `Frontend — lint + build`, and **`Image — build + dogfood self-scan`** —
+where it previously named only the first two. **"Require branches to be up to date before merging"**
+was also enabled on the same ruleset. No repository content changed; this entry is the record, for
+the same reason the rest of this checklist is recorded here rather than only in the ROADMAP — a
+settings change leaves no artifact in git.
+
+**Why:** [#136](https://github.com/tyler-rich/Scrye/issues/136) — the dogfood self-scan job
+(`ci.yml`'s `Image — build + dogfood self-scan`) ran and reported on every PR but was not on the
+allowlist `required_status_checks` actually enforces, so a PR could merge into `dev` with the image
+scan red. That job is not an ordinary CI check — it is the control `CLAUDE.md` § Dependency hygiene
+mandates (gating on fixable HIGH/CRITICAL findings in Scrye's own image) and the one that caught
+CVE-2026-5773 (§14, 2026-07-13) and verifies the SC-14 dev-tree exclusion. Requiring it converts
+"merge with a red gate" from a silent non-event into an explicit act, for anyone other than the
+repository-admin account on the bypass list.
+
+**Note, closing the loop from #136's own text:** the issue was closed directly on 2026-08-02 with no
+comment and no §14 entry — exactly the invisible-settings-change failure mode this checklist exists
+to catch. This entry supplies the missing verification: the live ruleset readout above confirms the
+required context really is in place, rather than trusting the closed state alone.
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the public-repo governance checklist —
+this closes the first of the two issue-tracked branch-protection gaps; struck from the checklist).
+Closes #136.
+
+---
+
+### 2026-08-03 — Process/Governance — protect-tags ruleset created, closing #137
+
+**What changed:** a new GitHub ruleset, **`protect-tags`**, was created (`target: "tag"`,
+pattern `v*` — matches any tag beginning with `v`, not only the dotted semver form). It restricts
+tag creation, update, and deletion to the bypass list, and blocks force pushes to matching tags.
+**Repository admin** is on the bypass list, consistent with how
+`protect-dev` and `protect-main` are configured (§14, 2026-08-02 — the admin bypass on those
+rulesets is what let `dev` be deleted during the v0.2.0 promotion despite "Restrict deletions").
+No repository content changed; this entry is the record, for the same reason the rest of the
+public-repo governance checklist is recorded here rather than only in the ROADMAP — a settings
+change leaves no artifact in git.
+
+**Why:** [#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricted tag pushes,
+and a `v*.*.*` tag push is exactly what triggers `publish.yml` (GHCR push, the `:latest` move, and
+provenance + SBOM attestation, per locked decision §6). Before this ruleset, anyone with write
+access could push or force-move a `v*.*.*` tag and trigger a publish outside the normal `dev` →
+`main` → tag flow. Theoretical on a sole-maintainer repo, but the fix belongs in place *before* any
+collaborator is added, not after.
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the public-repo governance checklist —
+this closes the second of the two remaining tracked settings gaps; struck from the checklist).
+Closes #137.
+
+---
+
+### 2026-08-03 — Process/Governance — Signed-commit enforcement declined, not deferred
+
+**What changed:** the "require signed commits" item under the public-repo governance checklist is
+**struck from `docs/ROADMAP.md`** as a declined decision, not left open as pending work. Neither
+`protect-dev` nor `protect-main` carries a `required_signatures` rule, and none will be added under
+the current commit workflow.
+
+**Why:** every commit in this repository is authored by a Claude Code session committing locally
+via `git` and pushing over the repository's normal push path — there is no signing key present in
+those environments (that absence is exactly why every commit here shows GitHub's "Unverified"
+badge today). Turning on "Require signed commits" on either protected-branch ruleset would reject
+every one of those pushes outright, breaking the development workflow entirely rather than adding
+friction to it.
+
+The two workarounds available are both worse than the problem they'd solve:
+- **Provisioning a GPG or SSH signing key into a sandboxed session** is precisely the kind of
+  environment a signing key should not be placed into — it turns the key into something that
+  exists in an ephemeral, non-interactive container rather than under a maintainer's direct
+  control, which undermines the point of requiring a signature in the first place.
+- **Switching sessions to create commits via the GitHub API** (which GitHub auto-signs on behalf
+  of the authenticated actor) would work, but it is a significant change to how these sessions
+  operate — moving off local `git commit`/`git push` entirely — for a benefit that is modest on a
+  repository with a single maintainer and no other committers to authenticate against.
+
+**Revisit trigger:** this decision is not permanent. Revisit it if either condition changes — a
+collaborator with write access is added (at which point signed commits start doing real work,
+distinguishing a maintainer's commits from a contributor's), or the commit workflow stops going
+through local `git` (e.g. a move to API-authored commits for some other reason removes the cost
+side of this trade-off).
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the public-repo governance checklist —
+this closes the last of its three previously-open items; struck from the checklist as declined,
+not done).
+
+---
+
+### 2026-08-02 — Security/Process — CodeQL migrated from default setup to a committed workflow; the two settings edits that finish it
+
+**What changed:** `.github/workflows/codeql.yml` (new — the repository's fifth workflow). CodeQL moves
+from GitHub's **default setup** (configured in repository settings, no artifact in git) to **advanced
+setup**: a workflow this repository owns, pins and reviews. This implements the recommendation the
+assessment entry below reached and deliberately left to the maintainer. No application code changed,
+and **nothing about the analysis changed** — same query suite, same three languages, same CodeQL
+bundle, same action version. The only thing that moves is *when* CodeQL runs.
+
+**Why: the trigger, not the queries.** Default setup's pull-request trigger targets the repository's
+**default branch**. `main` is the default branch here and PRs go to `dev`
+(CLAUDE.md § Git & PR conventions), so CodeQL never ran on a pull request at all — it ran on `main`
+on push, *after* a promotion had already landed. At that point the change is merged and the remedy
+for a finding is a revert, not a review comment. With several PRs regularly in flight, a finding that
+surfaces on `main` is attributable to a **batch** rather than to the PR that introduced it. The
+secondary gap is `:dev`: `dev-nightly.yml` builds and pushes that image from a branch CodeQL never
+analysed. (`:latest` was **not** a gap — it is published by a tag push, not by the promotion merge;
+the assessment entry below corrects that framing.)
+
+#### The workflow's shape, element by element
+
+| Element | Value | Why this and not something else |
+| --- | --- | --- |
+| Query suite | `queries: security-extended` | Reproduces **exactly** what default setup ran. `security-extended` is a member of `defaultSuites` in codeql-action's `src/analyze.ts` and resolves through `resolveQuerySuiteAlias()` to `<language>-security-extended.qls`. Omit it and the analysis silently falls back to the smaller `code-scanning` suite — 45 Python queries instead of 52. §14's triage entry below records a reproduction that made exactly that mistake and under-reported by one alert. |
+| Languages | explicit 3-entry matrix: `python`, `javascript-typescript`, `actions`, each `build-mode: none` | Advanced setup **loses** default setup's automatic language detection, which is what added `actions` in the first place. The matrix is now the whole list, and it carries an inline comment tying it to **locked decision §2** so the stack pinning is visible at the point a language would be added. `build-mode: none` on all three: nothing here is a compiled language. |
+| Action pins | `github/codeql-action/init` and `.../analyze` at `ea14db8afdef5d462e69d78c4ca45002d4522418` (`# v4.37.4`) | Repo convention (H9/SC-2): SHA-pinned with the tag as a trailing comment. v4.37.4 is the same action version default setup was running. **Pinning the action does not pin the queries** — `init`'s `tools:` input defaults to the recommended CodeQL bundle, so the CLI and query packs keep updating on GitHub's schedule. Dependabot's existing grouped weekly `github-actions` PR carries the SHAs forward. |
+| Permissions | `security-events: write`, `contents: read`, `actions: read` | Least privilege, declared at both the workflow and the job level so the grant is visible where it is used. `security-events: write` is the SARIF upload; `actions: read` is what codeql-action needs to read run metadata on `pull_request`. |
+| Triggers | `pull_request` **and** `push`, each filtered to `[main, dev]`, plus a weekly `schedule` | The whole point of the migration. `pull_request` is the per-PR gate on the branch that actually receives PRs; `push` keeps the post-merge analysis on both branches, which is what closes the `:dev` hole. The cron carries over default setup's weekly scan — see below for its scope, which is narrower than it looks. |
+| Path filters | **none, deliberately** | These contexts are destined for `protect-dev`'s required list. A job skipped by an `if:` still reports a `skipped` conclusion and satisfies a required check — that is why `Image — multi-arch build check` showing `skipped` on `dev` PRs is harmless. A **workflow that never triggers reports nothing at all**, so a `paths:` filter would make a docs-only PR hang forever on a check that was never scheduled. The suite runs in ~60 s and Actions minutes are free on a public repo; there is nothing here worth saving. |
+| `concurrency` | `codeql-${{ github.workflow }}-${{ github.ref }}`, `cancel-in-progress: true` | Mirrors `ci.yml`. Superseded runs on the same ref are cancelled. |
+| `fail-fast` | `false` | One language failing must not cancel the other two. A partial result is still worth having, and the failure names its own language. |
+
+**Default setup's weekly scan is carried over, not dropped — `schedule: - cron: "0 4 * * 1"`.**
+The migration spec named `pull_request` + `push` for `dev` and `main`, and the workflow was first
+built to exactly that, with the missing cron flagged rather than silently added; the maintainer then
+asked for it in the same PR. It matters for a reason the push/PR triggers cannot cover: query packs
+keep updating independently of the pinned action (see the pin row above), so **a newly published
+query never runs against unchanged code** unless something schedules it — it would otherwise wait for
+the next commit touching that language, which for a quiet subsystem can be a long time. Note this is
+*not* the schedule-instead-of-per-PR arrangement the assessment below rejected; it is a supplement to
+per-PR feedback, not a replacement.
+
+**Its scope is narrower than it reads, and the difference is worth knowing before relying on it.**
+`on: schedule` **always runs against the default branch**. The `branches: [main, dev]` filters apply
+to `push` and `pull_request` only and do not constrain a cron, so this weekly run analyses **`main`,
+never `dev`** — and, like the Settings row discussed below, **it does not fire at all until
+`codeql.yml` has reached `main` via a `dev` → `main` promotion.** Merging into `dev` does not start
+it. That is an acceptable shape rather than a gap: `dev` is covered continuously and at much higher
+frequency by the push/PR triggers, and the cron's purpose is catching *new queries* against a stable
+tree, which is precisely what `main` is. But do not read the cron as a safety net over `dev`.
+
+04:00 UTC Monday is the same off-hours slot `dev-nightly.yml` uses. They share no runner, no GHA
+cache scope and no registry, so the Monday overlap costs nothing.
+
+#### Settings edit 1 — the exact required-status-check context strings
+
+Required status checks are an **explicit allowlist of context strings**, and a string that matches no
+reporting check is a context that never reports — which blocks every PR indefinitely. These are the
+three, **verified against the check runs GitHub actually created** for run
+[30739872403](https://github.com/tyler-rich/Scrye/actions/runs/30739872403) rather than derived from
+the YAML:
+
+```
+CodeQL — python
+CodeQL — javascript-typescript
+CodeQL — actions
+```
+
+The separator is **U+2014 EM DASH with one ordinary space on each side** — the same character
+`ci.yml`'s `Backend — lint + tests` and `Image — build + dogfood self-scan` use. Copy these strings
+rather than retyping them; an en dash or a hyphen produces a context that never reports.
+
+They come from the matrix job's `name: CodeQL — ${{ matrix.language }}`. **Renaming that job, or
+changing a matrix `language:` value, renames the contexts and silently breaks the ruleset** — the
+workflow keeps passing while the required check hangs. The workflow carries a comment saying so at
+the job name.
+
+**Add them to `protect-main` as well as `protect-dev`.** Both are safe and both are useful:
+
+- **`protect-dev`** is the point of the exercise — it is where PRs land, and per §14 below its
+  `required_status_checks` currently names only `Backend — lint + tests` and
+  `Frontend — lint + build`. Until these three are on that list CodeQL runs, is visible, and goes red
+  **without blocking a merge**.
+- **`protect-main`** gets them for a different reason: the only PR that ever targets `main` is a
+  `dev` → `main` promotion, i.e. the last reviewable moment before a release tag triggers
+  `publish.yml`. The workflow triggers on `pull_request` with base `main` and on `push` to `main`
+  with no job-level `if:`, so all three contexts always report there — unlike
+  `Image — multi-arch build check`, which is `if:`-conditioned and is the reason #136 recommends
+  requiring that one on `protect-main` only.
+
+This differs from the `Image — build + dogfood self-scan` gap tracked as
+[#136](https://github.com/tyler-rich/Scrye/issues/136) only in which strings get added; the hazard
+and the reasoning are identical, and both edits can be made in one pass.
+
+#### Settings edit 2 — when to disable default setup (and why there cannot be an overlap)
+
+**The two setups are mutually exclusive. This is enforced server-side, and it was verified twice
+rather than assumed.** In codeql-action's `src/upload-lib.ts`, `shouldConsiderConfigurationError()`
+lists the API's rejection message verbatim:
+
+```
+CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled
+```
+
+and this repository then reproduced it live. The three CodeQL jobs on PR #141 ran the full analysis,
+exported SARIF, and **uploaded successfully** — and the upload was then rejected at processing:
+
+```
+Uploading results
+Successfully uploaded results
+Waiting for processing to finish
+Analysis upload status is failed.
+##[error]Code Scanning could not process the submitted SARIF file:
+CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled
+...
+CodeQL job status was configuration error.
+```
+
+So the answer to *"before or after merging?"* is neither of the naive options, and the stated goal —
+"a gap of zero rather than a window with no scanning" — **is not achievable as literally stated**:
+GitHub will not let both configurations produce results at the same time, so there is no overlap to
+arrange. What *is* achievable is a gap measured in minutes, with the new workflow proven working
+before the old one is switched off. The order below does that:
+
+1. **Leave default setup enabled while the PR is open.** It keeps analysing `main` on push and on its
+   weekly cron exactly as before. The PR's three CodeQL contexts will be **red**, with the
+   configuration error above — expected, and *not* a defect in the workflow: everything up to and
+   including the upload succeeds.
+2. **Disable default setup** — Settings → Code security → Code scanning → CodeQL analysis → **⋯** →
+   *Switch to advanced* (or *Disable CodeQL*). **Alert history is preserved** across the conversion;
+   the six triaged alerts do not disappear.
+3. **Re-run the failed CodeQL jobs on the PR** (Actions → the failed run → *Re-run failed jobs*).
+   With default setup off, the upload processes and the three contexts go green. **This is the
+   confirmation step** — it proves the committed workflow produces results *before* anything is
+   merged and before any ruleset depends on it. If it does not go green, re-enabling default setup
+   restores the previous state immediately.
+4. **Merge the PR into `dev`** (squash, per the ruleset's `allowed_merge_methods`). Note
+   `protect-dev` now also has **"Require branches to be up to date before merging"**
+   (`strict_required_status_checks_policy`), so if `dev` has moved the branch must be updated first —
+   which fires a `synchronize` and re-runs everything, including CodeQL, against the merged state.
+   That is a feature here, not friction: the green run that gates the merge is a run against the
+   code that will actually land.
+5. **Only then add the three contexts to `protect-dev` and `protect-main`.** Doing this *before*
+   step 4 would hang every other open PR: a PR whose branch predates the workflow has no CodeQL run
+   to report, and a required context with nothing reporting blocks the merge. After step 4 the strict
+   up-to-date rule forces every open PR to re-sync onto a `dev` that carries the workflow, so each
+   one picks the checks up on its next run.
+
+**The actual scanning gap** is therefore step 2 → step 3: roughly the ~60 s the re-run takes, plus
+however long passes between the two clicks. Nothing is lost in that window — default setup only ran
+on pushes to `main` and a weekly cron, and no push to `main` is involved in any of these steps.
+
+**Do not skip step 3 and disable default setup after merging instead.** That order works, but it
+inverts what the maintainer asked for: the workflow would be merged, and the ruleset possibly
+edited, on the strength of a run that had never been allowed to complete.
+
+**Two things the *Switch to advanced* flow does that are easy to misread. Both were hit live.**
+
+- **It opens a workflow-file editor pre-filled with GitHub's generic template. Do not commit it.**
+  Disabling default setup is the *first* half of that flow; the editor is the second, and it is
+  redundant here because this repository supplies its own `codeql.yml`. Committing the template
+  would (a) land a workflow directly on `main`, which per the branching model receives only
+  promotions, (b) collide at the identical path with the migration PR, and (c) name its job
+  `Analyze (${{ matrix.language }})` — producing contexts `Analyze (python)` &c., **not** the
+  `CodeQL — <language>` strings the rulesets are being pointed at. It also carries a `schedule`
+  cron, unpinned `@v4` action refs and `packages: read`. The correct action on that page is
+  **Cancel changes**; the disable has already taken effect by the time it is shown, which was
+  confirmed by re-running the PR's CodeQL jobs immediately afterwards — they went green with no
+  file committed.
+- **Settings will then report CodeQL as "not configured" / off, and that is not a failure.**
+  The Settings → Code security row determines the CodeQL status from a workflow present on the
+  **default branch** (`main`). With default setup off and `codeql.yml` living only on a feature
+  branch — or, after the merge, only on `dev` — the row has nothing to point at and reads as
+  though scanning were disabled. It is not: advanced setup is not an enablement flag anywhere, just
+  a workflow holding `security-events: write` that uploads SARIF, and the uploads demonstrably
+  process. **Expect the row to keep reading "not configured" until a `dev` → `main` promotion
+  carries the workflow to the default branch.** Judge the migration by whether the analysis jobs
+  go green and their results appear under the PR/branch in Security → Code scanning, never by that
+  row.
+
+**The sequence above was executed, not just proposed.** Attempts 1 and 2 of the PR's CodeQL run
+(08:29 and 08:44 UTC) failed identically with the configuration error while default setup was still
+enabled. Default setup was then disabled via *Switch to advanced*, the template editor cancelled
+without committing, and attempt 3 (09:21 UTC) re-ran the same three jobs unchanged: **all green** —
+`CodeQL — python` 51 s, `CodeQL — javascript-typescript` 60 s, `CodeQL — actions` 41 s. That is the
+step-3 confirmation: the committed workflow uploads *and processes* results, proven on the PR before
+the merge and before any ruleset edit.
+
+#### What this PR's CodeQL run actually found
+
+The analysis ran to completion on all three languages before the rejected upload, so the run itself
+is evidence about the workflow; it is not evidence about the *findings*, because rejected SARIF never
+reaches the Security tab and the alert list could not be read from the API at this session's token
+scope (`metadata=read` — `GET /code-scanning/alerts` returns 403, the same limitation the triage
+entry below hit). The findings were therefore obtained the same way that entry obtained them:
+**reproduced locally at the PR's head commit** (`1b4dcd9`) with `codeql-bundle-v2.26.2` — the exact
+CLI version the runner used, per the runner's `/opt/hostedtoolcache/CodeQL/2.26.2/` tool path — and
+the `*-security-extended.qls` suites, matching the workflow's `queries:` input rather than assuming
+the default suite.
+
+**Result: parity with the six alerts already triaged — nothing new surfaced.** 6 findings, all
+Python; **0** JavaScript/TypeScript; **0** Actions. Same rules, same files, same
+`security-severity` values as the triage table below:
+
+| Rule | Location | `security-severity` |
+|------|----------|---------------------|
+| `py/path-injection` | `backend/app/scanners/targets.py:138` | 7.5 |
+| `py/path-injection` | `backend/app/scanners/targets.py:144` | 7.5 |
+| `py/incomplete-url-substring-sanitization` | `backend/tests/test_credentials.py:320` | 7.8 |
+| `py/incomplete-url-substring-sanitization` | `backend/tests/test_dockerfile_supply_chain.py:71` | 7.8 |
+| `py/incomplete-url-substring-sanitization` | `backend/tests/test_redaction.py:222` | 7.8 |
+| `py/log-injection` | `backend/app/api/scans.py:574` | 6.1 |
+
+**One line number moved, and it is not a new finding.** The triage below recorded the third
+`py/incomplete-url-substring-sanitization` at `test_redaction.py:120`; it is now `:222`. That file's
+most recent change is `2e1e3ac` (#139, the log-redaction fix), which rewrote it — the flagged
+assertion is the same one at a new line. Every other rule/file/line pair is unchanged. **Parity was
+checked rather than assumed**, which is the point of saying so: the whole reason to reproduce is that
+a migration could quietly change the query set, and "it looks the same" is not a check.
+
+**Suite parity was verified at the source, not inferred from the workflow input.** Resolving the
+suites with the same CLI gives `python-security-extended.qls` → **52** queries vs
+`python-code-scanning.qls` → **45**; `javascript` → **105** vs **89**; `actions` → **24** vs **18** —
+matching the counts the triage entry recorded for the default-setup run exactly. So
+`queries: security-extended` in the committed workflow is running the same query set default setup
+was.
+
+**The workflow analyses itself, and comes back clean.** The `actions` database extracted six files —
+the five workflows plus the composite `build-image` action — including the newly added `codeql.yml`,
+and the Actions security queries (untrusted checkout, script injection, artifact poisoning) returned
+nothing on any of them.
+
+#### Verification performed
+
+- Workflow YAML parses; the three check runs GitHub created are named exactly as the strings above
+  (read back from the run's jobs API, not from the YAML).
+- The rest of CI is unaffected — `Backend — lint + tests`, `Frontend — lint + build` and
+  `Image — build + dogfood self-scan` all green on the PR; `Image — multi-arch build check` reports
+  `skipped`, as it does on every `dev` PR.
+- The default-setup/advanced-setup mutual exclusion confirmed both in `codeql-action`'s source and in
+  the live job log (quoted above), rather than from documentation.
+- `codeql-action` v4.37.4's commit SHA taken from `git ls-remote --tags` against the upstream
+  repository, not from a docs snippet.
+
+**Plan section affected:** §14 (this record); `docs/ROADMAP.md` § Near-term (the CodeQL item — the
+migration sub-item struck, the remaining work restated); `CHANGELOG.md` § Unreleased → Changed. No
+application code, schema, or locked-decision change. `.github/workflows/codeql.yml` is new; no
+existing workflow was touched.
+
+---
+
+### 2026-08-02 — Security/Process — Symlink-containment regression guard for filesystem scans (#135); Syft is the probe, and it runs against the binaries the image ships
+
+**What changed:** `backend/tests/test_scanner_symlink_containment.py` (new, 7 tests) plus four steps
+in CI's `image` job that run it. No application code changed — this is the regression test the
+2026-08-02 verification entry above proposed and deliberately did not write.
+
+**Why it exists.** Containment of a symlink planted *inside* an allowed filesystem scan root is not
+enforced by Scrye at all. `resolve_filesystem_path()` validates the target argument and is never
+re-applied during the walk, so the guarantee is inherited from Syft's directory resolver — and it
+hangs on `basePath()` defaulting `base` to the scan location, a line upstream itself annotates
+`// FIXME why is the base always being set instead of left as empty string?`. Action that FIXME and
+the re-rooting branch in `addSymlinkToIndex` is skipped, `indexAllRoots` starts adding out-of-root
+link targets as additional roots, and the escape is real — silently, on a routine scanner bump, with
+nothing in this repository that would notice. The full evidence chain is in the entry above.
+
+---
+
+#### Deviation 1 — Syft is the probe binary, not Grype
+
+**#135 says "run the scan the way Scrye runs it (`dir:`)"**, which reads as "invoke `grype dir:`".
+The test invokes `syft dir:` instead. Grype is unusable as the *instrument* here: its JSON carries
+only vulnerability **matches**, never a package catalogue, so "was the out-of-root package
+catalogued?" could only be observed through it by planting packages that carry live CVEs — making
+the assertion depend on a vulnerability database that changes daily, in a test whose entire job is to
+fail only when scanner *behaviour* changes. Syft's JSON lists the catalogue directly, needs no
+database, and runs offline in ~1 s.
+
+The substitution is sound because Grype's `dir:` source **is** Syft's directory source — the same
+argument the verification entry above already rests on. It is pinned rather than assumed, by two
+tests that need no fixture:
+
+- `test_grype_embeds_the_pinned_syft` — `grype version -o json` reports `syftVersion`, and it must
+  equal the `SYFT_VERSION` the Dockerfile pins (measured: grype 0.115.0 → `v1.46.0`). If a bump ever
+  breaks that identity, the guard would be exercising code Scrye does not run, and this fails first.
+- `test_scrye_scans_filesystems_through_the_directory_source` — `GrypeScanner.scan_filesystem()`
+  must still emit `dir:<path>`, so the premise that a filesystem scan is a Syft directory source at
+  all stays pinned. (No binary needed; this one runs in the ordinary backend suite.)
+
+`test_syft_binary_is_the_version_the_image_pins` closes the loop from the other side, so a stale
+local binary fails instead of passing quietly.
+
+#### Deviation 2 — a sensitivity control beyond the positive control #135 requires
+
+#135 requires a positive control asserted in the same run, because the 2026-08-02 verification hit a
+false negative caused purely by a filename the JS cataloger does not glob. That control is present
+(`left-pad 1.3.0` in-root must be catalogued), and a second one asserts the out-of-root manifest is
+catalogued when scanned directly — so its absence is containment, not a cataloger blind spot.
+
+A third was added: `test_probe_detects_an_escape_when_re_rooting_is_widened` passes
+`--base-path <parent-of-root>`, moving the re-rooting anchor above the scan root. That is the closest
+reachable analogue of the FIXME being actioned, and it flips the result — `lodash 4.17.15` is then
+catalogued at `/outside/package-lock.json`. Measured, not assumed. Without it, "the out-of-root
+package is absent" is an absence with no demonstration that the probe could ever have seen it.
+
+**Hardlinks are asserted on nowhere**, per #135: they *are* followed, that is correct behaviour, and
+a test that asserted against it would fail on a scanner doing the right thing.
+
+#### Deviation 3 — the guard runs in CI's `image` job, not the backend `pytest` job
+
+The tests need real binaries; the backend job has none, and downloading a second copy there would
+mean either a same-origin checksum (weaker than the cosign-verified path `docker/Dockerfile` uses) or
+reproducing cosign verification in YAML, plus duplicating the pinned versions. The `image` job
+already holds the built image, so it extracts `/usr/local/bin/{syft,grype}` from it with
+`docker create` + `docker cp` and runs the test against **the binaries the product actually ships** —
+cosign- and checksum-verified at build time, and guaranteed to match the Dockerfile's ARGs. Cost is
+one `setup-python` + `pip install -e ".[dev]"` in that job (~40 s, pip cache shared with the backend
+job); the scan itself is ~1 s over a two-file fixture.
+
+**Skips are made loud rather than tolerated.** A plain `pytest` run skips these tests with a reason;
+setting `SCRYE_TEST_REQUIRE_SCANNER_BINARIES` turns a missing binary into a failure, and CI sets it.
+So the guard cannot degrade into a permanent silent skip — the failure mode that makes
+binary-gated tests worthless.
+
+**Open item for the repository owner, not a code change.** `protect-dev`'s
+`required_status_checks` lists exactly two contexts — `Backend — lint + tests` and
+`Frontend — lint + build` (see the ruleset table in the CodeQL entry above). `Image — build +
+dogfood self-scan` is **not** among them, so this guard runs and reports red on every PR but does not
+*block* a merge. Adding that third context to the ruleset would close the gap; it is a GitHub
+Settings change and is recorded here rather than done silently.
+
+#### Verification performed
+
+Against the pinned binaries (`syft` 1.46.0, `grype` 0.115.0), downloaded and `sha256sum -c`-verified
+against each release's own `checksums.txt`: all 7 tests pass; the full backend suite is
+**734 passed, 5 skipped**; `ruff` and `black --check` clean. Confirmed by hand that a bare `pytest`
+skips 6 of the 7 with a reason and that `SCRYE_TEST_REQUIRE_SCANNER_BINARIES=1` with no binaries
+present turns those into hard errors.
+
+Closes #135 (closed by hand — a `Closes` keyword in a PR body targeting `dev` never fires).
+
+---
+
+### 2026-08-02 — Post-v1 — Log redaction moved from the `LogRecord` to the formatted line; uvicorn's access logger stops raising on every request
+
+**What changed:** `SecretRedactionFilter` (a `logging.Filter` that rewrote each record in place) is
+replaced by `RedactingFormatter` (a delegating `logging.Formatter` that masks a handler's rendered
+output) plus `install_redaction(handler)`, which wraps a handler's existing formatter idempotently.
+`configure_logging()` now wraps the formatters of every handler on the root logger and on
+`uvicorn`/`uvicorn.access`/`uvicorn.error` instead of attaching a filter to them. Redaction coverage
+is unchanged in intent and slightly wider in fact; no pattern in `redact()` was touched.
+
+**The bug.** Every uvicorn access log line raised
+`TypeError: cannot unpack non-iterable NoneType object` inside
+`uvicorn/logging.py::AccessFormatter.formatMessage` and printed a ~50-line `--- Logging error ---`
+traceback in place of the line. The app was unaffected — `GET /healthz` returned 200 throughout,
+because `logging` routes a formatting failure to `Handler.handleError()` and carries on — so the
+only symptom was log volume. With the container healthcheck at 30s that is ~2,880 failures/day from
+the healthcheck alone and roughly **144,000 lines/day** into Docker's json-file driver. On a host
+with no rotation configured that is a disk-filling defect, not a cosmetic one.
+
+**Cause, verified at the source rather than inferred.** Reproduced against real uvicorn 0.51.0 on
+CPython 3.14.6 by replaying the actual startup order (`dictConfig(uvicorn.config.LOGGING_CONFIG)`,
+then `configure_logging()`) and emitting the exact record uvicorn's access middleware emits; the
+traceback matched the reported one line for line. Two independent facts collide:
+
+1. `AccessFormatter.formatMessage()` does not use `record.getMessage()` at all. It unpacks
+   `record.args` into `(client_addr, method, full_path, http_version, status_code)` and rebuilds
+   `%(client_addr)s`/`%(request_line)s`/`%(status_code)s` from the pieces. The five-tuple **is** the
+   record's payload.
+2. `SecretRedactionFilter.filter()` normalized every record it saw to a pre-rendered string:
+   `if redacted != message or record.args: record.msg = redacted; record.args = None`. Note the
+   `or record.args` — the collapse fired on **every** record carrying args, redaction or not, so a
+   plain `GET /healthz` line was destroyed just as surely as one containing a token.
+
+That normalization is not gratuitous. A secret routinely straddles the msg/args boundary —
+`log.info("password=%s", pw)` has neither `"password=%s"` nor `"hunter2"` matching `_KV_PATTERN` on
+its own — so `redact()` can only work after `%`-interpolation, and putting the result back into a
+record means collapsing `msg`/`args` and clearing `args`. **Record-level redaction and a formatter
+that reads `record.args` cannot both be satisfied.** So the fix is the one the alternative implies:
+redact the formatted output, not the record. Exempting the access logger was explicitly rejected —
+access lines carry query strings that can hold an `api_token`/`access_token`, which is why
+`uvicorn.access` was brought under redaction in the first place.
+
+Redacting output is also strictly *more* complete than the record-level pass was: the access line's
+`client_addr`/`request_line` fields are rebuilt from `args` and never appear in `getMessage()`, so
+the old filter could not have masked a secret sitting in them even when it did not crash. Exception
+tracebacks and `stack_info`, previously handled by pre-formatting `exc_text` inside the filter, now
+fall out for free — they are part of what the inner formatter returns.
+
+**Ordering requirement (why wrapping handlers is sufficient).** `uvicorn.Config.__init__` applies
+`LOGGING_CONFIG` via `dictConfig` before `Config.load()` imports `app.main` and reaches
+`create_app()` → `configure_logging()`, so uvicorn's handlers already exist when we wrap them. The
+wrapping is idempotent (`isinstance(handler.formatter, RedactingFormatter)`) and re-applied on every
+`configure_logging()` call rather than being gated behind the one-shot `_CONFIGURED` flag, which now
+guards only the `basicConfig` half.
+
+**The truncation this first shipped with, and why it is now fixed rather than accepted.** The
+initial fix left a secret-bearing access line reading
+`127.0.0.1:54076 - "GET /api/scans?api_token=[REDACTED]` — the tempered-greedy unquoted-value branch
+consumed to end of line, taking the HTTP version and the status code with it, and that was written
+up as the same trade-off M3/SEC-4 recorded. **That framing was wrong**, and the maintainer
+rejected it before merge. Masking the token is the requirement; eating the rest of the line is
+collateral from the pattern being greedy to EOL, not a security necessity — and an access log
+without status codes cannot show a spike in 500s or someone probing for 401s, which is most of why
+it is kept. Both properties are achievable at once.
+
+**What makes them compatible: free text has no delimiter grammar, a query string does.** Redaction
+now runs a bounded query-string pass *before* the general key/value pass, as a pair of patterns:
+
+- `_URL_WITH_QUERY_PATTERN` — `(?:https?://|/)[^\s"<>?#]*\?[^\s"<>]*` — first identifies a token
+  that genuinely is a URL or an absolute path carrying a query.
+- `_QUERY_PARAM_PATTERN` — `[?&][\w.-]*(?:<secret names>)=[^&#\s"<>]*` — then masks the secret
+  parameters *inside* that token.
+
+The terminator set is structural, not heuristic. `&` separates parameters and `#` ends the query
+component outright (RFC 3986 §3.4); whitespace, `"`, `<` and `>` cannot appear in a URI unencoded at
+all, `"` being the one that matters in practice since uvicorn wraps the request line in double
+quotes. `'` is deliberately **not** a terminator: it is a legal sub-delim, so treating it as one
+could leave a byte of a secret behind — over-consuming a closing quote is the safe direction. And
+`+ / = . - ~`, the characters base64url and JWT-shaped tokens are made of, are not terminators
+either, so such a value is consumed whole.
+
+**The anchoring is the load-bearing part, and it is what keeps SEC-4 closed.** Applying the
+parameter rule to a whole line would treat any `?key=`/`&key=` appearing in prose as a query
+parameter and stop the value at the first space — re-opening exactly the hole SEC-4 fixed (a spaced,
+unquoted secret leaking its tail). The distinction that resolves it: **inside a URL a raw space is
+impossible, so stopping there is correct parsing rather than truncation** — a value that really
+contained a space arrives percent-encoded and is consumed whole. Outside a URL no such guarantee
+exists, so the tempered-greedy rule still applies there and still runs to end of line. So
+`?password=my secret phrase` in prose is redacted whole, while the same text inside a real request
+path is not, because in a URL it cannot occur. Restricting the bounded rule to genuine URLs is what
+lets both hold; **neither case has to lose.**
+
+One consequence worth stating: an unencoded `&` inside a query value splits the redaction
+(`?password=a&b` → `?password=[REDACTED]&b`). That is not a leak of anything the value owned — an
+unencoded `&` *is* a parameter separator, so the receiving server splits at the same place. The
+redaction agrees with the grammar rather than second-guessing it.
+
+`_KV_PATTERN`'s unquoted branch gained one guard, `(?!\[REDACTED\])`, so the general pass cannot
+re-consume — and thereby re-truncate — a value the query pass already masked. That also makes
+`redact()` idempotent, which is pinned by a test.
+
+**Verified against the case SEC-4 was written for.** `password=p@ss w0rd here`,
+`api_key=abc,def`, `smtp_password: my mail pass 123` and `form dump was ?password=my secret phrase`
+are all still redacted whole; `api_key=AKIA123 region=us` still bounds at the following structured
+field. Those tests were untouched and pass unchanged.
+
+**When it was introduced — it predates M3/SEC-4 and is not that entry's fault.** Two ingredients,
+neither harmful alone:
+
+| | Commit | Date | What it added |
+|---|---|---|---|
+| Latent | `3def52a` `feat(crypto): AES-256-GCM envelope encryption and log redaction` | 2026-07-03 | `record.msg = redacted; record.args = None` — harmless while the filter only sat on root handlers, since nothing reaching root reads `args` |
+| Trigger | `f2806d6` `fix(security): remediate full-repo security audit findings` | 2026-07-04 | `_INDEPENDENT_LOGGERS` — attached the filter to `uvicorn`/`uvicorn.access`/`uvicorn.error` (the "Secrets/logging (§6)" bullet of the 2026-07-04 audit-remediation entry) |
+
+The bug went live with the **second**, on 2026-07-04. **M3/SEC-4** (`8e100ee`, 2026-07-13, #64) only
+rewrote the unquoted-value branch of `_KV_PATTERN`; it never touched `filter()` or the logger
+wiring, and reverting it would not have fixed anything. It is a plausible suspect only because it is
+the most recent change to this file. Everything from the 2026-07-04 remediation onward — v0.1.0 and
+v0.2.0 both — shipped with it.
+
+**Why CI never surfaced it, and why the Definition-of-done smoke check didn't either.** Three
+compounding reasons, none of them an oversight in any single check:
+
+- **Nothing in CI starts a uvicorn server.** `ci.yml` runs `ruff`/`black`/`pytest`, the frontend
+  lint/Vitest/build, and an image build + Trivy/Grype self-scan. There is no run step, no
+  `docker compose up`, no request against a live server.
+- **The test suite cannot reach the code path.** `pytest` drives the app through FastAPI's
+  `TestClient` (ASGI in-process). uvicorn's access middleware never runs, so no record with a
+  five-tuple `args` is ever emitted, and `test_redaction.py` only exercised the filter against
+  records it constructed itself.
+- **Even a live smoke check would have passed.** DoD item 4 is "`docker compose up` brings the stack
+  up and `/healthz` returns healthy" — and it did, every time. The failure is inside `Handler.emit`,
+  which catches it, and the response is unaffected. A green healthcheck is exactly what a broken
+  access logger looks like from the outside. The observable is stdout volume, which nothing asserts
+  on.
+
+The general lesson worth keeping: a defect confined to the logging layer is invisible to every check
+that asserts on *behavior*, and a record-mutating `logging.Filter` is a shared-mutable-state hazard
+precisely because the mutation is invisible until some other component reads the field you cleared.
+
+**Regression coverage.** `TestUvicornAccessLogging` in `backend/tests/test_redaction.py` builds a
+handler with the real `uvicorn.logging.AccessFormatter` and a `StreamHandler` subclass that records
+`handleError()` calls (stock `logging` swallows them, so a naive test passes against the broken
+code). It asserts that an access record formats without raising, that the exact expected line is
+emitted, that `record.args` is still the five-tuple after formatting and that re-formatting is
+stable, that a token in the query string is redacted **with the status code intact**, and —
+mirroring real startup — that `configure_logging()` after `dictConfig(LOGGING_CONFIG)` leaves a
+`RedactingFormatter` on every handler of root and the three uvicorn loggers. The suite was verified
+to **fail** when `install_redaction` is swapped back for the old filter, so it is a real regression
+gate. `test_redaction.py::TestRedactingFormatter` additionally pins that the record is *not*
+mutated.
+
+`TestQueryStringRedaction` covers the bounding: the status code survives a redacted query secret;
+every secret in a multi-parameter query is masked (three secrets → three masks, with `page=2` and
+the status line untouched); base64url/JWT/percent-encoded values are consumed whole; non-secret
+parameters are left alone; full `https://` URLs work as well as bare paths; a free-text secret later
+on the same line is still redacted to end of line; SEC-4's prose cases are unchanged; and `redact()`
+is idempotent. Five of those eight, plus both access-logger assertions, were verified to **fail**
+against the previous unbounded pattern. The three that pass under both are guards on behavior that
+has to hold either way (non-secret parameters, the SEC-4 prose cases, idempotence) — they exist to
+catch a future over-correction, not to detect this one.
+
+**Plan section affected:** CLAUDE.md § Hard security rules ("Add a logging redaction filter" — still
+satisfied, now implemented as a formatter). Supersedes the "Secrets/logging (§6)" bullet of the
+2026-07-04 audit-remediation entry on the mechanism only; the coverage it describes is intact.
+Amends the M3/SEC-4 bullet of the 2026-07-13 entry only insofar as `SecretRedactionFilter` no longer
+exists by that name. No schema, security-model, or job-model change.
+
+---
+
+### 2026-08-02 — Post-v1 — OIDC account linking: authenticated self-link, guarded self-unlink, and stale-link detection (#114)
+
+**What changed:** An existing local account can now bind itself to an OIDC identity by running the
+existing authorization-code handshake **while signed in**, and can unbind itself again. Built at the
+minimal scope green-lit on 2026-07-29 in `docs/upgrades/oidc-id-autoretrieval.md`, which is
+**deleted in this PR** per the 2026-07-26 review-documents-retired decision — this entry is the
+durable record.
+
+**The premise correction that shaped it.** The request was "stop making the admin determine and
+paste their OIDC subject during setup." Scrye never had a subject field anywhere — not in
+`OidcConfigUpdateIn`, not in `AuthenticationPanel`, not in the users area. What that request was
+really describing is the one gap the automatic binding leaves: **an existing local account, above
+all the first admin, could not be linked to an OIDC identity at all.** The three available paths
+were all bad — `auto_provision` on mints a duplicate account (`tyler` plus a fresh
+`tyler-a1b2c3d4` at `default_role`); `auto_provision` off dead-ends at `not_provisioned`; or DB
+surgery into `oidc_identities`, which requires determining `sub` by hand at the IdP. That last one
+is not merely tedious: `sub` is the only identifier OIDC guarantees stable and unique per issuer,
+and on **Authentik's default hashed subject mode** and **Entra ID's pairwise subjects** it is not
+displayed anywhere and exists only inside tokens issued to our client. Auto-retrieval via a real
+flow is the only generally correct way to obtain it — a correctness fix, not a convenience.
+
+**Shape — one handshake, two terminal actions.** The link flow reuses `discover()`,
+`generate_pkce_pair()`, `build_authorization_url()`, `exchange_code()`, and `verify_id_token()`
+unchanged; only the terminal action differs. Deliberately the **same registered redirect URI**: a
+separate `/link/callback` would make every operator register a second URI at their IdP, and
+Entra/Keycloak reject unregistered ones — turning a UX fix into a reconfiguration chore.
+
+- **Schema (migration `0009_oidc_link_flows`)** — two nullable columns on `oidc_login_flows`:
+  `purpose` (`NULL` reads as `login`) and `user_id` (link flows only, FK → `users.id`). Backward
+  compatible; existing rows keep their meaning. Written with `batch_alter_table` because SQLite has
+  no `ALTER … ADD CONSTRAINT` — safe here since the table holds only in-flight handshakes with a
+  10-minute TTL and is excluded from backup bundles.
+- **`POST /api/auth/oidc/link`** — authenticated **cookie session** (not a bearer token: a link is a
+  browser round trip a token can start but never finish), `require_csrf`, the shared auth rate
+  limiter, the same `session_cookie_would_be_dropped()` transport refusal as login, and **fresh full
+  re-auth** — then a `purpose='link'` flow row and an authorization URL. A POST rather than the
+  public login GET, correctly: login binds no identity, link does.
+- **Callback** — branches on `flow.purpose` after the shared validation. For a link it requires a
+  live session whose user matches `flow.user_id`, checks the collision rules, inserts one
+  `OidcIdentity` row, records `auth.oidc_identity_linked`, and redirects to a **fixed** settings
+  path. It creates no session, assigns no role, runs no group sync, and does no provisioning.
+- **`DELETE /api/auth/oidc/link`** — same gates, plus the stranding guard.
+- **Frontend** — `OidcLinkCard` in Settings → Authentication (status, `last_login_at`, Link/Unlink,
+  the re-auth form, the MFA warning), a post-save CTA on the OIDC form, and callback-result
+  handling. `SettingsPage` opens the Authentication tab when the callback's query parameter is
+  present, since `Tabs` is `keepMounted={false}` and an unmounted panel would never show the result.
+
+**The invariants, since this is an identity-binding primitive and a bug here is admin account
+takeover.** The subject is read from exactly one expression — `claims["sub"]` of a token that
+passed `verify_id_token()` — and no request field, header, or query parameter carries a subject
+anywhere in the design; it is not returned either, since an opaque blob nobody can compare is
+noise. Linking is **insert-only** against `uq_oidc_identity_iss_sub`: an in-use identity is
+refused explicitly, never re-pointed, and re-linking your own is a no-op success. The link path
+grants nothing. And a stolen session alone can never create a login path, because the re-auth gate
+costs the password and the second factor too. `tests/test_oidc_linking.py` carries one test per
+abuse case **A1–A12** plus the new controls (42 tests).
+
+**The cost, recorded rather than buried: linking widens L2/SEC-8.** SEC-8 — mandatory-MFA policies
+enforced on local login only, OIDC delegating the second factor to the IdP — previously had a blast
+radius of OIDC-*provisioned* accounts, which carry no usable local password and no local TOTP
+enrollment, so there was nothing to bypass. A **linked** account is different: an admin with TOTP
+enrolled who links gains a sign-in path on which their local TOTP challenge never runs, and their
+effective second factor becomes whatever the IdP enforces. SEC-8 now reads "any linked account,
+including MFA-enrolled admins." The compensating control is the **fresh full re-auth gate on link
+and unlink** (current password + current TOTP when enrolled), which is why it is a hard requirement
+and not a nicety: it is what stops a session-only attacker from minting the bypass path. Plus the
+UI warning at link time, the existing `mfa_delegated_to_idp` marker on logins under a mandatory
+policy, and the new `auth.oidc_identity_linked` / `_unlinked` events making the path's creation and
+removal auditable. Documented in the README security model and `docs/ROADMAP.md`
+§ Known limitations. **Rejected:** refusing to link MFA-enrolled accounts (it guts the feature for
+exactly its target user, whose IdP likely runs passkeys/MFA stronger than Scrye's TOTP), and adding
+a local TOTP step inside the OIDC handshake (already rejected when SEC-8 was accepted — it locks
+out provisioned accounts and second-guesses the IdP).
+
+**Stale links — the failure mode this feature would otherwise have introduced.** A link row is a
+standing claim that `(issuer, sub)` keeps identifying the same person, and the IdP can break it
+silently: an account deleted and recreated gets a fresh subject, and changing an **Authentik**
+provider's subject mode **re-keys every user at once** from one un-warned toggle. The stale row
+still renders "Linked ✓", so the next sign-in either mints a duplicate account (auto-provision on)
+or dead-ends at `not_provisioned` — i.e. the operator experiences precisely the bug this feature
+was built to remove, with the settings screen asserting everything is fine, and the
+plausible-but-wrong diagnosis is "the linking feature regressed." So the login callback's
+no-identity branch now checks, *before* provisioning or dead-ending, whether the token's configured
+username/email claims match an account already holding a link for this issuer under a different
+subject; if so it fails closed with `oidc_error=identity_stale`, records
+`auth.oidc_identity_stale` (issuer, the existing row id, and which claim matched — never raw
+subject values), and the login screen points at the README re-link runbook. This is a
+**refuse-and-explain heuristic and never a binding**: auto-rebind on a claim match is the
+account-takeover vector §5 of the scoping ruled out, and it stays ruled out. Fail-closed is the
+worst an attacker extracts — someone at the same IdP who sets their email to the admin's converts
+"get provisioned a viewer account" into "get an error," strictly safer than before.
+
+**Two implementation choices worth naming, neither in the scoping doc:**
+
+1. **The unlink stranding guard is two checks, not one.** The doc says unlink is "refused when the
+   account has no usable local password." There is no such flag to test — an OIDC-provisioned
+   account simply holds a random argon2 hash nobody knows — and adding one would exceed the
+   sanctioned two-nullable-column schema change. That case is therefore enforced *by* the
+   fresh-password gate, which such an account cannot satisfy by construction (covered by a test).
+   The separately detectable stranding case — **local login disabled instance-wide**, where the
+   link is the only way in — gets an explicit `409` with an explanation, rather than a `403` the
+   operator would misread as a typo.
+2. **A second subject for an already-linked issuer is refused** (`issuer_already_linked`) rather
+   than accumulating a second identity row, so the re-link runbook has one unambiguous shape:
+   unlink, then link.
+
+Also added: `app/auth/reauth.py` (the shared gate plus `enforce_auth_rate_limit`, which
+`api/auth.py::_enforce_rate_limit` now delegates to, so every password-checking surface shares one
+limiter) and the `auth.reauth_failed` audit action.
+
+**Explicitly not built** (and recorded in `docs/ROADMAP.md` so they are not re-proposed): an admin
+binding an identity to *another* user — obtaining someone else's `sub` requires *them* to
+authenticate at the IdP, so the future shape is an invite-link flow, not a text field; **any**
+subject text-entry field anywhere; and **email-based auto-linking**, rejected outright as a
+classic account-takeover vector (email is neither verified nor stable, and an IdP that lets users
+self-set one turns "same email" into "attacker controls the admin account").
+
+**Why:** The pain was real even though the premise was slightly off, and the fix reduces almost
+entirely to controls Scrye already had — state + nonce + PKCE + browser binding + verified-token-only
+subjects — plus two new ones (session-match at the callback, fresh full re-auth to link or unlink).
+
+**Plan section affected:** §5 (OIDC/auth), §7 (data model — `oidc_login_flows` gains `purpose` and
+`user_id`), §10.1 (README: link walkthrough, per-provider subject/claim table, re-link runbook,
+security model). No locked decision changed; no job-model or distribution change.
+
+---
+
+### 2026-08-02 — Security/Process — Filesystem-gate symlink and TOCTOU residual risks closed out (neither is real); CodeQL advanced-setup migration assessed
+
+**What changed:** Docs only. Two items: (1) the two residual risks the CodeQL entry below named "for
+the record, not as proposed work" were verified against the scanners' actual behavior and are
+**closed — neither is exploitable**; (2) the CodeQL advanced-setup migration was assessed and a
+recommendation recorded. **No code, config, workflow, or scanner version changed, and no fix was
+implemented.**
+
+---
+
+#### Item 1 — the symlink and TOCTOU residual risks on `resolve_filesystem_path()`
+
+**Why this needed verifying rather than assuming.** The claim was that Grype's `dir:` walk might
+follow a symlink planted *inside* an allowed root and read out-of-root files. That would be the same
+class as **H1/SEC-1** — a route around the containment gate to arbitrary host files — which was the
+headline HIGH of the remediation cycle. The gate is a pre-flight check on the *target argument*
+(`backend/app/scanners/targets.py:138-146`); it is not re-applied during the walk, so the concern was
+structurally plausible.
+
+**Scope: there is only one code path.** Filesystem targets are **Grype-only**
+(`backend/app/scanners/support.py:18` — `TargetType.FILESYSTEM: frozenset({Scanner.GRYPE})`), so
+Trivy cannot run a filesystem target at all. The invocation is
+`grype -o json -- dir:<resolved-path>` (`grype.py:50-68`, `:210-211`).
+
+**Verdict: the symlink escape is not real.** Four independent lines of evidence:
+
+1. **Version identity.** Grype 0.115.0's embedded Go build info records
+   `github.com/anchore/syft v1.46.0` — the same Syft version Scrye pins, and the same binary tested
+   standalone here. Grype's `dir:` source *is* Syft's directory source, so the Syft test exercises
+   the identical walk code Grype runs.
+2. **Mechanism, at the source.** Syft's directory provider defaults `base` to the scan directory
+   itself — `basePath()` in `syft/source/directorysource/directory_source_provider.go:60-65`. A
+   non-empty `base` activates chroot-style re-rooting in `addSymlinkToIndex`
+   (`syft/internal/fileresolver/directory_indexer.go:362-406`): an absolute link target becomes
+   `filepath.Join(base, Clean(target))`, and a relative one
+   `filepath.Join(base, Clean(Join("/", dir, target)))`. Both collapse to a path **under the scan
+   root**, so a link out of the root resolves to something that does not exist and is dropped.
+3. **Empirically, five variants — none followed.** Planted inside an allowed root: an absolute
+   symlink to an outside directory, a relative one (`../outside/sensitive`), an absolute symlink to
+   an outside file, a relative one, and a symlink to `/etc`. A `package-lock.json` outside the root
+   declared `lodash 4.17.15`; an identical in-root file declared `left-pad 1.3.0`. **Only `left-pad`
+   was catalogued.** Debug logging shows exactly the re-rooting from (2): `escape` →
+   `<root>/tmp/.../outside/sensitive`, `etc_escape` → `<root>/etc`, `rel_escape` →
+   `<root>/outside/sensitive`, each followed by *"points to unresolved path …, ignoring target as new
+   root."*
+4. **Trivy agrees.** `trivy fs --scanners secret` over the same fixture reported only the two real
+   in-root files and no out-of-root path. Not reachable in Scrye, but the answer does not differ
+   between the scanners.
+
+**A comment in that code says the opposite — do not stop reading at it.** `indexAllRoots`
+(`directory_indexer.go:66`) is introduced with *"why account for multiple roots? To cover cases when
+there is a symlink that references above the root path, in which case we need to additionally index
+where the link resolves to."* Read alone, that says the escape is real. It is not, because the
+re-rooting in `addSymlinkToIndex` runs **first**, so an out-of-root target never becomes a new root.
+The comment describes an intent the surrounding code no longer implements. Behavior was measured;
+the comment was not trusted.
+
+**The load-bearing caveat, and the one thing worth acting on — now tracked as [#135](https://github.com/tyler-rich/Scrye/issues/135).**
+The containment rides entirely on `basePath()` defaulting `base` to the scan location — a function
+upstream annotates:
+
+```go
+// FIXME why is the base always being set instead of left as empty string?
+```
+
+If that FIXME is ever actioned, `base` becomes `""`, the re-rooting branch is skipped
+(`directory_indexer.go:374`), and `indexAllRoots` *would* add out-of-root symlink targets as new
+roots. **The escape would become real silently, on a routine Grype/Syft version bump, with no code
+change on Scrye's side.** Nothing in this repository would notice. A regression test — plant a
+symlink in a temp root, assert the out-of-root package is absent from Grype's output — would pin the
+behavior to the dogfood/test suite and fail loudly on the bump that changes it. **Opened as
+[#135](https://github.com/tyler-rich/Scrye/issues/135) on 2026-08-02; not implemented here.** That
+issue carries the mechanism, the `FIXME` reference, the inventory-disclosure severity ceiling (so it
+is not later mis-rated against H1/SEC-1), and the positive-control requirement the false-negative
+below taught. **Built later the same day** as
+`backend/tests/test_scanner_symlink_containment.py` — see the entry above, which records why Syft
+rather than Grype is the probe and where in CI it runs.
+
+**Hardlinks are followed, and that is fine.** A hardlink from inside an allowed root to a file
+outside **is** read — demonstrated: `lodash 4.17.15` catalogued via `/sub/package-lock.json`, same
+inode as the outside file. This is not a containment bypass. A hardlink is a second name for one
+inode, not a reference that containment could resolve; creating one requires write access inside the
+root **and** read access to the source (the kernel's `fs.protected_hardlinks`, normally `1`, blocks
+linking files you cannot read), and it cannot cross filesystems — so `/data/app_secret_key` on the
+data volume can only be linked from within that same volume. Anyone who can do it could already read
+the file.
+
+*Methodology note, because the first result was wrong:* the initial hardlink probe came back negative
+only because the planted file was named `hardlink-lock.json`, which the JavaScript cataloger does not
+glob. Renaming it to `package-lock.json` flipped the result to positive. **A negative from a
+cataloger-based probe means nothing unless the filename is one the cataloger actually looks for.**
+
+**Impact ceiling — this class cannot reproduce H1/SEC-1, even if an escape existed.** Grype `dir:`
+output carries **no file contents**. The SBOM's `files` entries expose `digests`, `id`, `location`,
+and `metadata` only; a marker string planted in a hardlinked secret file **never appeared anywhere in
+the output**. So the worst case here is disclosure of package inventory and file digests — not secret
+values. H1/SEC-1's severity came from `trivy repo <local path>` surfacing secret *contents* as
+downloadable scan output; that is a different and strictly worse primitive. Any future finding in
+this area should be severity-rated against inventory disclosure, not against H1/SEC-1.
+
+**TOCTOU: mechanism confirmed, not exploitable.** The window is real —
+`NormalizeRootDirectory` calls `filepath.EvalSymlinks(root)` at scan time
+(`chroot_context.go:69-75`), so a target directory swapped for a symlink between the worker's
+`resolve_filesystem_path()` (`backend/app/workers/inprocess.py:560`) and the walk **would** be
+followed, with `base` becoming the new real path — the containment above would then protect the
+attacker's substituted root rather than the configured one. What makes it non-exploitable is the
+preconditions, all of which must hold at once:
+
+- **Filesystem scanning must be switched on at all.** `filesystem_scan_roots` defaults to empty
+  (`config.py:243`), which disables the feature.
+- **Host write access to the parent of the scan target.** The attacker must be able to replace the
+  directory with a symlink — i.e. they already have write access to a host path the admin
+  deliberately mounted and allowlisted.
+- **A concurrent operator-triggered scan.** `POST /api/scans` requires the `operator` role and
+  passes CSRF (`scans.py:79`, `:159-166`); `operator` is rank 1 of 3 (`db/models/user.py:28`).
+- **Winning a sub-second race** between the worker's re-check and the subprocess `exec`.
+
+And the payoff is still package inventory, not file contents. Closing it properly would require
+handing the scanner an already-opened directory handle (`O_PATH`/fd) rather than a path string, which
+the subprocess interface — `grype … dir:<path>` — cannot express. **Accepted as a documented residual
+risk; no work proposed.**
+
+**Both risks are closed by this entry.** The prose in the CodeQL entry below that named them is
+superseded; do not re-open either without new evidence about scanner behavior, and re-verify against
+the pinned Grype/Syft versions if those move.
+
+---
+
+#### Item 2 — should CodeQL move to advanced setup for trigger control?
+
+**Recommendation: migrate, and do it together with a one-line ruleset edit. No sequencing dependency.**
+
+> **Corrected 2026-08-02 (same day), after reading the `protect-dev` ruleset via the API.** This
+> section originally recommended migrating *after* the branch-protection governance item, on the
+> premise that "until branch protection lands, a CodeQL check on a `dev` PR cannot block a merge."
+> **That premise was wrong** — branch protection on `dev` had already landed. The conclusion survives
+> for a sharper reason, but the sequencing does not. Both are corrected in place below, and the
+> superseded argument is marked withdrawn rather than deleted.
+
+**Correcting the premise first.** The concern was that in a dev-first workflow, findings "arrive after
+code is already published to `:latest`." That is **not** what happens for `:latest`. Publishing is
+triggered by a **semver tag push**, not by the promotion merge (`publish.yml`, locked decision §6),
+so the sequence is: promotion merges to `main` → CodeQL runs on push to `main` (~1 min) → someone
+pushes the tag → publish. Unless the tag is pushed within about a minute of the merge, CodeQL
+findings land *before* `:latest` exists. The premise **is** correct for **`:dev`**: `dev-nightly.yml`
+builds and pushes `:dev` from a branch CodeQL never analyses. So the real published-artifact gap is
+`:dev`, not `:latest`.
+
+The gap that actually justifies migrating is simpler and doesn't depend on publishing at all:
+**CodeQL never sees a change while it is still reviewable.** It runs after a promotion has landed on
+`main`, at which point the code is merged and a revert — not a review comment — is the remedy.
+
+**What the workflow needs, and whether the suite is reproducible.** Confirmed at the source, not from
+docs: `github/codeql-action/init` exposes a `queries:` input, and `security-extended` is a member of
+`defaultSuites` in `src/analyze.ts:361-367`, resolved by `resolveQuerySuiteAlias()` to
+`<language>-security-extended.qls`. So `queries: security-extended` in a committed workflow
+reproduces **exactly** what runs today. The workflow would need: SHA-pinned `init` + `analyze` (repo
+convention, H9/SC-2), `permissions:` narrowed to `security-events: write`, `contents: read`,
+`actions: read`, a three-entry language matrix (`python`, `javascript-typescript`, `actions`), and
+`on: pull_request` + `push` for **both** `dev` and `main`.
+
+**CI cost: effectively zero added wall-clock — measured, not estimated.** The first CodeQL run's
+longest job was **62 s** (javascript-typescript; python 56 s, actions 41 s, all parallel). The
+current PR pipeline's longest job is **121 s** (image build + dogfood self-scan), with a 130 s
+wall-clock across all four. CodeQL's jobs run in parallel with those and finish at roughly half the
+time of the critical-path job, so **the PR gate stays bounded by the image build either way**. Money
+cost is zero — the repository is public, so Actions minutes are free. A schedule-plus-PR trigger is
+*not* better here: the whole point is per-PR feedback, and the marginal cost of per-PR is nil.
+
+**Maintenance cost: near zero marginal, contrary to expectation.** `github/codeql-action` ships
+frequently — **40 `v4.x` releases between 2025-10-07 and 2026-07-30**, roughly four a month — which
+looks like exactly the churn this repo has been managing. It is not, because
+`.github/dependabot.yml` already **groups every `github-actions` bump into a single weekly PR**
+(`groups: github-actions: patterns: ["*"]`, `interval: weekly`). `codeql-action` would become one
+more line in a PR that already exists, not a new stream. The honest cost is that the grouped weekly
+PR becomes non-empty more often than it is today.
+
+**What migrating actually loses — less than assumed.**
+
+- **Managed query-pack updates are *not* lost.** This is the misconception worth naming: advanced
+  setup pins the **action**, not the CodeQL bundle. `init`'s `tools:` input defaults to *"the
+  recommended version of the CodeQL Bundle"*, so query packs keep updating on GitHub's schedule
+  exactly as they do now. Pinning the action does not freeze the queries.
+- **Automatic language detection *is* lost.** The matrix becomes explicit. Note that default setup's
+  auto-detection is what silently added the third language (`actions`) in the first place — a real
+  freebie that an explicit matrix would not have produced. Against that: locked decision §2 fixes the
+  stack, so a new language appearing unnoticed is close to impossible, and the matrix should carry a
+  comment tying it to §2.
+- **A fifth workflow to own.** It can break in ways a GitHub-managed one cannot, and CLAUDE.md
+  § Build performance warns that workflow shapes here are load-bearing. The repo already maintains
+  four workflows and a composite action, so this is familiar rather than new capability.
+
+**What the `protect-dev` ruleset actually says (read via `GET /repos/…/rulesets/18504510`).** The
+premise that branch protection on `dev` is "still open" does not survive contact with the API.
+`protect-dev` is **`enforcement: active`** on `refs/heads/dev` and carries four rules:
+
+| Rule | Parameters that matter |
+| --- | --- |
+| `pull_request` | 1 approving review, `dismiss_stale_reviews_on_push`, `required_review_thread_resolution`, `allowed_merge_methods: ["squash"]` |
+| `required_status_checks` | **exactly two contexts** — `Backend — lint + tests`, `Frontend — lint + build`; `strict_required_status_checks_policy: false` |
+| `deletion` | — |
+| `non_fast_forward` | — |
+
+So "Require status checks to pass" **is** live on `dev`. That kills the original sequencing argument.
+
+**But the conclusion survives, for a sharper reason: `required_status_checks` is an explicit
+allowlist of contexts, not a switch.** The list names two jobs. Neither image job is on it — note
+`Image — build + dogfood self-scan` and `Image — multi-arch build check` run on every PR and are
+**not** required — and a migrated CodeQL workflow's contexts (`Analyze (python)` &c.) would not be on
+it either. CodeQL would run, be visible, and go green or red **without blocking a merge**, until
+someone adds its contexts to that list.
+
+The difference from the original claim is the size of the remedy. "Wait for branch protection" framed
+it as a governance project; in fact it is **adding two or three strings to a ruleset that already
+exists**, done at the same time as the migration. There is no reason to sequence one behind the
+other.
+
+**Does the admin bypass change the answer? Only for one of the two things "required" buys.** For the
+repository owner it changes little — an actor who can bypass the ruleset can merge past any required
+check, so "required" is not an enforcement boundary against that person. What it still buys:
+
+1. **Real enforcement for anyone who is not that actor.** The repo is public and `CONTRIBUTING.md`
+   invites external contributions; for a contributor, a required check is a hard stop.
+2. **A deliberate bypass instead of a silent merge.** This is the part that matters most here,
+   because this project has already documented itself normalizing red: the same §14
+   (2026-07-31, flaky cancellation test) records that *"a test that reddens CI intermittently trains
+   everyone to re-run without reading the failure"*, and warns that the habit costs most on a
+   security tool. A visibly-red-but-optional check is exactly the artifact that habit erodes. Making
+   it required does not stop an admin, but it converts "merge anyway" from a non-event into an
+   explicit act.
+
+So: **a visibly-red check is not sufficient on its own**, not because of what the ruleset can enforce
+against an admin, but because this repository has written down that it stops reading advisory red.
+Required-ness is worth having even where it is bypassable.
+
+*Not independently confirmed:* the API returns `bypass_actors: null` and
+`current_user_can_bypass: "never"` for **both** rulesets, but that reflects *this session's token
+identity*, not the repository admin's — the bypass list is not readable at this permission level.
+Taking as given the maintainer's statement that Repository admin has *Always allow*, corroborated by
+§14 (2026-08-02), which records `dev` being deleted during the v0.2.0 promotion **despite** the
+`deletion` rule above being active.
+
+**One operational hazard if CodeQL's contexts are made required.** A required context that never
+**reports** blocks a PR indefinitely. A job skipped by an `if:` condition still reports a `skipped`
+conclusion and satisfies the requirement — that is why `Image — multi-arch build check` showing
+`skipped` on these PRs is harmless — but a *workflow that never triggers* reports nothing at all. So
+if the CodeQL workflow's contexts go on the required list, it must not carry `paths:`/`paths-ignore:`
+filters, or a docs-only PR will hang forever waiting on a check that was never scheduled. Given the
+suite runs in ~60 s and costs nothing on a public repo, the right answer is simply not to add path
+filters.
+
+**The case against this recommendation**, stated plainly because it is not weak:
+
+- **The empirical yield so far is 0 true positives in 6 alerts.** Every finding from the first run
+  was a false positive, three of them in test files. Paying any ongoing complexity for a check with
+  that hit rate is a bet on future regressions, not a response to demonstrated value. One more
+  scheduled run on `main` would have caught the same nothing.
+- **The `:latest` exposure argument does not survive contact with `publish.yml`** (above). Strip it
+  out and what remains is "findings arrive post-merge instead of pre-merge" — a real but ordinary
+  workflow-quality complaint, not a security gap.
+- ~~**Branch protection is still open.**~~ **Withdrawn — this argument was factually wrong.** See
+  the ruleset findings below: `protect-dev` is active and already requires status checks. The
+  surviving version of the point is much weaker: CodeQL's contexts would not be on the required list
+  *initially*, and putting them there is a settings edit made alongside the migration, not a
+  prerequisite for it.
+- **Default setup keeps giving things away for free** — the `actions` language arrived without being
+  asked for, and future additions would too. An explicit matrix ends that.
+
+**On balance:** migrate whenever convenient, and **add the CodeQL contexts to `protect-dev`'s
+required-checks list in the same change** — that is what turns it from advisory decoration into a
+gate, and it is a settings edit, not a project. Treat the **`:dev`** coverage hole, not `:latest`, as
+the concrete thing being fixed. **Not implemented in this session; the decision is the maintainer's.**
+
+---
+
+#### Follow-up (same day) — the two ruleset gaps tracked, and one checklist item found already done
+
+**The ruleset readout above produced two settings-level gaps. Both are now issues, not prose**, on
+the same reasoning that created the governance checklist in the first place: a settings gap leaves no
+artifact in the repository, so if it is not tracked it is invisible.
+
+- **[#136](https://github.com/tyler-rich/Scrye/issues/136) — `Image — build + dogfood self-scan` is
+  not a required status check**, on either ruleset, so a PR can merge into `dev` with the dogfood
+  scan red. That job is the control CLAUDE.md § Dependency hygiene mandates; it is what caught
+  CVE-2026-5773, what verifies the SC-14 dev-tree exclusion (`ci.yml:171`), and what demonstrates the
+  seven waived interpreter CVEs (#98 ×3, #116 ×3, #52 ×1) are the *only* outstanding findings — a
+  guarantee that is unverifiable if the gate can be merged past. Safe to require: the job has no
+  job-level `if:` and `ci.yml` carries no `paths:` filters, so it always reports.
+  `Image — multi-arch build check` is a different case — it is `if:`-conditioned to skip on `dev` PRs
+  (`ci.yml:316`), so requiring it on `protect-dev` would be vacuous; require it on `protect-main`
+  only, if at all.
+- **[#137](https://github.com/tyler-rich/Scrye/issues/137) — no ruleset restricts tag pushes.** Both
+  rulesets are `"target": "branch"`; there is no tag-targeted ruleset. A `v*.*.*` tag push triggers
+  `publish.yml` — multi-arch build, GHCR push, the `:latest` move, and a GitHub-signed provenance
+  attestation plus SBOM (`publish.yml:23-26`, `:52-56`). Every *branch* route to the published
+  artifact is gated; the *tag* route, which is the one that actually publishes, is not. `publish.yml`
+  does bound the blast radius on its own — the `github.repository ==` guard (`:46`) and the
+  `git merge-base --is-ancestor` main-ancestry check (`:73`) mean an arbitrary tag on an arbitrary
+  commit does not publish — but neither constrains *who* may tag, or which main-reachable commit gets
+  promoted to `:latest`, and nothing prevents a release tag being moved or deleted afterwards.
+  Theoretical with a single maintainer; the resolution trigger is **before any collaborator is
+  added**, because that is precisely the moment nobody re-audits ref rules.
+
+**Split into two issues rather than one**, following the #98/#116 precedent that an issue closes on
+its own trigger: #136 is actionable now and closes on a settings edit; #137 is latent and closes on
+an event that may be far off. One issue could not close on both.
+
+**Separately, a checklist item was found already done.** `docs/ROADMAP.md` listed *"Private
+vulnerability reporting — enable in the repo's Security settings"* as open;
+`GET /repos/tyler-rich/Scrye/private-vulnerability-reporting` returns **`{"enabled": true}`**. It is
+now struck. When it was enabled is not recorded anywhere — it may have been on since the repository
+went public and simply never removed from the list. That is the same drift the checklist exists to
+prevent, arriving from the opposite direction: not a settings change that went unrecorded, but a
+completed item that stayed listed as outstanding. **Verify checklist items against the API before
+working them, not just before closing them.**
+
+By contrast, **signed-commit enforcement is confirmed genuinely open** — neither ruleset carries a
+`required_signatures` rule.
+
+**Attribution footers on issues could not be removed.** Per this environment's convention the issue
+bodies were authored with the Claude Code footer; a subsequent `PATCH` to strip it from #135 was
+re-appended by the same ingress layer that does this to the PR body (§14 records the same behaviour
+there). #135, #136, and #137 therefore each carry a trailing
+`_Generated by [Claude Code](https://claude.ai/code)_` that has to be deleted by hand in the GitHub
+UI to match #98/#116. Noted here so the inconsistency is explained rather than looking like a style
+lapse.
+
+**Plan section affected:** §14 (this record); §4/§6 (filesystem-scan gate — verified, unchanged);
+`docs/ROADMAP.md` § Near-term (the CodeQL item's remaining work, and the governance checklist —
+branch-protection re-scoped, private vulnerability reporting struck). Issues #135, #136, #137
+opened. No code, schema, workflow, or locked-decision change.
+
+---
+
+### 2026-08-02 — Security/Process — CodeQL code scanning enabled via default setup; first-run triage: six alerts, all false positives
+
+**What changed:** GitHub **code scanning (CodeQL) was enabled on 2026-08-02** via **default setup**.
+This entry records the enablement, why default was chosen over advanced, and the full triage of the
+first scan. **Nothing was fixed, dismissed, or excluded** in this session — it is docs-only, and the
+disposition of every alert is left to the maintainer.
+
+**What the first run actually was.** Run
+[30731557142](https://github.com/tyler-rich/Scrye/actions/runs/30731557142), `dynamic` event,
+`main` @ `bb354a5` (the v0.2.0 promotion merge), 2026-08-02 03:59 UTC, 67 s wall-clock, all jobs
+green. CodeQL CLI **2.26.2**, `codeql-action` **4.37.4**, query packs `python-queries` **1.8.7** and
+`javascript-queries` **2.4.2**.
+
+**The suite is `security-extended`, not the default `code-scanning` one.** This is worth stating
+because it is easy to assume otherwise — "default setup" names the *setup mode*, not the query suite,
+and the suite is a separate dropdown in the same settings pane. The evidence is exact rather than
+inferred: the Python job interpreted **52** queries, `python-code-scanning.qls` resolves to **45**,
+and `python-security-extended.qls` resolves to **52** — and the runner's 52 interpreted query paths
+are a **set-identical** match to `security-extended`'s resolved list (zero on either side of the
+diff). The same distinction exists for the other two languages (`javascript`: 89 vs 105; `actions`:
+18 vs 24), though it changes nothing there, since both return zero findings under either suite.
+Anyone reproducing this analysis must pass `*-security-extended.qls` or they will silently run a
+smaller query set — see the reproduction note below, where exactly that happened.
+
+**Default setup enabled *three* languages, not the two that were scoped.** The roadmap item asked
+for Python and TypeScript; language auto-detection also added **`actions`** (the workflow-analysis
+pack), so the run has three analyze jobs: `Analyze (python)`, `Analyze (javascript-typescript)`,
+`Analyze (actions)`. That is a gain, not a problem — the repo's five workflow files are now analysed
+for the Actions-specific query set (untrusted checkout, script injection, artifact poisoning) that
+the SHA-pinning work of H9/SC-2 + H10/SC-3 addressed by hand — but it is worth knowing the third
+language is there before anyone reasons about which jobs a PR check covers.
+
+**Coverage was total; nothing was skipped.** The runner reported *"CodeQL scanned 78 out of 78
+TypeScript files, 5 out of 5 GitHub Actions files and 2 out of 2 JavaScript files"* and 174 Python
+files. There is no vendored or generated tree in this repository, so no path filters were needed and
+none were configured.
+
+**Why default setup over advanced.** The roadmap item left this open and said to prefer advanced *if
+paths need excluding*. They do not, and three things pointed the other way:
+
+- **Managed action versions and query packs.** Advanced setup means a committed
+  `.github/workflows/codeql.yml` pinning `github/codeql-action/*` by SHA, which this repo's
+  convention would then require Dependabot to keep current — a fourth workflow and a recurring bump
+  stream in exchange for control this repo has no use for. Default setup has GitHub track the action
+  and pack versions.
+- **A conventional layout that needs no custom queries or path filters.** Note that *choosing the
+  query suite is not an advanced-setup exclusive* — default setup exposes a Default/Extended
+  dropdown, and this repository is on **Extended** (above). What advanced setup alone buys is custom
+  query packs, path filters, and control over the trigger. Coverage is already 100% of every source
+  file, and there is no generated or vendored code to exclude, so the first two do not apply. (The
+  third turns out to matter — see the `dev`-PR note near the end of this entry, which was discovered
+  after this decision was made.)
+- **The configuration lives in repository settings, and *this entry* is its durable record.** Default
+  setup's config is not a file in git, which puts it in the same class as the branch rulesets and the
+  Dependabot security-update routing: a setting that leaves no artifact in the repository. §14 is
+  where that class of change is recorded — see the 2026-08-02 governance-checklist entry, which
+  exists precisely because settings work had been sitting invisible. **If path filters, custom queries, or a different
+  trigger are ever needed, converting to advanced setup is the trigger to revisit this**, and it can
+  be done without losing alert history.
+
+**How this triage was performed, including the mistake in the first pass.** The session token used
+here carries only `metadata=read`, so `GET /repos/tyler-rich/Scrye/code-scanning/alerts` and
+`.../analyses` both return **403 "Resource not accessible by integration"**. The alerts could not be
+read from the API. Instead the analysis was **reproduced locally at the same commit**:
+`codeql-bundle-v2.26.2` (the exact CLI the run used, hence the exact `python-queries` 1.8.7 /
+`javascript-queries` 2.4.2 packs), databases built from a worktree at `bb354a5`.
+
+**The first reproduction used the wrong suite and under-reported by one alert.** It ran
+`*-code-scanning.qls` on the assumption that "default setup" implies the default suite. That is 45 of
+the 52 Python queries, and the 7 it omits are `py/log-injection`, `py/tarslip`, `py/partial-ssrf`,
+`py/shell-command-constructed-from-input`, `py/jinja2/autoescape-false`, `py/overly-permissive-file`,
+and `py/request-without-cert-validation`. It therefore produced **five** findings and missed **#6**
+below. The gap was caught only when the Security tab was seen directly and showed six. Two lessons,
+both of which this repository has learned before in other forms: **a reproduction is not equivalent
+until its query set is checked against the run's**, and **matching file-extraction counts prove
+nothing about query coverage** — the first pass matched the runner's 174/78/5 file counts exactly
+while running seven fewer queries.
+
+The corrected run uses `*-security-extended.qls` and reproduces the Security tab **exactly**: six
+findings, same rules, same files, same lines, same severities. Extraction coverage also matches the
+runner file-for-file (**174 `.py`**, **49 `.tsx` + 29 `.ts` = 78 TypeScript**, **5 workflow `.yml`**).
+`main` and `dev` have **no** differing `.py`/`.ts`/`.tsx` files at this point, so the reproduction is
+equally valid for `dev`. The alert numbers below are the real ones, read off the Security tab.
+
+**Result: 6 alerts, all Python. 0 JavaScript/TypeScript. 0 Actions.**
+
+| Alert | Rule | Location | GitHub severity | Verdict | Recommended disposition |
+|-------|------|----------|-----------------|---------|-------------------------|
+| #1 | `py/path-injection` | `backend/app/scanners/targets.py:138` | High (7.5) | **False positive** | Dismiss — "Used in tests" is wrong; use **"False positive"** with the reasoning below |
+| #2 | `py/path-injection` | `backend/app/scanners/targets.py:144` | High (7.5) | **False positive** | Dismiss — **"False positive"**, same reasoning |
+| #3 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_credentials.py:320` | High (7.8) | **False positive** | Dismiss — **"Used in tests"** |
+| #4 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_dockerfile_supply_chain.py:71` | High (7.8) | **False positive** | Dismiss — **"Used in tests"** |
+| #5 | `py/incomplete-url-substring-sanitization` | `backend/tests/test_redaction.py:120` | High (7.8) | **False positive** | Dismiss — **"Used in tests"** |
+| #6 | `py/log-injection` | `backend/app/api/scans.py:574` | Medium (6.1) | **False positive** | Dismiss — **"False positive"** |
+
+**Counts by severity: 5 High, 1 Medium, 0 Critical, 0 Low.** The five Highs read worse than they are
+— GitHub derives severity from each *rule's* `security-severity` property (7.5 and 7.8, both in the
+7.0–8.9 band), which is a property of the query, not of the match.
+
+---
+
+#### Alerts #1 and #2 — `py/path-injection`, `backend/app/scanners/targets.py:138` and `:144`
+
+**The flagged code** is `resolve_filesystem_path()` (`backend/app/scanners/targets.py:119-146`) — the
+filesystem-scan containment gate:
+
+```python
+resolved = Path(target).resolve()                                     # line 138  ← sink 1
+within_root = any(
+    resolved == (root := Path(raw).resolve()) or root in resolved.parents for raw in roots
+)
+if not within_root:
+    raise TargetError("The target path is not under an allowed filesystem scan root.")
+if not resolved.is_dir():                                             # line 144  ← sink 2
+    raise TargetError("The target path does not exist or is not a directory.")
+return str(resolved)
+```
+
+CodeQL's reported flow is `scans.py:161` (the `ScanCreateIn` request body) → `scans.py:200` →
+`targets.py:119` → the two sinks.
+
+**Why the code is correct.** The check canonicalizes first (`Path.resolve()` collapses `..` *and*
+resolves symlinks along every component) and only then tests containment, using **`root in
+resolved.parents`** — a component-wise membership test on path objects, not a string comparison. That
+ordering and that idiom are what make it sound:
+
+- `/allowed/../etc/shadow` resolves to `/etc/shadow` before the check runs, so it fails containment.
+- A symlink at `/allowed/link → /etc` resolves to `/etc` before the check runs, so it fails too.
+- `/data/scans-evil` is **not** accepted against a root of `/data/scans`: `Path('/data/scans-evil')
+  .parents` is `[/data, /]`, which does not contain `/data/scans`. A `startswith` check on the same
+  two strings would wrongly accept it.
+- The feature is **off** unless an admin sets `SCRYE_FILESYSTEM_SCAN_ROOTS` (`filesystem_scan_roots`
+  defaults to an empty list, `backend/app/core/config.py:243`), in which case line 138 is never
+  reached at all — the empty-roots branch raises first.
+- The reported "user-provided value" is an **authenticated operator**: `POST /api/scans` requires
+  `require_csrf` *and* the `_operator` role dependency (`backend/app/api/scans.py:159-166`).
+- The check runs **twice** — at request time (`scans.py:200`, 422 on failure) and again in the worker
+  (`backend/app/workers/inprocess.py:560`), so a row edited between queue and execution is re-gated.
+- Coverage exists: `backend/tests/test_targets.py:88-111` asserts disabled-by-default, out-of-root
+  rejection, and in-root acceptance.
+
+Sink 2 (`resolved.is_dir()`, line 144) sits **after** the containment check, so it is not even an
+existence oracle for out-of-root paths — an out-of-root target raises at line 143 and never reaches
+it.
+
+**Why CodeQL is wrong here, specifically.** This is not "the analyzer was cautious"; the query
+**cannot** clear this code as written, and the reason is mechanical. `PathInjectionQuery.qll` is a
+two-state configuration:
+
+1. A source starts in state `NotNormalized`.
+2. Only a `Path::PathNormalization` node moves it to `NormalizedUnchecked`.
+3. Only a `Path::SafeAccessCheck` barrier clears `NormalizedUnchecked`.
+
+In `python-all` 7.2.2, `Path::PathNormalization::Range` has exactly **three** implementations —
+`os.path.normpath`, `os.path.abspath`, `os.path.realpath` (`semmle/python/frameworks/Stdlib.qll`
+:1108, :1118, :1128). **`pathlib.Path.resolve()` is not one of them.** It appears in that file only
+as a Path-returning method (`pathlibPathMethod`, :2623) and as a *file-system access* whose
+vulnerable path argument is its receiver (`PathlibFileAccess`, :2713-2731) — which is precisely why
+`Path(target)` on line 138 and `resolved` on line 144 are the two reported sinks.
+
+So the taint **never leaves `NotNormalized`**, and step 3's barrier is unreachable for this code *no
+matter what check is written between the two lines*. The containment logic is invisible to the query
+by construction.
+
+And even if `resolve()` had been modelled as a normalization, it would still not have helped: the
+only `Path::SafeAccessCheck::Range` implementation in the whole pack is **`str.startswith`**
+(`Stdlib.qll:5134`). This code deliberately does not use `startswith`, because `startswith` is the
+idiom with the `/data/scans` vs `/data/scans-evil` prefix-confusion bug described above. **The code
+is flagged because it avoided the buggy pattern that is the analyzer's only recognized safe one.**
+
+**Overlap with already-resolved work — do not re-litigate this.** These two alerts land on the exact
+control that two prior §14 entries deliberately built and then deliberately kept:
+
+- [2026-07-03 — Phase P3 — Filesystem scans gated behind an allowlist](#2026-07-03--phase-p3--filesystem-scans-gated-behind-an-allowlist)
+  is where this function and `SCRYE_FILESYSTEM_SCAN_ROOTS` came from, and why "empty = feature off".
+- [2026-07-13 — H1/SEC-1 (#53)](#2026-07-13--post-release--h1sec-1-repository-scan-targets-must-be-remote-clone-urls-local-path-arbitrary-read-closed-back-fill)
+  closed the `trivy repo <local path>` route **around** this gate and records the decision that
+  `SCRYE_FILESYSTEM_SCAN_ROOTS` is the **sole** way any scan can be pointed at a local path. That was
+  the headline HIGH of the security-review batch; the design that came out of it is the design CodeQL
+  is now flagging.
+
+Accepting a local path *under an admin-configured root* is the feature, not the vulnerability. The
+open question H1/SEC-1 settled was whether any **other** code path could reach local paths, and the
+answer was made "no."
+
+**Residual risk worth naming (neither is what CodeQL found, and neither is new).** (a) A TOCTOU
+window exists between the check and the scanner subprocess reading the directory — a symlink swapped
+in that window is not caught. (b) Grype's `dir:` walk of an allowed root may follow symlinks that
+point outside it; containment covers the *target*, not the tree beneath it. Both are properties of
+handing a directory to an external scanner, both require local write access inside an
+admin-configured root, and neither is reachable by an API caller. Recording them here so they are on
+the record, not proposing work.
+
+> **Superseded 2026-08-02 — both verified and closed; (b) was wrong.** Grype/Syft do **not** follow a
+> symlink out of the scan root: Syft re-roots every link target under the scan directory, so (b) does
+> not happen at the pinned versions. (a) is a real mechanism but is not exploitable. See
+> [the entry above](#2026-08-02--securityprocess--filesystem-gate-symlink-and-toctou-residual-risks-closed-out-neither-is-real-codeql-advanced-setup-migration-assessed)
+> for the evidence, the hardlink case that *is* followed (and why it is not a bypass), and the
+> upstream `FIXME` that makes the containment worth pinning with a regression test.
+
+---
+
+#### Alerts #3, #4, and #5 — `py/incomplete-url-substring-sanitization`, all three in `backend/tests/`
+
+The three flagged lines:
+
+- `backend/tests/test_redaction.py:120` — `assert "ghcr.io" in output`
+- `backend/tests/test_credentials.py:320` — `assert "git.example.com" in strip_url_credentials(text)`
+- `backend/tests/test_dockerfile_supply_chain.py:71` — `assert "token.actions.githubusercontent.com" in text`
+
+**What the query is for.** A real `py/incomplete-url-substring-sanitization` catches a broken host
+check — `if "example.com" in url:` accepts `https://evil.com/?x=example.com` and
+`https://example.com.evil.com`. That is a genuine and common bug.
+
+**Why it is wrong about all three.** Read the query
+(`Security/CWE-020/IncompleteUrlSubstringSanitization.ql`) and the reason is unambiguous: it is
+**purely syntactic**. Its entire condition is a `Compare` using the `In` operator whose left operand
+is a `StringLiteral` matching a hostname-shaped regex. There is **no dataflow, no requirement that
+the right-hand operand is a URL, and no requirement that the comparison's result is used in a
+security decision at all.** Any `"<something>.com" in <anything>` matches.
+
+None of the three right-hand operands is a URL, and none of the three comparisons is a check:
+
+- `output` in `test_redaction.py` is **captured log text** from a `logging` stream handler. The
+  assertion's job is the opposite of sanitization: it proves the redaction filter *preserved* the
+  non-secret context (`ghcr.io`) while consuming the adjacent secret. Rewriting it as an exact-host
+  comparison would break the test's purpose.
+- `strip_url_credentials(text)` in `test_credentials.py` returns a **redacted log line**
+  (`"cloning https://deploy:tok@git.example.com/team/repo.git failed"`, defined three lines above),
+  and the assertion's trailing comment — `# host preserved` — states exactly that. Note that the
+  `assert "git.example.com" not in ...` on line 309 of the same file is **not** flagged: the query
+  matches `In` and not `NotIn`, which on its own shows how little semantics it is using.
+- `text` in `test_dockerfile_supply_chain.py` is the **contents of `docker/Dockerfile`**, and the
+  assertion checks that the cosign keyless verification is identity-pinned to
+  `token.actions.githubusercontent.com`. Substring search over a Dockerfile is the correct operation;
+  there is no URL and no parsing to be done.
+
+All three are test oracles over fixed, in-repo strings, with no attacker anywhere in the picture.
+`"Used in tests"` is the accurate dismissal reason for these three — and, importantly, **not** for
+alerts #1, #2, and #6, which are in shipped code and need the "False positive" reason plus the
+mechanical explanation.
+
+---
+
+#### Alert #6 — `py/log-injection`, `backend/app/api/scans.py:574`
+
+**The flagged line** is the last statement of `delete_scan()`:
+
+```python
+@router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_scan(
+    scan_id: int,                                                     # line 527  ← reported source
+    ...
+) -> Response:
+    ...
+    logger.info("Deleted scan %d and all associated data.", scan_id)  # line 574  ← sink
+```
+
+CodeQL's flow is two nodes long: the path parameter at `:527` straight to the logging call at `:574`.
+
+**Why it cannot be exploited.** Log injection means smuggling `\r`/`\n` into a log record to forge log
+lines. That requires attacker-controlled **string** content reaching the sink. It cannot happen here:
+
+- `scan_id` is annotated **`int`**. FastAPI validates and coerces every path parameter through
+  Pydantic **before** the handler body runs, so a non-integer path segment is rejected with a 422 and
+  line 574 is never reached. The value at the sink is a Python `int`, not the raw request bytes.
+- It is rendered with **`%d`**, which can only ever emit `[-]digits`. There is no formatting path by
+  which an `int` produces a newline.
+- The endpoint is also behind `require_csrf` and the `_operator` role, though that is beside the
+  point — the type is what closes this, and it closes it completely.
+
+**Why CodeQL is wrong here, specifically.** Its Python taint model treats a framework route parameter
+as an `ActiveThreatModelSource` **regardless of the parameter's type annotation** — there is no
+"this was coerced to `int`" step in the model, so the annotation on line 527 is not read as anything.
+And the sanitizer set for this query is small and entirely syntactic
+(`LogInjectionCustomizations.qll`): a comparison against a constant (`ConstCompareBarrier`), an
+explicit `.replace("\n", …)` / `.replace("\r\n", …)` call, and models-as-data barriers. A type
+annotation is not among them, and no rewrite of this line short of `str(scan_id).replace("\n", "")`
+— which would be nonsense on an `int` — would clear it. As with alerts #1 and #2, the analyzer is
+not being cautious about something uncertain; it simply has no way to express the fact that makes the
+code safe.
+
+**Not to be confused with the redaction layer.** `SecretRedactionFilter` (`app/core/logging.py`,
+covered by `backend/tests/test_redaction.py`) exists to keep *secrets* out of log output. It is a
+different control for a different problem and is not what makes this line safe. (It was replaced by
+`RedactingFormatter` in the 2026-08-02 access-logger entry above; the point stands unchanged.)
+
+---
+
+**What the run did *not* flag, stated explicitly so absence is on the record.** The
+`security-extended` suites ran the full injection / traversal / deserialization / crypto / SSRF / XSS
+/ tarslip / unsafe-shell-construction sets against all 174 Python files and all 78 TypeScript files
+and returned **nothing** on the scanner subprocess-argv construction, the credential materialization
+and shredding path, the crypto and secret-store modules, the auth and CSRF layer, or the frontend.
+The Actions pack returned nothing on the five workflows. That is a clean result for exactly the code
+the roadmap item was written to get looked at — and it is a stronger result than it would have been
+under the default suite, since `security-extended` is the larger query set. It is still *coverage*,
+not proof of absence, and note that neither suite contains a "missing authorization" check for Python
+— one of the patterns the roadmap item hoped for. RBAC coverage remains the pytest suite's job.
+
+**A `dev` PR gets no CodeQL check at all — confirmed, not inferred.** Default setup's pull-request
+trigger targets the **default branch**, and `main` is the default branch here while `dev` is where
+day-to-day work is PR'd (§ Git & PR conventions). The PR carrying this entry (**#134**, into `dev`)
+was checked after its checks settled: **four check runs, none of them CodeQL.** So the roadmap item's
+worry that switching CodeQL on would "join the per-PR gate the moment it is switched on" is the
+opposite of what happened — on the branch that actually receives PRs, CodeQL does not run. In
+practice CodeQL currently analyses `main` on push (i.e. **after** a promotion has already landed) and
+on its weekly schedule. **Closing that gap needs advanced setup** — a committed workflow is the only
+way to add `dev` to the trigger — and it is the **strongest** reason to revisit the default-vs-
+advanced choice, stronger than the path-filter and custom-query reasons, since those remain
+hypothetical while this one is a live gap in coverage.
+
+**Not done here, and left to the maintainer.** No alert was dismissed, no code was changed, and no
+issue was opened. The recommended dispositions above are recommendations. One related item also stays
+open: even once CodeQL does run on the right branch, the check **cannot gate a merge** until its
+contexts are added to `protect-dev`'s required-checks list.
+
+> **Corrected 2026-08-02.** This originally attributed the gap to the "still-open **branch
+> protection** governance item." That was wrong — `protect-dev` is already active *and* already
+> carries `required_status_checks`. The rule is an explicit allowlist of contexts, so the blocker is
+> adding CodeQL's contexts to that list (a settings edit), not the governance item. See the entry
+> above for the full ruleset readout.
+
+**Plan section affected:** §14 (this record); `docs/ROADMAP.md` § Near-term (the CodeQL item, now
+struck). No code, schema, workflow, or locked-decision change.
+
+---
+
+### 2026-08-02 — Infra/Process — GHSA-qwww-vcr4-c8h2 closed by a 7.x backport (`react-router` 7.18.2), not the 8.3.0 major; the advisory's "Patched versions" field is stale
+
+**What changed:** `react-router-dom` bumped **7.18.1 → 7.18.2** in `frontend/package.json`, with
+`package-lock.json` regenerated (`react-router` moves 7.18.1 → 7.18.2 with it — `react-router-dom`
+pins its core exactly). **Issue #123 is closed.** No application code changes; no other dependency
+moves; the runtime image is byte-identical in everything but the hashed asset name.
+
+The bump is taken because **the fix for GHSA-qwww-vcr4-c8h2 exists on the 7 line** — verified in the
+published tarball, not inferred from a version number. The react-router 7 → 8 major migration #123
+contemplated is **not needed for this advisory** and is not part of this change.
+
+---
+
+**1. The 7.x patch exists, and it was already published when #123 last said it was not.**
+
+`react-router@7.18.2` and `react-router-dom@7.18.2` were published **2026-07-28T21:53Z**. The
+per-release re-confirmation comment posted on **2026-08-02T02:25Z** — five days later — states *"No
+7.x fix has appeared, so the cheap exit still does not exist."* That was wrong at the moment it was
+written.
+
+**How it went wrong is the reusable part.** The check was made against the **advisory's own
+metadata**, and that metadata is stale: GHSA-qwww-vcr4-c8h2 still reads
+
+| Field | Value (as of 2026-08-02) |
+| --- | --- |
+| Affected versions | `>= 7.12.0, < 8.3.0` |
+| Patched versions | `8.3.0` |
+
+There is no 7.x entry in the "Patched versions" field, and the affected range still swallows 7.18.2.
+Reading the advisory therefore produces exactly the false statement that landed in the issue. The
+registry is what actually answers the question — `dist-tags` on `react-router` carry a
+**`version-7: 7.18.2`** line alongside `latest: 8.3.0`, and `react-router-dom`'s own `latest` **is**
+7.18.2 (the package does not exist on the 8 line at all; v8 consolidates into `react-router`). This
+is the npm-side counterpart of the interpreter-CVE rule already in `CLAUDE.md` § Dependency hygiene:
+**an advisory's "first patched version" is a claim about one release line, not a survey of every
+maintained line.** The maintainers backported without asking GitHub to re-cut the range, which they
+are under no obligation to do.
+
+**2. Verified at the source: 7.18.2 carries the same fix as 8.3.0, and nothing else.**
+
+Per `CLAUDE.md` § Dependency hygiene, the changelog line was treated as evidence and not proof. Both
+changelogs claim the fix, under *different PR numbers* — 8.3.0 cites
+[#15311](https://github.com/remix-run/react-router/pull/15311) (the PR the advisory itself
+references), 7.18.2 cites [#15353](https://github.com/remix-run/react-router/pull/15353), the shape
+of a backport. So all four tarballs (7.18.1, 7.18.2, 8.2.0, 8.3.0) were unpacked and the vulnerable
+function diffed directly.
+
+The vulnerable path is `generateRenderResponse`'s mutation branch in `dist/*/index-react-server.*` —
+the RSC server entry. **7.18.1 and 8.2.0 are identical here**, and both are shaped like this:
+
+```js
+if (isMutationMethod(request.method)) try {
+  throwIfPotentialCSRFAttack(request, allowedActionOrigins);
+  ctx.runningAction = true;
+  let result = await processServerAction(request, /* … */);   // ← inside the same try
+  // …
+} catch (error) {
+  potentialCSRFAttackError = error;                            // ← catches *any* of the above
+}
+let staticContext = await query(
+  request,                                                     // ← still the mutation request
+  skipRevalidation || !!potentialCSRFAttackError ? { filterMatchesToLoad: () => false } : void 0,
+);
+if (potentialCSRFAttackError) { /* … */ staticContext.statusCode = 400; }
+```
+
+Two defects, both matching the advisory's title — *action execution before a 400 response*. The
+`catch` cannot distinguish "the origin check rejected this request" from "the action ran and threw",
+so an error raised by an **already-executed** server action is relabelled a CSRF error and served as
+a 400: the response asserts the request was blocked when its side effects have already happened. And
+on a genuine origin-check failure the **unmodified mutation-method request** is still handed to
+`query()`, so downstream sees a rejected mutation as a mutation.
+
+**7.18.2 and 8.3.0 are, again, identical to each other** — and fix both:
+
+```js
+if (isMutationMethod(request.method)) {
+  try {
+    throwIfPotentialCSRFAttack(request, allowedActionOrigins);  // ← alone in the try
+  } catch (error) {
+    onError?.(error);
+    potentialCSRFAttackError = error;
+    request = new Request(request.url, {                        // ← neutralized to GET
+      method: "GET", headers: request.headers, signal: request.signal,
+    });
+  }
+  if (!potentialCSRFAttackError) {                              // ← action gated on the check
+    ctx.runningAction = true;
+    let result = await processServerAction(request, /* … */);
+    // …
+  }
+}
+let staticContext = await query(request, skipRevalidation ? { filterMatchesToLoad: () => false } : void 0);
+```
+
+The origin check is alone in its `try`, so only it can set `potentialCSRFAttackError`; the action is
+gated behind `!potentialCSRFAttackError`, so it cannot run in a request that will answer 400; the
+rejection is surfaced through `onError`; and the rejected request is rewritten to `GET` before it
+reaches `query()`. Same four changes, same order, in both releases.
+
+**The backport is also the *entire* 7.18.1 → 7.18.2 diff.** Normalizing the hashed chunk filenames,
+the only textual differences across every published bundle are the version banner and the block
+above. No API surface moves, no dependency moves, no behaviour outside the RSC server entry changes.
+As patch bumps go this is the lowest-risk shape available — which is precisely why it is worth
+taking even for an unreachable path.
+
+**3. The reachability assessment in #123 was independently re-verified, and holds.**
+
+Checked against the tree rather than carried forward from the issue text. Every `react-router-dom`
+import in `frontend/src/` is declarative — `BrowserRouter` (`main.tsx`), `Routes`/`Route`/`Link`/
+`Navigate`/`useLocation` (`App.tsx`), `useNavigate`/`useParams`/`useSearchParams` in the five pages,
+and `MemoryRouter` in `src/test/render.tsx`. There is **no** `createBrowserRouter`, no
+`react-router.config.ts`, no `@react-router/*` package, and no route `action` export anywhere. The
+vulnerable code lives behind the `index-react-server` entry point, which nothing in the SPA imports,
+so Vite never pulls it into the bundle. Beyond that, `docker/Dockerfile` copies only
+`/build/frontend/dist` out of the `frontend-builder` stage — no `node_modules`, no `package.json` —
+so the npm dependency graph is not in the runtime image at all, and the CI dogfood Trivy/Grype image
+scan was never going to see this advisory in the first place. It surfaced only through `npm audit`
+and Dependabot against the source tree.
+
+So #123's central claim was correct. What it got wrong was the *cost of exiting* — it framed the
+only way out as a major migration, and on that basis set up a long-lived acceptance with a
+per-release review. The exit was a patch bump.
+
+**4. The Dependabot/`npm audit` alert will *not* clear, and that is expected.**
+
+Because the advisory's affected range still reads `>= 7.12.0, < 8.3.0`, `npm audit` continues to
+report both `react-router` and `react-router-dom` as HIGH at 7.18.2, and still proposes the same
+`react-router-dom@7.11.0` **downgrade** as its "fix". That proposal was wrong before and is now
+doubly wrong: 7.11.0 is *below* the fix as well as below the range. **The alert is a metadata
+artifact, not a code finding** — the vulnerable code is gone from the tree, verified above.
+
+Nothing is being waived to suppress it. It gates nothing: `npm audit` is not run in CI, and the
+image-level dogfood gate never saw the package (point 3). The correct upstream resolution is for the
+advisory to gain a `>= 7.12.0, < 7.18.2 → 7.18.2` range; until it does, this entry is the record of
+why the alert can be left alone. **Do not "fix" it by downgrading, and do not scope a react-router 8
+migration in response to it.**
+
+**5. What react-router 8 now is, and is not.**
+
+Removing this advisory from the argument leaves the 7 → 8 major as a pure **currency** decision,
+which is where it belongs — alongside the other frontend majors tracked from #86 in
+`docs/ROADMAP.md` (TypeScript 7, ESLint 10, Vite 8, Vitest 4, jsdom 29) and gated on that toolchain
+sweep, since v8 folds `react-router-dom` back into `react-router` and would touch every import site
+in `frontend/src/`. It is not security work and carries no deadline. Per `CLAUDE.md` § Dependency
+hygiene it must not be sold as a fix for GHSA-qwww-vcr4-c8h2 — as of 7.18.2 there is nothing left
+for it to fix.
+
+**Verified:** `npm ci` installs `react-router@7.18.2` / `react-router-dom@7.18.2`; the installed
+`node_modules/react-router/dist/development/index-react-server.mjs` carries the gated-action fix;
+`npm run build` succeeds; ESLint, Prettier and the 20-file / 69-test Vitest suite all pass — the
+four page-level suites (`ScansPage.urlstate`, `ScansPage.compare`, `ScanDetailPage.poller`,
+`ScanDetailPage.latestwins`) included, since they mount real routers.
+
+**Plan section affected:** `CLAUDE.md` § Dependency hygiene; §14 (2026-08-02, item 6 of the
+post-v0.2.0 cleanup entry, whose #123 re-confirmation this corrects); `docs/ROADMAP.md`.
+
+---
+
+### 2026-08-02 — Infra — Frontend builder and CI moved Node 22 → 24 (Active LTS); the Dependabot major-ignore re-pointed at the 24 line
+
+**What changed:** the SPA is now built on **Node 24 (`krypton`)** in both places it is built — the
+image's `frontend-builder` stage and CI's `frontend` job — with the stated local-development
+requirement updated to match and `.github/dependabot.yml`'s node major-ignore re-pointed from the
+22 line to the 24 line. This is the `docs/ROADMAP.md` § Near-term item written up on 2026-08-02
+(§14, "Post-v0.2.0 dependency cleanup", part 3), executed as the standalone PR that item said it
+had to be. **No application code, dependency version, schema, API contract, security model, or
+build structure changes** — nothing in `frontend/package.json` or `package-lock.json` moves, and
+the Dockerfile's stage boundaries and layer ordering are untouched (`CLAUDE.md` § Build
+performance).
+
+---
+
+**1. Why 24, stated as a lifecycle argument rather than a preference.**
+
+Read from `nodejs/Release`'s `schedule.json` at the source, not from a release-notes page:
+
+| Line | LTS from | Maintenance from | End of life |
+| --- | --- | --- | --- |
+| **20** (`iron`) | 2023-10-24 | 2024-10-22 | **2026-04-30** — already past |
+| **22** (`jod`) | 2024-10-29 | 2025-10-21 | **2027-04-30** |
+| **24** (`krypton`) | 2025-10-28 | 2026-10-20 | **2028-04-30** |
+| **25** | never — odd lines get no LTS | 2026-04-01 | **2026-06-01** — already past |
+| **26** | **2026-10-28** | 2027-10-20 | 2029-04-30 |
+
+24 is the Active LTS today and buys the longest supported window available: twelve months more
+than 22. **26 was considered and deliberately declined for now** — it became current on 2026-05-05
+but does not enter LTS until **2026-10-28**, so adopting it today would put the builder on a
+*current* line, which is the same class of mistake as the Node 25 proposal in #126. The 24 line
+does not even enter maintenance until 2026-10-20, so there is no pressure to revisit; the roadmap
+item now says exactly that instead of holding an open "move to 24" task.
+
+**This is a support-lifecycle bump, not a security fix, and it is not recorded as one.** No CVE is
+claimed to be cleared by it — the parallel to `CLAUDE.md` § Dependency hygiene's interpreter-CVE
+rule is deliberate. Node here is a **build-time** toolchain that never reaches the runtime image
+(the `frontend-builder` stage's only output is the compiled `dist/`), so the argument for currency
+is the supported-window one and nothing more.
+
+---
+
+**2. The digest was resolved against the registry, and the interpreter inside it verified.**
+
+`docker buildx imagetools inspect node:24-bookworm-slim` resolves the tag to the multi-arch index
+**`sha256:235600a8101ab264e117b1768e925532262668dc9b581ef1dd7d96ced463b8e7`**, which is what the
+`FROM` now pins — an index digest, matching how every other base in this Dockerfile is pinned, and
+carrying both platforms the multi-arch build needs (`linux/amd64`
+`sha256:a09aabc6…` and `linux/arm64/v8` `sha256:c39335f4…`, alongside a `linux/ppc64le` leg the
+build never selects).
+
+**Which Node that digest actually contains was confirmed, not inferred from the tag.** The index's
+`org.opencontainers.image.revision` annotation points at `nodejs/docker-node` commit
+`53252eea9caacaa50bdf58f4d34f0bff8d259999`, path `24/bookworm-slim`; that file's
+`ENV NODE_VERSION=24.18.1`. So the pinned image is **Node 24.18.1**, the current 24.x release
+(2026-07-28, npm 11.16.0). The container itself could not be run to check `node --version`
+directly — this environment has the docker CLI but no daemon, and registry blob fetches through the
+proxy return 403 — so the tag→commit→`NODE_VERSION` chain is the verification, and it is stated
+that way rather than as an executed check.
+
+---
+
+**3. Verified on a real Node 24, not on the assumption that a major is a no-op.**
+
+The whole frontend gate was run against **Node v24.18.1** — the exact version inside the pinned
+image — installed from `nodejs.org/dist` and checksum-verified against that release's
+`SHASUMS256.txt` (`d6c664df…`) before use:
+
+| Step | Result |
+| --- | --- |
+| `npm ci` | clean install from the unchanged lockfile |
+| `npm run lint` (ESLint, type-aware) | clean |
+| `npm run format:check` (Prettier) | clean |
+| `npm test` (Vitest) | **20 files, 69 tests, all passed** |
+| `npm run build` (`tsc -b && vite build`) | built in 6.5 s, 6634 modules |
+
+**CI's own frontend job confirms the change took effect**, which is worth stating separately from
+the local run: its log shows `node-version: 24` resolving to **v24.18.0** with **npm 11.16.0**,
+then the same 20 files / 69 tests and the same successful build. Note the **patch difference** —
+the runner's tool-cache carries 24.18.0 while the pinned image carries 24.18.1, because
+`node-version: "24"` is a major-line spec and `setup-node` takes whatever 24.x the runner already
+has. That is expected and is not the drift this item exists to prevent: the lockstep requirement is
+the **major**, since that is what changes language and npm behaviour.
+
+**Nothing in the toolchain broke**, so the deferred frontend-tooling sweep (`docs/ROADMAP.md`
+§ Near-term, the #86 majors — TypeScript 7, ESLint 10, Vite 8, Vitest 4, jsdom 29) stayed out of
+this PR, which is the point of keeping the two separate. Vite 6.4.3, Vitest 3.2.7, jsdom 26.1.0 and
+the React Testing Library harness all run on 24 unmodified.
+
+**One behavioural difference is worth recording even though it changed nothing here.** Node 24
+ships **npm 11** (11.16.0) where 22 ships npm 10, and npm 11 no longer runs dependency install
+scripts by default — `npm ci` now prints an `allow-scripts` warning for `esbuild@0.25.12`'s
+`postinstall`. The build is unaffected because esbuild's platform binary arrives through its
+`@esbuild/linux-*` optional dependency rather than through that script, which is why the Vite build
+succeeds with the postinstall skipped. Noted because it is the kind of difference that would
+matter for a future dependency that genuinely needs its install script.
+
+---
+
+**4. The three-file lockstep, and the fourth file that had drifted.**
+
+The roadmap item's whole reason for existing is that bumping the Dockerfile alone leaves **CI on 22
+while the image builds on 24**, so a version-specific failure first appears in a published image
+instead of in a check. All of them moved together:
+
+1. `docker/Dockerfile` — `node:22-bookworm-slim@sha256:6c74791e…` → `node:24-bookworm-slim@sha256:235600a8…`, with the stage comment rewritten to state the lockstep as a rule rather than to describe a pending move.
+2. `.github/workflows/ci.yml` — `node-version: "22"` → `"24"` (and the step's display name), with a comment naming the Dockerfile as the thing it must match.
+3. `CONTRIBUTING.md` § Prerequisites and `README.md` § Requirements — the stated Node requirement.
+
+**The stated requirement was also *raised*, not just re-worded, and that is a small deviation worth
+flagging.** Both files said **"Node 20+"**, which named a line that reached end-of-life on
+**2026-04-30** — i.e. the documented floor for local development was an unsupported runtime. It is
+now **"Node 22+"** with the image/CI version (24) named alongside it. 22 is kept as the floor
+rather than 24 so a contributor on the previous LTS is not turned away by a docs change; the two
+supported lines are exactly 22 and 24.
+
+**Checked for other references before calling the sweep complete**, since the roadmap item listed
+three files but the search space is larger: there is **no `.nvmrc`** anywhere in the repo, and
+`frontend/package.json` has **no `engines` field** — so neither needed updating, and neither was
+silently left behind. `CHANGELOG.md`'s single `node:22-bookworm-slim` mention is inside the v0.1.0
+release entry describing what shipped then, which is history and must not be rewritten. The
+`@types/node` devDependency stays at 22.20.0: it is a *typings* package pinned as part of the
+frontend dependency set, and moving it is a `package.json` change that belongs with the #86
+tooling sweep, not here — the SPA is browser-targeted and does not type against Node 24 APIs.
+
+---
+
+**5. The Dependabot ignore keeps its shape and changes its target.**
+
+`.github/dependabot.yml`'s `docker` entry still carries:
+
+```yaml
+- dependency-name: "node"
+  update-types: ["version-update:semver-major"]
+```
+
+The **rule is unchanged** — block majors, let digest refreshes through — because the reason for it
+is unchanged: a major here spans four files and a lifecycle decision, and the
+`version-update:semver-major` scoping is what keeps Dependabot proposing digest refreshes of the
+pinned tag instead of going silent (the failure mode that left the 22 digest stale until #107).
+Only the **comment** moved: it now names 24 as the line in use and 2028-04-30 as its EOL, records
+the Node 26 revisit date as a deliberate decision rather than a bump to accept, and keeps the
+Node 25 / #126 history as the example of why odd lines are declined.
+
+**The open question from the 2026-08-02 entry is still open, and this PR does not close it.** That
+entry noted the ignore's digest-still-arrives behaviour was confirmed from *documented semantics*
+plus reported behaviour, not from an observed Dependabot run in this repository, and that the next
+scheduled `docker` run is the test. Re-pointing the ignore at 24 does not change that: the same
+test applies, now against the `24-bookworm-slim` tag. If no `node` update ever arrives, the
+fallback remains the one #107 used — refresh the digest by hand and say so here.
+
+---
+
+**Verification.** Frontend lint, format, Vitest and build all green on Node v24.18.1 as tabled
+above. **CI's image build is the real gate** and is reported from the PR's actual run, not
+predicted here — the local checks exercise the SPA toolchain but not the multi-stage image build,
+and this environment has no docker daemon to build it with.
+
+**Files touched:** `docker/Dockerfile`, `.github/workflows/ci.yml`, `.github/dependabot.yml`,
+`CONTRIBUTING.md`, `README.md`, `docs/ROADMAP.md` (item struck as done, Node 26 revisit retained),
+`docs/ARCHIVE.md` (this entry).
+
+**Plan section affected:** §9.1 (image build), process.
+
+---
+
+### 2026-08-02 — Infra/Process — Post-v0.2.0 dependency cleanup: three closed Dependabot PRs reapplied, the base-branch anomaly traced to `dev`'s deletion, the brace-expansion waiver retired
+
+**What changed:** the three Dependabot PRs closed on 2026-08-02 as unmergeable-as-built (#126, #127,
+#128) applied by hand and correctly; `.github/dependabot.yml` given the two `ignore` entries that
+stop the same PRs recurring; the base-branch question those closures raised diagnosed to a root
+cause; and the three advisory tracking issues re-verified against the tree after the v0.2.0 tag —
+with **`postcss` bumped by hand to close #124**, because with the Dependabot queue empty nothing
+was going to propose it. No application code, schema, API contract, security model, job model, or
+auth behavior changes.
+
+---
+
+**1. `fastapi` 0.140.0 → 0.140.13, with `requirements.lock` regenerated (was #127).**
+
+#127 failed CI because Dependabot edits `pyproject.toml` without touching
+`backend/requirements.lock`, and CI's drift gate recompiles the lock and fails on any difference.
+That is the gate working — a Dependabot pip bump in this repo is *never* mergeable as opened, and
+the fix is always to reapply the bump and regenerate the lock with the pinned command from
+`CONTRIBUTING.md` § Backend dependency lock (`uv pip compile pyproject.toml --group build
+--generate-hashes --python-version 3.14`, uv 0.8.17). The regenerated lock moves **three lines** —
+`fastapi`'s version and its two wheel hashes — and nothing else; `starlette` stays at the
+explicitly-pinned 1.3.1, which 0.140.13 still accepts.
+
+**The thirteen patch releases were read before applying, and none of them touches a path Scrye
+uses.** Grouped by what they are:
+
+| Releases | Change | Reaches Scrye? |
+| --- | --- | --- |
+| 0.140.1 – 0.140.7 | Internal refactors: stop retaining flat dependency trees, avoid re-flattening for OpenAPI/body/param handling, retune the dependency `lru_cache` limit | No behavior change — memory/OpenAPI-generation performance only |
+| 0.140.8, .11, .12, .13 | Streaming fixes: stream item type lost through `include_router()`, `response_model_*` ignored for `Iterable[…]` returns, SSE line-splitting, `status_code` ignored on SSE/JSONL endpoints | **No** — the backend has no SSE, JSONL, or streaming endpoint, and no `response_model_*` parameter anywhere |
+| 0.140.9 | `exclude_defaults` not propagated to dict keys/values in `jsonable_encoder` | **No** — `jsonable_encoder` is never called |
+| 0.140.10 | Sequences with nested `Annotated` types mishandled | **No** — the only nested `Annotated[list[str], …]` in the tree is `pydantic-settings`' `NoDecode` in `app/core/config.py`, not a request parameter |
+
+Verified by grep across `backend/app/`: no `jsonable_encoder`, no `StreamingResponse`, no SSE
+helper, no `response_model_*`. Every response in `app/api/` is a plain `Response`,
+`PlainTextResponse`, `RedirectResponse`, or `FileResponse`. So this is a currency bump that fixes
+nothing Scrye was hitting and risks nothing either — which is the honest way to describe it.
+
+**Confirmed against the regenerated lock, not just against the version pin.** A throwaway venv on
+**CPython 3.14.6** was built the way the image builds: `pip install --require-hashes -r
+requirements.lock`, then `pip install --no-deps --no-build-isolation .`. The full backend suite
+passes there — **666 passed, 5 skipped**, byte-identical to the pre-bump baseline on the same
+interpreter, with the same 18 warnings (the standing Starlette `HTTP_422_UNPROCESSABLE_ENTITY`
+deprecations already tracked in `docs/ROADMAP.md`). Running the suite against the hash-verified
+closure rather than against an editable install is the point: the lock is what ships, so it is what
+has to be green.
+
+---
+
+**2. `docker/login-action` 4.5.1 → 4.6.0, SHA-pinned (#128 proposed 4.5.2).**
+
+Pinned at `dbcb813823bdd20940b903addbd779551569679f # v4.6.0` in all three workflows that
+authenticate to GHCR — `publish.yml`, `dev-nightly.yml`, `rescan.yml` — keeping the tag as a
+trailing comment per the convention every other `uses:` in this repo follows (H9/SC-2).
+
+**Why 4.6.0 rather than the 4.5.2 that #128 proposed.** 4.5.2's only substantive commit,
+["surface Docker Hub OIDC error responses"](https://github.com/docker/login-action/pull/1058),
+improves the error text when a **Docker Hub OIDC** login fails — a path none of the three call
+sites can reach, since all three log in to `ghcr.io` with the built-in `GITHUB_TOKEN` as
+username/password. 4.6.0 supersedes it a day later and is the one whose changed code is at least
+*adjacent* to what this repo does: it hardens the **buildx-scoped config path** used by the
+login → buildx-builder → push chain, and it carries the action's own bundled dependency bumps
+(`@aws-sdk/client-ecr`, `js-yaml`, `postcss`). Taking the newer release also avoids pinning to a
+version that was already superseded on the day it was applied.
+
+**The SHA was resolved from upstream, not read off a changelog or release page.** `git ls-remote
+--tags https://github.com/docker/login-action` maps `refs/tags/v4.6.0` to that commit. Trusting a
+rendered SHA is precisely the substitution a SHA pin exists to prevent; the tag→commit mapping has
+to come from the repository that owns it. Note that upstream's **moving `v4` tag currently points
+at the same commit** — the pin here is the immutable `v4.6.0` commit, not the alias.
+
+**The changelog matters more than usual here**, because this action runs only on the tag-gated
+publish path and the nightly — paths CI *cannot* exercise, so a breaking change would surface at
+release time on a protected branch. So 4.6.0 was read at the source rather than from its release
+notes, comparing `v4.5.2...v4.6.0`:
+
+- **`action.yml` is byte-identical.** No input added, removed, renamed, or re-defaulted.
+- **`src/main.ts` and `src/docker.ts` are unchanged.** The login flow itself does not move.
+- **The entire change is in `src/context.ts`'s buildx-scoped config-dir helper.** It now resolves
+  the buildx config root and the per-registry directory with `path.resolve` and rejects a
+  `registry` whose resolved path escapes the config root; validates the `scope` input (at most one
+  `@` separator, actions matching `^[a-z]+(,[a-z]+)*$`); and rejects a scope path that escapes the
+  registry directory — via a new `isChildPath()` helper doing the usual `relative()` /
+  `startsWith('..')` / `isAbsolute()` containment test.
+
+**And the honest reading of what that buys Scrye: nothing behavioural, today.** That helper
+short-circuits on its first line — `if (scopeDisabled() || !scope || scope === '') return ''` —
+and none of the three call sites passes a `scope` input (each passes exactly `registry`,
+`username`, `password`; no `ecr`, no `logout`, no OIDC, and no `DOCKER_CONFIG` is set anywhere in
+the repo). So every line 4.6.0 adds sits behind a gate this repo does not open. Two of the three
+sites (`publish.yml`, `dev-nightly.yml`) do go on to run buildx through
+`.github/actions/build-image`, so the hardened area is on the chain they use; `rescan.yml` only
+does a plain `docker pull` afterwards. The bump is therefore **currency plus defence-in-depth
+against a future `scope` being introduced** — not a fix for anything currently reachable, and it
+is not recorded as one.
+
+---
+
+**3. Node: majors ignored, and the 22 → 24 move written up as tracked work (was #126).**
+
+#126 proposed **`node:22-bookworm-slim` → `25-bookworm-slim`**. Declining it is a lifecycle
+argument, not a preference: per the [Node release schedule](https://github.com/nodejs/Release),
+**v25 has no LTS date at all** — odd-numbered lines never get one — and its `end` is
+**2026-06-01**, i.e. it was *already end-of-life* when the PR was opened on 2026-07-31. The 22 line
+Scrye builds on runs to **2027-04-30**. Accepting the "upgrade" would have moved the builder from a
+supported runtime to an unsupported one.
+
+So `.github/dependabot.yml`'s `docker` entry now ignores `node` majors:
+
+```yaml
+- dependency-name: "node"
+  update-types: ["version-update:semver-major"]
+```
+
+**Scoped so digest refreshes still arrive.** An `ignore` condition whose `update-types` are all of
+the `version-update:semver-*` form suppresses only *semver version* updates; a digest refresh of
+the same `22-bookworm-slim` tag is not one, and still comes through. That scoping is load-bearing
+rather than incidental: the previous round of declining a major left Dependabot offering nothing at
+all for this image, and the pinned digest went stale until it was refreshed by hand in **#107**
+(§14, 2026-07-26). The config *can* express "ignore majors, allow digests", so no workaround was
+needed and the question the ignore had to answer does not need reopening.
+
+**Stated evidence, since this repo does not accept "the docs say so" as proof.** What is confirmed
+is the *documented semantics* of `update-types` (it filters semver version updates) plus reported
+behaviour of the docker updater continuing to raise digest-only PRs against ignored majors. What
+is **not** yet confirmed is an observed Dependabot run *in this repository* doing so — the first
+scheduled `docker` run after this lands is the actual test. **If the next run produces no `node`
+update at all, the assumption is wrong** and the fallback is the one #107 already used: refresh the
+digest by hand, and say so here.
+
+The `docs/ROADMAP.md` § Near-term Node item was rewritten rather than left as it was. It now states
+plainly that the move is **22 → 24** (Active LTS, supported to **2028-04-30**), that it **must be
+its own PR**, and that it spans **three files which have to change together** —
+`docker/Dockerfile`'s `frontend-builder` digest, `.github/workflows/ci.yml`'s
+`node-version: "22"`, and `CONTRIBUTING.md`'s stated Node requirement (plus `README.md`
+§ Requirements). The reason is spelled out because it is the failure mode, not a formality:
+**bumping the Dockerfile alone leaves CI building on 22 while the image builds on 24**, so a
+version-specific build or lint failure would first appear in a published image rather than in a
+check. The new base must be **digest-pinned, resolved against the registry**. Node **26** is
+recorded as a post-2026-10-28 reconsideration (it becomes LTS then), not as a competing target
+today.
+
+---
+
+**4. The self-referencing image tag ignored (`scrye`).**
+
+Dependabot's docker run has been failing with **`private_source_authentication_failure`** because
+`docker/docker-compose.yml` pins `image: scrye:0.2.0` — Scrye's own **locally built** tag, which
+Dependabot resolves as Docker Hub's `library/scrye` and gets a 401 for. The diagnosis is the
+2026-08-02 entry below; this is the fix it said would land here.
+
+**Which ecosystem entry actually scans the file was verified, not assumed.** `.github/dependabot.yml`
+has *separate* `docker` and `docker-compose` entries, both on `directory: "/docker"`. Reading the
+files: `docker/docker-compose.yml` carries the only `image: scrye:0.2.0` reference (its other two
+images, `aquasec/trivy` and `wollomatic/socket-proxy`, are fully qualified and public), and
+`docker/Dockerfile` contains **no** `scrye` image reference at all — its `scrye` occurrences are a
+build-command comment, the `groupadd`/`useradd` for the runtime user, and `SCRYE_*` env vars, none
+of which any updater parses as a dependency. So the compose file is scanned by the
+**`docker-compose`** entry, and that is where the substantive ignore and its explanation live.
+
+The ignore was added to the **`docker` entry as well**, deliberately. The failing run's ecosystem is
+visible only in the Dependabot UI/job logs, which are not reachable from a code session and are not
+in the public API — so the entry the UI attributes it to could not be verified from here. Adding
+the same `dependency-name: "scrye"` to an entry whose only file never mentions `scrye` suppresses
+nothing and costs nothing, and it removes the failure mode where the fix is filed against the wrong
+half of a two-entry pair. Both entries carry a comment saying the tag is a local build artifact
+rather than a registry dependency.
+
+**The image tag itself was deliberately left alone.** Qualifying it as
+`ghcr.io/tyler-rich/scrye:0.2.0` would make the compose file **pull a published image instead of
+building locally**, changing what the documented quick start does; dropping the tag loses the
+version pin. Both were rejected in the diagnosis entry and both are still rejected.
+
+---
+
+**5. Why #110, #120, #126, #127 and #128 all opened against `main` — two different causes, and only
+one of them was the documented one.**
+
+This is the finding with the longest reach, so it is written out in full.
+
+**#110 and #120 are the documented case.** Both are npm **security** updates. `target-branch` is
+honoured for version updates only; security updates always open against the repository's default
+branch. Their head-branch names corroborate it —
+`dependabot/npm_and_yarn/frontend/npm_and_yarn-…`, with **no target-branch segment**, because
+Dependabot never intended `dev` for them. Nothing new here; this is the rule added to `CLAUDE.md`
+§ Dependency hygiene on 2026-07-31.
+
+**#126, #127 and #128 are not that case, and the "grouped security updates" hypothesis is wrong.**
+Three facts rule it out:
+
+- All three are **version** updates. `node` 22→25, `fastapi` 0.140.0→0.140.13 and
+  `docker/login-action` 4.5.1→4.5.2 are none of them security-advisory-driven, and Dependabot's own
+  closing comment on #128 says the PR "was built based on a group rule" — a version-update group.
+- All **three different ecosystems** (`docker`, `pip`, `github-actions`) were affected identically
+  and simultaneously. A grouped-security override would hit only ecosystems that actually had a
+  security update to group.
+- Their head branches **do** carry the target-branch segment —
+  `dependabot/docker/docker/dev/docker-images-…`, `dependabot/pip/backend/dev/backend-dependencies-…`,
+  `dependabot/github_actions/dev/github-actions-…`. Dependabot reads `target-branch: dev` and
+  encodes it in the branch name. **The configuration worked.**
+
+**The actual cause, with direct evidence.** Each of the three PRs' timelines carries an
+**`automatic_base_change_succeeded`** event:
+
+| PR | Head branch | Base-change event |
+| --- | --- | --- |
+| #126 | `dependabot/docker/docker/dev/docker-images-0e8fc498de` | 2026-08-01T23:56:09Z |
+| #127 | `dependabot/pip/backend/dev/backend-dependencies-fd4d557a46` | 2026-08-01T23:56:09Z |
+| #128 | `dependabot/github_actions/dev/github-actions-85123b4e12` | 2026-08-01T23:56:10Z |
+
+The v0.2.0 promotion PR **#122** merged at **2026-08-01T23:56:07Z**. All three base changes land
+**two to three seconds later**, and all three PRs' `base.sha` is `bb354a5` — the promotion's merge
+commit.
+
+Neither #110 nor #120 carries an `automatic_base_change_succeeded` event. Note the distinction
+that matters when reading a timeline: #120 *does* carry two ordinary **`base_ref_changed`** events
+(2026-07-31T05:06:53Z by `tyler-rich`, 05:09:23Z by `dependabot[bot]`) — that is the **manual**
+retarget-to-`dev`-and-back already documented in the 2026-07-31 release-prep entry, a different
+event type produced by a person changing the base in the UI. `automatic_base_change_succeeded` is
+emitted only by GitHub's retarget-on-base-branch-deletion, and it is the one to look for.
+
+GitHub **automatically retargets open pull requests whose base branch is deleted**, moving them to
+the merged pull request's base. A `dev` → `main` promotion has `dev` as its **head** branch; with
+"Automatically delete head branches" enabled, merging it deleted `dev`, and every open PR based on
+`dev` was silently moved to `main` in the same instant. The three Dependabot PRs were opened
+against `dev` **correctly** on 2026-07-31 and were moved afterwards by GitHub, not by Dependabot,
+not by `.github/dependabot.yml`, and not by any repository security setting.
+
+**This is the same incident as the entry below**, which recorded that the v0.2.0 promotion deleted
+`dev` and that the `protect-dev` ruleset's admin bypass is why *Restrict deletions* did not stop
+it. What was not appreciated then is that the branch deletion had a **second blast radius**: it did
+not only remove a branch that had to be restored, it re-based the entire open-PR queue onto the
+protected release branch. Three PRs were then closed as "opened against main despite the head
+branch being built for dev" — a description that is accurate about the symptom and wrong about the
+cause.
+
+**Recommended fix: nothing further to change, and specifically not `target-branch`.** The remedy is
+already in place — "Automatically delete head branches" was disabled on 2026-08-02 — and it
+addresses this directly, because with no head-branch deletion there is no retarget. Concretely:
+
+- **Do not** alter `target-branch: dev` on any ecosystem. It is doing exactly what it should; the
+  branch names prove Dependabot honoured it.
+- **Do not** trade grouped security updates for one-PR-per-advisory. Grouping is not implicated,
+  and unpicking it would multiply the PR volume for no benefit.
+- **Do not** re-enable auto-delete-on-merge. The entry below already says this for the
+  branch-recovery reason; this entry adds a second, independent reason.
+- If a promotion is ever merged with auto-delete re-enabled by accident, expect the whole open-PR
+  queue on `main` afterwards and **check the head-branch name before assuming a routing bug**.
+
+Written into `CLAUDE.md` § Dependency hygiene and a new `CONTRIBUTING.md` subsection, § *A version
+update on `main` means something else went wrong*, with the two-signal table (head-branch segment,
+timeline event) for telling the two causes apart.
+
+---
+
+**6. The three advisory tracking issues re-verified after the v0.2.0 tag — two of the three closed.**
+
+v0.2.0 was released 2026-08-02T00:03:32Z, so the "re-confirm at each release" cadence each issue
+sets for itself is due. All three were checked against the tree and against current advisory data.
+**#124 and #125 both closed** — the first by applying the bump, the second because the advisory had
+moved under it. #123 stays open, unchanged.
+
+- **#123 (GHSA-qwww-vcr4-c8h2, `react-router`) — still accurate, no change.** `react-router-dom` is
+  still pinned 7.18.1 resolving `react-router@7.18.1`; `frontend/src/main.tsx` still uses
+  `<BrowserRouter>`; there is still no `react-router.config.ts` and no `@react-router/*` package.
+  The advisory range is unchanged at `>=7.12.0 <8.3.0`, no 7.x fix has appeared, and `npm audit`
+  still offers only the `react-router-dom@7.11.0` **downgrade** as its "fix". The acceptance holds
+  exactly as written.
+- **#124 (GHSA-r28c-9q8g-f849, `postcss`) — bumped by hand, 8.5.16 → 8.5.25, and closed.**
+  Detailed below.
+- **#125 (GHSA-mh99-v99m-4gvg, `brace-expansion`) — materially wrong, corrected and closed.**
+
+---
+
+**`postcss` 8.5.16 → 8.5.25, applied by hand (closes #124).**
+
+**Why by hand.** `.github/dependabot.yml` targets `dev` for npm version updates and would normally
+propose this, but it has **not**, and after the three closures above there are **no open Dependabot
+PRs at all**. A HIGH advisory waiting on a bot that is not going to act is worse than the small
+diff, so the bump was applied directly. The original plan to defer it to its own PR was wrong for
+the same reason.
+
+**Which version actually clears it — verified in the published source, not from the range.** The
+advisory reports affected `<=8.5.17`, first patched **8.5.18**. That number was checked rather than
+taken, because the `brace-expansion` case immediately above is a live example of an advisory range
+being wrong mid-flight. Unpacking the tarballs, `lib/previous-map.js`'s `loadFile()` in **8.5.18**
+gains the containment check the advisory describes and 8.5.17 does not have:
+
+```js
+if (cssFile) {
+  let relativePath = relative(dirname(cssFile), path)
+  if (relativePath === '..' || relativePath.startsWith('..' + sep) || isAbsolute(relativePath)) {
+    return undefined
+  }
+}
+```
+
+That is exactly the fix for "path traversal in previous source-map auto-loading" — a
+`sourceMappingURL` can no longer point outside the stylesheet's own directory. **8.5.18 is
+therefore the real floor**, confirmed independently of the advisory metadata. The same check is
+still present in **8.5.25** (renamed `relativePath` → `rel`, semantics identical), which is what
+was pinned: it is the current release on the pinned 8.5 line, and `CLAUDE.md` § Dependency hygiene
+asks for current, actively-maintained pins rather than the bare minimum that clears a finding.
+
+**No `overrides` entry was needed, and no parent was bumped.** `postcss` is a **direct
+`devDependency`** in `frontend/package.json`, not only transitive as first assumed — the six
+packages that also reach it (`vite`, `postcss-preset-mantine`, `postcss-mixins`, `postcss-js`,
+`postcss-nested`, `postcss-simple-vars`, `sugarss`) declare it as a **peer** or caret range
+(`^8.4.21`, `^8.2.14`, `>=8.0.0`, `vite`'s `^8.5.3`), all of which 8.5.25 satisfies. So raising the
+single direct pin lifts the whole tree, and `npm ls postcss --all` shows every consumer deduped
+onto one 8.5.25 copy. The escalation condition — *"if the fix requires a major bump of a parent
+package, stop"* — did not arise.
+
+**Regenerated with npm, not by editing version strings** (`npm pkg set` + `npm install
+--package-lock-only`), so `resolved` URLs and `integrity` hashes moved with the version. The diff
+is three lock hunks and one `package.json` line: `postcss` 8.5.16 → 8.5.25, its `nanoid` floor
+`^3.3.12` → `^3.3.16`, and the resulting `nanoid` 3.3.15 → 3.3.16 — all `dev: true`, no new
+packages.
+
+**Verified after:** `npm ci` installs 8.5.25 and the installed
+`node_modules/postcss/lib/previous-map.js` carries the containment check; ESLint, Prettier, the
+20-file / 69-test Vitest suite and `npm run build` all pass; and **`npm audit` no longer reports
+`postcss`** — the remaining two highs are the `react-router` / `react-router-dom` pair from #123.
+Nothing ships either way: PostCSS runs during `vite build` and the runtime image copies only
+`dist/`.
+
+#124 was closed on its own stated criterion — *"close by hand once `postcss` is pinned at 8.5.25+
+and the frontend build and Vitest suite pass"* — the same standard applied to #125.
+
+---
+
+**What #125 asserted**, on 2026-07-31: the advisory covers `<=5.0.7`, so Scrye's 1.1.18 and 2.1.4
+are both still inside the affected range; there is no fixed release on the 1.x or 2.x lines; the
+bump taken in #121 is "currency, not a clearance" and "clears nothing"; the only route out is
+ESLint 10.
+
+**What is actually true.** The advisory was **revised on 2026-07-31**, the same day #125 was
+written, from a single flat `<=5.0.7` range into per-major ranges:
+
+| Affected | First patched |
+| --- | --- |
+| `>= 4.0.0, < 5.0.8` | 5.0.8 |
+| `>= 3.0.0, < 3.0.3` | 3.0.3 |
+| `>= 2.0.0, < 2.1.3` | 2.1.3 |
+| `< 1.1.17` | 1.1.17 |
+
+Scrye carries **1.1.18** and **2.1.4**. Both are at or above their line's first patched version, so
+**neither copy is affected** — the #121 bump did clear the advisory after all. `npm audit` agrees:
+`brace-expansion` no longer appears in its output at all (the three remaining highs are the
+`postcss` and `react-router`/`react-router-dom` entries from #123 and #124).
+
+**Verified at the source, not from the advisory metadata** — which is the whole point of `CLAUDE.md`
+§ Dependency hygiene, and doubly so here, since it was believing a flat advisory range that put the
+wrong claim into #125 in the first place. Unpacking the published tarballs: **1.1.17** adds
+`EXPANSION_MAX_LENGTH = 4000000`, bounding the total character count the expansion accumulator may
+hold, and rewrites `expand()` to iterate rather than recurse — with the code comments naming
+**CVE-2026-14257**, the CVE behind this GHSA, explicitly. 1.1.16 has none of it. **2.1.3** carries
+the identical fix. 1.1.18 and 2.1.4 extend the same bound to sequence expansion. Both copies
+installed under `frontend/node_modules/` were checked directly and contain `EXPANSION_MAX_LENGTH`.
+
+**#125 was corrected and closed** rather than left open with a note, on its own stated criterion:
+"close by hand once every `brace-expansion` copy resolves to 5.0.8+, **or a backport lands on the
+1.x and 2.x lines**." The backport landed. Its "review cadence" section had also anticipated this
+exact outcome — "check whether a 1.x or 2.x backport has appeared (which would close this cheaply)
+before assuming the major is still the only route" — so the issue contained the instruction that
+resolves it. No duplicate was opened.
+
+**What this does *not* change:** the ESLint 10 / frontend-tooling-majors item in
+`docs/ROADMAP.md` stands on tooling-currency grounds, exactly as #125 said it should. It was never
+justified by this advisory, so retiring the advisory does not touch it.
+
+**And the shipped `CHANGELOG.md` is left as published.** Its `[0.2.0]` § Security text describes
+the brace-expansion bump as currency that clears nothing, which was true against the advisory data
+available when v0.2.0 was tagged and is a published release record. Rewriting shipped release notes
+to match later advisory revisions would make the changelog a moving document; this entry is the
+correction, and it is where a reader is pointed.
+
+---
+
+**7. A roadmap item added for GitHub code scanning (CodeQL).**
+
+Scrye gates on *dependency* vulnerabilities every PR — Trivy and Grype dogfood the image — but
+nothing analyses Scrye's own source for injection, path-traversal, unsafe-deserialization or
+missing-authorization patterns. CodeQL covers both languages in this repo and is **free for public
+repositories**, which this one is.
+
+Recorded in `docs/ROADMAP.md` § Near-term as work needing **its own scoped session**, not a
+settings-page click, for two stated reasons: default setup **adds a workflow that runs on every
+push and pull request**, so it joins the per-PR gate immediately and interacts with the
+still-open branch-protection item; and the first run **typically surfaces a batch of findings that
+all need triage at once** — genuine issues, false positives needing written dismissals, and
+generated or vendored code that should be excluded from analysis. The item also flags the
+default-vs-advanced-setup decision (advanced fits this repo's SHA-pinned, explicitly-configured
+workflow convention and is the only option that can tune query suites or path filters), and
+requires triage decisions to be written down, on the same reasoning as the governance entry below:
+a dismissal with no recorded reason is indistinguishable from an unread finding.
+
+---
+
+**Plan section affected:** `backend/pyproject.toml` + `backend/requirements.lock` (fastapi);
+`frontend/package.json` + `frontend/package-lock.json` (postcss);
+`.github/workflows/{publish,dev-nightly,rescan}.yml` (login-action SHA);
+`.github/dependabot.yml` (node-major and `scrye` ignores); `docker/Dockerfile` (comment pointer);
+`docs/ROADMAP.md` (Node 22→24 item rewritten, CodeQL item added); `CLAUDE.md` § Dependency hygiene
+and `CONTRIBUTING.md` § Releasing (the version-update-on-`main` cause). No locked decision is
+touched: the runtime stays Python 3.14.6, the frontend builder stays Node 22, Mantine v7 and React
+18 are untouched, distribution stays GHCR-only, and `docker/docker-compose.yml` still builds the
+app image locally. Extends the two 2026-08-02 entries below — the auto-delete finding (whose second
+blast radius is item 5) and the `scrye:0.2.0` diagnosis (whose fix is item 4).
+
+---
+
+### 2026-08-02 — Process/Governance — Public-repo governance checklist verified in GitHub Settings; five of eight items closed
+
+**What changed:** the public-repo governance checklist under `docs/ROADMAP.md` § Near-term was
+worked through in GitHub Settings and **five of its eight items are now closed**; those five were
+struck from the checklist and the three that remain open were left in place. Nothing in the
+repository changed as a consequence — this entry *is* the change, for the reason given under
+**Why** below. No code, schema, API contract, security model, job model, auth, or CI behavior is
+affected.
+
+**Closed — verified, and the state each is now in:**
+
+1. **GitHub profile display name set to `tyler-rich`.** This closes **R7/D4** (the 2026-07-13
+   squash-merge-authorship entry). GitHub authors a merge performed through the web UI — the
+   squashed commit of a feature PR, and the merge commit of a promotion — as the merging account's
+   *profile display name*, which repo-local `git config user.name` cannot override. While the
+   profile read "Tyler Richardson", every such merge silently violated `CLAUDE.md`'s
+   author-identity rule no matter how carefully the branch commits were authored. With the display
+   name changed, the rule now holds end-to-end.
+2. **`DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` repo secrets deleted.** Unreferenced by any workflow
+   since the GHCR consolidation (§14 2026-07-09) — dormant registry credentials sitting on a
+   public security-tool repo.
+3. **GHCR package `ghcr.io/tyler-rich/scrye` confirmed public.** §14 2026-07-06 asked to confirm it
+   was *private*, which inverted when the repo went public on 2026-07-09; it is public, as locked
+   decision §6 requires.
+4. **Dependabot security alerts confirmed enabled, and Dependabot malware alerts enabled.** The
+   `.github/dependabot.yml` file only schedules *version* updates; alerting is a separate repo
+   setting. Malware alerts were not on the original checklist and were switched on in the same
+   pass.
+5. **Actions workflow permissions confirmed set to "read repository contents and packages"
+   only, with "Allow GitHub Actions to create and approve pull requests" unchecked.** Both were
+   **already correct — verified, not changed.** Recording that distinction is the point: an item
+   found already-correct and an item never looked at are indistinguishable from inside the
+   repository, and this checklist existed because exactly that ambiguity let items sit. The
+   restrictive default breaks nothing, including GHCR push, because every workflow declares its
+   own explicit `permissions:` block and an explicit block takes precedence over the repo default
+   rather than being capped by it.
+
+**Still open — unchanged, and not to be treated as done:** branch protection on `main` and `dev`;
+the signed-commit-enforcement decision; enabling private vulnerability reporting so `SECURITY.md`'s
+stated channel actually exists. The branch-protection item picked up a scoping note from the
+auto-delete finding in the entry below — an existing ruleset's *Restrict deletions* did not hold
+against an admin — but the item itself is untouched.
+
+**Why this is logged here at all:** a repository-settings change produces **no artifact in the
+codebase**. There is no diff, no file, no CI run, nothing a later session can grep for. That
+invisibility is not incidental — it is precisely why several of these items sat undone for weeks
+after first being written down in §14 prose, until they were collected into a ROADMAP checklist so
+they were at least visible in one place. Striking an item from that checklist without a dated
+record here would restore the original failure mode in a worse form: the list would say "done"
+with nothing behind it, and no way to tell a verified setting from an assumed one. So the rule
+this entry establishes is that **the checklist tracks what is open; §14 records what was actually
+verified and when** — including, explicitly, which items were found already correct.
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (governance checklist reduced to its
+three open items, with a pointer here and a scoping note on branch protection). Closes R7/D4 from
+the 2026-07-13 squash-merge-authorship entry, and the settings-side items carried from §14
+2026-07-06, 2026-07-09, and 2026-07-20.
+
+---
+
+### 2026-08-02 — Infra/Process — Auto-delete-on-merge deleted `dev` during the v0.2.0 promotion; the ruleset's admin bypass is why "Restrict deletions" did not stop it
+
+**What changed:** the repository setting **"Automatically delete head branches" has been
+disabled**. Stale branches are pruned by hand instead. No repository content changed; this entry
+is the record.
+
+**What happened:** merging the v0.2.0 `dev` → `main` promotion PR (#122) **deleted the `dev`
+branch**. `dev` is the *head* branch of a promotion PR, so auto-delete-on-merge treated it as a
+spent feature branch. The ref was still available and `dev` was recovered with GitHub's **Restore
+branch**.
+
+**Why the ruleset did not prevent it — this is the part worth remembering:** the `protect-dev`
+ruleset has **"Restrict deletions" enabled**, and it made no difference. The ruleset's **bypass
+list grants Repository admin "Always allow"**, and auto-delete-on-merge runs with the **merging
+user's** authority — an admin. So the deletion was performed by a principal the ruleset
+unconditionally exempts, and the restriction was never evaluated as a block. Nothing was
+misconfigured in the ruleset; it did exactly what its bypass list says.
+
+Two consequences follow, and both matter more than the one-off recovery:
+
+- **This would recur on every release.** It is not a fluke of #122. Every `dev` → `main`
+  promotion PR has `dev` as its head branch, and promotions are merged by an admin by
+  construction — so with auto-delete on, `dev` gets deleted at each release, and each recovery
+  depends on the ref still being restorable.
+- **The ruleset alone is not protection while admin bypass is on.** Do **not** re-enable
+  "Automatically delete head branches" on the belief that *Restrict deletions* covers it. It does
+  not, for the repository owner, which is the only account that merges promotions. Re-enabling it
+  would need the bypass list narrowed first — and that is a separate decision with its own
+  friction, since the same bypass is what makes ordinary admin operations possible on a
+  single-maintainer repo. The chosen mitigation is the cheap one: leave auto-delete off.
+
+This also sharpens the still-open branch-protection item in `docs/ROADMAP.md` § Near-term, which
+now carries a pointer to this entry: a rule configured on a protected branch should be assumed
+**advisory for the repository owner** until the bypass list has been examined. A ruleset that
+reads "enabled" in the UI is not evidence that it will stop an action taken by an admin.
+
+**Plan section affected:** none of the plan proper — repository settings and operational process.
+`docs/ROADMAP.md` § Near-term gains the scoping note on branch protection. Related: the
+2026-07-31 promotion-merge-method entry above, which is what made the v0.2.0 promotion a merge
+commit; the deletion is independent of the merge method.
+
+---
+
+### 2026-08-02 — Infra — Dependabot's docker run fails on our own local build tag `scrye:0.2.0`
+
+**What changed:** nothing yet in this PR — this records the diagnosis. The fix (an `ignore` entry
+for `dependency-name: "scrye"` in `.github/dependabot.yml`) is being applied in the follow-up
+dependency PR. **It landed** — see the 2026-08-02 post-v0.2.0 dependency-cleanup entry above,
+item 4, which also confirms by reading both files that the compose file is the one carrying the
+reference and adds the ignore to both docker entries.
+
+**The failure:** Dependabot's docker run reports
+**`private_source_authentication_failure`**. The cause is `docker/docker-compose.yml`'s app
+service, which pins `image: scrye:0.2.0` — Scrye's **own local build tag**, built from
+`docker/Dockerfile` by whoever runs the stack (released images publish to
+`ghcr.io/tyler-rich/scrye`, per locked decision §6). Dependabot has no way to know that tag is
+local: an unqualified name resolves to Docker Hub, so it looks up `library/scrye`, gets a **401**,
+and reports the run as an authentication failure against a private source.
+
+**Why the diagnosis is confident:** the other two images in the same file —
+`aquasec/trivy` and `wollomatic/socket-proxy`, both fully qualified and both public — resolve
+fine. So the ecosystem, the directory configuration, and Dependabot's access to the file are all
+working; the failure is specific to the one reference that does not name a real registry image.
+This has never affected the images Dependabot is actually there to track.
+
+**The fix, and where it goes:** an `ignore` entry for `dependency-name: "scrye"` on the ecosystem
+entry that scans `docker/docker-compose.yml` — in this repo that is the **`docker-compose`**
+entry (`.github/dependabot.yml` has both a `docker` entry for `docker/Dockerfile`'s base images
+and a `docker-compose` entry for the compose file's sidecars). If the failing run is surfaced
+under `docker` rather than `docker-compose` in the UI, adding the same ignore to both entries is
+harmless — the Dockerfile has no `scrye` reference for it to suppress. The alternative fixes were
+rejected: qualifying the tag as `ghcr.io/tyler-rich/scrye:0.2.0` would make the compose file pull
+a published image instead of the locally-built one, changing what the documented quick start does,
+and dropping the tag entirely loses the version pin.
+
+**Plan section affected:** `.github/dependabot.yml` (in the follow-up PR). No effect on the build,
+the image, or locked decision §6 — `docker/docker-compose.yml` keeps building the app image
+locally.
 
 ---
 

@@ -101,6 +101,34 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "docker"
+    ignore:
+      # Node MAJOR bumps are declined here on a support-lifecycle argument, not
+      # a preference. The builder is on 24 (`krypton`), the Active LTS, which is
+      # supported through 2028-04-30 — the longest window available today.
+      # Node's odd-numbered lines never become LTS: 25 (proposed as #126)
+      # reached end-of-life on 2026-06-01, so taking it would have moved the
+      # build onto an UNSUPPORTED runtime, not extended anything. Node 26 does
+      # not enter LTS until 2026-10-28; it is a deliberate decision to make
+      # after that date, not a bump to accept from a PR. A major here also
+      # spans three files that must change together (this Dockerfile stage,
+      # ci.yml's `node-version`, and the CONTRIBUTING/README requirement), so it
+      # is not something a Dependabot bump can carry regardless.
+      #
+      # Scoped to `version-update:semver-major` on purpose: DIGEST refreshes of
+      # the pinned `node:24-bookworm-slim` tag are NOT a semver version update
+      # and still come through. That matters — declining the major previously
+      # left Dependabot offering nothing at all for this image and the pinned
+      # digest went stale until it was refreshed by hand in #107
+      # (docs/ARCHIVE.md §14, 2026-07-26).
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      # `scrye` is Scrye's OWN local build tag, not a registry dependency — see
+      # the docker-compose entry below, which is the entry that actually scans
+      # the file carrying it. Repeated here because the failing run is surfaced
+      # under one of these two ecosystems and the distinction is not visible
+      # from the repository; suppressing a name the Dockerfile never references
+      # is a no-op.
+      - dependency-name: "scrye"
     groups:
       docker-images:
         patterns:
@@ -115,6 +143,21 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "docker"
+    ignore:
+      # docker/docker-compose.yml pins `image: scrye:0.3.0` — Scrye's own image,
+      # BUILT LOCALLY from docker/Dockerfile by whoever runs the stack. It is not
+      # a registry dependency: released images publish to
+      # ghcr.io/tyler-rich/scrye (locked decision §6). Dependabot cannot know
+      # that, so it resolves the unqualified name as Docker Hub's
+      # `library/scrye`, gets a 401, and fails the whole run with
+      # `private_source_authentication_failure`.
+      #
+      # Ignoring the name is the fix. The alternatives were rejected: qualifying
+      # the tag as ghcr.io/tyler-rich/scrye:0.3.0 would make the compose file
+      # PULL a published image instead of building locally, changing what the
+      # documented quick start does, and dropping the tag loses the version pin.
+      # See docs/ARCHIVE.md §14, 2026-08-02.
+      - dependency-name: "scrye"
     groups:
       docker-images:
         patterns:

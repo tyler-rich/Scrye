@@ -279,6 +279,16 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   ahead, and merging it can resolve *away* from the security fix. This is what happened to
   **#120** (brace-expansion) on 2026-07-31; it was closed and the bump reapplied on `dev`. See
   `docs/ARCHIVE.md` §14 (2026-07-31) and `CONTRIBUTING.md` § Releasing.
+  **A *version* update sitting on `main` has a different cause and needs a different response.**
+  `target-branch` works for version updates, so one on `main` was moved there after the fact:
+  GitHub **automatically retargets every open PR whose base branch is deleted** to the merged PR's
+  base, and a `dev` → `main` promotion has `dev` as its head branch. With auto-delete-on-merge on,
+  merging a promotion therefore silently rebases the whole open-PR queue onto `main`. That is what
+  happened to **#126/#127/#128** on 2026-08-01, not a Dependabot misconfiguration. Distinguish the
+  two by the head branch name (a version update's carries the `/dev/` target-branch segment; a
+  security update's does not) and by the PR timeline's `automatic_base_change_succeeded` event.
+  Auto-delete is disabled for exactly this reason — do not re-enable it. See `docs/ARCHIVE.md` §14
+  (2026-08-02) and `CONTRIBUTING.md` § A *version* update on `main` means something else went wrong.
 - **Interpreter CVEs: verify against the target version's source before a bump is justified on
   security grounds.** Scanner output, advisory "fixed in" fields, and this repo's own issue
   summaries are **evidence, not proof** — none of them is sufficient on its own to claim that

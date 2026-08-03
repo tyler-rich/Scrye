@@ -14,7 +14,7 @@ const mockedGetAbout = vi.mocked(getAbout);
 
 const BASE_ABOUT: AboutInfo = {
   app_name: 'Scrye',
-  version: '0.2.0',
+  version: '0.3.0',
   status: 'healthy',
   database: 'ok',
   python_version: '3.14.6',
@@ -51,7 +51,7 @@ describe('AboutPanel — version stat', () => {
 
     // Bound to its own stat card: the Scanners table has a "Version" column
     // header too, so the label alone does not identify the app-version stat.
-    const value = screen.getByText('0.2.0');
+    const value = screen.getByText('0.3.0');
     expect(value.previousElementSibling).toHaveTextContent('Version');
   });
 });

@@ -351,7 +351,7 @@ def update_schedule(
         secret = payload.passphrase.get_secret_value()
         if len(secret) < _MIN_PASSPHRASE_LEN:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Passphrase must be at least {_MIN_PASSPHRASE_LEN} characters.",
             )
         schedule.passphrase_ciphertext = encrypt_secret(

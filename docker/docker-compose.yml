@@ -40,7 +40,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: scrye:0.2.0 # built locally from docker/Dockerfile; released images publish to ghcr.io/tyler-rich/scrye (locked decision §6)
+    image: scrye:0.3.0 # built locally from docker/Dockerfile; released images publish to ghcr.io/tyler-rich/scrye (locked decision §6)
     user: "1000:1000"
     read_only: true
     security_opt:

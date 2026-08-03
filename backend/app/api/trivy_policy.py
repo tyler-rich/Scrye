@@ -69,7 +69,7 @@ def _validate_vex_content(content: str) -> None:
         json.loads(content)
     except (ValueError, UnicodeDecodeError) as exc:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="VEX document content must be valid JSON.",
         ) from exc
 

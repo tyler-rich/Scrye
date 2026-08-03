@@ -10,18 +10,21 @@
 #   - Final image runs as a non-root user, COPY (never ADD), no secrets baked in.
 #   - HEALTHCHECK probes /healthz.
 # Build context is the repository root:
-#   docker build -f docker/Dockerfile -t scrye:0.2.0 .
+#   docker build -f docker/Dockerfile -t scrye:0.3.0 .
 # ─────────────────────────────────────────────────────────────────────────────
 
 # --- Stage 1: build the React/Vite SPA ---------------------------------------
-# Node 22 (`jod`), digest-pinned. Keep this on the 22 line: 24 (`krypton`) is the
-# intended next move — it is the Active LTS and is supported through 2028-04-30,
-# versus 22's 2027-04-30 — but that bump also touches ci.yml's `node-version` and
-# CONTRIBUTING, so it is tracked as its own item in docs/ROADMAP.md rather than
-# ridden in on a digest refresh. Node 26 is not LTS until 2026-10-28 and is not a
-# candidate. Refresh this digest against the registry (the `22-bookworm-slim` tag
-# moves with each 22.x patch); do not let a Dependabot major stand in for it.
-FROM node:22-bookworm-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS frontend-builder
+# Node 24 (`krypton`), digest-pinned. This is the Active LTS: it entered LTS on
+# 2025-10-28, goes to maintenance on 2026-10-20 and is supported through
+# 2028-04-30, versus the 22 line's 2027-04-30. Keep this in lockstep with
+# ci.yml's `node-version` — the image and CI must build on the same major, or a
+# version-specific build/lint failure surfaces in a published image instead of in
+# a check. Node 26 does not enter LTS until 2026-10-28; revisit then, not before.
+# Refresh this digest against the registry (the `24-bookworm-slim` tag moves with
+# each 24.x patch); do not let a Dependabot major stand in for it — node majors
+# are ignored in .github/dependabot.yml precisely so the digest refresh is what
+# Dependabot offers here.
+FROM node:24-bookworm-slim@sha256:235600a8101ab264e117b1768e925532262668dc9b581ef1dd7d96ced463b8e7 AS frontend-builder
 WORKDIR /build/frontend
 
 # Install deps from the lockfile first for better layer caching. The BuildKit

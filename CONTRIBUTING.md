@@ -16,7 +16,8 @@ everyone.
 ### Prerequisites
 
 - **Python 3.14** (3.14.6 or later)
-- **Node 20+** (the image builds with Node 22)
+- **Node 22+** (the image and CI both build with Node 24, the Active LTS; the 20
+  line reached end-of-life on 2026-04-30)
 - **Docker** + the **Compose v2** plugin (for the integrated run; Buildx for a
   multi-arch image build)
 - For native scan runs: the **`trivy`**, **`grype`**, and **`syft`** binaries on
@@ -389,6 +390,31 @@ cd backend && pytest
 cd frontend && npm test && npm run build && npm run lint && npm run format:check
 ```
 
+### Tests that need the real scanner binaries
+
+`backend/tests/test_scanner_symlink_containment.py` is a regression guard against a
+**scanner** change rather than a Scrye change: containment of a symlink planted inside an
+allowed filesystem scan root is inherited entirely from Syft's directory resolver, and
+upstream marks the line it hangs on with a `FIXME` (issue #135, `docs/ARCHIVE.md` §14,
+2026-08-02). It therefore has to run the real pinned binaries; a plain `pytest` skips it.
+
+Point it at the versions `docker/Dockerfile` pins — the test asserts the versions match,
+so a stale local copy fails rather than passing quietly:
+
+```bash
+cd backend
+SCRYE_SYFT_BINARY=/path/to/syft \
+SCRYE_GRYPE_BINARY=/path/to/grype \
+SCRYE_TEST_REQUIRE_SCANNER_BINARIES=1 \
+  pytest tests/test_scanner_symlink_containment.py
+```
+
+`SCRYE_TEST_REQUIRE_SCANNER_BINARIES` turns "binary not found" from a skip into a failure.
+CI sets it in the `image` job, which extracts `syft`/`grype` from the image it just built,
+so the guard runs on every PR against exactly the binaries the image ships. **Re-run it on
+every Grype/Syft bump** — that is what it exists for. If it ever fails, treat it as a live
+finding and read the severity ceiling in issue #135 before rating it.
+
 Frontend tests run under **Vitest** (`npm test`); place them next to the code
 they cover. The suite runs in two environments, chosen automatically by file
 extension (see `frontend/vite.config.ts`):
@@ -543,6 +569,36 @@ moved ahead of that snapshot, merging it can revert newer work — including, in
 very fix the PR exists to deliver. It also does not re-run CI (`on: pull_request` does not fire on
 `edited`), so the green check shown after a retarget is from the old base. PR #120 on 2026-07-31 is
 the worked example: retargeted, went stale, closed, and the bump was reapplied on `dev` instead.
+
+### A *version* update on `main` means something else went wrong
+
+The rule above explains a **security** update on `main`. It does **not** explain a routine version
+update there, and if you find one, the cause is not `target-branch`.
+
+**Merging a promotion PR retargets every open PR based on `dev`.** GitHub automatically retargets
+open pull requests whose base branch is deleted, moving them to the merged PR's base. A `dev` →
+`main` promotion has `dev` as its *head* branch, so if the head branch is deleted on merge, every
+open PR based on `dev` — including all of Dependabot's — is silently moved to `main`. This is what
+happened to **#126, #127 and #128** on 2026-08-01: all three were opened against `dev` correctly,
+and all three recorded an `automatic_base_change_succeeded` event within three seconds of the
+v0.2.0 promotion merging. Nothing in `.github/dependabot.yml` was involved.
+
+**"Automatically delete head branches" is already disabled** for this reason (`ARCHIVE.md` §14,
+2026-08-02), so this should not recur — but the two failure modes look identical in the PR list, so
+tell them apart before reaching for either response above:
+
+| Signal | Security update (targets `main` by design) | Retargeted version update |
+| --- | --- | --- |
+| Head branch name | no target-branch segment, e.g. `dependabot/npm_and_yarn/frontend/…` | carries `/dev/`, e.g. `dependabot/pip/backend/dev/…` |
+| PR timeline | no `automatic_base_change_succeeded` | `automatic_base_change_succeeded`, timestamped seconds after the promotion merged |
+
+Read the timeline event type precisely: a plain **`base_ref_changed`** is someone changing the base
+by hand, which is what #120 shows and is a different (and discouraged — see above) situation.
+**`automatic_base_change_succeeded`** is the one GitHub emits for retarget-on-deletion.
+
+A retargeted version update is not stale in the way #120 was — it was simply moved. Close it and
+reapply the bump on `dev`, or wait for Dependabot's next run to re-open it against `dev` once the
+branch exists again.
 
 ### What gets published
 

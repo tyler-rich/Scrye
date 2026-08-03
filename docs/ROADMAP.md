@@ -44,17 +44,22 @@ Small, self-contained work that closes a concrete gap.
   been updated since then is still column-only. That fallback can only be dropped once every
   row has been re-encrypted, which is exactly what this action would do — one eager pass
   instead of waiting for each record's next write.
-- **Move the frontend build from Node 22 to Node 24.** The image's `frontend-builder` stage and
-  CI both run Node 22 (`jod`), which entered maintenance on 2025-10-21 and is supported only
-  through **2027-04-30**. Node 24 (`krypton`) is the Active LTS and is supported through
-  **2028-04-30**, so it is where this should land. Node **26** is deliberately not the target: it
-  does not become LTS until **2026-10-28**. The move spans three places that must change together
-  — `docker/Dockerfile`'s pinned `node:22-bookworm-slim` digest, `.github/workflows/ci.yml`'s
-  `node-version: "22"`, and `CONTRIBUTING.md`'s stated Node floor (plus the matching line in
-  `README.md` § Requirements) — which is exactly why it is its own item and not something a
-  Dependabot digest bump can carry. Until it happens, the 22 digest still needs refreshing on its
-  own schedule; Dependabot offers the 26 major instead of a 22 digest refresh, so declining the
-  major leaves the builder stale (see `ARCHIVE.md` §14, 2026-07-26).
+- ~~**Move the frontend build from Node 22 to Node 24.**~~ **Done 2026-08-02** — the image's
+  `frontend-builder` stage, CI's `setup-node`, and the stated requirement in `CONTRIBUTING.md` /
+  `README.md` all moved to Node 24 (`krypton`, Active LTS, supported through **2028-04-30**) in
+  one PR, with `.github/dependabot.yml`'s major-ignore re-pointed at the 24 line. See
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
+
+  **What remains is the Node 26 decision, and it is not due yet.** 26 became current on
+  2026-05-05 but does not enter LTS until **2026-10-28** (EOL 2029-04-30). Revisit it
+  deliberately after that date — the 24 line does not go to maintenance until 2026-10-20 and is
+  supported for eighteen months past it, so there is no pressure. The same three-file lockstep
+  applies to any future major: the Dockerfile stage, `ci.yml`'s `node-version`, and the
+  CONTRIBUTING/README requirement move together, or a version-specific failure surfaces in a
+  published image instead of in a check. Node majors stay ignored for the `docker` ecosystem in
+  `.github/dependabot.yml` — scoped to `version-update:semver-major`, so digest refreshes of the
+  pinned 24 tag still arrive — which is why odd-numbered lines like the **#126** Node 25 proposal
+  (never LTS, EOL 2026-06-01) do not show up here.
 - **Frontend tooling majors from Dependabot #86.** After the Mantine/React ignores landed
   (locked decision §2 — `ARCHIVE.md` §14, 2026-07-26), the rest of that grouped PR is still
   wanted and still unapplied: **TypeScript 5.7 → 7.0**, **ESLint 9 → 10**, **`typescript-eslint`
@@ -63,80 +68,207 @@ Small, self-contained work that closes a concrete gap.
   every one of them lands on the **type-aware ESLint gate** turned on 2026-07-24, so the real
   work is the lint-config churn they shake out, not the version numbers. Best done as a single
   deliberate PR rather than folded into an unrelated change.
-- **Retire the deprecated Starlette status-code constants.** `status.HTTP_422_UNPROCESSABLE_ENTITY`
-  raises a `StarletteDeprecationWarning` on every attribute access — Starlette renamed it to
-  `HTTP_422_UNPROCESSABLE_CONTENT` — and it is referenced at **22 call sites** across seven routers
-  (`scans.py` ×10, `scan_schedules.py` ×4, `registries.py` ×3, `notifications.py` ×2, and one each
-  in `trivy_policy.py`, `git_credentials.py`, `backups.py`). The same rename hit
-  `HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `HTTP_413_CONTENT_TOO_LARGE`, at 2 more call sites in
-  `uploads.py`. These are the backend suite's standing deprecation warnings, recorded as
-  pre-existing at each of the last two interpreter bumps (`ARCHIVE.md` §14, 2026-07-03 and
-  2026-07-25) and never actually cleared. The change is mechanical — the constants are equal
-  integers, so no status code or behavior moves — and it takes the suite's warning output down to
-  the Starlette-TestClient httpx notice, so a genuinely new warning becomes visible instead of
-  being lost in known noise.
+- **`react-router` 7 → 8.** Belongs with the tooling majors above, and is now a **pure currency
+  item with no security component**. It was previously coupled to GHSA-qwww-vcr4-c8h2 (#123),
+  whose only recorded fix was the 8.3.0 major; that advisory was closed on 2026-08-02 by the
+  **7.18.2 backport** instead, so nothing about the 8 line is required (see
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md)). Do not re-argue it as a security fix — as of
+  7.18.2 there is nothing left for it to fix. The migration's actual cost is that v8 folds
+  `react-router-dom` back into `react-router`, so **every import site in `frontend/src/` moves**
+  (twelve files today), plus whatever the type-aware ESLint gate makes of the new type surface —
+  which is the same risk the bumps above share, and the reason to do them together.
+- **Ask GitHub to re-cut GHSA-qwww-vcr4-c8h2's affected range for the 7.18.2 backport.** The
+  advisory still ranges **`>= 7.12.0, < 8.3.0`** — re-confirmed during the v0.3.0 release prep on
+  2026-08-03, where `npm audit` against the current lockfile reported `react-router` HIGH at
+  `7.12.0 - 8.2.0`. `react-router` 7.18.2 is inside that range while *carrying the fix*, so
+  `npm audit` and Dependabot will report a HIGH against a package we have actually patched,
+  indefinitely and with no version we can move to that silences it short of the 8 major above.
+  The follow-up is an **advisory-improvement request** (the *Suggest improvements for this
+  vulnerability* path on the GHSA page) asking for the range to be re-cut to
+  **`>= 7.12.0, < 7.18.2`**, with the 8.x range left as it is.
+
+  **Why it is worth the effort rather than something to live with.** A permanent false HIGH on a
+  dependency we have already fixed is not a cosmetic annoyance: it trains everyone reading the
+  output — us, and anyone reviewing a Dependabot queue — to dismiss that package's alerts on
+  sight, which is exactly how a *real* future `react-router` advisory gets waved through. Scrye is
+  a vulnerability scanner that gates its own CI on its own findings; a standing known-bogus HIGH in
+  that pipeline is a direct hit on the signal the project exists to produce. It also is not only
+  our problem — **every consumer on 7.18.2 sees the same false positive**, so the fix is worth
+  making upstream rather than papering over locally with an ignore rule.
+
+  **The evidence is already gathered; do not re-derive it.** The tarball comparison is recorded in
+  [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md) (v0.3.0 release prep): `throwIfPotentialCSRFAttack()`
+  is byte-identical across 7.18.1, 7.18.2 and 8.3.0, and the fix is entirely at the call site in
+  `index-react-server.js`'s `generateMiddlewareResponse` — 7.18.1 runs the origin check and
+  `processServerAction()` inside one `try`, while 7.18.2 isolates the check in its own `try`,
+  rewrites the rejected request to `method: "GET"`, and gates the action behind
+  `if (!potentialCSRFAttackError)`, which is the same code 8.3.0 ships. Upstream's `CHANGELOG.md`
+  at 7.18.2 lists exactly one patch change, *"Harden RSC CSRF codepaths"*
+  ([remix-run/react-router#15353](https://github.com/remix-run/react-router/pull/15353)), so the
+  backport is the entire 7.18.1 → 7.18.2 diff. Background and the reachability assessment are in
+  [#123](https://github.com/tyler-rich/Scrye/issues/123) (closed) and
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
+
+  Independent of Scrye's own exposure, which is nil either way: the SPA is declarative-only, so the
+  vulnerable RSC entry point is never imported and never enters the bundle. This item is about the
+  advisory's metadata, not about risk.
+- ~~**Retire the deprecated Starlette status-code constants.**~~ **Done 2026-08-03** —
+  `HTTP_422_UNPROCESSABLE_ENTITY` → `HTTP_422_UNPROCESSABLE_CONTENT` and
+  `HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `HTTP_413_CONTENT_TOO_LARGE` across all 24 call sites in the
+  8 files that used them. Both constants verified equal to their predecessor before the rename (422
+  and 413 respectively, checked against the pinned `starlette==1.3.1`), so no status code or
+  response behavior moved. See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
 - **Offline / air-gapped scanner-DB import.** The Scanners settings already drive scheduled
   online DB refreshes (`trivy image --download-db-only`, `grype db update`). Add an import path
   for environments with no outbound access to `mirror.gcr.io` / `grype.anchore.io`, so the Trivy
   and Grype vulnerability databases can be side-loaded from a file.
-- **De-flake `test_cancel_queued_scan` (make slot acquisition observable).**
-  `backend/tests/test_scans_api.py::test_cancel_queued_scan` is timing-dependent **by
-  construction**: it monkeypatches a scanner whose `scan_image` does `await asyncio.sleep(0.2)`,
-  forces the worker semaphore to a single slot, queues two scans, and cancels the second — which
-  only works while that second scan is still `queued`. On a loaded CI runner the 0.2 s window
-  closes before the cancel POST is processed, the scan has left `queued`, and the endpoint
-  correctly returns **409**. So the failure is the *test* being wrong, not the code: queued-only
-  cancellation is a deliberate design decision (`docs/ARCHIVE.md` §14, 2026-07-03 — the in-process
-  worker has no channel to interrupt a live scanner subprocess; lifting that limit is the separate
-  "Cancel a running scan" item under Medium-term).
-
-  **Fix by making the worker's slot acquisition observable to the test** — e.g. an event/future the
-  test can await to know the first scan actually holds the only slot, so the cancel is issued at a
-  known state instead of inside a sleep window. **Do not just widen the sleep**: a longer sleep only
-  lengthens the odds, leaves the race in place, and slows the suite on every run.
-
-  **Why it matters more than one red check:** a test that reddens CI intermittently trains everyone
-  to re-run without reading the failure. That habit is exactly how a real regression gets waved
-  through — and it costs the most on a security tool, where the dogfood gate's output is the thing
-  nobody should learn to skim. Observed 2026-07-31 on a docs-and-workflow-only PR (#118), where it
-  failed once and passed on re-run of the identical commit.
+- ~~**De-flake `test_cancel_queued_scan` (make slot acquisition observable).**~~ **Done 2026-08-03**
+  — the fixed `await asyncio.sleep(0.2)` the fake scanner used to hold the worker's only slot is
+  replaced with a `threading.Event` pair: the first scan's `scan_image` blocks until the test
+  releases it, and a second event fires the instant `scan_image` actually starts (which only
+  happens once the worker's semaphore is acquired), so the test knows the second scan is
+  deterministically still `queued` before it cancels it — no wall-clock window to race under a
+  loaded CI runner. Test-only change; queued-only cancellation itself is unchanged (still gated on
+  the separate "Cancel a running scan" item under Medium-term). See
+  [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
+- **Retire `GET /api/scans` (deprecation-window decision, not yet scheduled).** The bare-array
+  `GET /api/scans` was frozen and marked `deprecated=True` rather than reshaped when the list
+  envelope landed (`backend/app/api/scans.py:276`, `docs/ARCHIVE.md` §14, 2026-07-25) — its
+  replacement, `GET /api/scans/history`, already ships the `{total, items}` envelope. Removing the
+  deprecated endpoint is a **breaking change for any external consumer using an API token**, so it
+  needs an announced deprecation window (a `CHANGELOG.md` entry plus a stated removal release), not
+  a silent drop in a routine cleanup PR. This item exists so that window is a deliberate decision
+  someone makes, rather than something that never gets tracked because the endpoint itself was
+  already marked deprecated and looked "handled." No removal date is set yet.
 - **Finish the public-repo governance setup (repository settings).** Going public added the
   in-repo pieces — a `.github/CODEOWNERS` (owner-review requests) and a `SECURITY.md` (private
   vulnerability reporting). The remaining pieces are GitHub **settings**, not files, so they live
   here as a checklist. None of them is doable from a code session, which is exactly why several
   sat invisible in `ARCHIVE.md` §14 prose for weeks before being collected here.
 
-  - **Branch protection** on `main` and `dev` — require a passing CI status, require a pull
-    request, require review from Code Owners, and for `main` restrict who can push tags/promote.
-  - **Signed-commit enforcement** — a decision to make. Requiring signed commits on the
-    protected branches means contributors must sign; worth it for a security tool, so weigh the
-    friction.
-  - **Private vulnerability reporting** — enable in the repo's Security settings, so
-    `SECURITY.md`'s stated channel actually exists.
-  - **Confirm Dependabot security alerts are enabled** (Security tab). The config file only
-    schedules *version* updates; security alerts are a separate repo setting. (§14 2026-07-20
-    context; carried from the remediation tracker.)
-  - **Settings → Actions → General → Workflow permissions → read-only.** Every workflow already
-    declares its own explicit `permissions:` block, and an explicit block takes precedence over
-    the repo default rather than being capped by it, so the restrictive default breaks nothing —
-    including GHCR push. Logged in §14 2026-07-06 and never carried anywhere until now.
-  - **Confirm the GHCR package `ghcr.io/tyler-rich/scrye` is public.** §14 2026-07-06 asked to
-    confirm it was *Private* (it inherited a private repo); the repo went public on 2026-07-09,
-    so the check is now the inverse — it should be **public**, per `CLAUDE.md` locked decision §6.
-    Still unverified in either direction.
-  - **Delete the unused `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` repo secrets.** No workflow has
-    referenced them since the GHCR consolidation (§14 2026-07-09); `grep -r DOCKERHUB .github/`
-    returns nothing. Dormant registry credentials on a public security-tool repo.
-  - **Set the GitHub profile display name to `tyler-rich`.** A squash-merge authors the squashed
-    commit with the merging account's *profile display name*, which repo-local `git config
-    user.name` cannot override — so while the profile reads "Tyler Richardson", every
-    squash-merged promotion silently breaks `CLAUDE.md`'s author-identity rule (R7/D4, §14
-    2026-07-13).
+  **Six of the original eight items are now closed.** Five were verified in GitHub Settings on
+  2026-08-02 — the GitHub profile display name, the dormant Docker Hub secrets, GHCR package
+  visibility, Dependabot security alerts, and the Actions workflow permissions; what that
+  verification actually found (including the two that turned out to be correct already rather than
+  newly changed) is in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md). **Private vulnerability
+  reporting is the sixth** — see below. Check that entry, not this list, before re-doing any of
+  them: a settings change leaves no artifact in the repository, so §14 is the only durable record it
+  happened.
+
+  **What remains is one untracked decision.** The branch-protection item turned out to be mostly
+  done; the two genuinely open pieces of it were tracked as issues, and both are now closed.
+
+  - **Branch protection** on `main` and `dev` — **mostly done; do not re-scope from the original
+    wording.** A ruleset readout on 2026-08-02 (`ARCHIVE.md` §14) found `protect-dev` and
+    `protect-main` both `active`, each already carrying `pull_request` (1 approval,
+    dismiss-stale-on-push, thread resolution, squash-only), `required_status_checks`, `deletion`,
+    and `non_fast_forward`. So *"require a passing CI status"* and *"require a pull request"* are
+    **already in place on both branches**.
+
+    Three things were flagged as genuinely open, two of them tracked as issues:
+
+    - ~~**[#136](https://github.com/tyler-rich/Scrye/issues/136) — the dogfood self-scan is not a
+      required check.**~~ **Done 2026-08-03** — verified live: `protect-dev`'s
+      `required_status_checks` now lists `Backend — lint + tests`, `Frontend — lint + build`, and
+      `Image — build + dogfood self-scan`, with "Require branches to be up to date before merging"
+      also enabled. See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
+    - ~~**[#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricts tag
+      pushes.**~~ **Done 2026-08-03** — a `protect-tags` ruleset now targets `v*` (any tag
+      beginning with `v`, not only the dotted semver form), restricting creation/update/deletion
+      and blocking force pushes, with Repository admin on the bypass list (same bypass shape as
+      `protect-dev`/`protect-main`). See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
+    - **Code-owner review is not required.** `require_code_owner_review` is `false` on both rulesets,
+      so `.github/CODEOWNERS` requests review but does not compel it. Untracked — it is a decision
+      rather than a gap, and on a single-maintainer repo it is close to a no-op today.
+
+    Note when working any of these: *Restrict deletions* is enabled on `protect-dev` and did **not**
+    prevent `dev` from being deleted during the v0.2.0 promotion, because the ruleset's bypass list
+    grants Repository admin *Always allow* (`ARCHIVE.md` §14, 2026-08-02). Assume any rule configured
+    here is advisory for the repository owner until the bypass list says otherwise. (The bypass list
+    is not readable at the API permission level available to a code session — the ruleset endpoint
+    returns `bypass_actors: null` — so confirm it in Settings rather than from an API dump.)
+  - ~~**Signed-commit enforcement**~~ **Declined 2026-08-03** — every commit in this repo is
+    authored by a Claude Code session pushing over local `git`, with no signing key present in that
+    environment; requiring signed commits would reject every session push outright, and both
+    workarounds (provisioning a signing key into a sandboxed session, or moving to API-authored
+    commits) cost more than the friction they'd remove on a solo-maintainer repo. Revisit if a
+    collaborator with write access is added, or if the commit workflow stops going through local
+    git. See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
+  - ~~**Private vulnerability reporting**~~ — **Done; verified 2026-08-02.**
+    `GET /repos/tyler-rich/Scrye/private-vulnerability-reporting` returns `{"enabled": true}`, so
+    `SECURITY.md`'s stated channel exists. It is not recorded when this was turned on — it may have
+    been enabled at any point since the repo went public and simply never struck from this list,
+    which is the same drift this checklist was created to stop.
+
+- ~~**Enable GitHub code scanning (CodeQL) for Python and TypeScript.**~~ **Done 2026-08-02** —
+  enabled via **default setup** on the **`security-extended`** query suite (a dropdown in the same
+  settings pane; "default setup" names the setup mode, not the suite). Language auto-detection added
+  a third language, **`actions`**, alongside Python and JavaScript/TypeScript. The first run covered
+  every source file — 174/174 Python, 78/78 TypeScript, 2/2 JavaScript, 5/5 workflows — and produced
+  **six alerts, all Python, all assessed as false positives**: two `py/path-injection` on the
+  filesystem-scan containment gate (`backend/app/scanners/targets.py:138` and `:144`), three
+  `py/incomplete-url-substring-sanitization` on test assertions, and one `py/log-injection` on an
+  `int`-typed path parameter (`backend/app/api/scans.py:574`). Full reasoning per alert, the
+  reproduction method behind the numbers, and the recommended disposition for each are in
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
+
+  ~~**Advanced setup was not taken.**~~ **Reversed 2026-08-02 — the migration is done.** Default
+  setup's pull-request trigger targets the **default branch**, so PRs into `dev` — where day-to-day
+  work is actually PR'd — got no CodeQL check at all (confirmed on #134, which got four check runs
+  and no CodeQL among them). CodeQL therefore analysed `main` on push, *after* a promotion had
+  landed, where a finding's remedy is a revert rather than a review comment, and where with several
+  PRs in flight it is attributable to a batch rather than to the PR that introduced it.
+  `.github/workflows/codeql.yml` now runs on `pull_request` and `push` for both `dev` and `main`, on
+  the same `security-extended` suite, the same three languages and the same SHA-pinned
+  `codeql-action` v4.37.4 default setup was running — so nothing about the analysis changed, only
+  when it runs. Pinning the action does not pin the query packs (`init`'s `tools:` defaults to the
+  recommended bundle), and Dependabot's existing grouped weekly `github-actions` PR carries the SHAs
+  forward. **Default setup's weekly scan is carried over too** — `schedule: - cron: "0 4 * * 1"` —
+  so a newly published query fires on its own rather than waiting for someone to touch a file in
+  that language. One scope note, because it is not obvious: `on: schedule` **always runs against the
+  default branch**, so that cron analyses `main`, not `dev`, and does not fire until `codeql.yml`
+  reaches `main` via a promotion. `dev` is covered continuously by the push/PR triggers instead. See
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
+
+  **What remains is disposition, and two settings edits.** No alert has been dismissed — that is a
+  deliberate hold, since a dismissal with no written reason is indistinguishable from an unread
+  finding. The §14 entry supplies the written reason for each; applying them (and deciding whether
+  the two `targets.py` alerts warrant a code change to make the containment legible to the analyzer,
+  rather than merely a dismissal) is the open work.
+
+  - **Disable default setup** (Settings → Code security → Code scanning → CodeQL analysis → ⋯ →
+    *Switch to advanced*). This is **not optional and not cosmetic**: the two configurations are
+    mutually exclusive server-side — while default setup is enabled the API rejects the committed
+    workflow's SARIF with *"CodeQL analyses from advanced configurations cannot be processed when the
+    default setup is enabled"*, so the new workflow's checks stay red. Alert history is preserved
+    across the conversion. The §14 entry gives the exact order (disable → re-run the PR's failed
+    CodeQL jobs to prove they go green → merge → *then* edit the rulesets), which keeps the
+    unscanned window to about a minute.
+  - **Add the three contexts to `protect-dev`'s — and `protect-main`'s — required status checks**:
+    `CodeQL — python`, `CodeQL — javascript-typescript`, `CodeQL — actions` (U+2014 em dash, one
+    ordinary space each side, exactly as in `Backend — lint + tests`). `required_status_checks` is an
+    **explicit allowlist of contexts**, currently naming only `Backend — lint + tests` and
+    `Frontend — lint + build` on both rulesets, so until these are added CodeQL runs and is visible
+    but does not block a merge. Do it **after** the merge, never before: a required context with
+    nothing reporting blocks a PR forever, and an open PR that predates the workflow has no CodeQL
+    run to report. Same hazard, same fix as [#136](https://github.com/tyler-rich/Scrye/issues/136);
+    both edits can be made in one pass.
 
 ## Medium-term
 
 Features and developer-experience investments with a larger surface.
 
+- **Admin-issued OIDC link invitations.** Self-service linking shipped (a user binds their *own*
+  account to an OIDC identity through the authorization-code flow). An admin binding an identity
+  on someone *else's* behalf is deliberately absent and cannot be added as a text field: obtaining
+  another person's `sub` requires **them** to authenticate at the IdP, and a type-in-a-subject
+  fallback would reintroduce both the manual-determination problem and an arbitrary-binding
+  surface. The correct shape, if demand appears, is an **invite link**: the admin generates a
+  one-time token, the target user opens it and completes the OIDC handshake under it, and the
+  binding lands on their account with the subject still coming only from the verified token.
+  Worth doing for a bulk onboarding; not worth it for a handful of users, who can each link
+  themselves in two clicks. (Email-based auto-linking stays rejected outright — it is a
+  well-known account-takeover vector, not a missing feature.)
 - **Uploaded image-tar (`docker save`) targets.** Both Trivy and Grype can scan a local image
   archive. Add a target type that accepts an uploaded `docker save` tarball, so an image can be
   scanned without a reachable registry.
@@ -239,7 +371,11 @@ isn't surprised.
   limitation, not a planned change; gating it at Scrye's layer would lock out OIDC accounts that
   have no local password. (When group→role mapping is configured it is re-applied on each login,
   but an absent groups claim preserves the current role, and an OIDC sync can never remove the
-  last admin.)
+  last admin.) **Account linking widened this** from provisioned accounts to any linked account,
+  including MFA-enrolled admins — a linked admin's local TOTP challenge never runs on the OIDC
+  path. The bound cost is that link and unlink both require fresh full re-authentication
+  (password + current TOTP when enrolled), so a stolen session cannot create the bypass path; the
+  UI warns before linking and both events are audited. See the README security model.
 - **Cloud registry credential helpers are not bundled.** Static registry credentials and tokens
   work out of the box. The ECR / GCR / ACR credential-helper *configuration* is generated at
   scan time, but the helper binaries themselves are not shipped in the image — those registry

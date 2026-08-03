@@ -7,6 +7,182 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-03
+
+### Upgrade notes
+
+- **Upgrading applies a database migration.** The container runs
+  `alembic upgrade head` on start as it always has; on first start of 0.3.0 that
+  applies `0009_oidc_link_flows`, which adds two nullable columns (`purpose`,
+  `user_id`) to `oidc_login_flows` — the table holding in-flight OIDC handshakes.
+  No other table changes and no existing data is rewritten. The table is
+  transient (10-minute TTL) and excluded from backup bundles, so the migration is
+  fast on a database of any size. Nothing to run by hand: pull the image and
+  restart.
+
+- **Downgrading to 0.2.0 after upgrading is not supported.** The 0.2.0 image's
+  migration history ends at `0008`, so it cannot start against a database
+  stamped `0009` — `alembic upgrade head` fails with an unknown revision rather
+  than starting with a mismatched schema. The migration's only reversal is
+  dropping the two columns it added. If you may need to go back, **take a backup
+  bundle before upgrading** and restore that onto 0.2.0; see
+  [Backup & restore](README.md#backup--restore).
+
+- No configuration change is required and no environment variable was added,
+  removed, or renamed.
+
+### Added
+
+- **Link your existing account to an OIDC identity** (Settings → Authentication →
+  *Your linked identity*). Enabling OIDC never connected it to the account you
+  were already signed in as: the first OIDC sign-in either created a **second,
+  separate account** (auto-provision on) or dead-ended at "no account is linked
+  to that identity" (auto-provision off). The only workaround was to determine
+  your provider's opaque `sub` by hand and write it into the database — which
+  Authentik's default hashed subject mode and Entra ID's pairwise subjects do not
+  let you look up at all.
+
+  Linking now runs the same authorization-code handshake *while you are signed
+  in* and binds the identity from the verified ID token to your own account.
+  **Nobody types or sees a subject** — there is no such field in the API or the
+  UI, by design. A guarded self-unlink completes the lifecycle.
+
+  Both actions require **fresh full re-authentication** — your current password,
+  plus a current TOTP code when enrolled — because each one changes how your
+  account can be signed into, and a stolen session alone must never be able to
+  add a sign-in path. Linking also **widens the accepted MFA-delegation
+  limitation** from OIDC-provisioned accounts to any linked account, including
+  MFA-enrolled admins — an admin with TOTP enrolled who links gains a sign-in
+  path on which their local TOTP challenge never runs, so their effective second
+  factor becomes whatever the identity provider enforces. This is the feature's
+  main trade-off. The UI warns before you link, `auth.oidc_identity_linked` and
+  `_unlinked` make the path's creation and removal auditable, and the README
+  security model documents the trade in full. Confirm your identity provider
+  enforces a second factor before linking an admin account. (L2 / SEC-8 — see
+  [`docs/ARCHIVE.md` §15](docs/ARCHIVE.md#15-finding-id-index-decoder-for-14s-citations))
+
+  Scope is deliberately minimal: an admin cannot bind an identity to *another*
+  user (that needs the other person to authenticate at the provider), and
+  email-based auto-linking is not built and not configurable — it is a
+  well-known account-takeover vector. See #114.
+
+- **A stale link now announces itself instead of resurfacing as the duplicate-account
+  bug.** If your provider re-issues your identifier — the account was deleted and
+  recreated, or an Authentik operator changed the provider's subject mode, which
+  re-keys every user at once — the stored link silently stops matching while the
+  settings screen still reads "Linked". Scrye now detects that case at sign-in
+  and **refuses with a specific error** ("your identity provider issued a
+  different account identifier than the one linked here"), recording
+  `auth.oidc_identity_stale` in the audit log, instead of quietly minting a
+  duplicate account or emitting a generic failure. It never re-binds on a name or
+  email match. The linked-identity card shows when the link was last used, and
+  the README carries a re-link runbook.
+
+### Fixed
+
+- **Every uvicorn access log line raised a `TypeError` and printed a ~50-line
+  traceback in place of the line.** The secret-redaction layer was a
+  `logging.Filter` that rewrote each record in place — collapsing its message and
+  arguments into one pre-rendered string and clearing `record.args`. uvicorn's
+  access formatter reads `record.args` directly, unpacking it into
+  `(client_addr, method, full_path, http_version, status_code)`, so it hit
+  `cannot unpack non-iterable NoneType object` on **every request**. Scrye itself
+  was never affected — `/healthz` returned 200 throughout, because Python's
+  logging routes a formatting failure to `handleError()` and carries on — so the
+  only symptom was log volume, and it was substantial: with the container
+  healthcheck at 30 seconds, roughly **144,000 lines/day** into Docker's
+  json-file driver. On a host without log rotation that fills a disk.
+
+  Redaction now runs on each handler's **rendered output** instead of on the log
+  record, so no formatter ever sees a record we altered. Coverage is unchanged in
+  intent and slightly wider in fact: the access line's client address and request
+  line are rebuilt from the arguments and never appeared in the record's message,
+  so they are redacted now for the first time. Access lines were **not** exempted
+  — their query strings can carry a token. Present since 2026-07-04, when the
+  redaction filter was first attached to uvicorn's loggers; it affected v0.1.0 and
+  v0.2.0. See `docs/ARCHIVE.md` § Deviations (2026-08-02) for the full analysis,
+  including why no CI check could have caught it.
+
+- **A secret in a URL query string no longer takes the rest of the log line with
+  it when redacted.** Masking a query parameter used to consume everything after
+  it — on an access line that meant the HTTP version and the **status code**,
+  leaving a log that cannot show a spike in 500s or someone probing for 401s.
+  Redaction now bounds a query value at the delimiters a query actually has
+  (`&`, `#`, whitespace, and the quote the access format puts after the path)
+  rather than running to end of line, so
+  `"GET /api/scans?api_token=[REDACTED] HTTP/1.1" 500` keeps everything but the
+  token. Every secret in a multi-parameter query is masked individually, and
+  non-secret parameters survive.
+
+  Free-form log text still redacts to end of line, because it has no delimiters
+  to stop at and a secret there may legitimately contain spaces — the bounded
+  rule applies only where a real URL or path has been identified, which is what
+  lets both behaviours coexist.
+
+### Security
+
+- **`react-router-dom` bumped 7.18.1 → 7.18.2, closing GHSA-qwww-vcr4-c8h2** (HIGH) —
+  an RSC-mode CSRF bypass in which a server action could execute before the
+  request was rejected with a 400. The fix was **backported to the 7 line** in
+  7.18.2; the react-router 8.3.0 major that the advisory names as its only patched
+  version is not required. Verified in the published tarballs rather than from the
+  advisory: 7.18.2's RSC server entry is identical to 8.3.0's — the origin check is
+  isolated in its own `try`, the server action is gated behind it, and a rejected
+  request is rewritten to `GET` — and that backport is the entire 7.18.1 → 7.18.2
+  diff.
+
+  Scrye was never exposed: the SPA is declarative-only (`<BrowserRouter>`, no
+  data-mode router, no server actions, no `@react-router/*` package), so the
+  vulnerable RSC entry point is not imported and never enters the bundle, and the
+  runtime image copies only the built `dist/` output. **`npm audit` and Dependabot
+  will keep reporting this at 7.18.2** — the advisory's affected range still reads
+  `< 8.3.0` and has not been re-cut for the backport. That is a metadata artifact,
+  not a code finding; the downgrade to 7.11.0 that `npm audit fix --force` proposes
+  remains the wrong move. Tracked in #123, now closed.
+- **`postcss` bumped 8.5.16 → 8.5.25, closing GHSA-r28c-9q8g-f849** (HIGH) — path
+  traversal in PostCSS's previous-source-map auto-loading, where a crafted
+  `sourceMappingURL` comment could make PostCSS read an arbitrary `.map` file from
+  disk and inline it into the generated source map. Unlike the `brace-expansion`
+  bump in 0.2.0, this one **does** clear its advisory: the containment check in
+  `lib/previous-map.js` was verified present in the published 8.5.18 source (the
+  real fix floor) and still present in the pinned 8.5.25.
+
+  `postcss` is a `devDependency` that runs during `vite build`; the runtime image
+  copies only the built `dist/` output, so no deployed Scrye was ever exposed and
+  nothing about the shipped image changes. Tracked in #124.
+
+### Changed
+
+- **CodeQL code scanning moved from GitHub's default setup to a committed
+  workflow** (`.github/workflows/codeql.yml`). Nothing about the analysis
+  changed — same `security-extended` suite, same three languages (`python`,
+  `javascript-typescript`, `actions`), same `codeql-action` version, now
+  SHA-pinned. What changed is when it runs: default setup's pull-request trigger
+  targets the repository's **default branch**, so PRs into `dev` — where all
+  day-to-day work is PR'd — got no CodeQL check at all, and findings only
+  surfaced on `main` after a promotion had already landed. It now runs on every
+  pull request and push for both `dev` and `main`, plus default setup's weekly
+  scan (Mondays, 04:00 UTC) so a newly published query fires on its own instead
+  of waiting for someone to touch a file in that language — that cron runs
+  against the default branch, as all scheduled workflows do. Deliberately
+  carries no `paths:` filters: a required check whose workflow never triggers
+  blocks a PR forever. No change to a deployed Scrye.
+- **The SPA is now built on Node 24 (`krypton`), the Active LTS.** The image's
+  `frontend-builder` stage and CI's frontend job moved together from Node 22,
+  which is in maintenance and supported only through 2027-04-30; 24 is supported
+  through 2028-04-30. Node is a build-time toolchain that never reaches the
+  runtime image, so nothing about a deployed Scrye changes — no dependency,
+  bundle or behaviour moves, and the lint/test/build gate was verified green on
+  Node 24.18.1 before the bump. The documented requirement for native
+  development is now **Node 22+** (it named the end-of-life 20 line before).
+- `docker/login-action` pinned to v4.6.0 in the GHCR publish, nightly and re-scan
+  workflows. No behaviour change for Scrye — the release hardens buildx-scoped
+  config-path handling, which is gated on a `scope` input none of the call sites
+  passes.
+- `fastapi` bumped 0.140.0 → 0.140.13 (dependency currency; the intervening fixes
+  are all on streaming, `jsonable_encoder` and OpenAPI-flattening paths Scrye does
+  not use), with `backend/requirements.lock` regenerated.
+
 ## [0.2.0] - 2026-07-31
 
 ### Added
@@ -543,6 +719,7 @@ model, in a single hardened container.
   + tmpfs, resource limits, healthcheck, loopback-only port binding); CSRF
   protection, rate-limited auth, and an audit log.
 
-[Unreleased]: https://github.com/tyler-rich/Scrye/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tyler-rich/Scrye/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/tyler-rich/Scrye/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tyler-rich/Scrye/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tyler-rich/Scrye/releases/tag/v0.1.0

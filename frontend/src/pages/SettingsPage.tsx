@@ -32,6 +32,22 @@ import { TrivyPolicyPanel } from '../components/settings/TrivyPolicyPanel';
 import { UsersPanel } from '../components/settings/UsersPanel';
 import { useAuth } from '../auth/AuthContext';
 
+/**
+ * Which tab to open on mount.
+ *
+ * The OIDC link callback returns the browser to this page with its outcome in
+ * the query string. `Tabs` is `keepMounted={false}`, so the panel that reads and
+ * clears that parameter has to be the one actually rendered — otherwise the
+ * result banner never appears and the stale parameter lingers in the URL.
+ */
+function initialTab(isAdmin: boolean): string {
+  if (isAdmin && typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('oidc_link') || params.has('oidc_link_error')) return 'authentication';
+  }
+  return isAdmin ? 'general' : 'scanners';
+}
+
 /** Full settings area (docs/ARCHIVE.md §4.5). Admin tabs are gated by role. */
 export function SettingsPage() {
   const { user } = useAuth();
@@ -48,11 +64,7 @@ export function SettingsPage() {
         </Text>
       </div>
 
-      <Tabs
-        defaultValue={isAdmin ? 'general' : 'scanners'}
-        keepMounted={false}
-        orientation="vertical"
-      >
+      <Tabs defaultValue={initialTab(isAdmin)} keepMounted={false} orientation="vertical">
         <Tabs.List>
           {isAdmin && (
             <>

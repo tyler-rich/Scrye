@@ -19,6 +19,7 @@ import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { ApiError } from '../../api/client';
 import { getAuthSettings, updateAuthSettings, type MfaPolicy } from '../../api/settings';
 import { getOidcConfig, updateOidcConfig, type OidcConfig } from '../../api/oidc';
+import { OidcLinkCard } from './OidcLinkCard';
 
 const MFA_POLICIES: { value: MfaPolicy; label: string }[] = [
   { value: 'optional', label: 'Optional (users choose)' },
@@ -152,6 +153,14 @@ export function AuthenticationPanel() {
           {saved === 'oidc' && (
             <Alert color="teal" icon={<IconCheck size={16} />} variant="light">
               OIDC configuration saved.
+              {oidc?.enabled && (
+                <>
+                  {' '}
+                  Link <strong>your</strong> account below so you can sign in with{' '}
+                  {oidc.display_name} — otherwise your first OIDC sign-in creates a second, separate
+                  account.
+                </>
+              )}
             </Alert>
           )}
           <Switch
@@ -216,6 +225,10 @@ export function AuthenticationPanel() {
           </Group>
         </Stack>
       </form>
+
+      <Divider />
+
+      <OidcLinkCard enabled={Boolean(oidc?.enabled)} />
     </Stack>
   );
 }

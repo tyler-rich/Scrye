@@ -162,7 +162,7 @@ def update_registry(
             # Create requires a username for this auth type; don't let update
             # blank it back out (APIR-6).
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Username/password auth requires a username.",
             )
         registry.username = payload.username
@@ -173,10 +173,10 @@ def update_registry(
     if payload.secret is not None:
         secret_value = payload.secret.get_secret_value()
         if not secret_value:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Secret is empty.")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Secret is empty.")
         if registry.auth_type not in SECRET_BEARING_AUTH_TYPES:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Auth type '{registry.auth_type.value}' does not take a secret.",
             )
         registry.secret_ciphertext = encrypt_secret(
