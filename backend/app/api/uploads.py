@@ -33,7 +33,7 @@ async def read_upload_capped(file: UploadFile, max_bytes: int, *, what: str) -> 
     limit_mib = max_bytes // (1024 * 1024)
     if file.size is not None and file.size > max_bytes:
         raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"{what} exceeds the {limit_mib} MiB limit.",
         )
     buffer = bytearray()
@@ -44,7 +44,7 @@ async def read_upload_capped(file: UploadFile, max_bytes: int, *, what: str) -> 
         buffer.extend(chunk)
         if len(buffer) > max_bytes:
             raise HTTPException(
-                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=f"{what} exceeds the {limit_mib} MiB limit.",
             )
     return bytes(buffer)

@@ -77,43 +77,34 @@ Small, self-contained work that closes a concrete gap.
   `react-router-dom` back into `react-router`, so **every import site in `frontend/src/` moves**
   (twelve files today), plus whatever the type-aware ESLint gate makes of the new type surface —
   which is the same risk the bumps above share, and the reason to do them together.
-- **Retire the deprecated Starlette status-code constants.** `status.HTTP_422_UNPROCESSABLE_ENTITY`
-  raises a `StarletteDeprecationWarning` on every attribute access — Starlette renamed it to
-  `HTTP_422_UNPROCESSABLE_CONTENT` — and it is referenced at **22 call sites** across seven routers
-  (`scans.py` ×10, `scan_schedules.py` ×4, `registries.py` ×3, `notifications.py` ×2, and one each
-  in `trivy_policy.py`, `git_credentials.py`, `backups.py`). The same rename hit
-  `HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `HTTP_413_CONTENT_TOO_LARGE`, at 2 more call sites in
-  `uploads.py`. These are the backend suite's standing deprecation warnings, recorded as
-  pre-existing at each of the last two interpreter bumps (`ARCHIVE.md` §14, 2026-07-03 and
-  2026-07-25) and never actually cleared. The change is mechanical — the constants are equal
-  integers, so no status code or behavior moves — and it takes the suite's warning output down to
-  the Starlette-TestClient httpx notice, so a genuinely new warning becomes visible instead of
-  being lost in known noise.
+- ~~**Retire the deprecated Starlette status-code constants.**~~ **Done 2026-08-03** —
+  `HTTP_422_UNPROCESSABLE_ENTITY` → `HTTP_422_UNPROCESSABLE_CONTENT` and
+  `HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `HTTP_413_CONTENT_TOO_LARGE` across all 24 call sites in the
+  8 files that used them. Both constants verified equal to their predecessor before the rename (422
+  and 413 respectively, checked against the pinned `starlette==1.3.1`), so no status code or
+  response behavior moved. See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
 - **Offline / air-gapped scanner-DB import.** The Scanners settings already drive scheduled
   online DB refreshes (`trivy image --download-db-only`, `grype db update`). Add an import path
   for environments with no outbound access to `mirror.gcr.io` / `grype.anchore.io`, so the Trivy
   and Grype vulnerability databases can be side-loaded from a file.
-- **De-flake `test_cancel_queued_scan` (make slot acquisition observable).**
-  `backend/tests/test_scans_api.py::test_cancel_queued_scan` is timing-dependent **by
-  construction**: it monkeypatches a scanner whose `scan_image` does `await asyncio.sleep(0.2)`,
-  forces the worker semaphore to a single slot, queues two scans, and cancels the second — which
-  only works while that second scan is still `queued`. On a loaded CI runner the 0.2 s window
-  closes before the cancel POST is processed, the scan has left `queued`, and the endpoint
-  correctly returns **409**. So the failure is the *test* being wrong, not the code: queued-only
-  cancellation is a deliberate design decision (`docs/ARCHIVE.md` §14, 2026-07-03 — the in-process
-  worker has no channel to interrupt a live scanner subprocess; lifting that limit is the separate
-  "Cancel a running scan" item under Medium-term).
-
-  **Fix by making the worker's slot acquisition observable to the test** — e.g. an event/future the
-  test can await to know the first scan actually holds the only slot, so the cancel is issued at a
-  known state instead of inside a sleep window. **Do not just widen the sleep**: a longer sleep only
-  lengthens the odds, leaves the race in place, and slows the suite on every run.
-
-  **Why it matters more than one red check:** a test that reddens CI intermittently trains everyone
-  to re-run without reading the failure. That habit is exactly how a real regression gets waved
-  through — and it costs the most on a security tool, where the dogfood gate's output is the thing
-  nobody should learn to skim. Observed 2026-07-31 on a docs-and-workflow-only PR (#118), where it
-  failed once and passed on re-run of the identical commit.
+- ~~**De-flake `test_cancel_queued_scan` (make slot acquisition observable).**~~ **Done 2026-08-03**
+  — the fixed `await asyncio.sleep(0.2)` the fake scanner used to hold the worker's only slot is
+  replaced with a `threading.Event` pair: the first scan's `scan_image` blocks until the test
+  releases it, and a second event fires the instant `scan_image` actually starts (which only
+  happens once the worker's semaphore is acquired), so the test knows the second scan is
+  deterministically still `queued` before it cancels it — no wall-clock window to race under a
+  loaded CI runner. Test-only change; queued-only cancellation itself is unchanged (still gated on
+  the separate "Cancel a running scan" item under Medium-term). See
+  [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
+- **Retire `GET /api/scans` (deprecation-window decision, not yet scheduled).** The bare-array
+  `GET /api/scans` was frozen and marked `deprecated=True` rather than reshaped when the list
+  envelope landed (`backend/app/api/scans.py:276`, `docs/ARCHIVE.md` §14, 2026-07-25) — its
+  replacement, `GET /api/scans/history`, already ships the `{total, items}` envelope. Removing the
+  deprecated endpoint is a **breaking change for any external consumer using an API token**, so it
+  needs an announced deprecation window (a `CHANGELOG.md` entry plus a stated removal release), not
+  a silent drop in a routine cleanup PR. This item exists so that window is a deliberate decision
+  someone makes, rather than something that never gets tracked because the endpoint itself was
+  already marked deprecated and looked "handled." No removal date is set yet.
 - **Finish the public-repo governance setup (repository settings).** Going public added the
   in-repo pieces — a `.github/CODEOWNERS` (owner-review requests) and a `SECURITY.md` (private
   vulnerability reporting). The remaining pieces are GitHub **settings**, not files, so they live
@@ -129,9 +120,8 @@ Small, self-contained work that closes a concrete gap.
   them: a settings change leaves no artifact in the repository, so §14 is the only durable record it
   happened.
 
-  **What remains is one decision and two tracked settings gaps.** The branch-protection item turned
-  out to be mostly done; the parts of it that are genuinely open are now issues rather than prose,
-  for exactly the reason this checklist exists.
+  **What remains is one untracked decision.** The branch-protection item turned out to be mostly
+  done; the two genuinely open pieces of it were tracked as issues, and both are now closed.
 
   - **Branch protection** on `main` and `dev` — **mostly done; do not re-scope from the original
     wording.** A ruleset readout on 2026-08-02 (`ARCHIVE.md` §14) found `protect-dev` and
@@ -140,17 +130,18 @@ Small, self-contained work that closes a concrete gap.
     and `non_fast_forward`. So *"require a passing CI status"* and *"require a pull request"* are
     **already in place on both branches**.
 
-    Three things are genuinely still open, two of them now tracked:
+    Three things were flagged as genuinely open, two of them tracked as issues:
 
-    - **[#136](https://github.com/tyler-rich/Scrye/issues/136) — the dogfood self-scan is not a
-      required check.** `required_status_checks` is an allowlist naming only `Backend — lint +
-      tests` and `Frontend — lint + build`, so a PR can merge with the image scan red. Includes the
-      `paths:`-filter hazard: a required context whose workflow never triggers blocks a PR forever
-      (a job skipped by `if:` is fine — it reports `skipped`).
-    - **[#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricts tag pushes.**
-      Both rulesets are `target: "branch"`; there is no tag-targeted ruleset, and a `v*.*.*` tag push
-      is what triggers `publish.yml` (GHCR push, `:latest` move, provenance + SBOM attestation).
-      Theoretical with a sole maintainer; the trigger is **before any collaborator is added**.
+    - ~~**[#136](https://github.com/tyler-rich/Scrye/issues/136) — the dogfood self-scan is not a
+      required check.**~~ **Done 2026-08-03** — verified live: `protect-dev`'s
+      `required_status_checks` now lists `Backend — lint + tests`, `Frontend — lint + build`, and
+      `Image — build + dogfood self-scan`, with "Require branches to be up to date before merging"
+      also enabled. See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
+    - ~~**[#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricts tag
+      pushes.**~~ **Done 2026-08-03** — a `protect-tags` ruleset now targets `v*` (any tag
+      beginning with `v`, not only the dotted semver form), restricting creation/update/deletion
+      and blocking force pushes, with Repository admin on the bypass list (same bypass shape as
+      `protect-dev`/`protect-main`). See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
     - **Code-owner review is not required.** `require_code_owner_review` is `false` on both rulesets,
       so `.github/CODEOWNERS` requests review but does not compel it. Untracked — it is a decision
       rather than a gap, and on a single-maintainer repo it is close to a no-op today.
@@ -161,10 +152,13 @@ Small, self-contained work that closes a concrete gap.
     here is advisory for the repository owner until the bypass list says otherwise. (The bypass list
     is not readable at the API permission level available to a code session — the ruleset endpoint
     returns `bypass_actors: null` — so confirm it in Settings rather than from an API dump.)
-  - **Signed-commit enforcement** — a decision to make, and **verified still open**: neither ruleset
-    carries a `required_signatures` rule (2026-08-02 readout). Requiring signed commits on the
-    protected branches means contributors must sign; worth it for a security tool, so weigh the
-    friction.
+  - ~~**Signed-commit enforcement**~~ **Declined 2026-08-03** — every commit in this repo is
+    authored by a Claude Code session pushing over local `git`, with no signing key present in that
+    environment; requiring signed commits would reject every session push outright, and both
+    workarounds (provisioning a signing key into a sandboxed session, or moving to API-authored
+    commits) cost more than the friction they'd remove on a solo-maintainer repo. Revisit if a
+    collaborator with write access is added, or if the commit workflow stops going through local
+    git. See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
   - ~~**Private vulnerability reporting**~~ — **Done; verified 2026-08-02.**
     `GET /repos/tyler-rich/Scrye/private-vulnerability-reporting` returns `{"enabled": true}`, so
     `SECURITY.md`'s stated channel exists. It is not recorded when this was turned on — it may have

@@ -578,8 +578,14 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (128, newest first)
+### Index of §14 entries (134, newest first)
 
+- [2026-08-03 — Post-v1 — PR #142 verified green on the pinned Python 3.14.6 in CI; `test_undeterminable_presence_fails_startup`'s local-sandbox failure was 3.13-specific](#2026-08-03--post-v1--pr-142-verified-green-on-the-pinned-python-3146-in-ci-test_undeterminable_presence_fails_startups-local-sandbox-failure-was-313-specific)
+- [2026-08-03 — Post-v1 — `test_cancel_queued_scan` de-flaked: worker slot acquisition made observable, sleep removed](#2026-08-03--post-v1--test_cancel_queued_scan-de-flaked-worker-slot-acquisition-made-observable-sleep-removed)
+- [2026-08-03 — Post-v1 — Deprecated Starlette status-code constants retired across 24 call sites](#2026-08-03--post-v1--deprecated-starlette-status-code-constants-retired-across-24-call-sites)
+- [2026-08-03 — Process/Governance — Dogfood self-scan added to required status checks, closing #136](#2026-08-03--processgovernance--dogfood-self-scan-added-to-required-status-checks-closing-136)
+- [2026-08-03 — Process/Governance — protect-tags ruleset created, closing #137](#2026-08-03--processgovernance--protect-tags-ruleset-created-closing-137)
+- [2026-08-03 — Process/Governance — Signed-commit enforcement declined, not deferred](#2026-08-03--processgovernance--signed-commit-enforcement-declined-not-deferred)
 - [2026-08-02 — Security/Process — CodeQL migrated from default setup to a committed workflow; the two settings edits that finish it](#2026-08-02--securityprocess--codeql-migrated-from-default-setup-to-a-committed-workflow-the-two-settings-edits-that-finish-it)
 - [2026-08-02 — Security/Process — Symlink-containment regression guard for filesystem scans (#135); Syft is the probe, and it runs against the binaries the image ships](#2026-08-02--securityprocess--symlink-containment-regression-guard-for-filesystem-scans-135-syft-is-the-probe-and-it-runs-against-the-binaries-the-image-ships)
 - [2026-08-02 — Post-v1 — Log redaction moved from the `LogRecord` to the formatted line; uvicorn's access logger stops raising on every request](#2026-08-02--post-v1--log-redaction-moved-from-the-logrecord-to-the-formatted-line-uvicorns-access-logger-stops-raising-on-every-request)
@@ -708,6 +714,175 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-03 — Post-v1 — PR #142 verified green on the pinned Python 3.14.6 in CI; `test_undeterminable_presence_fails_startup`'s local-sandbox failure was 3.13-specific
+
+**What changed:** nothing in the repository — this entry records a verification, not a code change.
+PR #142's development-agent session had no Python 3.14.6 available locally (only 3.13.12 and a
+3.14.0rc2 that fails to even import FastAPI/Pydantic under this codebase's dependency versions), so
+its local test run was done under 3.13 with `requires-python` temporarily loosened in an uncommitted,
+reverted copy of `pyproject.toml`. That run passed except for one failure,
+`tests/test_master_key_autogeneration.py::TestExistingKeyIsNeverReplaced::test_undeterminable_presence_fails_startup`,
+confirmed to reproduce identically on an unmodified checkout under the same 3.13 sandbox — i.e.
+unrelated to the PR's own changes, but still unverified against the actual pinned runtime.
+
+**CI on the real pinned interpreter is what settles it.** The `Backend — lint + tests` job on PR
+#142's final commit (`74ce83d`) ran on `pythonLocation: /opt/hostedtoolcache/Python/3.14.6/x64` — the
+exact pinned floor — and the suite came back **730 passed, 9 skipped, 0 failed**, including the test
+above. So the failure is confirmed **sandbox-specific to Python 3.13's `pathlib`**, not a real defect:
+`test_undeterminable_presence_fails_startup` monkeypatches `crypto.os.stat` to raise
+`PermissionError` for one specific path, but because `os` is a shared module object, that patch is
+visible to *every* caller of `os.stat` in the process — including the test's own
+`assert not autogen.exists()`, which calls `pathlib`'s `Path.exists()` → `os.stat()` internally. On
+3.13's `pathlib` implementation that assertion routes through the patched `os.stat` and raises instead
+of returning `False`; on 3.14.6 it evidently does not (a `pathlib` internal-implementation difference
+between the two versions, not tracked further here). **Do not re-diagnose this test as broken from a
+future local run under Python 3.13** — check which interpreter is running first.
+
+**Recorded so it isn't re-diagnosed:** this is a note, not a fix and not a new tracked item — the test
+passed on the pinned interpreter, which is the bar this PR was held to. If a *future* local run under
+Python 3.13 (or any interpreter where `pathlib.Path.exists()` routes through `os.stat`) reproduces this
+failure, the cause is the sandbox's interpreter, not a regression in this test or in `crypto.py`.
+
+**Plan section affected:** none (verification-only). Documented here per CLAUDE.md's rule that a
+settings-adjacent or environment-specific finding with no code diff still needs a durable record so
+it isn't re-diagnosed from scratch later.
+
+---
+
+### 2026-08-03 — Post-v1 — `test_cancel_queued_scan` de-flaked: worker slot acquisition made observable, sleep removed
+
+**What changed:** `backend/tests/test_scans_api.py::test_cancel_queued_scan` no longer holds the
+worker's only concurrency slot with a fixed `await asyncio.sleep(0.2)`. The fake scanner now blocks
+on a `threading.Event` the test controls, and a second `threading.Event` fires the instant
+`scan_image` actually starts executing — which only happens after the worker's semaphore has been
+acquired, so it doubles as "the first scan now holds the only slot." The test waits on that signal
+before submitting the second scan, so the second scan is deterministically still `queued` at the
+moment it's canceled. Test-only change — no worker or production code touched.
+
+**Why:** the ROADMAP item this closes explained the failure mode precisely: the old test's
+correctness depended on the whole round-trip (submit first, submit second, cancel second) finishing
+inside the 0.2 s window before the first scan's fake sleep ended and released the semaphore to the
+second. Under a loaded CI runner that window could close before the cancel POST was processed, the
+second scan would have already left `queued`, and the endpoint correctly returned 409 — the test was
+wrong, not the code. Widening the sleep would only have lengthened the odds without removing the
+race; making the first scan's execution point observable removes the wall-clock dependency entirely.
+Run 20× locally with no failures, in ~0.35 s per run (down from a sleep-bound floor of 0.2 s per run
+plus the race).
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the de-flake item — struck).
+
+---
+
+### 2026-08-03 — Post-v1 — Deprecated Starlette status-code constants retired across 24 call sites
+
+**What changed:** `status.HTTP_422_UNPROCESSABLE_ENTITY` → `status.HTTP_422_UNPROCESSABLE_CONTENT`
+and `status.HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `status.HTTP_413_CONTENT_TOO_LARGE` across all 24
+call sites in the 8 files that used them (`scans.py` ×10, `scan_schedules.py` ×4, `registries.py`
+×3, `notifications.py` ×2, and one each in `trivy_policy.py`, `git_credentials.py`, `backups.py`,
+`uploads.py`).
+
+**Why:** both old constants raised a `StarletteDeprecationWarning` on every attribute access and
+have been standing warnings in the backend suite's output since at least the 2026-07-03 interpreter
+bump. Before renaming, both old/new pairs were checked against the pinned `starlette==1.3.1` to
+confirm the rename can't move a status code: `HTTP_422_UNPROCESSABLE_ENTITY` and
+`HTTP_422_UNPROCESSABLE_CONTENT` both resolve to `422`; `HTTP_413_REQUEST_ENTITY_TOO_LARGE` and
+`HTTP_413_CONTENT_TOO_LARGE` both resolve to `413`. Purely mechanical — no response behavior
+changed.
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the Starlette-constants item — struck).
+
+---
+
+### 2026-08-03 — Process/Governance — Dogfood self-scan added to required status checks, closing #136
+
+**What changed:** `protect-dev`'s `required_status_checks` now lists three contexts —
+`Backend — lint + tests`, `Frontend — lint + build`, and **`Image — build + dogfood self-scan`** —
+where it previously named only the first two. **"Require branches to be up to date before merging"**
+was also enabled on the same ruleset. No repository content changed; this entry is the record, for
+the same reason the rest of this checklist is recorded here rather than only in the ROADMAP — a
+settings change leaves no artifact in git.
+
+**Why:** [#136](https://github.com/tyler-rich/Scrye/issues/136) — the dogfood self-scan job
+(`ci.yml`'s `Image — build + dogfood self-scan`) ran and reported on every PR but was not on the
+allowlist `required_status_checks` actually enforces, so a PR could merge into `dev` with the image
+scan red. That job is not an ordinary CI check — it is the control `CLAUDE.md` § Dependency hygiene
+mandates (gating on fixable HIGH/CRITICAL findings in Scrye's own image) and the one that caught
+CVE-2026-5773 (§14, 2026-07-13) and verifies the SC-14 dev-tree exclusion. Requiring it converts
+"merge with a red gate" from a silent non-event into an explicit act, for anyone other than the
+repository-admin account on the bypass list.
+
+**Note, closing the loop from #136's own text:** the issue was closed directly on 2026-08-02 with no
+comment and no §14 entry — exactly the invisible-settings-change failure mode this checklist exists
+to catch. This entry supplies the missing verification: the live ruleset readout above confirms the
+required context really is in place, rather than trusting the closed state alone.
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the public-repo governance checklist —
+this closes the first of the two issue-tracked branch-protection gaps; struck from the checklist).
+Closes #136.
+
+---
+
+### 2026-08-03 — Process/Governance — protect-tags ruleset created, closing #137
+
+**What changed:** a new GitHub ruleset, **`protect-tags`**, was created (`target: "tag"`,
+pattern `v*` — matches any tag beginning with `v`, not only the dotted semver form). It restricts
+tag creation, update, and deletion to the bypass list, and blocks force pushes to matching tags.
+**Repository admin** is on the bypass list, consistent with how
+`protect-dev` and `protect-main` are configured (§14, 2026-08-02 — the admin bypass on those
+rulesets is what let `dev` be deleted during the v0.2.0 promotion despite "Restrict deletions").
+No repository content changed; this entry is the record, for the same reason the rest of the
+public-repo governance checklist is recorded here rather than only in the ROADMAP — a settings
+change leaves no artifact in git.
+
+**Why:** [#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricted tag pushes,
+and a `v*.*.*` tag push is exactly what triggers `publish.yml` (GHCR push, the `:latest` move, and
+provenance + SBOM attestation, per locked decision §6). Before this ruleset, anyone with write
+access could push or force-move a `v*.*.*` tag and trigger a publish outside the normal `dev` →
+`main` → tag flow. Theoretical on a sole-maintainer repo, but the fix belongs in place *before* any
+collaborator is added, not after.
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the public-repo governance checklist —
+this closes the second of the two remaining tracked settings gaps; struck from the checklist).
+Closes #137.
+
+---
+
+### 2026-08-03 — Process/Governance — Signed-commit enforcement declined, not deferred
+
+**What changed:** the "require signed commits" item under the public-repo governance checklist is
+**struck from `docs/ROADMAP.md`** as a declined decision, not left open as pending work. Neither
+`protect-dev` nor `protect-main` carries a `required_signatures` rule, and none will be added under
+the current commit workflow.
+
+**Why:** every commit in this repository is authored by a Claude Code session committing locally
+via `git` and pushing over the repository's normal push path — there is no signing key present in
+those environments (that absence is exactly why every commit here shows GitHub's "Unverified"
+badge today). Turning on "Require signed commits" on either protected-branch ruleset would reject
+every one of those pushes outright, breaking the development workflow entirely rather than adding
+friction to it.
+
+The two workarounds available are both worse than the problem they'd solve:
+- **Provisioning a GPG or SSH signing key into a sandboxed session** is precisely the kind of
+  environment a signing key should not be placed into — it turns the key into something that
+  exists in an ephemeral, non-interactive container rather than under a maintainer's direct
+  control, which undermines the point of requiring a signature in the first place.
+- **Switching sessions to create commits via the GitHub API** (which GitHub auto-signs on behalf
+  of the authenticated actor) would work, but it is a significant change to how these sessions
+  operate — moving off local `git commit`/`git push` entirely — for a benefit that is modest on a
+  repository with a single maintainer and no other committers to authenticate against.
+
+**Revisit trigger:** this decision is not permanent. Revisit it if either condition changes — a
+collaborator with write access is added (at which point signed commits start doing real work,
+distinguishing a maintainer's commits from a contributor's), or the commit workflow stops going
+through local `git` (e.g. a move to API-authored commits for some other reason removes the cost
+side of this trade-off).
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the public-repo governance checklist —
+this closes the last of its three previously-open items; struck from the checklist as declined,
+not done).
 
 ---
 

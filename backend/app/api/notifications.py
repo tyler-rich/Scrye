@@ -195,7 +195,7 @@ def create_channel(
         secret_value = url_secret or secret_value
     if not secret_value and payload.type not in SECRET_OPTIONAL_TYPES:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"A secret is required for '{payload.type.value}' channels.",
         )
 
@@ -285,7 +285,7 @@ def update_channel(
             # Create forbids a channel of this type with no secret; the update
             # path must not be able to reach that state either (APIR-6).
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"A secret is required for '{channel.type.value}' channels.",
             )
         changes["secret"] = "updated"  # metadata only; never the value
