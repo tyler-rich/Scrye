@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (130, newest first)
+### Index of §14 entries (131, newest first)
 
+- [2026-08-03 — Process/Governance — Dogfood self-scan added to required status checks, closing #136](#2026-08-03--processgovernance--dogfood-self-scan-added-to-required-status-checks-closing-136)
 - [2026-08-03 — Process/Governance — protect-tags ruleset created, closing #137](#2026-08-03--processgovernance--protect-tags-ruleset-created-closing-137)
 - [2026-08-03 — Process/Governance — Signed-commit enforcement declined, not deferred](#2026-08-03--processgovernance--signed-commit-enforcement-declined-not-deferred)
 - [2026-08-02 — Security/Process — CodeQL migrated from default setup to a committed workflow; the two settings edits that finish it](#2026-08-02--securityprocess--codeql-migrated-from-default-setup-to-a-committed-workflow-the-two-settings-edits-that-finish-it)
@@ -710,6 +711,35 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-03 — Process/Governance — Dogfood self-scan added to required status checks, closing #136
+
+**What changed:** `protect-dev`'s `required_status_checks` now lists three contexts —
+`Backend — lint + tests`, `Frontend — lint + build`, and **`Image — build + dogfood self-scan`** —
+where it previously named only the first two. **"Require branches to be up to date before merging"**
+was also enabled on the same ruleset. No repository content changed; this entry is the record, for
+the same reason the rest of this checklist is recorded here rather than only in the ROADMAP — a
+settings change leaves no artifact in git.
+
+**Why:** [#136](https://github.com/tyler-rich/Scrye/issues/136) — the dogfood self-scan job
+(`ci.yml`'s `Image — build + dogfood self-scan`) ran and reported on every PR but was not on the
+allowlist `required_status_checks` actually enforces, so a PR could merge into `dev` with the image
+scan red. That job is not an ordinary CI check — it is the control `CLAUDE.md` § Dependency hygiene
+mandates (gating on fixable HIGH/CRITICAL findings in Scrye's own image) and the one that caught
+CVE-2026-5773 (§14, 2026-07-13) and verifies the SC-14 dev-tree exclusion. Requiring it converts
+"merge with a red gate" from a silent non-event into an explicit act, for anyone other than the
+repository-admin account on the bypass list.
+
+**Note, closing the loop from #136's own text:** the issue was closed directly on 2026-08-02 with no
+comment and no §14 entry — exactly the invisible-settings-change failure mode this checklist exists
+to catch. This entry supplies the missing verification: the live ruleset readout above confirms the
+required context really is in place, rather than trusting the closed state alone.
+
+**Plan section affected:** `docs/ROADMAP.md` § Near-term (the public-repo governance checklist —
+this closes the first of the two issue-tracked branch-protection gaps; struck from the checklist).
+Closes #136.
 
 ---
 

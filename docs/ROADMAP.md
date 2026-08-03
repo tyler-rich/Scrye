@@ -114,6 +114,15 @@ Small, self-contained work that closes a concrete gap.
   through — and it costs the most on a security tool, where the dogfood gate's output is the thing
   nobody should learn to skim. Observed 2026-07-31 on a docs-and-workflow-only PR (#118), where it
   failed once and passed on re-run of the identical commit.
+- **Retire `GET /api/scans` (deprecation-window decision, not yet scheduled).** The bare-array
+  `GET /api/scans` was frozen and marked `deprecated=True` rather than reshaped when the list
+  envelope landed (`backend/app/api/scans.py:276`, `docs/ARCHIVE.md` §14, 2026-07-25) — its
+  replacement, `GET /api/scans/history`, already ships the `{total, items}` envelope. Removing the
+  deprecated endpoint is a **breaking change for any external consumer using an API token**, so it
+  needs an announced deprecation window (a `CHANGELOG.md` entry plus a stated removal release), not
+  a silent drop in a routine cleanup PR. This item exists so that window is a deliberate decision
+  someone makes, rather than something that never gets tracked because the endpoint itself was
+  already marked deprecated and looked "handled." No removal date is set yet.
 - **Finish the public-repo governance setup (repository settings).** Going public added the
   in-repo pieces — a `.github/CODEOWNERS` (owner-review requests) and a `SECURITY.md` (private
   vulnerability reporting). The remaining pieces are GitHub **settings**, not files, so they live
@@ -129,9 +138,8 @@ Small, self-contained work that closes a concrete gap.
   them: a settings change leaves no artifact in the repository, so §14 is the only durable record it
   happened.
 
-  **What remains is one decision and two tracked settings gaps.** The branch-protection item turned
-  out to be mostly done; the parts of it that are genuinely open are now issues rather than prose,
-  for exactly the reason this checklist exists.
+  **What remains is one untracked decision.** The branch-protection item turned out to be mostly
+  done; the two genuinely open pieces of it were tracked as issues, and both are now closed.
 
   - **Branch protection** on `main` and `dev` — **mostly done; do not re-scope from the original
     wording.** A ruleset readout on 2026-08-02 (`ARCHIVE.md` §14) found `protect-dev` and
@@ -140,13 +148,13 @@ Small, self-contained work that closes a concrete gap.
     and `non_fast_forward`. So *"require a passing CI status"* and *"require a pull request"* are
     **already in place on both branches**.
 
-    Three things are genuinely still open, two of them now tracked:
+    Three things were flagged as genuinely open, two of them tracked as issues:
 
-    - **[#136](https://github.com/tyler-rich/Scrye/issues/136) — the dogfood self-scan is not a
-      required check.** `required_status_checks` is an allowlist naming only `Backend — lint +
-      tests` and `Frontend — lint + build`, so a PR can merge with the image scan red. Includes the
-      `paths:`-filter hazard: a required context whose workflow never triggers blocks a PR forever
-      (a job skipped by `if:` is fine — it reports `skipped`).
+    - ~~**[#136](https://github.com/tyler-rich/Scrye/issues/136) — the dogfood self-scan is not a
+      required check.**~~ **Done 2026-08-03** — verified live: `protect-dev`'s
+      `required_status_checks` now lists `Backend — lint + tests`, `Frontend — lint + build`, and
+      `Image — build + dogfood self-scan`, with "Require branches to be up to date before merging"
+      also enabled. See [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md).
     - ~~**[#137](https://github.com/tyler-rich/Scrye/issues/137) — nothing restricts tag
       pushes.**~~ **Done 2026-08-03** — a `protect-tags` ruleset now targets `v*.*.*`, restricting
       creation/update/deletion and blocking force pushes, with Repository admin on the bypass list
