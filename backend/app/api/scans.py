@@ -114,7 +114,7 @@ def _reject_unsupported_combo(target_type: TargetType, scanner: Scanner) -> None
     """Raise 422 if ``scanner`` cannot run against ``target_type``."""
     if not scanner_supports(target_type, scanner):
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{scanner.value} does not support {target_type.value} targets.",
         )
 
@@ -172,7 +172,7 @@ async def create_scan(
     """
     if payload.target_type is TargetType.SBOM:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="SBOM scans require a file upload; use POST /api/scans/sbom.",
         )
     _reject_unsupported_combo(payload.target_type, payload.scanner)
@@ -183,7 +183,7 @@ async def create_scan(
         and db.get(Registry, payload.registry_id) is None
     ):
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The selected registry does not exist."
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="The selected registry does not exist."
         )
     if (
         payload.target_type is TargetType.REPOSITORY
@@ -191,7 +191,7 @@ async def create_scan(
         and db.get(GitCredential, payload.git_credential_id) is None
     ):
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="The selected git credential does not exist.",
         )
     if payload.target_type is TargetType.FILESYSTEM:
@@ -199,7 +199,7 @@ async def create_scan(
         try:
             resolve_filesystem_path(payload.target)
         except TargetError as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     scan = Scan(
         scanner=payload.scanner,
@@ -234,12 +234,12 @@ async def create_sbom_scan(
     # materialized in memory before the check (API-4).
     data = await read_upload_capped(file, _MAX_SBOM_UPLOAD_BYTES, what="SBOM")
     if not data:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The SBOM file is empty.")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="The SBOM file is empty.")
     try:
         json.loads(data)
     except (ValueError, UnicodeDecodeError) as exc:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The SBOM file is not valid JSON."
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="The SBOM file is not valid JSON."
         ) from exc
 
     display_name = Path(file.filename or "sbom.json").name or "sbom.json"
@@ -329,7 +329,7 @@ def list_history(
     """
     if sort not in _SORT_COLUMNS:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Unknown sort column '{sort}'.",
         )
     base = filters.apply(select(Scan))
@@ -643,7 +643,7 @@ def diff_scans(
     """
     if scan_id == other_scan_id:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Cannot diff a scan against itself."
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Cannot diff a scan against itself."
         )
     base = _get_scan_or_404(db, scan_id)
     compare = _get_scan_or_404(db, other_scan_id)
@@ -656,7 +656,7 @@ def diff_scans(
         or base.target != compare.target
     ):
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Scans must share the same scanner, target type, and target to be diffed.",
         )
 

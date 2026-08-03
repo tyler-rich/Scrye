@@ -94,12 +94,12 @@ def _validate_template(db: Session, payload: ScanScheduleIn) -> None:
     """Validate the scan template (target type / scanner / referenced creds)."""
     if payload.target_type is TargetType.SBOM:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="SBOM scans cannot be scheduled (they require a file upload).",
         )
     if not scanner_supports(payload.target_type, payload.scanner):
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{payload.scanner.value} does not support "
             f"{payload.target_type.value} targets.",
         )
@@ -109,7 +109,7 @@ def _validate_template(db: Session, payload: ScanScheduleIn) -> None:
         and db.get(Registry, payload.registry_id) is None
     ):
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The selected registry does not exist."
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail="The selected registry does not exist."
         )
     if (
         payload.target_type is TargetType.REPOSITORY
@@ -117,7 +117,7 @@ def _validate_template(db: Session, payload: ScanScheduleIn) -> None:
         and db.get(GitCredential, payload.git_credential_id) is None
     ):
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="The selected git credential does not exist.",
         )
 
