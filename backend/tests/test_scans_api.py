@@ -198,17 +198,27 @@ def test_unsupported_scanner_target_combo_rejected(client: TestClient, monkeypat
 
 
 def test_cancel_queued_scan(client: TestClient, monkeypatch) -> None:
-    # A scanner that blocks so the scan we cancel stays queued behind it.
+    # A scanner that blocks on a threading.Event instead of a fixed sleep, so
+    # the test knows exactly when the first scan holds the worker's only slot
+    # rather than guessing a wall-clock window it might race (ROADMAP: "make
+    # the worker's slot acquisition observable" instead of widening a sleep).
     import asyncio
+    import threading
 
-    class _SlowScanner:
+    running = threading.Event()  # set once the first scan starts executing
+    release = threading.Event()  # test sets this once the second is canceled
+
+    class _BlockingScanner:
         async def scan_image(
             self, target: str, options: dict, *, env: dict | None = None
         ) -> ScanExecution:
-            await asyncio.sleep(0.2)
+            # scan_image only runs after the worker's semaphore is acquired,
+            # so this signal doubles as "the first scan holds the only slot."
+            running.set()
+            await asyncio.to_thread(release.wait)
             return _fake_execution()
 
-    monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _SlowScanner())
+    monkeypatch.setattr(inprocess, "get_scanner", lambda scanner: _BlockingScanner())
     # Force single-slot concurrency so the second scan waits as 'queued'.
     client.app.state.scan_worker._semaphore = asyncio.Semaphore(1)
     csrf = _setup_admin(client)
@@ -216,6 +226,9 @@ def test_cancel_queued_scan(client: TestClient, monkeypatch) -> None:
     first = client.post(
         "/api/scans", headers={CSRF: csrf}, json={"scanner": "trivy", "target": "a"}
     ).json()
+
+    assert running.wait(timeout=5), "first scan never started executing"
+
     second = client.post(
         "/api/scans", headers={CSRF: csrf}, json={"scanner": "trivy", "target": "b"}
     ).json()
@@ -223,6 +236,8 @@ def test_cancel_queued_scan(client: TestClient, monkeypatch) -> None:
     cancel = client.post(f"/api/scans/{second['id']}/cancel", headers={CSRF: csrf})
     assert cancel.status_code == 200
     assert cancel.json()["status"] == "canceled"
+
+    release.set()
     # The first scan still completes.
     _wait_for_status(client, first["id"], {"succeeded", "failed"})
 
