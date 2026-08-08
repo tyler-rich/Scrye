@@ -17,7 +17,7 @@ dependencies = [
     # uvloop/httptools extras are validated for it); 0.52.0 is the current release.
     # 0.52.0 adds an opt-in experimental `--http zttp` parser; the default parser
     # selection is unchanged and docker/entrypoint.sh passes no `--http` flag.
-    "uvicorn[standard]==0.52.0",
+    "uvicorn[standard]==0.52.1",
     # >=2.12 is a hard floor on Python 3.14: the pydantic-core that 2.10.x pins
     # (2.27.2) publishes no cp314 wheel and does not build from source there.
     "pydantic==2.13.4",
@@ -29,7 +29,7 @@ dependencies = [
     # SQLAlchemy's asyncio support requires greenlet, which it no longer installs
     # implicitly on every platform. Declare it so the lock always carries it.
     "greenlet==3.5.4",
-    "alembic==1.18.5",
+    "alembic==1.19.0",
     "argon2-cffi==25.1.0",
     "cryptography==50.0.0",
     "httpx==0.28.1",
