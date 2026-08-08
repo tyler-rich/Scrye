@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (137, newest first)
+### Index of §14 entries (138, newest first)
 
+- [2026-08-08 — Docs/Process — `docs/ROADMAP.md` replaced wholesale with an externally-drafted two-track revision (Track A carried forward verbatim, Track B added)](#2026-08-08--docsprocess--docsroadmapmd-replaced-wholesale-with-an-externally-drafted-two-track-revision-track-a-carried-forward-verbatim-track-b-added)
 - [2026-08-08 — Security/Infra — `cryptography` bumped 49.0.0 → 50.0.0 for CVE-2026-69247; the dogfood gate caught it on an unrelated PR](#2026-08-08--securityinfra--cryptography-bumped-4900--5000-for-cve-2026-69247-the-dogfood-gate-caught-it-on-an-unrelated-pr)
 - [2026-08-03 — Infra/Process — Post-v0.3.0 Dependabot triage: three grouped PRs reapplied on `dev`, an annotated-tag SHA-pin corrected, eight toolchain majors held back](#2026-08-03--infraprocess--post-v030-dependabot-triage-three-grouped-prs-reapplied-on-dev-an-annotated-tag-sha-pin-corrected-eight-toolchain-majors-held-back)
 - [2026-08-03 — Release/Process — v0.3.0 release prep: version bumped to 0.3.0, CHANGELOG cut with an upgrade-notes block for migration 0009](#2026-08-03--releaseprocess--v030-release-prep-version-bumped-to-030-changelog-cut-with-an-upgrade-notes-block-for-migration-0009)
@@ -717,6 +718,87 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-08 — Docs/Process — `docs/ROADMAP.md` replaced wholesale with an externally-drafted two-track revision (Track A carried forward verbatim, Track B added)
+
+**What changed:** `docs/ROADMAP.md` was **replaced in full** with a revision the maintainer drafted
+outside this session and approved. The document is now split into two tracks. **Track A —
+Engineering & hardening** is the entire previous roadmap (Near-term / Medium-term / Longer-term ·
+speculative), carried across **verbatim**. **Track B — Features** is new: six phases (prioritization
+& enrichment, triage & decisions, reporting & visibility, AI assist & MCP, continuous scanning &
+supply chain, ecosystem & team workflow), followed by a **Deferred** list of candidate engines, an
+**Out of scope (policy)** list, a **Licensing & bundling policy** table, and five **Guiding
+principles**. A short *"Where Scrye is heading"* preamble (Decide / Watch / Corroborate /
+Interoperate) and a rewritten front-matter blockquote frame the two tracks. **Known limitations &
+accepted trade-offs** is carried across unchanged and still closes the document. No code, schema,
+API contract, security model, job model, auth, or CI behavior is affected, and no locked decision
+changed.
+
+**The only edits to Track A's substance are three `†` prerequisite markers**, added where a Track A
+item now gates a Track B feature: *Content-addressed SBOM target identity* (Phase 2 fix-watch),
+*Cancel a running scan* (heavier engines and any future endpoint-scanning target class, i.e. the
+deferred Nuclei entry), and *Generated API client* (the Phase 4 MCP server). Each `†` is matched by
+a reciprocal pointer on the Track B side, so the dependency reads in both directions.
+
+**Verified before replacing, not after.** Track A and Known limitations were diffed against the
+outgoing file line by line under whitespace/line-wrap normalization; every open item, every
+struck-through Done/Declined entry, every §14 pointer, and every standing warning — *"do not
+re-argue it as a security fix"*, *"the evidence is already gathered; do not re-derive it"*, *"do not
+re-scope from the original wording"*, the admin-bypass caveat, and the CodeQL disable-order and
+required-context hazards — survives with its wording intact. Each §14 pointer was then checked
+against the entry it names rather than against its presence in the old file: the `react-router`
+tarball comparison (2026-08-03 v0.3.0 release prep), the `protect-dev` ruleset readout and
+`bypass_actors: null` note (2026-08-02), the five-of-eight governance verification (2026-08-02), the
+#136/#137/signed-commit entries (2026-08-03), and the two CodeQL entries (2026-08-02) all match.
+`#123`, `#136` and `#137` were confirmed **closed** via the API; `./ARCHIVE.md` and `../README.md`
+still resolve from `docs/`, and nothing outside this file links into a ROADMAP section anchor.
+
+**One regression was caught and corrected rather than absorbed.** The draft's *Frontend tooling
+majors from Dependabot #86* paragraph was the **pre-#147** version of that item — the draft was
+written against `docs/ROADMAP.md` at `cb3c350`, and `004d2b5` (#147, 2026-08-03) rewrote the
+paragraph afterwards. Taking the draft as written would have reverted the #145 shopping-list
+refresh, dropped four toolchain members (`@eslint/js`, `@vitejs/plugin-react`,
+`eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`), reverted **jsdom 26 → 30** to the stale
+`26 → 29`, and removed the closing sentence recording that these are **deliberately not** in
+`.github/dependabot.yml`'s `ignore` list. That sentence is one half of a two-way reference —
+`.github/dependabot.yml` carries the matching *"Deliberately NOT ignored … tracked in
+docs/ROADMAP.md"* comment — so dropping it would have left the config pointing at a claim the
+roadmap no longer made. The current paragraph was spliced in verbatim (re-wrapped to the new file's
+column width, wording untouched) after the maintainer was asked; nothing else in the draft was
+altered.
+
+**One deletion is recorded rather than restored.** The outgoing preamble's sentence *"Scrye's
+repository is now **public**, so items that were previously blocked on that (free CI runners,
+fork-based contribution safety) are unblocked"* is not in the new front matter, which was
+deliberately rewritten for the two-track structure. Its load-bearing half survives in place — the
+*Native arm64 CI runners* item still states that public-repo arm64 runners are free and that the
+cost concern is gone.
+
+**Track B was checked against the locked decisions rather than assumed compatible.** Phase 5's
+running-fleet drift goes *"via the existing read-only Docker socket proxy"* (locked decision §4 —
+the app still never mounts `/var/run/docker.sock`); arq/Redis and SQLCipher stay where they are, in
+Track A's longer-term section, so §3 and §5 are untouched; the licensing table's
+subprocess-boundary rule is the same one CLAUDE.md § Scanner faithfulness and § Third-party license
+attribution already state; and the MCP server is specified as authenticated, read-only at launch,
+audit-logged, and disabled by default, reusing the existing API-token/RBAC model. One factual claim
+was spot-checked at the source: Phase 3 offers ntfy and Gotify *"alongside the existing webhook,
+Discord, SMTP, and Matrix channels"*, and `backend/app/db/models/notification.py:27-30` defines
+exactly those four.
+
+**Why:** the roadmap had accumulated a full engineering backlog and no statement of product
+direction, so a reader could see every open chore and still not know what Scrye is trying to
+become. The two-track split keeps the backlog exactly as it was — it is the part with dated
+evidence behind it and the part sessions actually work from — while giving the feature direction
+somewhere to live that is explicitly labelled as direction, not commitment. Replacing wholesale
+rather than editing in place is what made the fidelity check tractable: a superset claim can be
+verified by diff, whereas an incremental rewrite of the same size could not.
+
+**Plan section affected:** `docs/ROADMAP.md` in full (Track A/Track B restructure; Track A and
+Known limitations carried forward verbatim apart from the three `†` markers). §14 (this record).
+No locked decision changed; no other file touched. Landed via
+[#155](https://github.com/tyler-rich/Scrye/pull/155).
 
 ---
 
