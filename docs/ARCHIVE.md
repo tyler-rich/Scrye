@@ -807,7 +807,7 @@ since both move more than a patch:
   is unused.
 - **uvicorn 0.52.0** adds an **experimental, opt-in** HTTP/1.1 parser (`--http zttp`, a sans-IO
   parser with Zig bindings) that upstream explicitly marks not-for-production, and fixes non-ASCII
-  WebSocket request headers under websockets 13.0. Default parser selection is unchanged, and
+  WebSocket request headers under websockets 17.0. Default parser selection is unchanged, and
   `docker/entrypoint.sh` passes no `--http` flag — verified, not assumed — so the default
   (`auto` → httptools) is what the image keeps running. No behavior change for Scrye.
 
