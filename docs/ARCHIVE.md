@@ -797,7 +797,8 @@ verified by diff, whereas an incremental rewrite of the same size could not.
 
 **Plan section affected:** `docs/ROADMAP.md` in full (Track A/Track B restructure; Track A and
 Known limitations carried forward verbatim apart from the three `†` markers). §14 (this record).
-No locked decision changed; no other file touched.
+No locked decision changed; no other file touched. Landed via
+[#155](https://github.com/tyler-rich/Scrye/pull/155).
 
 ---
 
