@@ -79,10 +79,24 @@ updates:
     #
     # Deliberately NOT ignored: the frontend tooling majors (typescript, eslint,
     # typescript-eslint, vite, vitest, jsdom and friends). Those are *wanted* —
-    # they are the deferred #86 sweep tracked in docs/ROADMAP.md — so Dependabot
-    # should keep surfacing them until that PR is done. An ignore rule says "a
-    # bot may not make this decision"; it is not a parking space for work we
-    # intend to do.
+    # we want to see them, evaluate them, and land them, which is exactly what
+    # the #86 sweep did (see docs/upgrades/frontend-toolchain-86.md).
+    #
+    # `typescript` is the one to leave unignored most deliberately. TypeScript 7
+    # is wanted, and the only thing blocking it is upstream: typescript-eslint's
+    # `typescript` peer range has never admitted 7 in any published version. So
+    # the regenerating Dependabot PR proposing typescript 7.x is not noise — it
+    # IS the notification that tells us when upstream ships support. Ignoring it
+    # would suppress that signal while changing nothing about the blocker.
+    # Re-check the range in one command:
+    #
+    #     npm view typescript-eslint@latest peerDependencies.typescript
+    #
+    # Support is expected to arrive as a new typescript-eslint MAJOR built
+    # against TS 7's ./unstable/* API, not as a point-release range widen.
+    #
+    # An ignore rule says "a bot may not make this decision"; it is not a
+    # parking space for work we intend to do.
     ignore:
       - dependency-name: "@mantine/*"
         update-types: ["version-update:semver-major"]
