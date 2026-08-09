@@ -93,6 +93,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`@types/node` 24.13.3 → 26.2.0** — a deliberate reversal of the standing
+  "keep it on the 24 line" decision (`docs/upgrades/frontend-toolchain-86.md`
+  §5, and #145's narrowing on 2026-08-03), taken on the maintainer's
+  instruction. Nothing in the toolchain requires it: the only `@types/node`
+  constraints in the tree are the optional peers of `vite@8.2.1`
+  (`^20.19.0 || >=22.12.0`) and `vitest@4.1.10`
+  (`^20.0.0 || ^22.0.0 || >=24.0.0`), both of which 24.13.3 already satisfied.
+  This is currency, not a fix.
+
+  **The reason the old decision was reversible is that step 4 already shrank
+  the blast radius to one file.** §5's argument was that a `@types/node` ahead
+  of the pinned Node 24 runtime "describes APIs the build does not have and
+  feeds them straight into the type-aware ESLint gate" — written while
+  `tsconfig.app.json` still inherited TypeScript's enumerate-everything `types`
+  default. Since step 4 (#179) wrote `"types": []` there explicitly, the app
+  project no longer resolves the package at all: `tsc -p tsconfig.app.json
+  --listFiles` loads **1,063 files and zero of them are `@types/node`**, while
+  `tsconfig.node.json` loads **82**. The whole surface of this bump is
+  `vite.config.ts`, whose only Node API use is `process.env` — and
+  `interface ProcessEnv extends Dict<string> {}` is character-identical in both
+  versions.
+
+  **Compatibility with Node 24 was measured rather than inferred from the
+  version number, and it is not unconditional.** Every exported symbol of every
+  `node:` module was enumerated from both packages with the installed
+  TypeScript 6.0.3 compiler API and the two sets diffed. 26.2.0 adds two
+  modules (`node:ffi`, `node:quic`) and 263 symbols, and **drops 72** — of
+  which 31 are value exports. Checked against a real **Node 24.19.0**
+  (the head of the 24 line, which `ci.yml`'s `node-version: "24"` resolves to):
+  **26 of those 31 are still present on Node 24** — 24 top-level `zlib.Z_*`
+  constants plus `assert.CallTracker` and `buffer.SlowBuffer` — so the new
+  types genuinely stop describing a handful of deprecated APIs the pinned
+  runtime still has. In the other direction, **44 of the 65 added value exports
+  do not exist on Node 24.19.0**, `node:ffi` and `node:quic` wholesale. Neither
+  list is referenced anywhere in this repository, and neither is reachable from
+  `src/`. Both are recorded so the residual is a known quantity rather than an
+  assumption.
+
+  **The lockfile diff is +8/−8: 306 packages before and after, zero added, zero
+  removed, two bumped** — `@types/node` itself and its sole dependency
+  `undici-types` 7.18.2 → 8.3.0. `eslint --print-config` was diffed before and
+  after on one representative file of each class (app `.tsx`, library `.ts`,
+  the test override) **plus `vite.config.ts`, the one file this bump can
+  reach**: all four are byte-identical at **135 rules**. Lint, `format:check`,
+  `tsc -b --force` and `npm audit` are clean; the suite is the same **80 tests
+  across 22 files**, diffed per test name rather than by total; and all three
+  emitted assets are **byte-identical** by SHA-256 to the pre-bump baseline,
+  which is the proof a types-only devDependency cannot reach what ships.
+
 - **`globals` 17.8.0 → 17.9.0, `@testing-library/user-event` 14.6.1 → 14.6.3,
   and `postcss` 8.5.25 → 8.5.26** — step 8, the last step of the frontend
   toolchain sweep in `docs/upgrades/frontend-toolchain-86.md`. Three routine
