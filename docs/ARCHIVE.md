@@ -842,6 +842,26 @@ because they predate `main`'s last promotion. Practical consequences:
   No change is made here — this is a maintainer decision, recorded so the next re-proposal is not
   re-diagnosed from scratch.
 
+**Unrelated finding, surfaced by the same verification pass: the GitHub profile display name is
+still `Tyler Richardson`, so every web-UI merge violates § Git & PR conventions.** Updating #151's
+and #154's branches from `dev` produced merge commits authored `Tyler Richardson
+<170156756+tyler-rich@users.noreply.github.com>`, which prompted checking the rest of the history.
+**Every** commit created through the GitHub web UI carries that name — `a43b2eb` (the v0.3.0
+promotion merge), `004d2b5` (#147), `719f11b` (#156), `e5aa6ea` (#148), `984bfa5` (#155),
+`0463ce7` (#142), `fb6864c` (#141) — while every commit pushed from a session over local `git`
+correctly carries `tyler-rich` (`1b1f24a`, `f3fc929`, `cb3c350`). The split is exactly the one
+§ Git & PR conventions predicts: *"GitHub authors a squash-merge commit — and the merge commit a
+promotion produces — as the merging account's profile display name, which the repo-local
+`git config user.name` cannot override."*
+
+This is **not** something a code session can fix, and it is not new — `a43b2eb` predates this
+audit by six days. It is noted because `docs/ROADMAP.md` § Finish the public-repo governance setup
+lists the profile display name among the five items *"verified in GitHub Settings on 2026-08-02"*,
+and the commits above show it was not actually changed (or was changed back). The fix is a
+one-field edit at <https://github.com/settings/profile> — set **Name** to `tyler-rich` — after
+which future merges comply; commits already written keep the old name and are not worth rewriting.
+Flagged rather than resolved, and `docs/ROADMAP.md` deliberately left unedited.
+
 **Verification notes.** Every version claim above was checked at its source rather than taken from
 a PR description, per § Dependency hygiene's rule about scanner and advisory metadata being
 evidence rather than proof: PyPI's release index for `alembic`/`uvicorn` (which also disproved a
