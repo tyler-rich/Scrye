@@ -32,6 +32,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Bundled scanner binaries updated: Trivy 0.72.0 → 0.73.0, Grype 0.115.0 →
+  0.116.1, Syft 1.46.0 → 1.50.0** — the current upstream releases, verified by
+  resolving each project's tags rather than from any advisory or summary. No
+  breaking changes, deprecations, or CLI changes in any release crossed, and
+  Syft's JSON schema moves only at patch level (16.1.5 → 16.1.10), so Scrye's
+  JSON parsing and the persisted-SBOM format are unaffected. Highlights: Trivy
+  gains native discovery of VEX documents stored as OCI artifacts; Grype 0.116
+  adds lightweight Go reachability analysis that reduces false positives and
+  dedupes govulndb/GHSA twins; Syft picks up vcpkg and macOS `.app` cataloging.
+  The CI dogfood gate's `aquasec/trivy` / `anchore/grype` scan images (pinned to
+  the bundled versions by design) and the weekly re-scan move in lockstep, with
+  digests resolved from the registry. `THIRD_PARTY_LICENSES/` re-verified at the
+  new tags: every bundled `LICENSE` (and Trivy's `NOTICE`) is byte-identical
+  upstream, and Grype/Syft still ship no `NOTICE`, so only the version table
+  changes.
 - **`uvicorn[standard]` 0.52.0 → 0.52.1 and `alembic` 1.18.5 → 1.19.1**, the
   mergeable half of Dependabot **#157**, reapplied by hand because Dependabot
   edits `pyproject.toml` only and leaves `backend/requirements.lock` stale — its
