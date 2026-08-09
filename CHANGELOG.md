@@ -93,6 +93,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Vitest 3.2.7 → 4.1.10** — step 5 of the frontend toolchain sweep in
+  `docs/upgrades/frontend-toolchain-86.md`. **`vitest` is the only package
+  bumped**, and it stays on the pinned `vite@6.4.3`: `vitest@4.1.10` declares
+  `vite: "^6.0.0 || ^7.0.0 || ^8.0.0"` as a required (non-optional) peer, so
+  Vitest 4 needs no Vite major and does not have to wait for step 7. `jsdom`
+  stays at 26.1.0 (step 6) and `vite` at 6.4.3 (step 7).
+
+  **`frontend/vite.config.ts` needed no change**, confirmed against the shipped
+  4.1.10 artifact rather than the migration guide: `dist/config.d.ts` still
+  carries `declare module "vite" { interface UserConfig { test?: … } }`, so the
+  `/// <reference types="vitest/config" />` plus `defineConfig` from `'vite'`
+  arrangement still types the `test` key; `extends?: string | true` is still on
+  the project-configuration type; and `projects` is already the current
+  spelling, so the `workspace` → `projects` rename is inert. Vitest 4's other
+  breaking changes have no consumer here — no `coverage`, `poolOptions`,
+  `reporters`, `deps.*` or `css` keys in the config, no snapshots, and no
+  test-options-as-third-argument call sites. The narrowed default `exclude`
+  (v3's five patterns down to `node_modules` and `.git`) collects nothing new,
+  because both projects' `include` globs are confined to `src/**`.
+
+  **One type error had to be fixed, in test code**, and it is the one thing the
+  sweep document's Step 5 row did not predict. Vitest 4 widened `vi.fn`'s
+  type-parameter constraint from `Procedure` to `Procedure | Constructable` (the
+  change that lets `vi.spyOn` mock constructors), so the alias
+  `ReturnType<typeof vi.fn>` — which instantiates a generic at its *constraint*,
+  not its default — now resolves to `Mock<Procedure | Constructable>` and no
+  longer satisfies a plain call signature. `tsc -b` failed at
+  `OidcLinkCard.test.tsx:65`, where such a mock is passed to
+  `.mockImplementation()` on a `History.replaceState` spy. Fixed at that one
+  site by typing the mock against the real method signature
+  (`Mock<typeof window.history.replaceState>`) instead of the loose alias, which
+  is more accurate than what it replaced. No autofix was run, in bulk or
+  otherwise. The sibling `ReturnType<typeof vi.fn>` at line 49 still compiles —
+  its mock is only ever asserted on — and was deliberately left alone.
+
+  **`vi.restoreAllMocks()` changed meaning, and it reaches one suite — but no
+  test's outcome depends on it.** In Vitest 4 it restores only spies created
+  with `vi.spyOn`, where Vitest 3 also reset plain `vi.fn()` implementations.
+  Measured on both versions with a standalone probe rather than read from the
+  guide: v3 reports the `vi.fn()` implementation gone after the call, v4 reports
+  it surviving; `vi.spyOn` spies are restored under both.
+  `OidcLinkCard.test.tsx` is the only file combining a `vi.mock` factory's
+  `vi.fn()`s with `vi.restoreAllMocks()` in `afterEach`, so its three mocks now
+  carry implementations across tests. Instrumenting the real suite shows the
+  carryover is real and inert: `startOidcLink`/`unlinkOidcIdentity` retain an
+  implementation from the test that sets it onward, yet are invoked **zero**
+  times in every later test, and every one of the ten tests sets
+  `getOidcLinkStatus`'s own resolved value before rendering.
+
+  **Suites, from a fresh `rm -rf node_modules && npm ci`:** lint clean,
+  `format:check` clean, **80 tests across 22 files** — identical to the
+  pre-bump baseline down to per-test name and status — `npm audit` 0
+  vulnerabilities, and a build of 7,035 modules whose emitted assets carry the
+  **same content hashes** as the baseline (`index-Vvdzytcz.js` 645.14 kB,
+  `index-D2wHtcHV.css` 201.38 kB), which is the proof that a test-runner
+  devDependency changed nothing that ships.
+
 - **TypeScript 5.7.2 → 6.0.3, and `frontend/tsconfig.app.json` pins
   `"types": []`** — step 4 of the frontend toolchain sweep in
   `docs/upgrades/frontend-toolchain-86.md`. **`typescript` is the only package
