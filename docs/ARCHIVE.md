@@ -976,6 +976,61 @@ lockfile, or config file changed, and `docs/ROADMAP.md` still deliberately unedi
 
 ---
 
+**Fourth pass (same date): the jsdom rating's supporting claim was challenged, tested, and
+narrowed — the rating survived, the wording did not.** The third pass justified jsdom's *medium*
+with *"detection is complete — no failure mode that survives a green run."* The maintainer
+challenged exactly the right seam: a green suite catches a query that finds **nothing** or **too
+much**, but not a query that resolves to a **different** element while downstream assertions still
+pass. That is silent drift, and the counts appeared to leave room for it (116 query call sites
+against 79 tests). The claim was **asserted, not argued**, and an unqualified "complete" could not
+be supported. It is replaced in §8 by a four-part audit against the suite itself:
+
+- **`getBy*` semantics make most drift loud.** It throws on zero matches *and* on more than one, so
+  silent one-to-one drift needs the engine to stop matching A *and* start matching exactly one B in
+  the same pass; any widening raises *"found multiple elements"* instead.
+- **62 of the 116 sites are discriminated by name, not by selector.** All 34 `getByRole(role,
+  {name})` and 28 `getByLabelText(text)` filter candidates by accessible name / label text computed
+  in JS; the engine only assembles the pool, so B would need an identical accessible name to A —
+  which is the ">1 match" throw condition.
+- **85 of the 116 are assertion subjects, categorised rather than estimated** — 74 directly inside
+  `expect(...)`, 11 assigned or line-wrapped and then asserted.
+- **The single set-valued query is pinned by exact equality.** There is exactly one `*AllBy*` call
+  in the suite (`NewScanPage.prefill.test.tsx:54`), and it feeds a helper asserted with `toEqual`
+  on the full ordered array — which also pins the suite's only raw selector use
+  (`el.closest('[role="option"]')`). No `within(...)` scoping anywhere.
+
+**What the audit could not argue away — ~17 interaction targets** (`user.click(getByRole(…))` and
+similar), where the resolved element is acted on rather than asserted on — is **handed to Step 6 as
+a checklist item** rather than reasoned about further: wrap `screen`'s query methods in a temporary
+`setupFiles` shim that logs each resolved element's `outerHTML`, run before and after the bump, and
+diff. That converts the residual from a judgement into a two-run measurement, and the shim is
+deleted before the PR opens.
+
+**Two corrections fell out of the same check.** (a) *"79 assertions"* was wrong in both prior
+passes: **79 is the test count**; the suite runs **151 `expect` calls**. Quoting the test count as
+an assertion count understated assertion density by roughly half, and it was the number the
+challenge reasoned from — so the error was this document's, not the challenge's. (b) The channel
+table's *"every query bottoms out in `querySelectorAll`"* was true but misleading about how much
+the engine can actually move: read from the installed `@testing-library/dom@10.4.1`, `getByText`'s
+candidate selector is `'*'` and `getByLabelText`'s are `'label'` / `'label,input'` / `'*'`, so the
+engine has no discriminating power there at all. The real exposure is `getByRole`'s
+`makeRoleSelector()` plus `node.matches()` against aria-query's element-role selectors — bare tag
+names and simple attribute selectors, **not** the complex-selector territory (`:has()`, `:is()`,
+`:scope`, nesting) where jsdom's "over 20 selector-related bugs" lived.
+
+**Rating unchanged: jsdom stays medium and stays third.** The audit made the oracle's strength
+specific rather than assumed, and every specific came back favourable. Step 7 (Vite 8) keeps the
+property that actually separates them — a Lightning CSS regression fails nothing and no checklist
+item can turn it into a test.
+
+**Plan section affected (fourth pass):** `docs/upgrades/frontend-toolchain-86.md` only — §6 (the
+selector channel row rewritten, the estimate paragraph's claim qualified, a drift-measurement
+checklist item added to Step 6) and §8 (the new *"Does a green run actually prove anything?"*
+subsection, plus a pointer in the revision note). No estimate, rating, ordering, or sequence
+membership changed. Still scoping only; `docs/ROADMAP.md` still deliberately unedited.
+
+---
+
 **Plan section affected:** new file `docs/upgrades/frontend-toolchain-86.md`; this §14 entry
 (including the correction to the 2026-08-09 queue-audit entry's characterisation of #153's red
 check). `docs/ROADMAP.md` was deliberately **not** edited — three items in it are affected (the #86

@@ -619,7 +619,7 @@ Counts are from `frontend/src/**/*.test.tsx` (12 files, 17 of the 79 tests).
 
 | Change | Reaches this suite? | Evidence |
 |---|---|---|
-| Selector engine `nwsapi` → `@asamuzakjp/dom-selector` (27.0.0) | **LIVE — widest surface** | **116 Testing Library query call sites** (34 `getByRole`, 28 `getByLabelText`, 21 `getByText`, plus `find*`/`query*` variants). Every one bottoms out in `querySelectorAll`. |
+| Selector engine `nwsapi` → `@asamuzakjp/dom-selector` (27.0.0) | **LIVE, but narrower than the call count suggests** | **116 Testing Library query call sites** (34 `getByRole`, 28 `getByLabelText`, 21 `getByText`, plus `find*`/`query*` variants). All bottom out in `querySelectorAll` — but read the installed `@testing-library/dom@10.4.1` and the engine's *discriminating power* varies by query type: `getByText`'s candidate selector is `'*'` (`queries/text.js:11`) and `getByLabelText`'s are `'label'`, `'label,input'`, `'*'` — an engine cannot change "every element", so filtering there is pure JS. The real exposure is `getByRole`: `querySelectorAll(makeRoleSelector(role))` (a union of bare tag names plus one `*[role~="X"]`) followed by `node.matches(selector)` against aria-query's element-role selectors (`input[type="checkbox"]`, `a[href]`, …). Those are simple tag/attribute selectors — **not** the complex-selector territory (`:has()`, `:is()`, `:scope`, nesting) where jsdom's "over 20 selector-related bugs" lived. |
 | UA stylesheet re-derived + CSS `display` resolution fixed (27.0.0) | **LIVE — narrow, one path** | Reaches the tests only through Testing Library's accessibility filter: in the installed `@testing-library/dom@10.4.1`, `isSubtreeInaccessible()` reads `getComputedStyle(element).display` and `isInaccessible()` reads `.visibility`; `config.js` sets `defaultHidden: false` and the repo never calls `configure()`, so **all 34 `getByRole` sites run that filter**. |
 | CSSOM implementation replaced (29.0.0) | **Inert** | `vite.config.ts`'s `test` block sets **no `css` key**, so Vitest's default `css: false` applies and Mantine's stylesheets are never injected into jsdom. There is no author CSS in the CSSOM to re-parse — only UA defaults, which is the row above. |
 | `element.click()` → `PointerEvent` (27.0.0) | **Inert** | **No `.click()` anywhere in `frontend/src/`.** All interaction is `userEvent.click` (8) or `fireEvent.click` (6), both of which construct and dispatch their own events rather than calling `HTMLElement.prototype.click()`. |
@@ -638,15 +638,36 @@ pushed in both directions and the two roughly cancel:
   that sound worst in the changelog (the CSSOM rewrite and the `click()` change).
   The CSS surface in particular is nearly absent because Vitest does not process
   CSS by default.
-- *Unchanged, and decisive for the risk rating:* **detection here is complete and
-  immediate.** `npm test` runs 79 assertions in ~15 s and is a total oracle for
-  this step — there is no failure mode that passes CI and shows up later. That is
-  exactly what separates it from Step 7, where a CSS-minifier regression fails
-  nothing and reaches a user.
+- *Unchanged, and decisive for the risk rating:* **detection here is near-total and
+  immediate** — `npm test` runs **79 tests / 151 `expect` calls** in ~15 s. The
+  qualifier matters and is argued rather than asserted in §8 under *"Does a green
+  run actually prove anything?"*: a green suite is a strong oracle for this step,
+  but not a tautologically complete one, and the residual is what the checklist
+  item below exists to close. Contrast Step 7, where a CSS-minifier regression
+  fails nothing and reaches a user.
 
-So: **effort S–L, risk medium.** Not "low", because of the 116-site selector
-surface and jsdom 30.0.0's unreadable notes; not "high", because everything that
-can go wrong announces itself in a 15-second test run.
+So: **effort S–L, risk medium.** Not "low", because of the selector surface and
+jsdom 30.0.0's unreadable notes; not "high", because the drift audit in §8 shows
+the suite pins the elements its queries resolve to, and the one residual is
+closable in ~20 lines of throwaway instrumentation.
+
+**Checklist item — close the silent-drift residual (≈20 min, do it once).**
+§8's audit shows ~17 of the 116 query sites are *interaction targets* rather than
+assertion subjects, so in principle a query could resolve to a different element
+post-swap and still leave the suite green. That residual is measurable rather than
+arguable, so measure it:
+
+- [ ] **Before** touching the version, add a temporary `setupFiles` shim that wraps
+      `screen`'s query methods and appends `element.outerHTML.slice(0, 120)` to a
+      log keyed by test name + call index. Run `npm test`. Keep the log.
+- [ ] Bump `jsdom`, run `npm test` again with the same shim, and **`diff` the two
+      logs**. An empty diff proves no query changed which element it resolved to —
+      which is the thing a green suite alone does not prove.
+- [ ] Delete the shim before opening the PR. It is a measurement, not a fixture.
+
+If the diff is non-empty, every differing line is a query worth reading before
+deciding the step is done — that is the whole point, and it costs one extra test
+run.
 
 ---
 
@@ -866,6 +887,12 @@ readable): jsdom's effort band widened **S–M → S–L**, its risk stayed **me
 and it swapped places with the Vite step. Every other row is unchanged and was
 re-checked rather than left standing — the reasoning is in §6, Step 6.
 
+**Audited in the third pass:** jsdom's rating rested on an unqualified claim that
+a green test run leaves no failure mode behind. That claim was challenged, tested
+against the suite, and **narrowed** — the rating survives, the wording does not.
+See *"Does a green run actually prove anything?"* below; the residual it could not
+argue away is now a checklist item on Step 6 rather than a footnote here.
+
 ### Relative risk — the ranking, stated plainly
 
 Because "which step is riskiest" drives what gets scheduled when, and one plausible
@@ -891,11 +918,74 @@ Step 3 and the Vite step have outranked it since the first draft. What actually
 changed is the gap: Step 1's risk fell further once its rule set was proven
 identical across the span (§0.3), while jsdom's surface became concrete.
 
-**jsdom is not the highest-risk step either.** It sits third. The property that
-keeps it there — and the one worth carrying into scheduling — is that its
-verification is *complete*: 79 assertions in ~15 s, with no failure mode that
-survives a green run. Step 7 has the opposite property, which is why it outranks a
-step that crosses four majors to its two.
+**jsdom is not the highest-risk step either.** It sits third, and the property
+that keeps it there is the strength of its oracle. That property was originally
+asserted here rather than argued — *"no failure mode that survives a green run"* —
+which is too strong as an unqualified claim. It is replaced by the audit below.
+
+### Does a green run actually prove anything? (the silent-drift check)
+
+A green suite catches a query that finds **nothing** or finds **too much**. The
+harder question is whether a query could resolve to a *different* element after
+the selector-engine swap while every downstream assertion still passes — silent
+drift, which is not a failure and which a green run would not catch. The raw
+counts look like they leave room for it: **116 query call sites, 79 tests**. They
+do not, for four reasons, in descending order of how much work each does.
+
+**1. `getBy*` semantics make most drift loud, not silent.** `getBy*` throws on
+**zero** matches *and* on **more than one**. Silent one-to-one drift therefore
+needs the engine to stop matching element A *and* start matching exactly one
+different element B, in the same pass. Any widening that catches a second
+candidate raises *"found multiple elements"* instead — a failure, not drift.
+
+**2. 62 of the 116 sites are discriminated by name, not by selector.** All 34
+`getByRole(role, {name})` and 28 `getByLabelText(text)` sites filter candidates by
+**accessible name / label text, computed in JavaScript** by Testing Library and
+`dom-accessibility-api` — the selector engine only assembles the candidate pool.
+For a result to drift from A to B, B must carry an *identical* accessible name to
+A. Two same-named elements in scope is precisely the ">1 match" condition that
+throws today. And per §6's channel table, the engine's actual discriminating power
+in these queries is bare tag names and simple attribute selectors, not the complex
+selectors where jsdom's fixed bugs lived.
+
+**3. 85 of the 116 sites are assertion subjects, measured not estimated.**
+Categorising every call site by how its result is consumed: **74** appear directly
+inside `expect(...)`; **11** more are assigned to a variable or wrapped across
+lines and then asserted on (`expect(save).toBeDisabled()`,
+`expect(value.previousElementSibling).toHaveTextContent('Version')`, …). Drift at
+any of those 85 changes what is asserted, so it is not silent. The suite also runs
+**151 `expect` calls**, not 79 — 79 is the *test* count, and quoting it as an
+assertion count (as an earlier draft of this document did) understates assertion
+density by roughly half.
+
+**4. The one set-valued query is pinned by exact equality.** Set-valued queries
+(`*AllBy*`) carry no uniqueness guarantee and are the natural home for silent
+drift. There is **exactly one** in the entire suite —
+`getAllByText(/^(UNKNOWN|LOW|MEDIUM|HIGH|CRITICAL)$/)` in
+`NewScanPage.prefill.test.tsx:54` — and it feeds a helper whose result is asserted
+with `toEqual(['UNKNOWN','LOW','MEDIUM','HIGH','CRITICAL'])`: an exact, ordered
+deep-equality check. A changed set fails it. That helper is also the suite's only
+raw selector use (`el.closest('[role="option"]')`), so the same assertion pins
+that too. There is no `within(...)` scoping anywhere.
+
+**What remains, honestly: ~17 interaction targets.** Sites like
+`await user.click(screen.getByRole('button', { name: 'Refresh' }))`, where the
+resolved element is acted on rather than asserted on. Most are followed by
+assertions that would fail if the wrong element were hit — `BackupsPanel.test.tsx`
+clicks delete and then asserts `toHaveBeenCalledWith(BACKUP.id)`;
+`ScansPage.urlstate.test.tsx` types into a search box and then asserts the URL it
+produced. But "most" is not "all", and proving the rest by inspection is more work
+than measuring it. **So the residual is not argued away — it is handed to Step 6
+as a checklist item** (a resolved-element snapshot, diffed across the bump), which
+converts it from a judgement into a two-run measurement.
+
+**Net effect on the rating: none.** The audit made the oracle's strength
+*specific* rather than assumed, and every specific came back favourable — the one
+genuinely drift-prone construct in the suite turned out to be pinned by a `toEqual`
+on the whole array. jsdom stays at **medium** and stays third. Step 7 keeps the
+opposite property — a Lightning CSS regression fails nothing at all, and no
+checklist item can turn that into a test — which is why it still outranks a step
+crossing four majors to its two.
 
 ### Recommendation on #153: **keep it open, correct the note attached to it**
 
