@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (152, newest first)
+### Index of §14 entries (153, newest first)
 
+- [2026-08-09 — Infra — #86 sweep step 8 landed: `globals` 17.9.0, `@testing-library/user-event` 14.6.3, `postcss` 8.5.26 — the sweep is complete, and its reminder-surface PR had already closed itself](#2026-08-09--infra--86-sweep-step-8-landed-globals-1790-testing-libraryuser-event-1463-postcss-8526--the-sweep-is-complete-and-its-reminder-surface-pr-had-already-closed-itself)
 - [2026-08-09 — Infra — #86 sweep step 7 landed: Vite 6.4.3 → 8.2.1 + `@vitejs/plugin-react` 4.3.4 → 6.0.5; the partial oracle was closed by a pixel diff, but only after its noise floor was calibrated](#2026-08-09--infra--86-sweep-step-7-landed-vite-643--821--vitejsplugin-react-434--605-the-partial-oracle-was-closed-by-a-pixel-diff-but-only-after-its-noise-floor-was-calibrated)
 - [2026-08-09 — Infra — #86 sweep step 6 landed: jsdom 26.1.0 → 30.0.1; the selector-drift shim diffed empty, but only after the shim itself had to be fixed](#2026-08-09--infra--86-sweep-step-6-landed-jsdom-2610--3001-the-selector-drift-shim-diffed-empty-but-only-after-the-shim-itself-had-to-be-fixed)
 - [2026-08-09 — Infra — #86 sweep step 5 landed: Vitest 3.2.7 → 4.1.10 on the pinned Vite 6; the "no config changes" prediction held, the "low breakage" one did not](#2026-08-09--infra--86-sweep-step-5-landed-vitest-327--4110-on-the-pinned-vite-6-the-no-config-changes-prediction-held-the-low-breakage-one-did-not)
@@ -733,6 +734,193 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 8 landed: `globals` 17.9.0, `@testing-library/user-event` 14.6.3, `postcss` 8.5.26 — the sweep is complete, and its reminder-surface PR had already closed itself
+
+**What changed:** `frontend/package.json` (three lines), `frontend/package-lock.json`, plus
+`CHANGELOG.md` and this entry. This is **step 8 — the final step** of the eight-step sequence in
+`docs/upgrades/frontend-toolchain-86.md`. **Those three packages are the only ones bumped.** No
+source, test, or config file changed; `frontend/eslint.config.js`, both tsconfigs,
+`vite.config.ts` and `postcss.config.cjs` are byte-identical to `dev`. `main` was not touched.
+
+**Step 8's membership was read from the row rather than from the session brief, and the brief was
+wrong.** The brief predicted step 8 was `@testing-library/user-event`, `globals`, `postcss` **and
+`eslint-plugin-react-refresh` 0.4.16 → 0.5.3**, with the react-refresh bump described as the
+non-trivial member needing a config migration. It is not in step 8. §6's Step 8 row names exactly
+three packages, and **`eslint-plugin-react-refresh` belongs to Step 2**, where §6's Step 2 "Moves"
+row places it and where it landed on 2026-08-09 as **#174** — `frontend/package.json` has read
+`"eslint-plugin-react-refresh": "0.5.3"` since. Reported to the maintainer before anything moved,
+per the standing instruction to follow the row and say so when the brief diverges.
+
+**The three 0.5.x migration hazards were nevertheless re-verified against the *installed* 0.5.3**,
+because the brief raised them and because step 2's entry recorded them as re-checked once, at
+install time, rather than as permanently settled. All three are no-ops here, confirmed at the
+artifact rather than from the changelog:
+
+| 0.5.0 change | Checked against | Verdict |
+|---|---|---|
+| ESM-only, flat config required | installed `package.json`: `"type": "module"`, peer `eslint: "^9 \|\| ^10"` | no-op — this repo has been flat-config and ESM since Phase 0; there is no `.eslintrc*` anywhere |
+| preferred export moved to a named `reactRefresh` exposing `plugin`/`configs` | `import()`ed the installed package: named exports are `default` and `reactRefresh`; `default` still carries `{rules, configs}` | no-op — `eslint.config.js` imports the **default** export and registers it as `plugins: {'react-refresh': reactRefresh}`, which still resolves `rules`, and `--print-config` lists the rule at the expected severity |
+| `customHOCs` renamed to `extraHOCs`; HOC-call validation tightened | the rule's shipped `meta.schema`: `{extraHOCs, allowExportNames, allowConstantExport, checkJS}`, `additionalProperties: false` | no-op — the repo's single `react-refresh/only-export-components` usage passes `allowConstantExport` only, and sets no HOC option at all. Worth noting the failure mode it avoids: `additionalProperties: false` means a surviving `customHOCs` key would be a hard **config** error, not a silently-ignored option. |
+
+**All three targets were re-checked at the registry before the bump; none had moved.**
+`globals` 17.9.0, `@testing-library/user-event` 14.6.3 and `postcss` 8.5.26 are each still
+`dist-tags.latest`, so no deviation from the document's targets was needed or proposed — the first
+step in the sweep for which that is true of every member.
+
+---
+
+**The `globals` caution is the only judgement in this step, and it was answered by measurement.**
+§6's Step 8 row carries an inherited warning: a `globals` bump can silently *shrink* a set, leaving
+lint green while `eslint.config.js:20`'s `globals.browser` loses coverage — so inspect the set
+rather than trust a green run. Inspected, on both sides, from the installed package:
+
+| | 17.8.0 | 17.9.0 |
+|---|---|---|
+| `globals.browser` keys | 1,191 | **1,196** |
+| added | — | `PerformanceMarkConditional`, `PermissionsPolicy`, `RTCIceCandidatePair`, `WebTransportDatagramsWritable`, `WebTransportSendGroup` (all `false`, i.e. read-only) |
+| removed | — | **none** |
+
+**Nothing shrank.** (For the record, since it costs nothing: `serviceworker` 324 → 326,
+`sharedWorker` 292 → 294 and `worker` 343 → 347 also grew, and no set in the package lost an entry.
+This repo consumes `browser` only.)
+
+**The `print-config` diff, run on one representative file per file class, per §0.3's method note.**
+App `.tsx` (`src/pages/Dashboard.tsx`), library `.ts` (`src/lib/polling.ts`) and the test override
+(`src/lib/polling.test.ts`) all hold at **135 rules, with zero added, zero removed, and zero
+severity or option changes**. The *only* difference in any of the three fully-resolved configs is
+those five `languageOptions.globals` entries — no rule, no plugin identity string, no parser
+setting moved. That is the expected result for a step that touches no linting package, and it is
+recorded as a measured result rather than an assumed one because §0.3's whole lesson is that the
+expected result is exactly what does not get checked.
+
+**The build output is byte-identical, and that check was strengthened deliberately.** Prior steps
+compared Vite's emitted **content hashes**; here all three artifacts were compared by **SHA-256 of
+the file contents** — `index-C771VE3z.js`, `index-BG7b_ejj.css` and the sourcemap all match the
+pre-bump baseline exactly. That is worth doing rather than inheriting the weaker check, because
+unlike `globals` and `user-event`, **`postcss` is genuinely in the build path**: it runs via
+`frontend/postcss.config.cjs` (`postcss-preset-mantine` + `postcss-simple-vars`) on every build. A
+postcss patch that changed CSS output would be invisible to lint and to the test suite, and this is
+the check that rules it out.
+
+**What moved in the lockfile: 306 → 306 packages, and every line is accounted for.** Both lockfiles
+were parsed and compared key by key rather than eyeballed: **zero added, zero removed, three
+bumped** — `globals` 17.8.0 → 17.9.0, `@testing-library/user-event` 14.6.1 → 14.6.3, `postcss`
+8.5.25 → 8.5.26 — plus the root manifest's three pins. `lockfileVersion` stays 3 and the file diff
+is **+13/−13**, the smallest of the sweep. The one transitive *requirement* that moved is
+`postcss`'s own `nanoid` range, `^3.3.16` → `^3.3.17`, which installs nothing: the tree already
+carries **`nanoid@3.3.18`** from the 2026-08-09 advisory refresh, so 8.5.26 raising its floor past
+GHSA-2v37-7h3g-55p8 is satisfied by a package that was already there. Nothing else in the resolved
+tree changed — `eslint` (10.8.1), `typescript` (6.0.3), `vite` (8.2.1), `vitest` (4.1.10), `jsdom`
+(30.0.1), `react`/`react-dom` (18.3.1) and `@mantine/*` (7.17.8) were read out of both lockfiles
+rather than trusted from the diff.
+
+The lockfile was written with **npm 11.19.0** installed into a scratch prefix to match CI's Node 24
+rather than the sandbox's Node 22 / npm 10.9.7 — the **eighth** consecutive lockfile touch to use
+this method and the eighth clean diff. `npm ci` was run through the same npm 11 and the lockfile's
+SHA-256 re-verified unchanged afterwards, so what `--package-lock-only` produced is byte-identical
+to what a real install writes.
+
+**Suites, measured on both sides, each from a clean install.** Baseline (`npm ci` from the committed
+lockfile): lint clean (14.0 s), `format:check` clean, **80 tests across 22 files**, build **630.29 kB
+JS / 196.79 kB CSS**, `npm audit` **0 vulnerabilities**. After the bump, from a fresh
+`rm -rf node_modules && npm ci`: lint clean (11.6 s), `format:check` clean, **80 tests across 22
+files**, build identical, audit **0**. The test comparison was made **per test, not per total** —
+both runs captured with `--reporter=json` and reduced to sorted `file :: full test name :: status`
+triples, which **diff empty**. **No lint finding was autofixed, in bulk or individually — there were
+none.**
+
+---
+
+**Sweep-completion assessment, made against #172's live diff rather than from memory.** Every one of
+the thirteen packages **#172** proposes is now either landed or deliberately excluded:
+
+| #172 proposes | Disposition |
+|---|---|
+| `typescript-eslint` 8.66.0 | landed, step 1 (#171) |
+| `eslint` 10.8.0 · `@eslint/js` 10.0.1 · `eslint-plugin-react-hooks` 7.1.1 · `eslint-plugin-react-refresh` 0.5.3 | landed, step 2 (#174) — `eslint` at **10.8.1**, one patch *ahead* of the proposal |
+| `typescript` 7.0.2 | **excluded** — §3.1's ceiling is 6.0.3; landed at **6.0.3** in step 4 (#179) |
+| `vitest` 4.1.10 | landed, step 5 (#180) |
+| `jsdom` 30.0.1 | landed, step 6 (#183) |
+| `vite` 8.2.0 · `@vitejs/plugin-react` 6.0.5 | landed, step 7 (#185) — `vite` at **8.2.1**, ahead of the proposal |
+| `@types/node` 26.1.2 | **excluded** — §5, "Action: none" |
+| `globals` 17.9.0 · `@testing-library/user-event` 14.6.3 | landed here, step 8 |
+
+Plus `postcss` 8.5.26, which #172 also carries and which the document assigns to step 0-or-8.
+
+**Two exclusions, not one — and the second is worth stating plainly because it is easy to misread
+as complete.** `@types/node` is the excluded member everyone remembers (§5). But **`typescript` is
+excluded too**, because #172 proposes **7.0.2** and the sweep deliberately stopped at **6.0.3**.
+Eleven of thirteen landed; two did not, and both non-landings are decisions rather than omissions.
+
+**The TypeScript ceiling was re-checked on the day, and it has not moved.**
+`typescript-eslint@latest` is still **8.66.0** peering `typescript: ">=4.8.4 <6.1.0"`, and its
+canary `8.66.1-alpha.10` declares the same. Two consequences that point in opposite directions and
+must not be conflated:
+
+- **The installed `typescript@6.0.3` sits inside that range**, so nothing in the shipped toolchain
+  is straining a peer bound — the sweep's end state is a satisfiable graph.
+- **#172's own `typescript` member is still outside it.** `7.0.2` against `<6.1.0` is the same
+  `ERESOLVE` that killed #153, #170 and every regeneration since. So #172 is *not* merely stale,
+  it is **still unsatisfiable as composed**, and completing the sweep did not make it mergeable.
+
+**#172 was already closed before this session, and not by a maintainer.** Read live: `state:
+closed`, `merged: false`, `closed_at: 2026-08-09T11:27:01Z`, carrying exactly one comment — from
+`dependabot[bot]`, *"Looks like these dependencies are updatable in another way, so this is no
+longer needed."* Dependabot superseded it automatically when step 2 (#174) landed, three minutes
+before. **No close action was taken here, and none was needed.**
+
+**The reminder surface has moved four times in one day, which is the finding that generalises.**
+The chain from the scoping document's #153 now reads **#153 → #170 → #172 → #175 → #181 → #184 →
+#186**, each opened against the then-current `dev` and each auto-closed by Dependabot within
+minutes of the next sweep step landing (#172 13 updates → #175 9 → #181 8 → #184 7 → **#186 5,
+open**). §8's advice — *"close it only when Step 7 lands"* — was written for a PR expected to sit
+still; in practice the group regenerates after **every** merge that touches `frontend/package.json`,
+so a specific PR number is a snapshot, not a handle. **#186** is the live one: opened
+2026-08-09T17:00:26Z from `167b1c6`, carrying five updates — this step's three (`globals` 17.9.0,
+`@testing-library/user-event` 14.6.3, `postcss` 8.5.26) plus the two declined ones (`@types/node`
+26.1.2, `typescript` 7.0.2). Once this step merges it should regenerate down to **exactly the two
+declined items**, which is the honest end state §8 anticipated. **#186 was deliberately not
+touched** — it was not in this step's scope, and closing or commenting on a PR the maintainer has
+not seen is not a call this session makes.
+
+**Which of the document's Step 8 predictions held.**
+
+- **"`globals` 17.8.0 → 17.9.0, `@testing-library/user-event` 14.6.1 → 14.6.3, and `postcss`
+  8.5.25 → 8.5.26 if not already taken in Step 0" — HELD, including the conditional.** Step 0 (the
+  2026-08-09 lockfile refresh) took `js-yaml` and `nanoid` only and left `package.json` untouched,
+  so `postcss` was still at 8.5.25 and belonged here.
+- **"Mechanical, no config change, no coupling" — HELD**, and the no-coupling half is now
+  measured rather than asserted: zero packages added or removed from the lockfile.
+- **The inherited `globals` caution — HELD as a caution and answered in the favourable
+  direction.** The set grew by five and lost nothing. The row prices this as *"a spot-check, not an
+  investigation"*, which was right.
+- **"Fold into whichever step is convenient, or take alone" — taken alone**, consistent with every
+  other step in the sweep having exactly one plausible cause of failure.
+- **Effort priced 15 min / very low — accurate for the bump**; essentially all the time went on the
+  baseline/after measurements (two clean installs, two `print-config` sweeps, the globals set diff,
+  the byte-level asset comparison), which is the sweep's standing exit criteria rather than this
+  step's cost.
+
+**What was deliberately not done.** No package other than the three step 8 names moved, in
+`package.json` or in the lockfile — in particular **`@types/node` stays at 24.13.3** and
+**`typescript` stays at 6.0.3**, both per the document's own decisions. No lint finding was
+autofixed, in bulk or individually. No source, test, or config file changed. **#172 was not closed
+(it already was, by Dependabot) and no comment was posted on it**; **#186 was not touched**;
+`docs/ROADMAP.md` was **not** edited — marking Track A's sweep item complete is a maintainer call,
+and one is proposed to the maintainer rather than made here.
+`docs/upgrades/frontend-toolchain-86.md` was **not** edited either, on the same standing basis as
+every prior step: correcting the sequence document is the maintainer's, and this entry is the
+record of what its Step 8 row got right in the meantime — which, uniquely in this sweep, is all of
+it. `main` was not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`, `CHANGELOG.md`
+§ Unreleased/Changed, and this entry. No code behaviour, schema, API contract, security model, job
+model, auth, or CI configuration changed; no locked decision re-opened — React stays on 18 and
+Mantine on v7, and none of `globals`, `@testing-library/user-event` or `postcss` declares a
+`react`, `react-dom`, `@types/react*` or `@mantine/*` peer.
 
 ---
 
