@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (145, newest first)
+### Index of §14 entries (146, newest first)
 
+- [2026-08-09 — Infra — #86 sweep step 2 landed: the ESLint 10 family, with the React Compiler rule set held inert; three of the doc's four predictions held](#2026-08-09--infra--86-sweep-step-2-landed-the-eslint-10-family-with-the-react-compiler-rule-set-held-inert-three-of-the-docs-four-predictions-held)
 - [2026-08-09 — Docs/Process — Scoping doc corrected post-step-1; #170 (Dependabot's regenerated unsatisfiable frontend group) closed](#2026-08-09--docsprocess--scoping-doc-corrected-post-step-1-170-dependabots-regenerated-unsatisfiable-frontend-group-closed)
 - [2026-08-09 — Infra — #86 sweep step 1 landed: `typescript-eslint` 8.19.0 → 8.66.0; the scoping doc's rule-set claim was wrong in two independent ways](#2026-08-09--infra--86-sweep-step-1-landed-typescript-eslint-8190--8660-the-scoping-docs-rule-set-claim-was-wrong-in-two-independent-ways)
 - [2026-08-09 — Security — Frontend lockfile refreshed to clear two HIGH advisories in the build toolchain (js-yaml, nanoid); kept separate from the #86 sweep](#2026-08-09--security--frontend-lockfile-refreshed-to-clear-two-high-advisories-in-the-build-toolchain-js-yaml-nanoid-kept-separate-from-the-86-sweep)
@@ -725,6 +726,204 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 2 landed: the ESLint 10 family, with the React Compiler rule set held inert; three of the doc's four predictions held
+
+**What changed:** `frontend/package.json` (four lines), `frontend/package-lock.json`,
+`frontend/eslint.config.js` (the one required holding edit), plus `CHANGELOG.md` and this entry.
+This is **step 2 of the eight-step sequence** in `docs/upgrades/frontend-toolchain-86.md`, executed
+exactly as scoped: `eslint` 9.39.4 → **10.8.1**, `@eslint/js` 9.39.4 → **10.0.1**,
+`eslint-plugin-react-hooks` 5.1.0 → **7.1.1**, `eslint-plugin-react-refresh` 0.4.16 → **0.5.3**.
+**No source file changed.** `typescript` stays at 5.7.2 (step 4), no tsconfig was touched, the React
+Compiler rules were not adopted (step 3), and `#153`/`#170`'s successors were left alone.
+
+**Versions re-checked at the registry before the bump, not taken from the document.** `eslint`'s
+`dist-tags.latest` is **10.8.1** — the document's Step 2 row already specifies 10.8.1 and flags
+#153's 10.8.0 as stale, and 10.8.1 is still current, so no deviation was needed. `@eslint/js`
+10.0.1, `eslint-plugin-react-hooks` 7.1.1 and `eslint-plugin-react-refresh` 0.5.3 are all still
+`latest`. The §3.1 ceiling one-liner was re-run in passing: `typescript-eslint@latest` is still
+8.66.0 peering `typescript: >=4.8.4 <6.1.0`, so **the TypeScript 6.0.3 ceiling holds as of this
+date** and step 4's target is unchanged.
+
+**Package membership: four, not three.** The session brief named three packages; the document's
+Step 2 "Moves" row names four. The fourth — `eslint-plugin-react-refresh` — was confirmed with the
+maintainer before being included, on the evidence that it is **not** peer-forced: 0.4.16 peers
+`eslint: ">=8.40"`, an unbounded range that ESLint 10 satisfies, so it would have kept resolving.
+It is in the step because the document puts it there, not because the bump required it.
+
+**Every peer claim re-verified at the published manifest, per the method note.** `react-hooks`
+5.1.0/6.0.0/7.0.0/7.0.1 all stop at `eslint ^9.0.0`; the `^10.0.0` clause first appears in **7.1.0**
+and is present in 7.1.1 — so the plugin genuinely is peer-forced and taking ESLint 10 with the old
+pin would have been the same `ERESOLVE` class that killed #153. `@eslint/js@10.0.1` peers
+`eslint ^10.0.0` but marks it **optional**, confirming §3.6's "convention, not a hard peer";
+`eslint@10.8.1` no longer lists `@eslint/js` in its own `dependencies` (9.39.4 pinned it exactly),
+so it is fully external now. `eslint-plugin-react-refresh@0.5.3` peers `eslint: "^9 || ^10"` and is
+`"type": "module"` where 0.4.16 was `"commonjs"` — the ESM-only change is real and, as predicted, a
+no-op for a repo that has been flat-config and ESM since Phase 0.
+
+**`component-hook-factories`, confirmed at the artifact.** 7.1.0's shipped bundle contains **zero**
+occurrences of the string — the rule really was removed. 7.1.1 restores it as
+`makeDeprecatedRule('7.1.0')`: `meta.deprecated: true`, `create() { return {}; }`. A registered
+no-op. **We are on 7.1.1**, so nothing referencing that rule name can error out on an unknown rule.
+
+**The holding edit, and proof that it is both necessary and behaviour-preserving.**
+`frontend/eslint.config.js` spread `...reactHooks.configs.recommended.rules`. Resolved from the
+**installed** 7.1.1, that object is **16 rules — 13 at `error`, 3 at `warn`** — where 5.1.0's,
+resolved from its tarball, is exactly **2**: `react-hooks/rules-of-hooks: 'error'` and
+`react-hooks/exhaustive-deps: 'warn'`. So the bump alone would have enabled 14 React Compiler rules
+(12 new at `error`, 2 at `warn`) inside the ESLint-10 PR. The spread was replaced by those two rules
+written out, which is byte-equivalent to what 5.1.0 contributed. **The document's §3.5 enumeration
+held exactly** — all 12 `error` names and both `warn` names match the installed bundle, and the
+counts reconcile: 16 total = 2 basic + 14 added, or equivalently 13 `error` + 3 `warn`.
+
+**The gate the maintainer set — "the React Compiler rules must be absent or off" — passes at the
+resolved config.** `eslint --print-config` on all three file classes reports exactly **two**
+`react-hooks/*` rules, at `[2]` and `[1]`, identical to the pre-bump baseline. Zero compiler rules
+present at any severity.
+
+**The before/after `print-config` diff, run on one representative file per file class.** This is the
+check §0.3's method note prescribes, and it was run against the installed tree both sides. App
+`.tsx` (`src/pages/Dashboard.tsx`), library `.ts` (`src/lib/polling.ts`) and the test override
+(`src/lib/polling.test.ts`) **all moved identically, 118 → 121 rules**, six entries differing:
+
+| Rule | Before | After | Nature |
+|---|---|---|---|
+| `no-unassigned-vars` | absent | `[2]` | **new in `eslint:recommended`** |
+| `no-useless-assignment` | absent | `[2]` | **new in `eslint:recommended`** |
+| `preserve-caught-error` | absent | `[2]` | **new in `eslint:recommended`** |
+| `no-shadow-restricted-names` | `[2, {reportGlobalThis: false}]` | `[2, {reportGlobalThis: true}]` | **real default change** |
+| `no-constant-binary-expression` | `[2]` | `[2, {checkRelationalComparisons: false}]` | new option, default off — inert |
+| `no-unused-vars` | `[0]` | `[0, {…7 options…}]` | new `defaultOptions`; rule is **off** here |
+
+(The only non-rule difference is the `plugins` identity string.)
+
+**The three added rules were attributed to `@eslint/js` by resolving its config object, not by
+reading release notes.** Both packages' `src/configs/eslint-recommended.js` were `require`d from
+unpacked tarballs and their `rules` maps diffed: **61 → 64 entries**, and the delta is exactly
+`no-unassigned-vars`, `no-useless-assignment`, `preserve-caught-error`, all at `"error"`. **Nothing
+removed, nothing re-severitied.** 10.0.1 additionally carries the `name: "@eslint/js/recommended"`
+property that 9.39.4's lacks, confirming §3.6's second leg at the artifact.
+
+**The last two rows are not behaviour changes, and the distinction was established rather than
+asserted.** Both are ESLint 10 adding or revising `meta.defaultOptions`, which `--print-config` then
+materialises. The tempting reading — "v10 expands defaults for everything, so these are formatting
+noise" — is wrong and was tested: **25 of the 72 core rules in this config carry
+`meta.defaultOptions` under ESLint 10, yet only these two moved**, so the diff is confined to rules
+whose defaults are new or changed, not a blanket format shift. `no-constant-binary-expression`'s new
+option defaults to `false`, so it is opt-in. `no-unused-vars` sits at severity `0` here regardless —
+typescript-eslint's `eslint-recommended` layer disables it in favour of `@typescript-eslint/no-unused-vars`.
+
+**Which of the document's Step 2 predictions held, and which did not.**
+
+- **(a) three new `eslint:recommended` rules — HELD, exactly.** Named correctly and complete; the
+  artifact diff found no fourth and no removal.
+- **(c) `no-shadow-restricted-names` now reports `globalThis` — HELD.** Confirmed as a default flip
+  in the resolved config. It reports nothing in this codebase.
+- **(d) `eslint-plugin-react-refresh` 0.5.3 is not a routine bump — HELD, and its two no-op claims
+  re-checked against the installed package as the row asks.** ESM-only/flat-config-required: a
+  no-op, this repo has no `.eslintrc*` and `eslint.config.js` is ESM. `customHOCs` → `extraHOCs`:
+  a no-op, the repo's single `react-refresh/only-export-components` usage passes only
+  `allowConstantExport` and sets no HOC option at all.
+- **(b) JSX reference tracking changes `no-unused-vars` / `no-undef` results across 51 `.tsx` files
+  — DID NOT HOLD, and could not have.** Both rules are at severity **`0`** in this repo's resolved
+  config — `no-unused-vars: [0, …]` and `no-undef: [0, {typeof: false}]` — because typescript-eslint
+  disables them on the grounds that TypeScript already reports both. A reference-resolution change
+  cannot produce a report through a rule that is off. The prediction was written from the ESLint 10
+  migration guide without checking whether the affected rules were enabled here, which is the same
+  class of error §0.3 was corrected for: a claim about a mechanism, not verified against the
+  composite this repo actually resolves. It is the widest-blast-radius item in the row, and it is
+  structurally inert. **This does not generalise to a repo that enables those rules.**
+
+**Net lint result: zero problems.** Not one of the three new rules fired, `no-shadow-restricted-names`
+found no shadowed `globalThis`, and no report appeared from any implementation change across the
+ESLint 9 → 10 span. Unlike step 1, no source edit was needed — so nothing was autofixed, in bulk or
+otherwise, because there was nothing to fix.
+
+**`@eslint/eslintrc` and `js-yaml` are gone from the tree, which is §0.4 discharged.**
+`npm ls @eslint/eslintrc` and `npm ls js-yaml` both report empty. `eslint@9.39.4` depended on
+`@eslint/eslintrc: ^3.3.5`; `10.8.1` depends on neither, and eslintrc was this repo's only path to
+`js-yaml`. The lockfile refresh of 2026-08-09 had closed GHSA-5p4m-2wfm-xmqj by version; this
+removes the path.
+
+**None of ESLint 10's removals touch this repo, verified by search rather than by inheriting the
+document's "Doesn't apply here" row.** Zero `.eslintrc*` files anywhere in the repository; zero
+`eslint-env` comments (which v10 reports as errors); no `getSourceCode`/`context.getScope`/
+`context.getAncestors`/`context.getFilename` use, no `RuleTester`, no `new Linter`, no import of
+`eslint` from source — so the removed deprecated `SourceCode` and rule-context methods have no
+consumer; no `jiti` (v10's only peer, and optional); no `--flag v10_config_lookup_from_file`; no
+bracket expressions in any ignore glob. **The engine floor is satisfied everywhere it matters:**
+`eslint@10.8.1` and `@eslint/js@10.0.1` both declare `node: "^20.19.0 || ^22.13.0 || >=24"`, CI's
+`node-version: "24"` satisfies it, and the pinned `node:24-bookworm-slim@sha256:235600a8…` ships
+Node 24.18.1 (resolved in the scoping entry below). No `ci.yml` or `Dockerfile` change is needed.
+
+**What moved in the lockfile: 362 → 346 packages, every movement attributed to a target or its
+transitive closure.** Both lockfiles were parsed and each added/removed package's requirers
+resolved, rather than eyeballing the diff:
+
+- **5 added.** `hermes-parser` + its `hermes-estree`, `zod`, and `zod-validation-error` — all
+  required by `eslint-plugin-react-hooks@7.1.1`; and `@types/esrecurse`, required by
+  `eslint-scope@9.1.2`, which ESLint 10 pulls in.
+- **A prediction correction worth recording: `@babel/core` and `@babel/parser` were already in the
+  tree.** §3.5 lists them among the five "real runtime dependencies it did not have" that 7.1.1
+  gains. They are real dependencies of the plugin, but both were already present at **7.29.7** via
+  `@vitejs/plugin-react@4.3.4`, so they cost **zero** new packages. The plugin's dependency growth
+  against *this* tree is three packages plus one transitive, not five.
+- **21 removed.** The entire `@eslint/eslintrc` subtree — eslintrc itself, its nested
+  `globals@14.0.0`, `js-yaml` → `argparse`, `import-fresh` → `parent-module` → `resolve-from` →
+  `callsites`, `strip-json-comments`, `lodash.merge`, `concat-map`, and the `chalk` chain
+  (`ansi-styles`, `color-convert`, `color-name`, `has-flag`, `supports-color`). Plus **four nested
+  duplicates that step 1 itself created**: `@typescript-eslint/typescript-estree`'s private
+  `minimatch@10.2.6`, `brace-expansion@5.0.9`, `balanced-match@4.0.4` and
+  `@typescript-eslint/visitor-keys`'s `eslint-visitor-keys@5.0.1` existed only because the
+  top-level copies stayed pinned for ESLint 9. ESLint 10 requires those same versions at top level,
+  so they dedupe away — the step-1 entry's "nested copies" note is now discharged.
+- **16 version bumps.** The four targets, plus ESLint 10's own closure moving in step:
+  `@eslint/config-array`, `config-helpers`, `core`, `object-schema`, `plugin-kit`, `eslint-scope`,
+  `eslint-visitor-keys`, `espree` (and its `acorn`), and the hoisted `minimatch`/`brace-expansion`/
+  `balanced-match`. **Nothing moved that is not a target or required by one.**
+
+`lockfileVersion` stays 3 and the diff is **+158/−359** — proportionate to 21 removals against 5
+additions, with no whole-file re-normalisation, because the lockfile was written with **npm 11.19.0**
+installed into a scratch prefix to match CI's Node 24 rather than the sandbox's Node 22 / npm 10.9.7.
+That is the third consecutive lockfile touch to use this method and the third time it produced a
+clean diff; it should be treated as the standing procedure, not a per-session detour.
+
+**Suites, measured here rather than quoted, from a clean `npm ci` on both sides.** Baseline on
+9.39.4: lint clean (15.9 s), `format:check` clean, **79 tests across 21 files**, build **7,035
+modules → 645.18 kB JS / 201.38 kB CSS**, `npm audit` **0 vulnerabilities**. After the bump, from a
+fresh `rm -rf node_modules && npm ci`: lint clean (14.1 s), `format:check` clean, **79 tests across
+21 files**, build **7,035 modules → 645.18 kB JS / 201.38 kB CSS**, audit **0**. The build output is
+identical down to the **content hashes** (`index-BNB6IweX.js`, `index-D2wHtcHV.css`), which is the
+proof that this step cannot have changed what ships — it is lint-only, as the document prices it.
+
+**One cosmetic upstream defect, recorded so it is not re-derived.** `eslint-plugin-react-hooks@7.1.1`
+reports `meta.version === "7.0.0"` while its `package.json` says `7.1.1`, so `--print-config`'s
+`plugins` array prints `react-hooks:eslint-plugin-react-hooks@7.0.0`. **That string is not a
+reliable way to confirm the installed version** — read `package.json` or `npm ls`. Nothing in this
+repo depends on the value.
+
+**Standing consequence for steps 3 onward.** The method note is earning its keep: three of Step 2's
+four predictions held precisely, and the fourth failed for the same structural reason §0.3 failed —
+a mechanism was read from upstream documentation without checking whether this repo's *resolved*
+config exposes it. Steps 3 and 4 should keep resolving the composite, not the guide. Step 3's cost
+in particular is now measurable rather than estimated: the 16-rule `configs.recommended` is
+installed and one line of `eslint.config.js` away, so its report count can be obtained without any
+dependency change.
+
+**What was deliberately not done.** No package outside Step 2's four moved. No lint finding was
+autofixed, in bulk or individually — there were none. No React Compiler rule was activated. No step
+3 or later work was started. The sequence's membership and order were not edited.
+`docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were **not** edited — correcting the
+sequence document is a maintainer call, and this entry is the record of what its Step 2 row got
+right and wrong in the meantime. `main` was not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`,
+`frontend/eslint.config.js`, `CHANGELOG.md` § Unreleased/Changed, and this entry. No code
+behaviour, schema, API contract, security model, job model, auth, or CI configuration changed; no
+locked decision re-opened — React stays on 18 and Mantine on v7, and no package in this step
+declares a `react`, `react-dom`, `@types/react*` or `@mantine/*` peer.
 
 ---
 

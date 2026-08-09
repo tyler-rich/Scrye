@@ -28,7 +28,13 @@ export default tseslint.config(
       'react-refresh': reactRefresh,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
+      // These two are exactly what `reactHooks.configs.recommended.rules`
+      // contained under eslint-plugin-react-hooks 5.1.0, which this spread used
+      // to pull in. Written out because 7.x's `configs.recommended` folds in the
+      // React Compiler rule set on top of them, and adopting that is a separate
+      // decision — see docs/upgrades/frontend-toolchain-86.md, Step 3.
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
