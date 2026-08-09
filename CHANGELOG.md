@@ -73,6 +73,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **ESLint 9.39.4 → 10.8.1, with `@eslint/js` 9.39.4 → 10.0.1,
+  `eslint-plugin-react-hooks` 5.1.0 → 7.1.1 and `eslint-plugin-react-refresh`
+  0.4.16 → 0.5.3** — step 2 of the frontend toolchain sweep in
+  `docs/upgrades/frontend-toolchain-86.md`, unblocked by step 1
+  (`typescript-eslint@8.66.0` is the first release to peer `eslint ^10.0.0`).
+  Lint-only: no source file changed, `npm test` and `npm run build` are
+  unchanged, and the emitted bundle carries the **same content hashes** as
+  before (`index-BNB6IweX.js`, `index-D2wHtcHV.css`). `typescript` stays at
+  5.7.2 and no other package in `frontend/package.json` moved.
+
+  **`eslint-plugin-react-hooks` is peer-forced, and its rule-set expansion is
+  deliberately held inert.** 5.1.0 peers `eslint` only up to `^9`; the `^10.0.0`
+  clause first appears in 7.1.0, so ESLint 10 cannot resolve against the old
+  pin. But 7.x's `configs.recommended.rules` folds in the React Compiler set —
+  resolved from the installed package, it is **16 rules (13 `error`, 3 `warn`)**
+  where 5.1.0's was 2. `frontend/eslint.config.js` spread that object, so the
+  bump alone would have enabled 14 new rules. The spread is replaced by the two
+  rules it contained under 5.1.0 — `react-hooks/rules-of-hooks: 'error'` and
+  `react-hooks/exhaustive-deps: 'warn'`, verified against 5.1.0's shipped
+  config — making the edit behaviour-preserving. Adopting the compiler set is
+  step 3 and remains a separate decision. Confirmed at the resolved config, not
+  assumed: `eslint --print-config` reports exactly those two `react-hooks/*`
+  rules, at their original severities, for all three file classes.
+
+  **The resolved rule set moved by three rules, and every movement was checked
+  with `eslint --print-config` on an app `.tsx`, a library `.ts`, and a test
+  override — before and after.** All three classes moved identically, 118 → 121
+  rules:
+
+  - **Added at `error`, all three from `@eslint/js` 10.0.0's revised
+    `eslint:recommended`:** `no-unassigned-vars`, `no-useless-assignment`,
+    `preserve-caught-error`. Attributed by resolving the shipped config object
+    from both packages rather than reading release notes — 9.39.4's recommended
+    carries 61 rules, 10.0.1's carries 64, and the delta is exactly those three
+    with nothing removed and nothing re-severitied.
+  - **`no-shadow-restricted-names`** — its `reportGlobalThis` default flips
+    `false` → `true`, so `globalThis` is now reported. The one genuine
+    behaviour change among the severity-carrying rules; it finds nothing here.
+  - **Two entries changed shape without changing behaviour:**
+    `no-constant-binary-expression` gains a new option
+    (`checkRelationalComparisons`, default `false`, so opt-in) and
+    `no-unused-vars` materialises a full default-option object. Both are ESLint
+    10 adding or revising `meta.defaultOptions`, not a print-config formatting
+    change — 25 of the 72 core rules in this config carry `defaultOptions` and
+    only these two moved. `no-unused-vars` is at severity `0` here regardless,
+    disabled by typescript-eslint in favour of its own rule.
+
+  **`@eslint/eslintrc` and `js-yaml` are now absent from the tree entirely** —
+  `eslint@10.8.1` no longer depends on eslintrc, which was this repo's only path
+  to `js-yaml`. `npm ls` reports nothing for either. That permanently removes
+  the path behind GHSA-5p4m-2wfm-xmqj, which the lockfile refresh above had
+  closed by version alone.
+
+  **None of ESLint 10's removals reach this repo, checked rather than assumed:**
+  there has never been an `.eslintrc*` file (flat config since Phase 0), there
+  are no `eslint-env` comments anywhere, no custom rules or `SourceCode` /
+  rule-context API use, no `RuleTester` or `Linter`/`ESLint` API consumers, and
+  no bracket expressions in any ignore glob. The new engine floor
+  (`^20.19.0 || ^22.13.0 || >=24`) is satisfied by CI's Node 24 and by the
+  `node:24-bookworm-slim` digest the image pins.
+
 - **`typescript-eslint` 8.19.0 → 8.66.0** — step 1 of the frontend toolchain
   sweep in `docs/upgrades/frontend-toolchain-86.md`, taken alone because it is
   the only unblocking move in that sequence: the pinned 8.19.0 capped
