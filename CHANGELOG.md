@@ -73,6 +73,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **React Compiler lint rules adopted from `eslint-plugin-react-hooks@7.1.1`,
+  with `react-hooks/set-state-in-effect` held back** — step 3 of the frontend
+  toolchain sweep in `docs/upgrades/frontend-toolchain-86.md`. **No dependency
+  version moved**; `frontend/package.json` and `frontend/package-lock.json` are
+  byte-identical. Step 2's holding edit in `frontend/eslint.config.js` is
+  replaced by the `...reactHooks.configs.recommended.rules` spread it was
+  standing in for, so the resolved rule set goes **121 → 135 rules** — verified
+  with `eslint --print-config` on an app `.tsx`, a library `.ts` and a test
+  override, all three moving identically. The 14 added are 11 at `error`
+  (`config`, `error-boundaries`, `gating`, `globals`, `immutability`,
+  `preserve-manual-memoization`, `purity`, `refs`, `set-state-in-render`,
+  `static-components`, `use-memo`), 2 at `warn` (`incompatible-library`,
+  `unsupported-syntax`), and `set-state-in-effect` at `off`. Nothing else in
+  the resolved config moved at any severity.
+
+  **Twelve of the fourteen report nothing against the current tree** —
+  including `immutability`, `purity` and `preserve-manual-memoization`, which
+  the scoping document expected to fire in volume. The whole adoption cost is
+  two rules and 24 findings.
+
+  **`react-hooks/refs` — 6 findings, all fixed by hand.** All six are one
+  idiom in `frontend/src/pages/ScansPage.tsx`: a `useRef(viewFromParams(…))`
+  whose `.current` was read during render to seed six `useState` initializers.
+  Reading a ref during render is what the rule forbids, so the ref is replaced
+  by a lazy `useState` initializer — `const [initialView] = useState(() =>
+  viewFromParams(searchParams))` — which runs `viewFromParams` exactly once on
+  first render, as the ref did. Behaviour is unchanged and the History
+  deep-linking tests (`P3-1`) still pass. This is the sweep's first step to
+  change runtime code, so unlike steps 1 and 2 the emitted bundle moves:
+  `index-BNB6IweX.js` 645.18 kB → `index-Vvdzytcz.js` 645.14 kB. The CSS is
+  untouched and keeps its hash (`index-D2wHtcHV.css`).
+
+  **`react-hooks/set-state-in-effect` — 18 findings, rule left `off` with the
+  reason in the config and the work tracked in
+  [#176](https://github.com/tyler-rich/Scrye/issues/176).** Only **6** of the 18
+  are the synchronous setState-in-effect the rule's rationale describes, and
+  two of those are deliberate effects that each closed a real bug —
+  `ScanDetailPage`'s `:scanId` reset (`L17`/`P2-2`) and `ScansPage`'s compare
+  reconcile (`P3-2`) — so #176 names them explicitly rather than leaving a
+  future session to "fix" them blind. The other **12** are the fetch-on-mount
+  idiom, where every `setState` runs after an `await`; they are deliberately
+  **not** in #176's scope, because a three-shape probe against the installed
+  7.1.1 showed the report tracks what the compiler can see rather than a
+  behavioural difference: with `load` defined in the component body
+  `void load()` reports while the semantically identical
+  `void (async () => { await load(); })()` does not, and moving `load` behind a
+  custom hook silences every shape. There is no fix for those 12 that is an
+  improvement — only hiding the call from the analyser, or a data-fetching
+  refactor that is its own decision.
+
 - **ESLint 9.39.4 → 10.8.1, with `@eslint/js` 9.39.4 → 10.0.1,
   `eslint-plugin-react-hooks` 5.1.0 → 7.1.1 and `eslint-plugin-react-refresh`
   0.4.16 → 0.5.3** — step 2 of the frontend toolchain sweep in
