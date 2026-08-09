@@ -128,15 +128,18 @@ export function ScansPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   // Read the initial view from the URL exactly once; subsequent syncing is
-  // one-directional (state → URL) via the effect below.
-  const initialView = useRef(viewFromParams(searchParams));
+  // one-directional (state → URL) via the effect below. A lazy `useState`
+  // initializer rather than a ref: both run `viewFromParams` once, but a ref's
+  // `.current` would be read during render, which `react-hooks/refs` reports
+  // and the rules of React forbid.
+  const [initialView] = useState(() => viewFromParams(searchParams));
 
-  const [filters, setFilters] = useState<HistoryFilters>(initialView.current.filters);
-  const [dateFrom, setDateFrom] = useState(initialView.current.dateFrom);
-  const [dateTo, setDateTo] = useState(initialView.current.dateTo);
-  const [sort, setSort] = useState<HistorySort>(initialView.current.sort);
-  const [order, setOrder] = useState<SortOrder>(initialView.current.order);
-  const [page, setPage] = useState(initialView.current.page);
+  const [filters, setFilters] = useState<HistoryFilters>(initialView.filters);
+  const [dateFrom, setDateFrom] = useState(initialView.dateFrom);
+  const [dateTo, setDateTo] = useState(initialView.dateTo);
+  const [sort, setSort] = useState<HistorySort>(initialView.sort);
+  const [order, setOrder] = useState<SortOrder>(initialView.order);
+  const [page, setPage] = useState(initialView.page);
 
   const [data, setData] = useState<{ total: number; items: ScanSummary[] } | null>(null);
   const [options, setOptions] = useState<FilterOptions>({ initiators: [], tags: [] });

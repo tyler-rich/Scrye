@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (146, newest first)
+### Index of §14 entries (147, newest first)
 
+- [2026-08-09 — Infra — #86 sweep step 3 landed: React Compiler rules adopted, `set-state-in-effect` held back over 12 findings with no honest fix (#176)](#2026-08-09--infra--86-sweep-step-3-landed-react-compiler-rules-adopted-set-state-in-effect-held-back-over-12-findings-with-no-honest-fix-176)
 - [2026-08-09 — Infra — #86 sweep step 2 landed: the ESLint 10 family, with the React Compiler rule set held inert; three of the doc's four predictions held](#2026-08-09--infra--86-sweep-step-2-landed-the-eslint-10-family-with-the-react-compiler-rule-set-held-inert-three-of-the-docs-four-predictions-held)
 - [2026-08-09 — Docs/Process — Scoping doc corrected post-step-1; #170 (Dependabot's regenerated unsatisfiable frontend group) closed](#2026-08-09--docsprocess--scoping-doc-corrected-post-step-1-170-dependabots-regenerated-unsatisfiable-frontend-group-closed)
 - [2026-08-09 — Infra — #86 sweep step 1 landed: `typescript-eslint` 8.19.0 → 8.66.0; the scoping doc's rule-set claim was wrong in two independent ways](#2026-08-09--infra--86-sweep-step-1-landed-typescript-eslint-8190--8660-the-scoping-docs-rule-set-claim-was-wrong-in-two-independent-ways)
@@ -726,6 +727,149 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 3 landed: React Compiler rules adopted, `set-state-in-effect` held back over 12 findings with no honest fix (#176)
+
+**What changed:** `frontend/eslint.config.js` (the holding edit removed, one rule overridden off),
+`frontend/src/pages/ScansPage.tsx` (six lines), plus `CHANGELOG.md`, this entry, and new issue
+**#176**. This is **step 3 of the eight-step sequence** in
+`docs/upgrades/frontend-toolchain-86.md` — the step the document flags as *"a separate decision;
+may be declined"* and prices as *"unbounded until measured"*. **No dependency version moved:**
+`frontend/package.json` and `frontend/package-lock.json` are byte-identical, SHA-256 unchanged
+across the whole session. No step 4 or later work was started; `main` was not touched.
+
+**The cost was measured before the config was edited, which is the whole point of the step.** The
+maintainer asked for a finding count against the current tree before anything landed. It was
+obtained with a throwaway `eslint.probe.config.js` — a copy of `eslint.config.js` with the spread
+restored, run via `--config`, then deleted — so the tracked tree was never modified to take the
+measurement. Result: **24 findings, from 2 of the 14 rules.**
+
+| Count | Severity | Rule |
+|---:|---|---|
+| 18 | error | `react-hooks/set-state-in-effect` |
+| 6 | error | `react-hooks/refs` |
+| 0 | — | the other 12 |
+
+**Twelve of the fourteen rules report nothing** — including `immutability`, `purity` and
+`preserve-manual-memoization`, which the scoping document's Step 3 row named as *"the ones most
+likely to fire in volume"* on a codebase with 23 `useEffect` and 15 `useMemo`/`useCallback` files.
+That prediction did not hold, in the favourable direction. `set-state-in-effect` — which the row
+also names — is the one that did.
+
+**The rule population split, and this is the finding that decided the step.** `set-state-in-effect`
+reports two populations that its own message does not distinguish, established by reading every one
+of the 18 sites rather than trusting the count:
+
+- **6 are genuine** — a synchronous `setState` reachable from the effect body, i.e. the cascading
+  render during commit that the rule's rationale describes: `LoginPage.tsx:57`,
+  `OidcLinkCard.tsx:90`, `NewScanPage.tsx:130`, `ScanDetailPage.tsx:293`, `ScanDetailPage.tsx:366`
+  (reported because `loadFindings` opens with a synchronous `setFindingsLoading(true)` before its
+  first `await`), and `ScansPage.tsx:225`.
+- **12 are the fetch-on-mount idiom** — `void load()` in an effect where `load` is a local
+  `useCallback` whose every `setState` runs *after* an `await`. Each of the twelve loaders was read
+  to confirm no synchronous `setState` precedes the first `await`: `AuthContext:124`,
+  `ApiTokensPanel:54`, `BackupsPanel:75`, `DockerEnvironmentsPanel:55`, `GitCredentialsPanel:52`,
+  `ScheduledScansPanel:84`, `TrivyPolicyPanel:74`, `UsersPanel:44`, `AccountPage:276`,
+  `NewScanPage:124`, `ScanDetailPage:309`, `ScansPage:214`.
+
+**The second population was proven an artifact of analysis scope, not a behavioural claim — by
+probe, not by argument.** A scratch file was linted under the probe config with three shapes of the
+same fetch-on-mount code, `load` defined in the component body each time:
+
+| Shape | Reported? |
+|---|---|
+| `void load()` | **yes** |
+| `void (async () => { await load(); })()` | no |
+| `load().catch(() => {})` | **yes** |
+
+The first two are semantically identical. Separately, moving the identical `load` behind a custom
+hook silences **all three**. And `ScanDetailPage:353`'s `listArtifacts(id).then(setArtifacts)` is
+silent for the same reason — the callee is a module import, not a local callback the compiler can
+trace into. So the report tracks what the compiler can see through, and the available "fixes" are
+an async-IIFE wrapper that changes nothing, or hoisting twelve loaders behind hooks — which
+silences the rule by hiding from it. **Neither is an improvement**, which is why the maintainer
+scoped these twelve out of #176 entirely rather than deferring them: if a data-fetching refactor is
+ever worth doing it is its own decision, not a rider on a lint step. This is the § Interpreter CVEs
+rule — *check it against the artifact before believing the metadata* — applied to a lint report:
+the message asserted "synchronously", the code said otherwise, and the probe settled it.
+
+**What was done, per the maintainer's option 2.** All 14 rules enabled via the restored
+`...reactHooks.configs.recommended.rules` spread; `react-hooks/set-state-in-effect: 'off'`
+immediately after it, carrying the reason inline and a pointer to **#176**; the six `refs` findings
+fixed by hand.
+
+**The `refs` fix, and why it is a real improvement rather than a silencing.** All six were one
+idiom in `ScansPage.tsx:132-139` — `const initialView = useRef(viewFromParams(searchParams))`
+whose `.current` was read during render to seed six `useState` initializers. Reading a ref during
+render is what the rule forbids and what the rules of React forbid. Replaced with
+`const [initialView] = useState(() => viewFromParams(searchParams))`: a lazy initializer runs
+`viewFromParams` exactly once on first render, which is precisely what the ref was there to do, so
+the "read the URL once, then sync one-directionally" contract in the surrounding comment is
+preserved rather than reinterpreted. `initialView` had no other use in the file (checked), and
+`useRef` stays imported for `historyGuard` at line 175. The History deep-linking tests (`P3-1`)
+still pass.
+
+**#176 names the two archive-cited effects explicitly, at the maintainer's instruction, so nobody
+"fixes" them blind.** Two of the six genuine findings are effects that each closed a real bug and
+would be re-opened by deletion: `ScanDetailPage.tsx:293` is **`L17` / `P2-2`** (React Router reuses
+the component instance across `/scans/:id`, so without the reset the previous scan's header,
+findings, artifacts, tag draft and poll state linger and the status-gated effects fire against a
+stale `scan.status` — §14, 2026-07-24 Priority-1/2 batch, originally issue #62), and
+`ScansPage.tsx:225` is **`P3-2`** (the compare selection held row snapshots outliving a
+filter/page change or a delete, showing a phantom "1/2 selected" and diffing a since-deleted scan —
+§14, 2026-07-24 Priority-3 batch, with two jsdom regression tests). #176 records both, names the
+compiler-idiomatic replacement for `L17`/`P2-2` (a `key` prop on the route element, which is a
+change in a different file), and states that the tests must still pass.
+
+**The before/after `print-config` diff, run on one representative file per file class.** This is
+the check §0.3's method note prescribes, run against the installed tree both sides. App `.tsx`
+(`src/pages/Dashboard.tsx`), library `.ts` (`src/lib/polling.ts`) and the test override
+(`src/lib/polling.test.ts`) **all moved identically, 121 → 135 rules**, with 14 entries differing
+and **nothing else changed at any severity**:
+
+| Severity | Rules added |
+|---|---|
+| `error` (11) | `config`, `error-boundaries`, `gating`, `globals`, `immutability`, `preserve-manual-memoization`, `purity`, `refs`, `set-state-in-render`, `static-components`, `use-memo` |
+| `warn` (2) | `incompatible-library`, `unsupported-syntax` |
+| `off` (1) | `set-state-in-effect` |
+
+**Nothing in the diff was surprising, and the counts reconcile against step 2's record.** The
+installed `configs.recommended` is 16 rules; `rules-of-hooks` and `exhaustive-deps` were already
+present at `[2]` and `[1]` from step 2's written-out pair and are unchanged, so the delta is exactly
++14. The scoping doc's §3.5 enumerates 12 at `error` and 2 at `warn`; here 11 sit at `error` and the
+12th, `set-state-in-effect`, is the one overridden to `off` — the same 12, differently disposed.
+`component-hook-factories` does not appear, consistent with step 2's finding that 7.1.1 registers it
+as a deprecated no-op outside `configs.recommended`. No core rule, no `@typescript-eslint/*` rule,
+and no plugin identity string moved.
+
+**Suites, run from a fresh `rm -rf node_modules && npm ci`.** Lint clean, `format:check` clean,
+**79 tests across 21 files**, `npm audit` **0 vulnerabilities**. **The build output moved, and that
+is expected here where it was not in steps 1 and 2:** 7,035 modules → **645.14 kB** JS
+(`index-Vvdzytcz.js`) / 201.38 kB CSS, against the baseline's 645.18 kB `index-BNB6IweX.js`. Steps
+1 and 2 were provably lint-only and their asset hashes were identical; this step changes runtime
+code in `ScansPage.tsx`, so a −0.04 kB shift and a new JS hash are the honest signal that it did.
+The CSS is untouched and keeps its hash (`index-D2wHtcHV.css`). The lockfile SHA-256 was captured
+before the baseline install and re-verified after the final one, unchanged.
+
+**What was deliberately not done.** No dependency version, `package.json`, or lockfile touched — the
+maintainer's out-of-scope line for this step, and it held. No `--fix`, in bulk or individually: the
+six `refs` findings were edited by hand at one site. No rule disabled beyond the single override the
+maintainer authorised, and the 12 fetch-on-mount findings were **reported rather than worked
+around** — no async-IIFE wrapper, no hook extraction. No step 4 or later work.
+`docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were **not** edited — correcting the
+sequence document is a maintainer call, and this entry is the record of what its Step 3 row got
+right and wrong in the meantime (its "unbounded, possibly a multi-day refactor" pricing was
+correct as a range; the actual answer is 24 findings, 6 fixed, 12 declined, 12 rules free).
+
+**Plan section affected:** `frontend/eslint.config.js`, `frontend/src/pages/ScansPage.tsx`,
+`CHANGELOG.md` § Unreleased/Changed, this entry, and new issue #176.
+`frontend/package.json`, `frontend/package-lock.json`,
+`docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were deliberately **not** edited. No
+schema, API contract, security model, job model, auth, or CI configuration changed; no locked
+decision re-opened — React stays on 18 and Mantine on v7, and the React Compiler rules are static
+analysis with no React runtime dependency, so enabling them pressures neither.
 
 ---
 
