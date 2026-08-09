@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (144, newest first)
+### Index of §14 entries (145, newest first)
 
+- [2026-08-09 — Docs/Process — Scoping doc corrected post-step-1; #170 (Dependabot's regenerated unsatisfiable frontend group) closed](#2026-08-09--docsprocess--scoping-doc-corrected-post-step-1-170-dependabots-regenerated-unsatisfiable-frontend-group-closed)
 - [2026-08-09 — Infra — #86 sweep step 1 landed: `typescript-eslint` 8.19.0 → 8.66.0; the scoping doc's rule-set claim was wrong in two independent ways](#2026-08-09--infra--86-sweep-step-1-landed-typescript-eslint-8190--8660-the-scoping-docs-rule-set-claim-was-wrong-in-two-independent-ways)
 - [2026-08-09 — Security — Frontend lockfile refreshed to clear two HIGH advisories in the build toolchain (js-yaml, nanoid); kept separate from the #86 sweep](#2026-08-09--security--frontend-lockfile-refreshed-to-clear-two-high-advisories-in-the-build-toolchain-js-yaml-nanoid-kept-separate-from-the-86-sweep)
 - [2026-08-09 — Docs/Process — #86 frontend toolchain sweep scoped into an ordered sequence; TypeScript 7 ruled out at the source; #153's red check re-diagnosed](#2026-08-09--docsprocess--86-frontend-toolchain-sweep-scoped-into-an-ordered-sequence-typescript-7-ruled-out-at-the-source-153s-red-check-re-diagnosed)
@@ -724,6 +725,95 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Docs/Process — Scoping doc corrected post-step-1; #170 (Dependabot's regenerated unsatisfiable frontend group) closed
+
+**What changed:** `docs/upgrades/frontend-toolchain-86.md` §0.3 and the Step 1 and Step 2 rows in
+§6, plus a note in the ranking discussion in §8 that cited §0.3's original claim. No dependency
+version, lockfile, or config file was touched; the sweep's sequence, its membership, and its
+ordering are unchanged. Separately, **#170** — Dependabot's regenerated frontend-dependencies
+group, opened after #168 merged and #153 stopped matching — was closed.
+
+**#170, verified before acting rather than assumed.** Its file diff was read directly: `typescript`
+5.7.2 → **7.0.2** is still proposed, alongside `typescript-eslint` 8.19.0 → 8.66.0, which peers
+`typescript: ">=4.8.4 <6.1.0"`. Same unsatisfiable graph #153 carried — `npm ci` fails at
+`ERESOLVE` before ESLint runs, for the reasons `docs/upgrades/frontend-toolchain-86.md` §3.1 and
+§0.2 already establish. Closed with a comment stating the group is unsatisfiable as composed, that
+the #86 sweep is running as the ordered sequence in that document, that step 1 landed as #171, and
+that the doc is the tracking surface rather than this PR. **Not merged, not cherry-picked from** —
+same reasoning as the doc's §8 recommendation for #153. Dependabot will regenerate an equivalent
+group weekly, at newer targets, with the same unsatisfiable pairing, until the `dev`-only ignore
+rules for the toolchain majors' individual members (none exist; the sweep is deliberately
+unignored) or the sequence completes — closing it changes nothing about that cadence, and this
+entry records that explicitly so a future close isn't read as having fixed it.
+
+**The scoping doc's methodological error, found by executing step 1 rather than by inspection.**
+The entry immediately below this one (`#86 sweep step 1 landed`) diffed the *fully-resolved* ESLint
+config before and after the bump and found `no-with` had moved from `error` to `off` — a change
+the doc's §0.3 said could not have happened, because §0.3 claimed the shipped `recommendedTypeChecked`
+config was "byte-for-byte identical… nothing added, removed, or re-severitied" between 8.19.0 and
+8.66.0. The claim was wrong, and the way it was wrong matters more than the specific miss:
+`tseslint.configs.recommendedTypeChecked` is a **three-layer composite** (`base` +
+`eslint-recommended` + `recommended-type-checked`), and the scoping session diffed only the third
+file — `dist/configs/recommended-type-checked.js`, 50 entries either side, genuinely identical —
+then generalised that result to the whole composite. The undiffed `eslint-recommended-raw.js` layer
+went 22 → 23 entries across the same span, adding `no-with: 'off'`, which changes the resolved
+config because `frontend/eslint.config.js` extends `js.configs.recommended` ahead of the tseslint
+layers.
+
+**This is scope, not sloppiness, and the correction says so.** Every claim in the document is
+cited to a published peer range, an upstream guide, or an unpacked tarball — eleven tarballs were
+pulled apart to check artifacts directly rather than trust documentation, which is real evidentiary
+discipline. The failure was narrower than that discipline: one file was diffed and the finding was
+stated about a three-file composite it was only one third of. Nothing about the method that
+produced the other headline findings (§0.1's TypeScript-7 package-export read, §0.4's
+`@eslint/eslintrc` dependency-graph check, §0.5's GHSA re-cut verified at the advisory database) is
+implicated — those each read the actual artifact the claim was about, completely. §0.3 read one
+artifact out of three and described all three.
+
+**What §0.3 now says, and what was added alongside it.** Rewritten to separate what was verified
+(the third layer, genuinely identical) from what was not (the other two layers, one of which
+changed) and from a second, independent point the original headline conflated with the first: an
+unchanged rule set does not imply an unchanged set of *findings*, because rule implementations get
+stricter across a 47-minor span regardless of which rules are selected — step 1's own two
+`no-unnecessary-type-assertion` reports are the proof, on code that was in the tree, unedited, the
+whole time. Step 1's own row had already priced this correctly ("only detection improves," S–M,
+"dominated by however many reports appear"); it was the headline in §0.3 that read as a stronger,
+outcome-level promise and got cited as one. A method note was added, binding on every step in §6
+that has not yet run: re-verify each step's config/rule-set claim against the **installed** tree
+when the step executes, checking **every layer** of any composite config, using
+`eslint --print-config <file>` on one representative file per file class (app `.tsx`, library
+`.ts`, test override) before and after — not a diff of the plugin's own shipped config file, which
+is exactly the check that would have caught this the first time.
+
+**Package-ownership check requested for six packages; five were already correctly scoped, one
+row was thin and was filled in.** Checked against the doc's actual step assignments in §6, not
+against memory of what the doc probably says:
+
+| Package | Owning step | Verdict |
+|---|---|---|
+| `@vitejs/plugin-react` 4.3.4 → 6.0.5 | Step 7, lockstep with Vite 8 | **Already correctly scoped.** §3.3 and Step 7's row already state the Babel-removal no-op and the Vite-8-only peer; no routine-bump treatment to correct. |
+| `@testing-library/user-event` → 14.6.3 | Step 8 | **Already correctly scoped** as a routine patch; no coupling exists to misstate. |
+| `globals` → 17.9.0 | Step 8 | **Already correctly scoped**, and already carries a non-routine caution (a minor can silently shrink the `globals.browser` set — inspect it, don't trust green). |
+| `postcss` → 8.5.26 | Step 0 and/or Step 8 (either) | **Already correctly scoped**, explicitly optional/either-step. |
+| `@types/node` → 26.1.2 | None — §5 explicitly declines it | **Correct as a non-member.** §5's "Action: none" is a decision the sweep doesn't need it, not an omission. |
+| `eslint-plugin-react-refresh` 0.4.16 → 0.5.3 | Step 2 | **Owned, but the row treated it as routine and it isn't quite.** Step 2's "Moves" line listed the version bump with no accompanying breakage note, unlike the other three packages in that step. 0.5.0 is ESM-only and requires flat config (a no-op here — this repo has been flat-config since Phase 0), renames `customHOCs` to `extraHOCs` (also a no-op here — the repo's one `react-refresh/only-export-components` usage sets no HOC option), and tightens HOC validation generally. Step 2's row now names all three; the ESM/flat-config and rename points are confirmed no-ops for this repo's current config, but — per the new method note — should be re-checked against the installed 0.5.3 package when Step 2 actually runs rather than trusted from this pass. |
+
+None of the six needed reordering or a new owning step; the sequence's membership and order are
+unchanged by this entry.
+
+**What was deliberately not done.** No dependency, lockfile, or config file was changed. No
+sweep step was executed. `main` was not touched. The sequence's membership and ordering were not
+altered — §6's steps 0–8 still name the same packages in the same order for the same peer-range
+reasons; only the claims describing what Step 1 and Step 2 will find, and the headline in §0.3,
+were corrected. `docs/ROADMAP.md` was not edited.
+
+**Plan section affected:** `docs/upgrades/frontend-toolchain-86.md` §0.3, the Step 1 and Step 2
+rows of §6, one clause in §8's risk-ranking discussion, and this entry. PR #170 (closed, not
+merged). No code, schema, API contract, security model, job model, auth, or CI behaviour changed;
+no locked decision re-opened.
 
 ---
 
