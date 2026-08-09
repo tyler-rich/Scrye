@@ -166,7 +166,7 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   `git config user.name "tyler-rich"` and
   `git config user.email "170156756+tyler-rich@users.noreply.github.com"`.
   Every commit and PR must use this name/email — no Claude/Anthropic identity, no co-author
-  trailer, no bot account. This is in addition to, not instead of, the Attribution rule below.
+  trailer, no bot account. This is in addition to, not instead of, § GitHub operations below.
   Note: GitHub authors a **squash-merge** commit — and the **merge commit** a promotion
   produces — as the merging account's *profile display name*, which the repo-local
   `git config user.name` cannot override. **The display name stays the maintainer's real name —
@@ -186,16 +186,45 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   one-line pointer — e.g. "See `docs/ARCHIVE.md` § Deviations for changes made in this phase" — not
   the full explanation repeated there.
 
-## Attribution
+## GitHub operations
+
+All GitHub reads and writes go through the `gh` CLI. Never use a GitHub
+MCP server or plugin for anything, even if one is available in the
+session.
+
+This is not a style preference. MCP tools authenticate as a GitHub App:
+every PR body, comment, and edit made through them is attributed to that
+app rather than to the maintainer, and an attribution footer with a
+session URL is appended server-side to the body — neither is removable
+after the fact. `gh` authenticates as tyler-rich and appends nothing.
+
+Use:
+  gh pr create --base dev --head <branch> --title "..." --body-file <file>
+  gh pr view <n> --json body,url,author
+  gh pr edit <n> --body-file <file>
+  gh pr comment <n> --body-file <file>
+  gh issue comment <n> --body-file <file>
+  gh pr checks <n>
+  gh run list / gh run view
+
+Prefer --body-file over --body: it avoids shell quoting damage to
+markdown and leaves an artifact to diff if the posted body differs from
+what was written.
 
 Nothing you write may contain an attribution footer, a session URL, a
-Co-Authored-By trailer, or a "Generated with" line. This applies to commit
-messages, PR titles and bodies, and PR and issue comments.
+Co-Authored-By trailer, or a "Generated with" line — in commit messages,
+PR titles or bodies, or comments.
 
-If one appears anyway, it was appended after you wrote — do not try to
-remove it. Editing a PR body to strip it does not work; the text is
-re-appended server-side, and attempting it produces false "verified clean"
-reports. Leave it and say nothing about it. I remove it by hand at merge.
+Alert dispositions are mine, not yours. Never dismiss, close, or change
+the state of a code scanning alert, a Dependabot alert, or a secret
+scanning alert. Never change a repository setting, ruleset, branch
+protection, or security toggle through `gh api` or any other route.
+Reading any of these is fine and encouraged — report what you find and
+recommend a disposition, then stop.
+
+Sessions never merge. Open the PR, report the link, stop. Green checks
+are not authorization. Never run `gh pr merge`, never enable auto-merge,
+never merge through any other route.
 
 ## Definition of done (per phase — all must hold before opening the PR)
 1. Lint clean — `ruff` + `black` (Python), ESLint + Prettier (TypeScript).
@@ -206,9 +235,8 @@ reports. Leave it and say nothing about it. I remove it by hand at merge.
 6. Any deviations are logged in `docs/ARCHIVE.md` § Deviations.
 7. No secrets, keys, or tokens committed; `.gitignore` still covers all sensitive paths.
 8. Commits are **verified** — not assumed — to be under the user's git identity, checked via
-   `git log --format="%an <%ae>%n%B"` immediately before opening the PR. See § Attribution for
-   what you write yourself (never a footer) versus what appears after the fact (never yours to
-   remove).
+   `git log --format="%an <%ae>%n%B"` immediately before opening the PR. See § GitHub operations
+   for the no-footer rule and for the requirement that the PR be opened with `gh`.
 
 ## Coding standards
 - **Python:** type hints everywhere; module/function docstrings; `ruff` + `black` clean; meaningful
