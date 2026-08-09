@@ -9,6 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Frontend lockfile refreshed, closing two HIGH advisories in the build/dev
+  toolchain: GHSA-5p4m-2wfm-xmqj (`js-yaml`) and GHSA-2v37-7h3g-55p8
+  (`nanoid`).** Both are transitive devDependencies, and both fixed versions
+  already sat inside the ranges their requiring packages declare, so this is a
+  `package-lock.json` change only — `package.json` is untouched and no package
+  moved a major.
+
+  - **`js-yaml` 4.3.0 → 4.3.1** — GHSA-5p4m-2wfm-xmqj, HIGH (CVSS 7.5,
+    CWE-407): quadratic CPU consumption resolving a `!!omap`, the
+    CVE-2026-59870 fix not having been backported to the 3.x/4.x lines.
+    Affected range `>=4.0.0 <4.3.1`. Reached by one path only —
+    `eslint@9.39.4` → `@eslint/eslintrc@3.3.5` → `js-yaml` — whose declared
+    range is `^4.1.1`. Verified at source rather than from the advisory's
+    metadata: diffing the two published tarballs, 4.3.1's sole functional
+    change is in the `!!omap` duplicate-key check, which replaces an array
+    plus a linear `indexOf` scan per key (the quadratic path) with an object
+    and an `Object.prototype.hasOwnProperty` lookup.
+  - **`nanoid` 3.3.16 → 3.3.18** — GHSA-2v37-7h3g-55p8, HIGH (CVSS 5.9,
+    CWE-835): a custom generator can loop indefinitely when `size` is zero.
+    Affected range `<3.3.17`. Reached by one path only — `postcss@8.5.25` →
+    `nanoid` — whose declared range is `^3.3.16`. The advisory's fixed version
+    is 3.3.17; the refresh resolves to **3.3.18**, the highest release in that
+    range, which is a follow-up to the same defect — comparing the two
+    tarballs, 3.3.18 extends 3.3.17's zero-size guard to the async native
+    entry point, which 3.3.17 left unguarded.
+
+  **Neither package ships in the Scrye image.** Both are marked `dev` in the
+  lockfile and neither appears in the built SPA (`nanoid` runs inside PostCSS
+  at build time; `js-yaml` only ever parses this repo's own ESLint config).
+  The runtime stage of `docker/Dockerfile` copies `frontend/dist` out of the
+  builder and no `node_modules`, so the vulnerable code never reaches a
+  deployed instance — the fix is for the build and development toolchain.
+
+  The lockfile diff is exactly those two entries — six lines each way, the
+  `version`/`resolved`/`integrity` triple per package — with no transitive
+  requirement moved and no unrelated churn. After the refresh `npm audit`
+  reports 0 vulnerabilities at every severity, and the frontend suites are
+  unchanged: ESLint clean, Prettier clean, 79 tests across 21 files passing,
+  and a build of 7,035 modules to 645.18 kB JS / 201.38 kB CSS — byte-for-byte
+  the sizes recorded for the pre-refresh baseline.
+
 - **`cryptography` bumped 49.0.0 → 50.0.0, closing CVE-2026-69247** (HIGH) — a
   Bleichenbacher-style oracle in the PKCS7 decryption helpers, where
   `pkcs7_decrypt_der` and its variants exposed distinguishable errors and timing
