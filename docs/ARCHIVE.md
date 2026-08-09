@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (149, newest first)
+### Index of §14 entries (150, newest first)
 
+- [2026-08-09 — Infra — #86 sweep step 5 landed: Vitest 3.2.7 → 4.1.10 on the pinned Vite 6; the "no config changes" prediction held, the "low breakage" one did not](#2026-08-09--infra--86-sweep-step-5-landed-vitest-327--4110-on-the-pinned-vite-6-the-no-config-changes-prediction-held-the-low-breakage-one-did-not)
 - [2026-08-09 — Infra — #86 sweep step 4 landed: TypeScript 5.7.2 → 6.0.3 with the ceiling re-checked; the `this`-less inference change surfaced, silently and benignly](#2026-08-09--infra--86-sweep-step-4-landed-typescript-572--603-with-the-ceiling-re-checked-the-this-less-inference-change-surfaced-silently-and-benignly)
 - [2026-08-09 — Post-v1 — `L17`/`P2-2`'s reset effect finally has a regression test; the protection #176 relies on was never actually enforced](#2026-08-09--post-v1--l17p2-2s-reset-effect-finally-has-a-regression-test-the-protection-176-relies-on-was-never-actually-enforced)
 - [2026-08-09 — Infra — #86 sweep step 3 landed: React Compiler rules adopted, `set-state-in-effect` held back over 12 findings with no honest fix (#176)](#2026-08-09--infra--86-sweep-step-3-landed-react-compiler-rules-adopted-set-state-in-effect-held-back-over-12-findings-with-no-honest-fix-176)
@@ -729,6 +730,222 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 5 landed: Vitest 3.2.7 → 4.1.10 on the pinned Vite 6; the "no config changes" prediction held, the "low breakage" one did not
+
+**What changed:** `frontend/package.json` (one line), `frontend/package-lock.json`,
+`frontend/src/components/settings/OidcLinkCard.test.tsx` (an import, two lines, and a comment
+explaining them), plus `CHANGELOG.md` and this entry. This is **step 5 of the eight-step sequence**
+in `docs/upgrades/frontend-toolchain-86.md`. **`vitest` is the only package bumped.** `jsdom` stays
+at **26.1.0** (step 6) and `vite` at **6.4.3** (step 7); `frontend/vite.config.ts`, both tsconfigs,
+`frontend/eslint.config.js` and every production source file are untouched. No step 6 or later work
+was started; `main` was not touched.
+
+**Step 5's row was confirmed to name `vitest` alone before anything moved.** The maintainer's
+instruction was to stop if it also named jsdom, because the 5-Vitest/6-jsdom/7-Vite order exists to
+spend the cheap total oracle before the expensive partial one. It does not: the "Moves" cell reads
+*"`vitest` only (stays on the pinned `vite@6.4.3`)"*, and jsdom is step 6's sole member. No
+divergence, nothing to escalate.
+
+**The target and the peer range were re-checked at the registry, not taken from the document.**
+`vitest`'s `dist-tags.latest` is still **4.1.10**; the only published version beyond it is
+`5.0.0-beta.7` on the `beta` tag, which is a prerelease and out of scope. So the document's target
+is current and no deviation was needed. The ordering question — whether Vitest 4 forces the Vite
+major that is not due until step 7 — was answered at the published manifest:
+
+| Field on `vitest@4.1.10` | Value |
+|---|---|
+| `peerDependencies.vite` | `^6.0.0 \|\| ^7.0.0 \|\| ^8.0.0` |
+| `peerDependenciesMeta.vite.optional` | `false` (a **required** peer) |
+| `dependencies.vite` | `^6.0.0 \|\| ^7.0.0 \|\| ^8.0.0` (same range) |
+| `engines.node` | `^20.0.0 \|\| ^22.0.0 \|\| >=24.0.0` |
+
+The pinned **`vite@6.4.3` satisfies it**, so §3.4's finding holds and the sequence order is sound.
+CI's Node 24 and the pinned `node:24-bookworm-slim` (Node 24.18.1) both satisfy the engine floor;
+no `ci.yml` or Dockerfile change is needed.
+
+**Config claims re-verified against the shipped 4.1.10 tarball, per §0.3's method note.** All three
+legs the Step 5 row asserts held, checked in the artifact rather than in the migration guide:
+
+| Claim | Where it was checked | Verdict |
+|---|---|---|
+| `declare module "vite"` still augments `UserConfig` with `test` | `dist/config.d.ts:33` | **holds** — `/// <reference types="vitest/config" />` + `defineConfig` from `'vite'` still types the `test` key |
+| project configs still accept `extends?: string \| true` | `dist/chunks/reporters.d.*.d.ts:3614` | **holds** — `vite.config.ts:32,40` are fine |
+| `projects` is the current spelling | `…:2859` `projects?: TestProjectConfiguration[]` | **holds** — the `workspace` → `projects` rename is a no-op |
+
+The rest of Vitest 4's breaking surface was checked against the repo rather than assumed inert:
+`vite.config.ts` carries no `coverage`, `poolOptions`, `maxThreads`/`maxForks`, `minWorkers`,
+`reporters`, `deps.*`, `environmentMatchGlobs`/`poolMatchGlobs`, `css` or `restoreMocks` key; there
+are **zero** snapshot files and no `toMatchSnapshot`/`toMatchInlineSnapshot` call sites, so the
+custom-element shadow-root printing change has nothing to act on; and no `test`/`describe` call
+passes an options object as a third argument. The **narrowed default `exclude`** was measured on
+both sides rather than reasoned about — v3 resolves to five patterns
+(`node_modules`, `dist`, `cypress`, the dot-dirs, and the `*.config.*` union), v4 to two
+(`node_modules`, `.git`) — and it collects nothing new here because both projects' `include` globs
+are confined to `src/**`, which contains no `dist`, no `cypress` and no config file matching a test
+glob. `jsdom` remains a builtin environment in 4.1.10 (`dist/environments.d.ts`).
+
+**Net: `frontend/vite.config.ts` needed no edit, exactly as the row predicts.**
+
+**The row's *"Expected breakage: Low"* did not hold, and the miss is a type error rather than a test
+failure.** `npm run build` failed at its `tsc -b` half:
+
+```
+src/components/settings/OidcLinkCard.test.tsx(65,65): error TS2345:
+  Argument of type 'Mock<Procedure | Constructable>' is not assignable to parameter of type
+  '(data: any, unused: string, url?: string | URL | null | undefined) => void'.
+```
+
+**The mechanism, read from the installed `@vitest/spy@4.1.10` declarations rather than inferred.**
+`fn` is declared `fn<T extends Procedure | Constructable = Procedure>(…): Mock<T>`; under 3.2.7 the
+constraint was `Procedure` alone. The widening is the *"`spyOn` and `fn` Support Constructors"*
+change the migration guide leads with — but its cost here arrives through a route the guide does not
+mention. `ReturnType<T>` instantiates a generic signature at its **constraint**, not its default, so
+the alias `ReturnType<typeof vi.fn>` silently moved from `Mock<Procedure>` to
+`Mock<Procedure | Constructable>`, whose call signature is
+`NormalizedProcedure<Procedure | Constructable>` — a union with a construct-only branch that no
+longer matches a plain call signature. `OidcLinkCard.test.tsx` used that alias for a mock passed to
+`.mockImplementation()` on a `History.replaceState` spy, which is the one position in the suite that
+demands an exact signature.
+
+**Fixed at that one site, by making the type more accurate rather than looser.** The mock is now
+declared `Mock<typeof window.history.replaceState>` and created with
+`vi.fn<typeof window.history.replaceState>()` — the real method signature, which is what the alias
+was always standing in for. No `as`, no `any`, no `@ts-expect-error`, and **no autofix, in bulk or
+individually**. `Mock` is exported from `vitest` itself, so the import is type-only and nothing at
+runtime changed: `vi.fn<T>()` erases to `vi.fn()`.
+
+**The sibling occurrence was found and deliberately left alone.** `stubLocation()` at line 49 also
+returns `{ assign: ReturnType<typeof vi.fn> }`. It still compiles, because `assign` is only ever
+passed to `expect(...)` and stored as an object property — never into a position requiring an exact
+signature. It is a latent instance of the same loose idiom, not a defect, and editing non-erroring
+code is outside this step's scope. Recorded so it is not rediscovered as a mystery: **if a future
+step ever passes `assign` to a typed callback parameter, this is the same error waiting.** A grep
+confirms these two are the only `ReturnType<typeof vi.fn>` uses in `frontend/src/`.
+
+**One semantic change reaches the suite, and it was measured on both versions rather than argued.**
+Vitest 4's `vi.restoreAllMocks()` restores only spies created with `vi.spyOn`; Vitest 3's also reset
+plain `vi.fn()` implementations. A standalone probe — two scratch projects, one per version, running
+the identical file — settles it:
+
+| | `vi.fn()` implementation survives `restoreAllMocks()` | `vi.spyOn` spy restored |
+|---|---|---|
+| `vitest@3.2.7` | **no** | yes |
+| `vitest@4.1.10` | **yes** | yes |
+
+Two files call `vi.restoreAllMocks()`. **`api/client.test.tsx` is structurally inert** — it has no
+`vi.spyOn`, no `vi.mock` factory and no module-level `vi.fn()`; its only mocks are per-test
+`vi.fn()`s handed to `vi.stubGlobal('fetch', …)` and removed by `vi.unstubAllGlobals()` in
+`afterEach`, so nothing exists for the call to act on under either version.
+**`OidcLinkCard.test.tsx` is the one file that combines a `vi.mock` factory's `vi.fn()`s with
+`restoreAllMocks()` in `afterEach`**, so its three mocks now carry implementations across tests
+where they previously did not.
+
+**Whether that changes any test's behaviour was measured, not reasoned.** The real file was
+temporarily instrumented to print, per test, each mock's call count and whether it still held an
+implementation; the instrumentation was then removed and the file re-verified as carrying only the
+type fix. The carryover is **real and provably inert**: `startOidcLink` holds an implementation from
+the *"navigates to the provider URL"* test onward and `unlinkOidcIdentity` from *"sends fresh
+credentials when unlinking"* onward — under Vitest 3 both would have been wiped after each test —
+yet both record **zero calls** in every subsequent test, and all ten tests set
+`getOidcLinkStatus`'s own resolved value before rendering, so its carryover is always overwritten
+before it can be read. **No test passes for a different reason than it did on 3.2.7.**
+
+**What moved in the lockfile: 346 → 338 packages, every movement attributed to a requirer.** Both
+lockfiles were parsed and each added/removed/bumped package's requirers resolved, rather than
+eyeballing the diff:
+
+- **2 added** — `obug@2.1.4` (a direct dependency of `vitest@4.1.10`) and
+  `@standard-schema/spec@1.1.0` (required by `@vitest/expect@4.1.10`).
+- **10 removed** — `vite-node` and its private `cac`, replaced by Vite's Module Runner; `tinypool`,
+  which v4 removes outright when it rewrote the pool architecture; `tinyspy`, dropped by
+  `@vitest/spy@4`; `strip-literal` and its nested `js-tokens`, dropped by `@vitest/runner@4`; and
+  `check-error`, `deep-eql`, `loupe`, `pathval`, the chai-5 subtree orphaned by the move to chai 6.
+  Each was checked to have **no surviving requirer**.
+- **13 version bumps** — the seven `@vitest/*` packages to 4.1.10, plus `vitest` itself and its
+  closure moving in step: `chai` 5.3.3 → 6.2.2, `es-module-lexer` 1.7.0 → 2.3.1, `std-env` 3.10.0 →
+  4.2.0, `tinyexec` 0.3.2 → 1.3.0, `tinyrainbow` 2.0.0 → 3.1.1.
+
+**Nothing moved that is not `vitest` or required by it, and the one case that looked like it could
+have been was checked specifically.** `es-module-lexer` crossing a major (1 → 2) is the entry that
+would matter if `vite@6.4.3` also required it, since a single hoisted copy serves both. It does not:
+before the bump its **only** requirer was `vite-node@3.2.4` at `^1.7.0`, and after it is `vitest` at
+`^2.0.0` — Vite bundles its own copy and declares no dependency on the package. `vite` stays 6.4.3
+and `jsdom` 26.1.0 in the resolved tree, verified by reading both entries out of the lockfile rather
+than trusting the diff.
+
+`lockfileVersion` stays 3 and the file diff is **+131/−209** — proportionate to 10 removals against
+2 additions, with no whole-file re-normalisation, because the lockfile was written with **npm
+11.19.0** installed into a scratch prefix to match CI's Node 24 rather than the sandbox's Node 22 /
+npm 10.9.7. That is the **fifth** consecutive lockfile touch to use this method and the fifth clean
+diff. `npm ci` was additionally run *through the same npm 11* and the lockfile's SHA-256 re-verified
+unchanged afterwards, so the file a `--package-lock-only` resolution produced is byte-identical to
+what a real install writes.
+
+**Suites, measured on both sides, each from a clean install.** Baseline on 3.2.7 (`npm ci` from the
+committed lockfile): lint clean (11.6 s), `format:check` clean, **80 tests across 22 files**, build
+**7,035 modules → 645.14 kB JS (`index-Vvdzytcz.js`) / 201.38 kB CSS (`index-D2wHtcHV.css`)**,
+`npm audit` **0 vulnerabilities**. After the bump, from a fresh `rm -rf node_modules && npm ci`:
+lint clean (9.5 s), `format:check` clean, **80 tests across 22 files**, build **7,035 modules →
+645.14 kB / 201.38 kB**, audit **0**. The emitted assets carry the **same content hashes** on both
+sides — the same signal steps 1, 2 and 4 produced, and the right one here, since a test-runner
+devDependency and a type-only test edit cannot reach the bundle.
+
+**The count comparison was made per test, not per total.** A matching 80/22 pair proves less than it
+looks like: the same totals could hide a renamed, moved or re-parented test. Both runs were captured
+with `--reporter=json` and reduced to a sorted `file :: full test name :: status` triple, and the two
+lists **diff empty** — the same 22 files, the same 80 test names, the same statuses.
+
+**Baseline note: 80/22 is the current figure; the document's Step 5 row says 79/21.** The row's
+*"expect 21 files / 79 tests"* was written before `ScanDetailPage.scanIdReset.test.tsx` landed on
+`dev`. The step-4 entry above already records the correction; it is repeated here because Step 5's
+row is one of the two places in the document that still quotes the stale pair, and a future step
+comparing against it would read a genuine regression as a match.
+
+**Which of the document's Step 5 predictions held.**
+
+- **"Moves `vitest` only, stays on `vite@6.4.3`" — HELD**, and the peer range was re-verified at the
+  published manifest rather than inherited: `^6.0.0 || ^7.0.0 || ^8.0.0`, required, satisfied by the
+  pin.
+- **"Config changes: none required" — HELD**, and all three of its supporting artifact claims
+  re-checked in the 4.1.10 tarball. This is the first Step-5-style prediction in the sweep to
+  survive verification unamended.
+- **"The narrowed default `exclude` collects nothing new" — HELD**, and upgraded from an argument to
+  a measurement by resolving `defaultExclude` under both versions.
+- **"Residual risk is the `vite-node` → ModuleRunner swap changing module resolution under the 17
+  jsdom tests" — DID NOT MATERIALISE.** All jsdom-project tests pass unchanged, by name and status.
+  (The count in that phrasing is doubly wrong and is worth correcting once, since §6's jsdom channel
+  analysis reuses it: the jsdom project today is **18 `.test.tsx` files carrying 59 tests**, against
+  4 `.test.ts` files carrying 21 under Node. "17" appears to be a stale `.tsx` **file** count quoted
+  as a test count — a step 6 that budgets 17 jsdom tests will badly under-price its own oracle.)
+- **"Expected breakage: Low… `npm test` is what verifies it" — DID NOT HOLD, and the framing is the
+  reason it was nearly missed.** The row names `npm test` as the oracle, and `npm test` was green on
+  the first run. The failure was in `npm run build`'s `tsc -b` half, which the row does not mention
+  at all — it is caught only because the sweep's standing exit criteria run all five commands. The
+  transferable point is the same one step 4 recorded from the other direction: **a step's named
+  oracle is not necessarily the oracle that fails.** A runner bump was priced as a runtime-only
+  change, and Vitest ships types that the type-checked build consumes.
+- **Effort priced S / under 1 h, risk low — came in at the top of the S band**, the extra time spent
+  entirely on diagnosing one `TS2345` and measuring the `restoreAllMocks` change.
+
+**What was deliberately not done.** No package other than `vitest` moved, in `package.json` or in
+the lockfile — in particular **`jsdom` and `vite` were not touched**, which is the whole point of
+the step boundary. No lint finding was autofixed, in bulk or individually — there were none; the one
+type error was fixed by hand at a single site. No production source file changed. The
+`ReturnType<typeof vi.fn>` at `OidcLinkCard.test.tsx:49` was left as it stands. The temporary
+instrumentation used to measure mock carryover was removed before the PR, and the file confirmed to
+carry only the type fix. `docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were **not**
+edited — correcting the sequence document is a maintainer call, and this entry is the record of what
+its Step 5 row got right and wrong in the meantime. No step 6 or later work was started; `main` was
+not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`,
+`frontend/src/components/settings/OidcLinkCard.test.tsx`, `CHANGELOG.md` § Unreleased/Changed, and
+this entry. No code behaviour, schema, API contract, security model, job model, auth, or CI
+configuration changed; no locked decision re-opened — React stays on 18 and Mantine on v7, and
+`vitest` declares no `react`, `react-dom`, `@types/react*` or `@mantine/*` peer.
 
 ---
 
