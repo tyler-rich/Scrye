@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (155, newest first)
+### Index of §14 entries (156, newest first)
 
+- [2026-08-09 — Infra/Process — The `@types/node` majors-ignore removed now that 26.2.0 has landed; no `typescript` ignore added, deliberately, because that regenerating PR is the TS7 signal](#2026-08-09--infraprocess--the-typesnode-majors-ignore-removed-now-that-2620-has-landed-no-typescript-ignore-added-deliberately-because-that-regenerating-pr-is-the-ts7-signal)
 - [2026-08-09 — Infra — `@types/node` 24.13.3 → 26.2.0: the sweep's one declined package taken deliberately, after step 4 had already shrunk its blast radius to one file](#2026-08-09--infra--typesnode-24133--2620-the-sweeps-one-declined-package-taken-deliberately-after-step-4-had-already-shrunk-its-blast-radius-to-one-file)
 - [2026-08-09 — Docs/Process — Roadmap updated for the completed #86 sweep, the re-cut react-router advisory, and the React-19-blocked router major](#2026-08-09--docsprocess--roadmap-updated-for-the-completed-86-sweep-the-re-cut-react-router-advisory-and-the-react-19-blocked-router-major)
 - [2026-08-09 — Infra — #86 sweep step 8 landed: `globals` 17.9.0, `@testing-library/user-event` 14.6.3, `postcss` 8.5.26 — the sweep is complete, and its reminder-surface PR had already closed itself](#2026-08-09--infra--86-sweep-step-8-landed-globals-1790-testing-libraryuser-event-1463-postcss-8526--the-sweep-is-complete-and-its-reminder-surface-pr-had-already-closed-itself)
@@ -736,6 +737,46 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Infra/Process — The `@types/node` majors-ignore removed now that 26.2.0 has landed; no `typescript` ignore added, deliberately, because that regenerating PR is the TS7 signal
+
+**What changed:** `.github/dependabot.yml` — one `ignore` entry and its nine-line explanatory comment removed — plus this entry. **No dependency, lockfile, source, test, or other config file was touched**, and **no other key in `dependabot.yml` moved**: the file's six ecosystems, every `target-branch: dev`, every `schedule`, every `commit-message` prefix, both `groups` blocks and the five remaining npm ignores are byte-identical. `main` was not touched.
+
+**The gate was checked before the edit, not after.** Removing a majors-ignore for a version that has not landed would leave Dependabot free to propose a major nobody has evaluated. So `dev` was read directly: **#190 merged at 2026-08-09T18:41:00Z** as squash commit **`5948b73`**, and `git show origin/dev:frontend/package.json` reads `"@types/node": "26.2.0"`. Only then was the ignore removed.
+
+**The exact diff — two removals, no additions:**
+
+```diff
+-    # @types/node is majors-locked for the SAME reason, against a different
+-    # runtime: its major tracks Node's, and this repo builds and runs on Node 24
+-    # (docker/Dockerfile's builder stage, ci.yml's `node-version`), with Node
+-    # majors already declined on a support-lifecycle argument in the `docker`
+-    # entry below. tsconfig.node.json sets `"types": ["node"]`, so a @types/node
+-    # ahead of the pinned runtime describes APIs the build does not have and
+-    # feeds them straight into the type-aware ESLint gate. #145 proposed
+-    # @types/node 26 against Node 24; 24.x was applied instead. Lifting this line
+-    # is part of moving the Node major, not a bump to take on its own.
+-    #
+...
+-      - dependency-name: "@types/node"
+-        update-types: ["version-update:semver-major"]
+```
+
+**Why the comment goes with the rule rather than being rewritten.** Its central claim — *"tsconfig.node.json sets `"types": ["node"]`, so a @types/node ahead of the pinned runtime describes APIs the build does not have and feeds them straight into the type-aware ESLint gate"* — was true of the tree it was written against and is no longer true of this one. Step 4 (#179) wrote an explicit empty `types` array into `tsconfig.app.json`, and the #190 entry below measures the consequence: the app project loads **1,063 files and zero of them are `@types/node`**, against 82 for the node project. The reach is one file, `vite.config.ts`. A comment whose premise has been retired is worse than no comment, because it reads as a live argument. Its factual content is not lost — it is preserved in the entry below alongside the measurement that superseded it.
+
+**DELIBERATE NON-ACTION — no `ignore` rule was added for `typescript`, and none should be.** This is the half of this change most likely to be "fixed" by a future session, so it is recorded as a decision rather than an omission. TypeScript 7 is **wanted**; what blocks it is entirely upstream (`typescript-eslint`'s `typescript` peer range, whose upper bound has never exceeded `<6.1.0` across all 1,510 published versions — re-verified from the full packument today, not from `latest` alone). The regenerating Dependabot PR proposing `typescript@7.x` **is the notification mechanism** that tells us when upstream ships support: an ignore rule would silence exactly the signal we are relying on, while changing nothing about the blocker. This also stays consistent with the standing rule in the file's own surviving comment — an ignore says *"a bot may not make this decision"*, and it is not a parking space for work we intend to do.
+
+**Dependabot itself suggested the opposite, on the PR closed today, which is worth recording.** Its automated reply to the closure reads: *"This pull request was built based on a group rule. Closing it will not ignore any of these versions in future pull requests. To ignore these dependencies, configure ignore rules in dependabot.yml."* Correct as a statement of mechanics and **wrong as advice here** — the PR reappearing is the desired behaviour, not a nuisance to suppress. A reply was posted on the PR saying so, so the reasoning is visible to anyone triaging the queue without reading this file.
+
+**The reminder-surface chain moved twice more today, and the second move is the one that mattered.** The chain recorded in the step-8 entry below — #153 → #170 → #172 → #175 → #181 → #184 → #186 — continued to **#188** and then, minutes after #190 merged, to **#191**. #188 carried two updates (`@types/node` 24.13.3 → **26.1.2** and `typescript` 6.0.3 → 7.0.2) and was **auto-closed by Dependabot at 18:43:33**, not by hand; **#191** was opened four seconds later carrying **`typescript` alone**, its `frontend/package.json` diff a single line. Two observations worth keeping: the group really does collapse to exactly the declined item once everything else lands, as §8 anticipated; and #188's `@types/node` target had by then become a **downgrade** (26.1.2 against the 26.2.0 on `dev`), which is what a Dependabot PR held open across a merge looks like. **#191 was closed with a comment** recording the packument-wide check and stating that the PR should keep reappearing and be evaluated fresh each time rather than assumed permanently unsatisfiable.
+
+**This file's edits are inert on `main` until the next promotion, exactly like every prior one.** Dependabot reads its configuration — `ignore` list included — from the repository's **default branch**, so a `dev`-only change to `.github/dependabot.yml` has no effect until a `dev` → `main` promotion carries it. That is the finding recorded in the queue-audit entry below, and the maintainer **declined** promoting this file to `main` on its own to close the lag (settings-audit entry below, 2026-08-09 — declined, not deferred). Two practical consequences of that, stated so neither is re-diagnosed: `main`'s copy has **never** carried the `@types/node` stanza (added on `dev` by #147, never promoted), so this removal deletes a rule that was **never live** — the file and the effective configuration are now *more* aligned, not less; and until the next release, Dependabot will keep offering `@types/node` majors regardless, because it always has been.
+
+**What was deliberately not done.** No `ignore` entry was added for `typescript` or anything else. No other key in `dependabot.yml` was changed — not a `target-branch`, `schedule`, `directory`, `groups`, `commit-message`, nor any of the five surviving npm ignores (`@mantine/*`, `react`, `react-dom`, `@types/react`, `@types/react-dom`) or the `docker`/`docker-compose` ones. **One stale sentence in the file was left in place and is flagged rather than fixed:** the surviving *"Deliberately NOT ignored"* paragraph still describes the frontend tooling majors as *"the deferred #86 sweep tracked in docs/ROADMAP.md"* and says Dependabot should surface them *"until that PR is done"* — the sweep completed on 2026-08-09, so the paragraph's stated reason has lapsed even though its instruction must persist, now for the TS7-signal reason above. Rewriting it was outside this change's brief and is a maintainer call. No dependency, lockfile, source, test, or workflow file was touched; `docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were not edited; `main` was not touched.
+
+**Plan section affected:** `.github/dependabot.yml` (one npm `ignore` entry and its comment removed) and this entry. PR #191 (closed, not merged); #188 auto-closed by Dependabot. No code behaviour, schema, API contract, security model, job model, auth, or CI configuration changed; no locked decision re-opened — the `@mantine/*`, `react`, `react-dom` and `@types/react*` majors-ignores that enforce locked decision §2 are untouched.
 
 ---
 
