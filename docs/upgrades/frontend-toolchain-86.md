@@ -440,9 +440,13 @@ because the Node major moved, and that is the separate roadmap item.
 ## 6. Proposed PR sequence
 
 Seven steps. Each moves one thing whose failure has one plausible cause. Steps 1–3
-are the ESLint/TypeScript chain and must run in order; steps 4–7 are independent of
-that chain and of each other, and can be interleaved or parallelised across
-branches.
+are the ESLint/TypeScript chain and **must** run in order — that is a hard
+constraint from the peer ranges in §3.2, not a preference. Steps 4–7 carry no
+dependency on that chain or on each other, so their order is a **judgement about
+verification cost**, not a requirement: they could be interleaved or parallelised
+across branches. The order given (Vitest → jsdom → Vite) spends the cheap, total
+oracle before the expensive, partial one; the reasoning is under Step 7's *"Why 6
+and 7 swapped"*.
 
 Every step's exit criteria are the same four commands plus CI, so they are stated
 once: `npm ci` · `npm run lint` · `npm run format:check` · `npm test` ·
@@ -540,6 +544,33 @@ as an oversight nor waved through on a stale reading. A note in
 ignore says "a bot may not make this decision", and TypeScript 7 is wanted — just
 not until `typescript-eslint` ships support.
 
+**Edits this step makes** — this is the checklist, not a pointer to one. §7.2 is
+the reasoning; the actions are here so they land with the version bump rather than
+being read as background:
+
+- [ ] `frontend/package.json` — `"typescript": "5.7.2"` → `"6.0.3"`.
+- [ ] **`frontend/tsconfig.app.json` — add `"types": []`.** TypeScript 6.0 changes
+      this option's default from "enumerate everything in `node_modules/@types`" to
+      `[]`, and upstream names it the change that *"will affect many projects"*,
+      recommending an explicit array *"to improve build performance and
+      predictability"*. It is a **no-op for this repo** — verified, not assumed
+      (§7.2) — which is exactly why it must be written down: an invisible no-op is
+      the kind of edit that gets skipped now and rediscovered as a mystery later,
+      and the explicit array also pins the behaviour against TypeScript 7, where
+      the old enumerate-everything default is gone for good.
+
+      ```jsonc
+      // frontend/tsconfig.app.json — alongside the existing strictness flags
+        "noUncheckedIndexedAccess": true,
+        "types": []                        // TS 6.0's new default, made explicit
+      ```
+- [ ] `frontend/tsconfig.node.json` — **no change.** It already sets
+      `"types": ["node"]` explicitly.
+- [ ] Fix whatever `tsc -b` reports from the `this`-less-function inference change
+      (§7.2) — the one TS 6.0 change no config audit can pre-empt.
+- [ ] State in the PR description that this stops at **6.0.3**, why, and that the
+      ceiling was last checked on **2026-08-09** (§3.1).
+
 **`ignoreDeprecations: "6.0"` exists as an escape hatch** and should not be used
 here: it silences 6.0's deprecation diagnostics, and those diagnostics are the
 free preview of what TypeScript 7 removes outright. Taking them now is the point
@@ -558,15 +589,71 @@ of the step.
 | **Judgement?** | mechanical |
 | **Effort / risk** | **S** — under 1 h if the suite passes. **Risk: low.** |
 
-**Ordered before Step 6 deliberately:** Vitest 4 is supported on Vite 6 by both its
-peer range and its migration guide (§3.4), so taking it first means that when Vite
-8 lands, a test failure is attributable to Vite. The reverse order also works, and
-would mean a test failure at this step is attributable to Vitest — pick one, but
-do not do both in one PR.
+**Ordered first among 5–7 deliberately:** Vitest 4 is supported on Vite 6 by both
+its peer range and its migration guide (§3.4), so it can go first, and it is the
+test *runner* — settling it before the DOM implementation underneath it (Step 6)
+means a jsdom failure is attributable to jsdom. Do not combine it with either
+neighbour in one PR.
 
 ---
 
-### Step 6 — Vite 6.4.3 → 8.2.1 **+** `@vitejs/plugin-react` 4.3.4 → 6.0.5
+### Step 6 — jsdom 26.1.0 → 30.0.1
+
+> **Re-ordered.** This was Step 7 in the first draft, behind the Vite major. It
+> moved ahead of it once the 27/28/29 changelogs were read — rationale under
+> "Why 6 and 7 swapped" below.
+
+| | |
+|---|---|
+| **Moves** | `jsdom` only |
+| **Config changes** | **None in `vite.config.ts`** — jsdom is reached only through Vitest's `environment: 'jsdom'`; nothing in `frontend/src/` imports it. **Two docs edits are required** (§7.4) for the raised Node floor. |
+| **What 27/28/29 actually changed** | From the upstream `Changelog.md` (present through tag `v29.0.0`, removed at `v30.0.0`). **27.0.0** is the substantial one: the CSS selector engine was swapped `nwsapi` → `@asamuzakjp/dom-selector` ("closing over 20 selector-related bugs"), `element.click()` now fires a `PointerEvent` instead of a `MouseEvent`, certain events became passive by default, the user-agent stylesheet was re-derived from the HTML Standard, CSS `display` resolution was fixed, and many `Window`-object conformance fixes landed (named properties, data → accessor properties). **28.0.0** overhauled resource loading and added MIME sniffing to frames. **29.0.0** replaced the whole CSSOM implementation (`@acemir/cssom` + `cssstyle` → internal `css-tree`-based), added real media-query parsing, and raised the Node 22 floor to 22.13.0. **30.0.0** is unknown (§9). |
+| **Which of those actually reach this suite** | Mapped onto the real test code rather than assumed — see the channel table below. Two channels are live, four are provably inert, and the loudest-sounding change (the CSSOM overhaul) is among the inert ones. |
+| **Prerequisite check** | ✅ **Resolved — no action needed.** **[peer]** `jsdom@30.0.1` `engines.node: "^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0"`. CI resolves `node-version: "24"` to 24.18.0 (seen in #153's job log). The pinned `node:24-bookworm-slim@sha256:235600a8…` in `docker/Dockerfile:27` ships **Node 24.18.1** (§9, resolved), which satisfies `^24.15.0`. There is no `.npmrc`, so `engine-strict` is off and a mismatch would have been a non-fatal `EBADENGINE` warning rather than a failed build — which is why it was worth resolving by hand rather than trusting a green CI run. |
+| **Verifies it** | `npm test` — expect **21 files / 79 tests** |
+| **Judgement?** | mechanical, unless a test fails |
+| **Effort / risk** | **S–L** — ~1 h if the suite is green first run, up to half a day if the selector-engine swap shifts query results. **Risk: medium** — held, not raised; reasoning below. |
+
+**Channel analysis — every 27/28/29 change against what the suite actually does.**
+Counts are from `frontend/src/**/*.test.tsx` (12 files, 17 of the 79 tests).
+
+| Change | Reaches this suite? | Evidence |
+|---|---|---|
+| Selector engine `nwsapi` → `@asamuzakjp/dom-selector` (27.0.0) | **LIVE — widest surface** | **116 Testing Library query call sites** (34 `getByRole`, 28 `getByLabelText`, 21 `getByText`, plus `find*`/`query*` variants). Every one bottoms out in `querySelectorAll`. |
+| UA stylesheet re-derived + CSS `display` resolution fixed (27.0.0) | **LIVE — narrow, one path** | Reaches the tests only through Testing Library's accessibility filter: in the installed `@testing-library/dom@10.4.1`, `isSubtreeInaccessible()` reads `getComputedStyle(element).display` and `isInaccessible()` reads `.visibility`; `config.js` sets `defaultHidden: false` and the repo never calls `configure()`, so **all 34 `getByRole` sites run that filter**. |
+| CSSOM implementation replaced (29.0.0) | **Inert** | `vite.config.ts`'s `test` block sets **no `css` key**, so Vitest's default `css: false` applies and Mantine's stylesheets are never injected into jsdom. There is no author CSS in the CSSOM to re-parse — only UA defaults, which is the row above. |
+| `element.click()` → `PointerEvent` (27.0.0) | **Inert** | **No `.click()` anywhere in `frontend/src/`.** All interaction is `userEvent.click` (8) or `fireEvent.click` (6), both of which construct and dispatch their own events rather than calling `HTMLElement.prototype.click()`. |
+| Certain events passive by default (27.0.0) | **Inert** | **No `preventDefault` anywhere in `src/`**, and no `onWheel`/`onTouch`/`onScroll` handlers or matching `addEventListener` calls. |
+| Resource loading overhaul + MIME sniffing (28.0.0), bad-port blocking (29.0.0) | **Inert** | No test loads a subresource; `fetch` is stubbed per test. |
+| `Window` conformance: data → accessor properties (27.0.0) | **Benign** | `src/test/setup.ts` assigns `window.matchMedia` / `window.ResizeObserver`, neither of which exists in jsdom 26.1.0, 29.1.1, or 30.0.1 (zero files in the shipped `lib/`), so the assignments create own properties. This also retires the "polyfill silently steps aside" risk the first draft flagged. |
+
+**Why the estimate widened but the risk did not rise.** Reading the changelogs
+pushed in both directions and the two roughly cancel:
+
+- *Upward:* the selector-engine swap is a genuinely wide, live surface — 116 query
+  sites — and its failure mode is *"unable to find an element with the role…"*,
+  which is less diagnosable than a lint error carrying a rule name and a line
+  number. That is why the effort band now runs to **L** rather than stopping at M.
+- *Downward:* four of the seven channels are provably inert, including the two
+  that sound worst in the changelog (the CSSOM rewrite and the `click()` change).
+  The CSS surface in particular is nearly absent because Vitest does not process
+  CSS by default.
+- *Unchanged, and decisive for the risk rating:* **detection here is complete and
+  immediate.** `npm test` runs 79 assertions in ~15 s and is a total oracle for
+  this step — there is no failure mode that passes CI and shows up later. That is
+  exactly what separates it from Step 7, where a CSS-minifier regression fails
+  nothing and reaches a user.
+
+So: **effort S–L, risk medium.** Not "low", because of the 116-site selector
+surface and jsdom 30.0.0's unreadable notes; not "high", because everything that
+can go wrong announces itself in a 15-second test run.
+
+---
+
+### Step 7 — Vite 6.4.3 → 8.2.1 **+** `@vitejs/plugin-react` 4.3.4 → 6.0.5
+
+> **Re-ordered.** This was Step 6 in the first draft. It moved behind jsdom —
+> rationale immediately below.
 
 | | |
 |---|---|
@@ -577,20 +664,28 @@ do not do both in one PR.
 | **Judgement?** | Mechanical to apply; **judgement** on whether any output difference is acceptable. |
 | **Effort / risk** | **L** — half a day including a real UI pass. **Risk: medium–high**, and uniquely *runtime* rather than lint-time. |
 
----
+**Why 6 and 7 swapped.** The first draft ran Vite 8 before jsdom. Reading the
+jsdom changelogs did not change either step's content, but it made the ordering
+argument concrete enough to act on:
 
-### Step 7 — jsdom 26.1.0 → 30.0.1
+1. **Group by oracle, and spend the cheap oracle first.** Steps 5 and 6 are both
+   verified by `npm test` alone — automated, ~15 s, total. Step 7 is verified by a
+   build plus a **human** pass over the running SPA, because its worst failure
+   mode is invisible to CI. Settling both test-harness steps first means the
+   expensive human verification happens once, at the end, against a harness that
+   is no longer moving.
+2. **Vite 8 changes the transform pipeline Vitest runs on.** With jsdom already
+   moved, a test failure during Step 7 points at Rolldown/Oxc. In the original
+   order, the last test-harness change (jsdom) landed on a just-swapped bundler,
+   which is the one arrangement where a test failure has two plausible causes.
+3. **Front-load the least predictable of the mechanical steps.** jsdom's band runs
+   to half a day and jsdom 30.0.0's notes are unreadable; learning that cost early
+   is worth more than learning it after the longest step.
 
-| | |
-|---|---|
-| **Moves** | `jsdom` only |
-| **Config changes** | **None in `vite.config.ts`** — jsdom is reached only through Vitest's `environment: 'jsdom'`; nothing in `frontend/src/` imports it. **Two docs edits are required** (§7.4) for the raised Node floor. |
-| **Expected breakage** | Four majors of DOM-implementation change under 17 `.tsx` render tests. The 27/28/29 changelogs are now in hand (below); 30's is not (§9). **The `setup.ts` risk previously flagged here does not materialise** — `matchMedia`, `ResizeObserver`, and `scrollIntoView` appear in **zero** files of the shipped `lib/` in 26.1.0, 29.1.1, *and* 30.0.1, so the `if (!…)` guards still take the polyfill branch and nothing silently steps aside. |
-| **What 27/28/29 actually changed** | From the upstream `Changelog.md` (present through tag `v29.0.0`, removed at `v30.0.0`). **27.0.0** is the big one for a render suite: the CSS selector engine was swapped `nwsapi` → `@asamuzakjp/dom-selector`, `element.click()` now fires a `PointerEvent` instead of a `MouseEvent`, certain events became passive by default, the user-agent stylesheet was re-derived from the HTML Standard, `cssstyle` was upgraded, and many `Window`-object conformance fixes landed (named properties, data → accessor properties). **28.0.0** overhauled resource loading and added MIME sniffing to frames — inert here, since no test loads a subresource. **29.0.0** replaced the whole CSSOM implementation (`@acemir/cssom` + `cssstyle` → internal `css-tree`-based) and raised the Node 22 floor to 22.13.0. The through-line is **CSS and selectors**, which is exactly what Mantine-heavy render tests exercise via Testing Library queries and `toHaveTextContent`-style assertions. |
-| **Prerequisite check** | ✅ **Resolved — no action needed.** **[peer]** `jsdom@30.0.1` `engines.node: "^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0"`. CI resolves `node-version: "24"` to 24.18.0 (seen in #153's job log). The pinned `node:24-bookworm-slim@sha256:235600a8…` in `docker/Dockerfile:27` ships **Node 24.18.1** (§9, resolved), which satisfies `^24.15.0`. There is no `.npmrc`, so `engine-strict` is off and a mismatch would have been a non-fatal `EBADENGINE` warning rather than a failed build — which is why it was worth resolving by hand rather than trusting a green CI run. |
-| **Verifies it** | `npm test` — expect 21 files / 79 tests |
-| **Judgement?** | mechanical, unless a test fails |
-| **Effort / risk** | **S–M** — 1–3 h. **Risk: medium.** Better characterised than at first pass, but 30.0.0's own notes remain unreachable, so treat `npm test` as the real oracle. |
+**The original order was not wrong** — every step is verified green before the
+next begins, so attribution is sound either way, and no dependency constraint
+forces this. It is a preference for cheap-and-total verification before expensive-
+and-partial. **Membership is unchanged**; only these two swapped.
 
 ---
 
@@ -652,7 +747,9 @@ Established from the **TypeScript 6.0 release notes**, checked option by option
 against both tsconfigs. TS 6.0 is a transition release: it is API-compatible with
 5.9 and mostly *deprecates* rather than removes, with removal deferred to 7.0.
 
-**Recommended edit — pin `types` rather than inherit the new default:**
+**Recommended edit — pin `types` rather than inherit the new default.** This is
+carried as a checklist item in **§6, Step 4 ("Edits this step makes")**; the
+reasoning is here, the action is there.
 
 ```jsonc
 // frontend/tsconfig.app.json
@@ -707,7 +804,7 @@ not need while `noEmit` is set.
 **Do not set `"ignoreDeprecations": "6.0"`.** It silences exactly the diagnostics
 that preview what TypeScript 7.0 removes.
 
-### 7.3 `frontend/vite.config.ts` — no required edit (Steps 5 and 6)
+### 7.3 `frontend/vite.config.ts` — no required edit (Steps 5 and 7)
 
 - **Vitest 4:** `/// <reference types="vitest/config" />` (line 1), `defineConfig`
   imported from `'vite'` (line 2), and `test.projects[].extends: true` (lines 32,
@@ -725,7 +822,7 @@ that preview what TypeScript 7.0 removes.
   `postcss-simple-vars`) is untouched by Vite 8 — PostCSS still runs; only CSS
   *minification* moves to Lightning CSS.
 
-### 7.4 `README.md` and `CONTRIBUTING.md` — required edits (Step 7)
+### 7.4 `README.md` and `CONTRIBUTING.md` — required edits (Step 6)
 
 Both currently state **"Node 22+"** for native development —
 `README.md:229` and `CONTRIBUTING.md:19`. `jsdom@30.0.1` requires
@@ -755,14 +852,50 @@ constraint in the sweep. **The Dockerfile's digest pin was checked and passes:**
 | 3 | React Compiler rules | unbounded | **high** | pure judgement; **may be declined** | — |
 | 4 | TypeScript → 6.0.3 | M | medium | judgement | — |
 | 5 | Vitest → 4.1.10 | S | low | mechanical | — |
-| 6 | Vite 8 + plugin-react 6 | L | **med–high** | mechanical + output review | — |
-| 7 | jsdom → 30.0.1 | S–M | medium | mechanical | — |
+| 6 | jsdom → 30.0.1 | **S–L** | medium | mechanical | — |
+| 7 | Vite 8 + plugin-react 6 | L | **med–high** | mechanical + output review | — |
 | 8 | routine minors | 15 min | very low | mechanical | — |
 
 Total: roughly **2–4 focused days** if nothing surprising appears, front-loaded on
-steps 2, 4, and 6. Step 3 is deliberately not in that estimate — it is a decision
+steps 2, 4, and 7. Step 3 is deliberately not in that estimate — it is a decision
 with an unbounded tail, and pricing it alongside version bumps is how it would end
 up taken by accident.
+
+**Revised in the second pass** (after the jsdom 27/28/29 changelogs became
+readable): jsdom's effort band widened **S–M → S–L**, its risk stayed **medium**,
+and it swapped places with the Vite step. Every other row is unchanged and was
+re-checked rather than left standing — the reasoning is in §6, Step 6.
+
+### Relative risk — the ranking, stated plainly
+
+Because "which step is riskiest" drives what gets scheduled when, and one plausible
+reading of the sequence is wrong:
+
+1. **Step 3 — React Compiler rules.** Highest, and the only step that can demand
+   real refactors rather than config edits. Mitigated by being optional.
+2. **Step 7 — Vite 8.** Highest among the steps that must happen, for one specific
+   reason: it is the **only step whose worst failure passes CI**. A Lightning CSS
+   minification difference in Mantine's 201 kB of CSS fails no check and reaches a
+   user; everything else in the sequence announces itself in a lint run or a test
+   run.
+3. **Step 6 — jsdom** and **Step 2 — ESLint 10 family**, roughly level.
+4. **Step 4 — TypeScript 6**, now better characterised than at first draft (§7.2).
+5. **Step 1 — typescript-eslint**, then the mechanical remainder.
+
+**Is jsdom now the highest-risk step rather than typescript-eslint?** Half of that
+is right and half rests on a mistaken premise. jsdom **is** riskier than
+typescript-eslint — but it already was in this document's first draft (Step 1
+low–med, jsdom medium), so the changelogs *confirmed* that relative order rather
+than overturning it. And **typescript-eslint was never the top of the ranking**:
+Step 3 and the Vite step have outranked it since the first draft. What actually
+changed is the gap: Step 1's risk fell further once its rule set was proven
+identical across the span (§0.3), while jsdom's surface became concrete.
+
+**jsdom is not the highest-risk step either.** It sits third. The property that
+keeps it there — and the one worth carrying into scheduling — is that its
+verification is *complete*: 79 assertions in ~15 s, with no failure mode that
+survives a green run. Step 7 has the opposite property, which is why it outranks a
+step that crosses four majors to its two.
 
 ### Recommendation on #153: **keep it open, correct the note attached to it**
 
@@ -783,7 +916,7 @@ up taken by accident.
   predicted type-aware-ESLint churn. It is not (§0.2). Anyone triaging the queue
   who believes that will keep re-deriving the ERESOLVE. The §14 entry accompanying
   this document records the correction.
-- **Close it only when Step 6 lands**, at which point the remaining offers will
+- **Close it only when Step 7 lands**, at which point the remaining offers will
   have collapsed to `typescript@7.x` (declined, §3.1) and `@types/node@26.x`
   (declined, §5), and a fresh grouped PR is more honest than a nine-month-old one.
 
@@ -816,7 +949,7 @@ removed at `v30.0.0`. The earlier "all candidate paths 404" finding was a
 first round of probes asked for refs that do not exist and the 404s said nothing
 about the file. Corrected path:
 `raw.githubusercontent.com/jsdom/jsdom/refs/tags/v29.0.0/Changelog.md`. Contents
-summarised in **§6, Step 7**.
+summarised in **§6, Step 6**.
 
 **4. The Node version behind the pinned digest — RESOLVED: Node 24.18.1**, which
 satisfies jsdom 30's `^24.15.0`. **`docker run` was not available** — the Docker
@@ -861,10 +994,10 @@ Advisory Database record itself**, not the npm registry's derived view:
 
 | # | Open question | Why it could not be answered | What would answer it |
 |---|---|---|---|
-| 2b | **jsdom 30.0.0's own breaking changes.** 27–29 are resolved above; 30 is not. | jsdom **deleted `Changelog.md` at `v30.0.0`** — verified by probing eight candidate filenames at the correct `refs/tags/v30.0.0` ref, all 404, against `Changelog.md` returning 200 at `v29.0.0`. Its notes now live only in GitHub Releases: `github.com` returns 403 through the proxy and `api.github.com` is scoped to `tyler-rich/Scrye`. | Read `jsdom/jsdom`'s GitHub Release notes for 30.0.0 from an unrestricted network. **Partly mitigated:** the specific risk Step 7 flagged was checked directly against the shipped `lib/` of 26.1.0, 29.1.1, and 30.0.1 — `matchMedia`, `ResizeObserver`, and `scrollIntoView` are implemented in **none** of them, so `src/test/setup.ts`'s polyfill guards behave identically. Step 7's `npm test` remains the oracle for the rest. |
+| 2b | **jsdom 30.0.0's own breaking changes.** 27–29 are resolved above; 30 is not. | jsdom **deleted `Changelog.md` at `v30.0.0`** — verified by probing eight candidate filenames at the correct `refs/tags/v30.0.0` ref, all 404, against `Changelog.md` returning 200 at `v29.0.0`. Its notes now live only in GitHub Releases: `github.com` returns 403 through the proxy and `api.github.com` is scoped to `tyler-rich/Scrye`. | Read `jsdom/jsdom`'s GitHub Release notes for 30.0.0 from an unrestricted network. **Partly mitigated:** the specific risk the first draft flagged was checked directly against the shipped `lib/` of 26.1.0, 29.1.1, and 30.0.1 — `matchMedia`, `ResizeObserver`, and `scrollIntoView` are implemented in **none** of them, so `src/test/setup.ts`'s polyfill guards behave identically. Step 6's `npm test` remains the oracle for the rest. |
 | 3 | **Is there an upstream `typescript-eslint` issue tracking TypeScript 7 support, and a rough timeline?** This decides whether TS 7 is a next-quarter item or a next-year one. | The typescript-eslint issue tracker is not reachable (same GitHub scoping as above). Their docs describe a *"New TypeScript Version"* pinned-issue process but the issues themselves cannot be listed. | Search `typescript-eslint/typescript-eslint` issues for label `New TypeScript Version`. **No browser needed for the decision itself:** §3.1's `npm view typescript-eslint@latest peerDependencies.typescript` answers "can we take TS 7 yet" directly from the registry. The issue tracker only adds a timeline. |
 | 5 | **How many lint reports each of steps 1, 2, 3, and 4 actually produces.** Every effort estimate above is a range because of this. | Answering it means installing the candidate toolchain and running it, which mutates the lockfile — explicitly out of scope for this session. | Executing the sequence. This is not a gap in the scoping; it is the reason the sequence is ordered the way it is — each step's report count is measured against exactly one changed variable. |
-| 6 | **Whether Vite 8's Lightning CSS minification changes Mantine's rendered output.** | Requires building and looking at the app. | Step 6's verification: build, diff the emitted CSS against the §1 baseline, and run the SPA in both colour schemes. |
+| 6 | **Whether Vite 8's Lightning CSS minification changes Mantine's rendered output.** | Requires building and looking at the app. | Step 7's verification: build, diff the emitted CSS against the §1 baseline, and run the SPA in both colour schemes. |
 
 ---
 
