@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (151, newest first)
+### Index of §14 entries (152, newest first)
 
+- [2026-08-09 — Infra — #86 sweep step 7 landed: Vite 6.4.3 → 8.2.1 + `@vitejs/plugin-react` 4.3.4 → 6.0.5; the partial oracle was closed by a pixel diff, but only after its noise floor was calibrated](#2026-08-09--infra--86-sweep-step-7-landed-vite-643--821--vitejsplugin-react-434--605-the-partial-oracle-was-closed-by-a-pixel-diff-but-only-after-its-noise-floor-was-calibrated)
 - [2026-08-09 — Infra — #86 sweep step 6 landed: jsdom 26.1.0 → 30.0.1; the selector-drift shim diffed empty, but only after the shim itself had to be fixed](#2026-08-09--infra--86-sweep-step-6-landed-jsdom-2610--3001-the-selector-drift-shim-diffed-empty-but-only-after-the-shim-itself-had-to-be-fixed)
 - [2026-08-09 — Infra — #86 sweep step 5 landed: Vitest 3.2.7 → 4.1.10 on the pinned Vite 6; the "no config changes" prediction held, the "low breakage" one did not](#2026-08-09--infra--86-sweep-step-5-landed-vitest-327--4110-on-the-pinned-vite-6-the-no-config-changes-prediction-held-the-low-breakage-one-did-not)
 - [2026-08-09 — Infra — #86 sweep step 4 landed: TypeScript 5.7.2 → 6.0.3 with the ceiling re-checked; the `this`-less inference change surfaced, silently and benignly](#2026-08-09--infra--86-sweep-step-4-landed-typescript-572--603-with-the-ceiling-re-checked-the-this-less-inference-change-surfaced-silently-and-benignly)
@@ -732,6 +733,274 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 7 landed: Vite 6.4.3 → 8.2.1 + `@vitejs/plugin-react` 4.3.4 → 6.0.5; the partial oracle was closed by a pixel diff, but only after its noise floor was calibrated
+
+**What changed:** `frontend/package.json` (two lines), `frontend/package-lock.json`, plus
+`CHANGELOG.md` and this entry. This is **step 7 of the eight-step sequence** in
+`docs/upgrades/frontend-toolchain-86.md` — the step §8 ranks as the highest-risk of those that must
+happen, on the grounds that it is *"the only step whose worst failure passes CI."* **`vite` and
+`@vitejs/plugin-react` are the only packages bumped.** `frontend/vite.config.ts`, both tsconfigs,
+`frontend/eslint.config.js`, `postcss.config.cjs`, and every production source and test file are
+byte-identical to `dev`. No step 8 work was started; `main` was not touched.
+
+**The targets were re-checked at the registry, and one had moved — escalated rather than assumed.**
+The session brief named **vite 8.2.0**. `vite`'s `dist-tags.latest` is **8.2.1** (published
+2026-08-06; 8.2.0 was 2026-07-30), which is inside the same constraints — same major, satisfies
+plugin-react 6.0.5's `vite: ^8.0.0` peer, same `engines.node` — and the scoping document's §2
+inventory already flags 8.2.0 as stale and prescribes *"Take 8.2.1"*. Per the maintainer's standing
+instruction to ask when a newer version exists inside the same constraints, **this was put to the
+maintainer rather than decided**; 8.2.1 was authorised. `@vitejs/plugin-react@6.0.5` is still
+`latest` and needed no deviation. 8.2.1 over 8.2.0 moves `rolldown ~1.2.0 → ~1.2.1` and
+`postcss ^8.5.23 → ^8.5.25` — the former mattering here precisely because Rolldown is the thing
+whose output this step exists to compare.
+
+**§3.3 is half wrong, and the correction was put to the maintainer because it could have changed
+the step's shape.** The document states there is *"no version of the plugin that spans the
+boundary"* and that plugin-react 5.x supports only Vite 6 and 7. Read from the published manifests:
+
+| plugin-react | `peerDependencies.vite` | Babel deps |
+|---|---|---|
+| 4.3.4 *(pinned)* | `^4.2.0 \|\| ^5.0.0 \|\| ^6.0.0` | 4 |
+| 5.0.0 | `… \|\| ^7.0.0` | 4 |
+| **5.2.0** | **`… \|\| ^7.0.0 \|\| ^8.0.0`** | 4 |
+| 6.0.0 / 6.0.5 | **`^8.0.0` only** | **0** |
+
+So **5.2.0 does span Vite 6→8**, and "Vite 8 alone, holding the plugin on 5.x" is a resolvable
+graph that would have separated the bundler major from the plugin major. The maintainer was offered
+that split and **declined it**, keeping step 7 as one step: the plugin's 4→5→6 span is where Babel
+was dropped, and splitting would land a plugin version nobody intends to keep and then immediately
+replace it. **The other half of §3.3 holds and was verified**: plugin-react 6 peers `^8.0.0` alone,
+non-optional, so it genuinely *requires* Vite 8 rather than tolerating it.
+
+**Vitest 4 does not constrain the Vite major — re-verified at the manifest, not inherited.**
+`vitest@4.1.10` declares `vite: "^6.0.0 || ^7.0.0 || ^8.0.0"` as a required peer (`optional: false`)
+*and* as a real `dependencies` entry at the same range. Vite 8.2.1 satisfies it, so step 5's landing
+neither blocks nor is broken by this step. `engines.node` on both new packages is
+`^20.19.0 || >=22.12.0`; CI's Node 24, the pinned `node:24-bookworm-slim` (24.18.1) and this
+sandbox's 22.22.2 all satisfy it, and **jsdom 30's floor from step 6 still dominates**, so
+`README.md`, `CONTRIBUTING.md`, `ci.yml` and `docker/Dockerfile` needed no edit.
+
+---
+
+**The Babel question, answered before anything was changed: nothing to move, nothing to drop.**
+plugin-react 6.0.0 removed every Babel-related feature, and the migration path for a repo that
+passes a `babel` option is to move that config to `@rolldown/plugin-babel` or drop it. **This repo
+passes no such option.** `frontend/vite.config.ts` is `plugins: [react()]` with no arguments; there
+is no `.babelrc*`, no `babel.config.*`, and no occurrence of the string `babel` in any `.ts`,
+`.tsx`, `.js`, `.cjs`, `.mjs` or `.json` file under `frontend/` outside the lockfile. So the hazard
+is a **no-op here**, and no babel configuration was relocated or removed — there was none to touch.
+
+**React Fast Refresh was smoke-tested rather than assumed, because the mechanism genuinely
+changed.** plugin-react 4 implemented Refresh through Babel plus the `react-refresh` npm package,
+both of which leave the tree in this step; Vite 8 implements it through Oxc. The dev server was
+started on the new toolchain and confirmed to (a) boot (`VITE v8.2.1 ready in 305 ms`), (b) serve
+the runtime at `/@react-refresh`, and (c) inject `$RefreshReg$` / `RefreshRuntime` into the
+transform of `src/App.tsx`. Worth doing by hand: nothing in the test suite or the production build
+exercises Refresh, so its loss would have been silent until a contributor noticed HMR stopped
+working.
+
+---
+
+**Build-output comparison, which is the substance of this step.** Measured from a clean
+`rm -rf node_modules && npm ci` on each side, both installs and both lockfile writes performed with
+**npm 11.19.0** in a scratch prefix to match CI's Node 24 rather than the sandbox's npm 10.9.7 —
+the **seventh** consecutive lockfile touch to use this method.
+
+| | Vite 6.4.3 | Vite 8.2.1 | Δ |
+|---|---|---|---|
+| modules transformed | 7,035 | 7,018 | −17 |
+| JS | 645.14 kB / `index-Vvdzytcz.js` | 630.29 kB / `index-C771VE3z.js` | **−14,845 B (−2.30%)** |
+| JS gzip | 193.61 kB | 187.36 kB | −6.25 kB |
+| CSS | 201.38 kB / `index-D2wHtcHV.css` | 196.79 kB / `index-BG7b_ejj.css` | **−4,586 B (−2.28%)** |
+| CSS gzip | 29.30 kB | 28.63 kB | −0.67 kB |
+| sourcemap | 2,959,362 B | 2,734,561 B | −224,801 B |
+| build time | 7.30 s | 1.28 s | −5.7× |
+| lint / `format:check` / audit | clean / clean / 0 | clean / clean / 0 | — |
+| tests | 80 across 22 files | 80 across 22 files | diffed per test name, empty |
+
+**Asset content hashes changed on both files, and that is the correct signal here** — unlike steps
+1, 2, 4, 5 and 6, where an unchanged hash was the proof the step could not reach the bundle. A
+bundler and a CSS minifier both changed engine; identical output would have meant the bump had not
+taken effect.
+
+**The module delta was attributed by census, not explained by plausible story.** A throwaway
+`vite.modules.config.ts` spread the real config and added a plugin recording `this.getModuleIds()`
+at `buildEnd`; it was run under both toolchains and the two lists diffed, then the probe was
+deleted. **19 ids exist only under Vite 6** — `commonjsHelpers.js` plus the `?commonjs-es-import` /
+`?commonjs-exports` / `?commonjs-module` proxy modules that `@rollup/plugin-commonjs` mints when
+converting `react`, `react-dom`, `scheduler`, `cookie`, `fast-deep-equal` and `set-cookie-parser`
+from CJS to ESM. Rolldown handles CommonJS in the bundler core and mints none. **1 id is new**:
+`vite/preload-helper.js`, a Vite-internal helper. 7,035 − 19 + 1 = 7,017 census ids against the
+reporter's 7,018, a one-module accounting difference in the reporter. **No application or library
+module was added or removed** — the delta is interop scaffolding only.
+
+**The CSS was diffed declaration by declaration, because §8's whole argument for ranking this step
+above jsdom is that a Lightning CSS regression fails nothing.** Eyeballing a minified diff is not a
+check: both minifiers reformat everything. So both stylesheets were parsed into
+(at-rule context, selector, declarations); every comma-joined selector list was **split into
+individual selectors** so that rule merging on one side and rule splitting on the other cancel out;
+colours were canonicalised to a common `rgba` form; and the shorthands Lightning CSS introduced
+(`inset`, `padding-inline`, …) were expanded back to longhands.
+
+| | |
+|---|---|
+| individual (context, selector) keys | **1,171 on each side** |
+| keys only in baseline / only after | **0 / 0** |
+| declarations lost / added | **0 / 0** |
+| declarations differing | 46, all semantics-preserving rewrites |
+
+The 46 break down as **29 vendor prefixes dropped where the unprefixed property is present**
+(`-moz-appearance` ×14, `-webkit-appearance` ×14, `-webkit-transform` ×1) and 17 value rewrites, of
+which 13 are `.15s ease` → `.15s` (`ease` is the initial `transition-timing-function`, so the
+elision is exact) and the remaining four are `transparent` → `#00000000`,
+`background-position: center` → `50%`, a whitespace trim inside a custom-property value, and
+`linear-gradient(… C 25%, C 50% …)` → `… C 25% 50%` (multi-position colour stops, CSS Images 4).
+Structural rewrites that the per-selector normalisation absorbed, each checked by hand:
+`:nth-of-type(1)` → `:first-of-type`, `*:before` → `:before`, `:where(*:not(style))` →
+`:where(:not(style))`, `-.24s` → `-240ms`, `0rem` → `0`, `top/right/bottom/left: 0` → `inset: 0`,
+adjacent rules with identical declaration blocks merged, and **the six `::-webkit-*`
+spin/search-button selectors split out of one comma list into six separate rules** — which is a
+correctness *improvement*, since a browser that cannot parse one selector in a comma list discards
+the entire rule.
+
+**The browser target rose, and that is the one genuine behaviour change in this step.** Vite 8
+defaults `build.target` to `baseline-widely-available`, which resolves — read out of the installed
+`vite/dist/node/` rather than from the guide — to **chrome111 / edge111 / firefox114 / safari16.4**,
+against esbuild's `modules` default of roughly Chrome 87 / Firefox 78 / Safari 14. §6's Step 7 row
+predicted exactly this. Every syntax Lightning CSS newly emitted was checked against that floor:
+Media Queries Level 4 range syntax (`@media screen and (device-width<=31.25em)`, replacing
+`max-device-width`) needs Safari 16.4 — *exactly* the floor, with no margin; multi-position colour
+stops need Safari 12.1; unprefixed `appearance` needs Safari 15.4. All inside the target. **No
+project document states a browser-support floor**, so nothing needed correcting — recorded here
+because the change is real and invisible, and a future decision to support an older browser would
+have to set `build.target` explicitly rather than inherit it.
+
+---
+
+**The render check, and the methodological finding worth keeping.** §6's Step 7 row asks for
+*"actually run the app — `docker compose up` and click through the SPA in both light and dark
+mode."* No Docker daemon is available in this sandbox (the CLI is present, as the 2026-08-09
+scoping entry records), so the equivalent was built from the pre-installed Chromium: serve each
+`dist/` over a static server, stub `/api/**` with fixtures so the SPA settles deterministically,
+and screenshot **six routes** (dashboard, scans list, new scan, scan detail, settings, account) in
+**both colour schemes** — twelve views per build — then diff the PNGs pixel by pixel. This is
+strictly stronger than a human click-through, which cannot detect a two-pixel shift.
+
+**The first pass diffed non-empty, and taking it at face value would have been wrong.** One view
+(`scans-light`) differed by 171 pixels. Before interpreting that as a Lightning CSS regression, the
+same build was rendered **twice** and the two runs diffed: **three views differed from themselves,
+by 133–138 pixels** — the same order of magnitude. In-flight Mantine animations (the fixture set
+includes a `running` scan, hence a live `Loader`) were being caught at different frames. **A
+measurement whose noise floor is unknown is not a measurement** — the identical lesson step 6's
+entry recorded about the selector-drift shim, arrived at independently by a different route, which
+is the reason to write it down twice.
+
+The fix was to freeze animations at their final state via Playwright's
+`screenshot({ animations: 'disabled', caret: 'hide' })` rather than to suppress them with injected
+CSS, which would have masked the very animation declarations the CSS diff had just examined.
+Re-calibrated: **two runs of the same build are now identical across all twelve views — a noise
+floor of exactly zero.** Against that floor:
+
+**All twelve views are pixel-identical between Vite 6.4.3 and Vite 8.2.1, in both light and dark
+mode.** That is the result this step needed, and it closes §9's still-open question 6 (*"whether
+Vite 8's Lightning CSS minification changes Mantine's rendered output"*) by measurement.
+
+**What the pixel diff does not cover, stated so it is not over-read.** Screenshots reach only
+rendered, settled states: the `@media (hover: hover)` and `:active` blocks (a large share of the
+merged rules), the `::-webkit-*` spin-button rules, and modal/popover/accordion-open states are not
+in the twelve views. Those were covered textually instead, by the declaration-level diff above,
+which is exhaustive over the stylesheet in a way the screenshots are not. The two checks are
+complementary, and neither alone would have been enough.
+
+---
+
+**What moved in the lockfile: 339 → 305 packages, every movement attributed to a requirer.** Both
+lockfiles were parsed and each added/removed/bumped package's requirers resolved in both trees:
+
+- **30 added.** `rolldown@1.2.3` (required by `vite`) plus its 15 `@rolldown/binding-*` platform
+  packages and `@oxc-project/types@0.143.0`; `lightningcss@1.33.0` (required by `vite`) plus its 12
+  `lightningcss-*` platform packages and `detect-libc`; and `@rolldown/pluginutils@1.0.1`, the sole
+  runtime dependency of `@vitejs/plugin-react@6.0.5`.
+- **61 removed**, each checked to have no surviving requirer: `esbuild@0.25.12` and its 25
+  `@esbuild/*` platform packages; `rollup@4.62.2` and its 25 `@rollup/rollup-*` platform packages;
+  plugin-react 4's Babel subtree (`@babel/plugin-transform-react-jsx-self`,
+  `…-jsx-source`, `@babel/helper-plugin-utils`, and the four `@types/babel__*`); and
+  `react-refresh@0.14.2`. `esbuild` retains one *optional peer* reference from `vite@8.2.1`
+  (`^0.27.0 || ^0.28.0`) and is therefore not installed.
+- **3 bumped.** The two targets, plus `picomatch` — a nested `4.0.4` copy deduping into the single
+  top-level `4.0.5`.
+
+**The one entry that could plausibly have been shared was checked specifically.** `@babel/core` and
+`@babel/parser` **survive at 7.29.7** and are *not* in the removed list: their only requirer is now
+`eslint-plugin-react-hooks@7.1.1`. This is the exact inverse of what step 2's entry recorded — there,
+plugin-react 4 already supplied them so react-hooks 7 cost zero new packages; here plugin-react 6
+drops them and react-hooks is the sole reason they remain. Had the two steps landed in the other
+order, this step would have shown four Babel packages leaving rather than three plus four types.
+`react`, `react-dom` (18.3.1), `@mantine/*` (7.17.8), `typescript` (6.0.3), `eslint` (10.8.1),
+`vitest` (4.1.10), `jsdom` (30.0.1) and `postcss` (8.5.25) are unchanged in the resolved tree, read
+out of both lockfiles rather than trusted from the diff.
+
+`lockfileVersion` stays 3 and the file diff is **+556/−978** — proportionate to 61 removals against
+30 additions, with no whole-file re-normalisation. `npm ci` was run through the same npm 11 and the
+lockfile's SHA-256 re-verified unchanged afterwards, so what `--package-lock-only` produced is
+byte-identical to what a real install writes. The build was additionally re-run from a second clean
+install and produced **identical content hashes**, so the output is reproducible rather than
+incidentally equal.
+
+**Which of the document's Step 7 predictions held.**
+
+- **"Moves both, in lockstep — peer-forced" — HELD for the destination, but its stated reason is
+  wrong.** plugin-react 6 does require Vite 8. But *"no version of the plugin spans the boundary"*
+  is false as of 5.2.0 (§3.3 correction above). The step stayed whole by the maintainer's decision,
+  not by the constraint the document claims.
+- **"Config changes: none required in `vite.config.ts`" — HELD**, and each supporting clause
+  re-verified against the file: no `build.rollupOptions`, no `esbuild`/`optimizeDeps`/`manualChunks`
+  keys, `plugins: [react()]` with no options, and `server.proxy` / `build.outDir` /
+  `build.sourcemap` all still honoured (the sourcemap is emitted).
+- **"plugin-react 6's Babel removal is a no-op because the repo passes no `babel` option" — HELD**,
+  verified by search across the whole `frontend/` tree rather than by reading the config alone.
+- **"This is the only step that can change what ships" — HELD.** JS −2.30%, CSS −2.28%, both asset
+  hashes new, and the browser target raised.
+- **"The default browser target rises to Chrome/Edge 111, Firefox 114, Safari 16.4" — HELD
+  exactly**, resolved from the installed package.
+- **"CSS minification moves to Lightning CSS — which matters here because Mantine emits 201 kB of
+  CSS" — HELD as to mechanism, and the feared outcome did not occur.** Lightning CSS rewrote
+  pervasively; it changed nothing semantically and nothing observable.
+- **"Verifies it: compare the emitted bundle against the baseline, then actually run the app… a CSS
+  minifier change does not fail a build; it fails a render" — HELD, and it is the row's most
+  valuable sentence.** It is the reason a pixel diff was built at all. The row's *"run it and click
+  through"* prescription is weaker than what it motivates, though — see the noise-floor finding
+  above, and note that a human click-through has no noise floor to calibrate and no way to detect a
+  sub-perceptual shift.
+- **"Effort L / half a day, risk medium–high" — came in mid-band on effort**, essentially all of it
+  spent on the two comparison harnesses (module census, pixel diff) rather than on the bump, which
+  was a two-line edit that was green first run. **Risk, in hindsight, was priced correctly**: the
+  step really did change the shipped bytes, and nothing but a purpose-built comparison would have
+  told the difference between "changed and fine" and "changed and broken."
+
+**What was deliberately not done.** No package other than `vite` and `@vitejs/plugin-react` moved,
+in `package.json` or in the lockfile — in particular **step 8's `globals`, `@testing-library/user-event`
+and `postcss` were not touched**, and no lint finding was autofixed, in bulk or individually
+(there were none). No source, test, or config file changed. **Both measurement probes were deleted
+before the PR** — `vite.modules.config.ts` removed and the working tree confirmed to carry only
+`package.json` and `package-lock.json` under `frontend/`; the Playwright harness lived entirely in
+the scratch directory and never entered the repository, and `playwright` was installed into a
+scratch prefix rather than into `frontend/`, so it appears in neither `package.json` nor the
+lockfile. `build.target` was **not** pinned to preserve the old browser floor — the raised target is
+Vite 8's documented default and no project document contradicts it; pinning it would be a product
+decision, not a bump. `docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were **not**
+edited — correcting the sequence document is a maintainer call, and this entry is the record of what
+its Step 7 row and §3.3 got right and wrong in the meantime. No step 8 work was started; `main` was
+not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`, `CHANGELOG.md`
+§ Unreleased/Changed, and this entry. No code behaviour, schema, API contract, security model, job
+model, auth, or CI configuration changed; no locked decision re-opened — React stays on 18 and
+Mantine on v7, and neither `vite@8.2.1` nor `@vitejs/plugin-react@6.0.5` declares a `react`,
+`react-dom`, `@types/react*` or `@mantine/*` peer.
 
 ---
 
