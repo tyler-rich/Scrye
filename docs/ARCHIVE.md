@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (153, newest first)
+### Index of §14 entries (154, newest first)
 
+- [2026-08-09 — Docs/Process — Roadmap updated for the completed #86 sweep, the re-cut react-router advisory, and the React-19-blocked router major](#2026-08-09--docsprocess--roadmap-updated-for-the-completed-86-sweep-the-re-cut-react-router-advisory-and-the-react-19-blocked-router-major)
 - [2026-08-09 — Infra — #86 sweep step 8 landed: `globals` 17.9.0, `@testing-library/user-event` 14.6.3, `postcss` 8.5.26 — the sweep is complete, and its reminder-surface PR had already closed itself](#2026-08-09--infra--86-sweep-step-8-landed-globals-1790-testing-libraryuser-event-1463-postcss-8526--the-sweep-is-complete-and-its-reminder-surface-pr-had-already-closed-itself)
 - [2026-08-09 — Infra — #86 sweep step 7 landed: Vite 6.4.3 → 8.2.1 + `@vitejs/plugin-react` 4.3.4 → 6.0.5; the partial oracle was closed by a pixel diff, but only after its noise floor was calibrated](#2026-08-09--infra--86-sweep-step-7-landed-vite-643--821--vitejsplugin-react-434--605-the-partial-oracle-was-closed-by-a-pixel-diff-but-only-after-its-noise-floor-was-calibrated)
 - [2026-08-09 — Infra — #86 sweep step 6 landed: jsdom 26.1.0 → 30.0.1; the selector-drift shim diffed empty, but only after the shim itself had to be fixed](#2026-08-09--infra--86-sweep-step-6-landed-jsdom-2610--3001-the-selector-drift-shim-diffed-empty-but-only-after-the-shim-itself-had-to-be-fixed)
@@ -734,6 +735,85 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Docs/Process — Roadmap updated for the completed #86 sweep, the re-cut react-router advisory, and the React-19-blocked router major
+
+**What changed:** `docs/ROADMAP.md` only — three Track A items — plus this entry. **No
+dependency version, lockfile, config file, workflow, or source file was touched**, no issue or
+PR was actioned, and `main` was not touched. Each of the three edits was gated on a live check
+made in this session rather than on a prior session's claim about it; all three premises held,
+and what was checked is recorded per item below so the checks are not re-run from scratch.
+
+**1 — The #86 frontend toolchain sweep item is struck as Done 2026-08-09.** The eight sweep
+PRs were re-confirmed present on `dev` before the bullet was written, by reading `dev`'s own
+history rather than by trusting the step entries below: **#171** (`typescript-eslint`
+8.19.0 → 8.66.0, `a99815a`), **#174** (the ESLint 10 family, `4ad34c9`), **#177** (React
+Compiler rules adopted with `set-state-in-effect` held off, `6902036`), **#179** (TypeScript
+5.7.2 → 6.0.3, `9aa2dc2`), **#180** (Vitest 3.2.7 → 4.1.10, `306556d`), **#183** (jsdom
+26.1.0 → 30.0.1, `265bf59`), **#185** (Vite 6.4.3 → 8.2.1 + `@vitejs/plugin-react`
+4.3.4 → 6.0.5, `167b1c6`), **#187** (`globals`, `@testing-library/user-event`, `postcss`,
+`7283801`). All eight are squash commits on `origin/dev`.
+
+The replacement bullet names all eight and **both deliberately-excluded packages**, which is
+the half most likely to be misread as an omission: **TypeScript 7** (no published
+`typescript-eslint` accepts it — peer `>=4.8.4 <6.1.0` at `latest` and at canary — so the
+ceiling is 6.0.3) and **`@types/node` 26** (nothing in the toolchain requires it; the pinned
+24.x satisfies every peer in play). The bullet also states plainly that both will keep
+appearing in Dependabot's grouped frontend PR until they are taken or ignored **on the default
+branch**, which is the `ignore`-list-read-from-`main` finding recorded in the 2026-08-09
+queue-audit entry below, restated in public-doc terms rather than cross-referenced.
+
+**2 — The GHSA-qwww-vcr4-c8h2 re-cut request is struck, and the premise was verified live
+rather than inherited.** The 2026-08-09 scoping entry below already reported the advisory as
+re-cut; that report was treated as a hypothesis, not as grounds to strike the item. Two
+independent live reads on 2026-08-09:
+
+| Source | Result |
+|---|---|
+| The advisory record in `github/advisory-database` (`advisories/github-reviewed/2026/07/GHSA-qwww-vcr4-c8h2/…json`, via `raw.githubusercontent.com`) | **two** `affected` entries for `react-router`: `introduced 7.12.0 / fixed 7.18.2` and `introduced 8.0.0 / fixed 8.3.0`; `published` and `github_reviewed_at` both **2026-07-24T16:44:43Z**, `modified` **2026-08-07T18:14:58Z** |
+| The npm registry's bulk advisory endpoint (`/-/npm/v1/security/advisories/bulk`) | the same advisory returned as two HIGH ranges, `>=7.12.0 <7.18.2` and `>=8.0.0 <8.3.0`; querying **7.18.2 alone returns `{}`** |
+
+So the range really was re-cut to what the roadmap item asked for — `>= 7.12.0, < 7.18.2`,
+with the 8.x range untouched — and the pinned 7.18.2 no longer matches. `api.osv.dev` was
+attempted as a third source and is still unreachable from this environment (curl exit 56),
+which is why the npm endpoint stands in as the independent corroboration; the two sources that
+did answer agree exactly. The struck bullet keeps the *reason* the item existed (a standing
+false HIGH in a vulnerability scanner's own pipeline teaches everyone to dismiss that
+package's alerts) and the backport evidence, so the record survives the strike.
+
+**3 — The `react-router` 7 → 8 item is reworded and moved out of the tooling-majors grouping.**
+The old wording said it *"belongs with the tooling majors above"* and shared *"the same risk
+the bumps above share."* That grouping is now doubly wrong: the tooling majors are done, and
+the real blocker was never lint churn. Verified live at the published package on 2026-08-09 —
+`react-router@8.3.0` is `dist-tags.latest` and declares `peerDependencies` of
+`react: ">=19.2.7"` and `react-dom: ">=19.2.7"` — against `frontend/package.json`, which pins
+`react` and `react-dom` at **18.3.1**. Both legs hold, so the item now says plainly that it is
+blocked on a **React 19 decision, not a tooling bump**, and it moved from **Near-term** to
+**Longer-term / speculative**, whose stated criterion is work *"gated on a scale threshold or
+an explicit decision"* — the only section in the file whose framing fits a locked-decision
+blocker. The migration's own cost (v8 folds `react-router-dom` back into `react-router`, so
+all twelve import sites in `frontend/src/` move) is kept, now stated as what happens *after*
+the decision rather than as a reason to batch it with the toolchain work.
+
+**What was deliberately not done.** No dependency, lockfile, or config file was touched.
+**#176 and its six deferred findings were not acted on** — the roadmap bullet links the issue
+and says nothing more about it. **The currently-open Dependabot frontend-dependencies group PR
+was not touched** — not merged, not closed, not commented on; the new bullet describes why the
+two declined packages will keep being proposed, in general terms, without actioning the PR.
+No advisory-improvement request was filed with GitHub: the re-cut had already happened, so
+there was nothing to ask for. `docs/upgrades/frontend-toolchain-86.md` was **not** edited —
+correcting the sequence document remains a maintainer call, and the sweep's completion is
+recorded in the step-8 entry below and now in the roadmap. `CHANGELOG.md` was not touched:
+nothing shipped. `main` was not touched.
+
+**Plan section affected:** `docs/ROADMAP.md` § Track A (Near-term: the #86 sweep item and the
+GHSA re-cut item both struck; the `react-router` item removed from Near-term) and § Track A
+(Longer-term / speculative: the `react-router` item added, reworded), plus this entry. No code
+behaviour, schema, API contract, security model, job model, auth, or CI configuration changed;
+no locked decision re-opened — React stays on 18 and Mantine on v7, and the `react-router`
+edit records that lock as the blocker rather than proposing to lift it.
 
 ---
 
