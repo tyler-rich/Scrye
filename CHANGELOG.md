@@ -93,6 +93,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **jsdom 26.1.0 → 30.0.1** — step 6 of the frontend toolchain sweep in
+  `docs/upgrades/frontend-toolchain-86.md`, crossing four majors (27, 28, 29,
+  30). **`jsdom` is the only package bumped**; `vite` stays at 6.4.3 (step 7),
+  and no config, source or test file changed. jsdom is a devDependency reached
+  only through Vitest's `environment: 'jsdom'` — nothing in `frontend/src/`
+  imports it — so the emitted bundle is unchanged down to its content hashes
+  (7,035 modules → 645.14 kB JS `index-Vvdzytcz.js` / 201.38 kB CSS
+  `index-D2wHtcHV.css`, identical to the pre-bump baseline).
+
+  **The Node floor rises, which is the one change with a reach outside the test
+  run.** `jsdom@30.0.1` declares `engines.node: "^22.22.2 || ^24.15.0 ||
+  >=26.0.0"`. All three runtimes that matter satisfy it — CI's
+  `node-version: "24"` resolves to 24.19.0, and `docker/Dockerfile`'s pinned
+  `node:24-bookworm-slim@sha256:235600a8…` ships Node 24.18.1 (confirmed by two
+  independent registry reads) — so neither `ci.yml` nor the Dockerfile needed a
+  change. `README.md` and `CONTRIBUTING.md` did: both said "Node 22+", under
+  which a contributor on Node 22.13 would install cleanly and then run `npm
+  test` on a runtime jsdom does not support. Both now say **Node 22.22.2+ or
+  24.15+**.
+
+  **The selector-engine swap was measured, not argued.** jsdom 27.0.0 replaced
+  the CSS selector engine (`nwsapi` → `@asamuzakjp/dom-selector`), and a
+  Testing Library query can resolve to a *different* element after such a swap
+  while every downstream assertion still passes — drift a green suite cannot
+  catch. Per the sweep document's Step 6 checklist, a throwaway `setupFiles`
+  shim wrapped every `screen` query method and logged each resolved element's
+  DOM index path plus its normalised `outerHTML`; the suite was run on both
+  jsdom versions and the two logs diffed. **176 query resolutions across 46
+  tests in 17 files — the diff is empty.** Every query resolved to the same
+  element on both sides. The shim was deleted before this PR; it was a
+  measurement, not a fixture.
+
+  Four further changes across the span were re-verified inert against the
+  *installed* tree rather than inherited from the scoping document: the 29.0.0
+  CSSOM rewrite has no author CSS to act on (`vite.config.ts`'s `test` block
+  sets no `css` key, so Vitest's default `css: false` applies and Mantine's
+  stylesheets never enter jsdom); 27.0.0's `element.click()` → `PointerEvent`
+  change is unreachable (no `.click()` anywhere in `frontend/src/` — all 26
+  interactions go through `userEvent`/`fireEvent`, which build their own
+  events); passive-by-default events cannot bite (no `preventDefault` in
+  `src/`); and `matchMedia`, `ResizeObserver` and `scrollIntoView` are
+  implemented in **zero** files of the shipped `lib/` in both 26.1.0 and
+  30.0.1, so `src/test/setup.ts`'s `if (!…)` polyfill guards behave
+  identically.
+
+  The lockfile moves 338 → 340 packages: 12 added, 10 removed, 19 bumped, every
+  one attributed to jsdom or its transitive closure by resolving each package's
+  requirers in both lockfiles. The new selector engine and the `css-tree`-based
+  CSSOM arrive (`@asamuzakjp/dom-selector`, `css-tree`, `mdn-data`,
+  `@bramus/specificity`, `bidi-js`, `require-from-string`,
+  `@csstools/css-syntax-patches-for-csstree`), `undici` replaces the
+  `ws`/`http-proxy-agent`/`https-proxy-agent`/`agent-base` stack, and
+  `cssstyle` → `rrweb-cssom` and `whatwg-encoding` → `iconv-lite` →
+  `safer-buffer` are orphaned along with `nwsapi`. Nothing outside that closure
+  moved: `vite`, `vitest`, `typescript`, `eslint`, `postcss`, `react` and
+  `react-dom` are unchanged in the resolved tree, and the top-level
+  `lru-cache@5.1.1` Babel depends on is untouched (jsdom's `11.5.2` copies are
+  all nested). Lint, `format:check`, build and `npm audit` (0 vulnerabilities)
+  are unchanged, and the test suite holds at **80 tests across 22 files** —
+  compared per test, not per total: both runs were captured with
+  `--reporter=json` and reduced to sorted `file :: full test name :: status`
+  triples, which diff empty.
+
 - **Vitest 3.2.7 → 4.1.10** — step 5 of the frontend toolchain sweep in
   `docs/upgrades/frontend-toolchain-86.md`. **`vitest` is the only package
   bumped**, and it stays on the pinned `vite@6.4.3`: `vitest@4.1.10` declares

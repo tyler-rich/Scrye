@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (150, newest first)
+### Index of §14 entries (151, newest first)
 
+- [2026-08-09 — Infra — #86 sweep step 6 landed: jsdom 26.1.0 → 30.0.1; the selector-drift shim diffed empty, but only after the shim itself had to be fixed](#2026-08-09--infra--86-sweep-step-6-landed-jsdom-2610--3001-the-selector-drift-shim-diffed-empty-but-only-after-the-shim-itself-had-to-be-fixed)
 - [2026-08-09 — Infra — #86 sweep step 5 landed: Vitest 3.2.7 → 4.1.10 on the pinned Vite 6; the "no config changes" prediction held, the "low breakage" one did not](#2026-08-09--infra--86-sweep-step-5-landed-vitest-327--4110-on-the-pinned-vite-6-the-no-config-changes-prediction-held-the-low-breakage-one-did-not)
 - [2026-08-09 — Infra — #86 sweep step 4 landed: TypeScript 5.7.2 → 6.0.3 with the ceiling re-checked; the `this`-less inference change surfaced, silently and benignly](#2026-08-09--infra--86-sweep-step-4-landed-typescript-572--603-with-the-ceiling-re-checked-the-this-less-inference-change-surfaced-silently-and-benignly)
 - [2026-08-09 — Post-v1 — `L17`/`P2-2`'s reset effect finally has a regression test; the protection #176 relies on was never actually enforced](#2026-08-09--post-v1--l17p2-2s-reset-effect-finally-has-a-regression-test-the-protection-176-relies-on-was-never-actually-enforced)
@@ -731,6 +732,286 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 6 landed: jsdom 26.1.0 → 30.0.1; the selector-drift shim diffed empty, but only after the shim itself had to be fixed
+
+**What changed:** `frontend/package.json` (one line), `frontend/package-lock.json`, `README.md`
+(one line) and `CONTRIBUTING.md` (one bullet) for the raised Node floor, plus `CHANGELOG.md` and
+this entry. This is **step 6 of the eight-step sequence** in
+`docs/upgrades/frontend-toolchain-86.md`. **`jsdom` is the only package bumped.** `vite` stays at
+**6.4.3** (step 7); `frontend/vite.config.ts`, both tsconfigs, `frontend/eslint.config.js`,
+`src/test/setup.ts` and every production source and test file are untouched. No step 7 work was
+started; `main` was not touched.
+
+**The target was re-checked at the registry before anything moved.** `jsdom`'s `dist-tags.latest`
+is still **30.0.1**, and the 30 line contains exactly two releases — 30.0.0 and 30.0.1 — so there
+is no newer 30.x and no deviation from the document's target was needed or proposed.
+
+**The Node floor was verified across all three runtimes, because this is the one step whose
+`engines` constraint reaches outside the test run.** `jsdom@30.0.1` declares
+`engines.node: "^22.22.2 || ^24.15.0 || >=26.0.0"`, read from the published manifest:
+
+| Runtime | Version | Satisfies `^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0`? |
+|---|---|---|
+| CI — `ci.yml` `node-version: "24"` | resolves to **24.19.0** (current head of the 24 line, `nodejs.org/dist/index.json`) | yes, `^24.15.0` |
+| Image — `docker/Dockerfile:27` `node:24-bookworm-slim@sha256:235600a8…` | **24.18.1** | yes, `^24.15.0` |
+| This sandbox | **22.22.2** | yes — and it is *exactly* the `^22.22.2` floor, with no margin |
+
+**The Dockerfile's digest is unchanged from the one §9 resolved, and was re-resolved rather than
+inherited**, by the two independent methods that entry records, which agree: Docker Hub's tag index
+maps `sha256:235600a8…` to exactly `24.18.1-bookworm-slim` and `24.18-bookworm-slim` (both last
+updated 2026-07-30), and the image's `linux/amd64` config blob — fetched through `mirror.gcr.io`,
+since Docker Hub 307-redirects blobs to the egress-blocked `production.cloudfront.docker.com` —
+carries `NODE_VERSION=24.18.1`, `created: 2026-07-30T19:05:08Z`. **So `ci.yml` and the Dockerfile
+need no edit**, exactly as §7.5 predicts. Worth doing by hand rather than trusting a green CI run:
+there is no `.npmrc`, so `engine-strict` is off and a violation would be a non-fatal `EBADENGINE`
+warning, not a failure.
+
+**The sandbox sitting exactly on the floor is a coincidence worth flagging, not a comfort.** Node
+22.22.2 satisfies `^22.22.2` by one patch. Any local run on a 22.x below that — or on a 24.x below
+24.15.0 — would silently execute the suite on a runtime jsdom does not support. That is precisely
+the contributor-facing hazard §7.4 names, and it is why the two docs edits are in this PR.
+
+**`README.md` and `CONTRIBUTING.md` raised from "Node 22+" to "Node 22.22.2+ or 24.15+".** Both
+previously stated a floor a contributor on Node 22.13 would satisfy — that runtime installs
+cleanly (npm does not enforce `engines` here) and then runs `npm test` under an unsupported jsdom.
+`CONTRIBUTING.md` additionally names the constraint's source inline, because "22.22.2" is
+otherwise an arbitrary-looking number that a future edit would round back down to "22".
+
+---
+
+**The step 6 checklist measurement — the selector-drift shim.** jsdom 27.0.0 swapped the CSS
+selector engine (`nwsapi` → `@asamuzakjp/dom-selector`). §8's audit establishes that a green suite
+catches a query finding *nothing* or *too much*, but not a query resolving to a **different**
+element while every downstream assertion still passes — and it explicitly declines to argue that
+residual away, handing it to this step as a two-run measurement instead. That is what was done, and
+it is the substantive content of this step.
+
+**What the shim did.** A throwaway `frontend/src/test/drift-shim.ts`, added as a second entry in
+the jsdom project's `setupFiles`, wrapped every own function property of `screen` matching
+`/^(get|query|find)(All)?By[A-Z]/` and appended one line per resolved element to a log file named
+by a `DRIFT_LOG` env var. Each line is keyed
+`<test file> :: <full test name> :: #<nth query in that test> :: <method>(<args>)` and carries the
+resolved element's description. Async `find*By*` results are logged on settle, and a throw or
+rejection is logged as such rather than dropped, so a "found nothing" outcome is part of the
+diffed record rather than a hole in it. Set-valued results (`getAllBy*`) log every element.
+
+**The shim as the document prescribes it does not work, and this is the transferable finding.**
+§8 and Step 6's checklist specify logging `element.outerHTML.slice(0, 120)` keyed by test name and
+call index. Written exactly that way, **two runs on the *same* jsdom version diff non-empty** —
+verified before touching the version, which is the only reason it was caught. Two independent
+causes:
+
+- **Mantine's `useId` mints a fresh random id per run.** 20-odd lines differed only in
+  `id="mantine-2hy2ovekj"` versus `id="mantine-0z1njuojt"`. Pure noise, but it is *inside* the
+  first 120 characters of most Mantine elements, so it dominates the diff.
+- **One line differed in real content**, not just ids: `BackupsPanel.test.tsx`'s
+  `getByRole('button', {name: 'Save schedule'})` at call #005 logged `len=760` in one run and
+  `len=314` in the other — the same button, caught with and without its transient loading state,
+  a timing-dependent DOM state rather than a different element.
+
+**A measurement whose noise floor is unknown is not a measurement.** Had the shim been written to
+spec, run once per version, and diffed, it would have produced ~20 differing lines on a bump that
+in fact changed nothing — and the honest reading of that output is indistinguishable from real
+drift without doing this calibration anyway. The fix was to log an element **identity** rather than
+its rendered bytes: the element's DOM index path from the document root
+(`html>body>div[0]>…>button[1]`) alongside a normalised `outerHTML` slice with
+`mantine-[a-z0-9]{6,}` collapsed to `mantine-ID`. The index path is what "resolved to a different
+element" actually means, and unlike `outerHTML` it does not move when the element's own contents
+are mid-transition. **The normalisation is the only edit made to what gets logged**, and it was
+validated the only way it can be: by re-running the unmodified suite twice on jsdom 26.1.0 and
+confirming the two logs are byte-identical. They are.
+
+> **Standing note — the shim specification in `docs/upgrades/frontend-toolchain-86.md` §8 is
+> methodologically broken, and not only for this step. Use the shape below instead, in any future
+> drift check.**
+>
+> This is a defect in the *technique*, not a one-off miss in one step's execution, and it recurs
+> anywhere the app under test mints identifiers per render. §8 prescribes logging
+> `element.outerHTML.slice(0, 120)` keyed by test name and call index. Any React app on Mantine
+> hits `useId` on essentially every labelled control, input, alert and popover — and React's own
+> `useId`, Emotion, Radix, Headless UI, Chakra and MUI all do the same thing — so a fresh random
+> id appears *inside the first 120 characters* of most elements, on every run. The log is then
+> re-randomised per run and a diff of two logs measures the id generator, not the DOM. A second,
+> subtler source is the same: `outerHTML` captures the element's **contents**, so any element
+> caught mid-transition (a button with and without its loading spinner, a list mid-fetch) differs
+> between runs while being the same element. Both were live here.
+>
+> **Why it is worse than merely noisy.** The failure is silent and points the wrong way. A
+> spec-conformant shim run once per version produces a large non-empty diff on a bump that changed
+> nothing, and "non-empty diff" is exactly the signal the check exists to raise. Reading that
+> output honestly means investigating ~20 phantom drifts, or — the likelier outcome under time
+> pressure — concluding the whole measurement is unreliable and waving it through on the green
+> suite, which is the state §8 built the checklist item to escape. A check that cries wolf is worse
+> than no check, because it discredits itself.
+>
+> **The template.** Two properties, both required:
+>
+> 1. **Log element *identity*, not rendered bytes.** The element's **DOM index path** from the
+>    document root (`html>body>div[0]>…>button[1]`) is what "the query resolved to a different
+>    element" actually means. It is stable against the element's own contents changing, and it
+>    moves precisely when the resolved node moves. Keep a normalised `outerHTML` slice alongside it
+>    as a human-readable label for reading a non-empty diff — not as the identity.
+> 2. **Normalise the generated ids** — here `mantine-[a-z0-9]{6,}` → `mantine-ID`. Adapt the
+>    pattern to whatever the app mints (`:r0:`-style for bare React `useId`, `css-…` for Emotion,
+>    `radix-…` for Radix). Normalisation is the only edit permitted to what gets logged; anything
+>    further starts hiding the thing being measured.
+>
+> **And the step that makes it a measurement rather than a hope: calibrate the noise floor first.**
+> Run the shim **twice on the unchanged version** and confirm the two logs are byte-identical
+> *before* touching the dependency. That costs one extra test run — ~20 s here — and it is the only
+> thing that distinguishes "the diff is empty because nothing drifted" from "the diff is empty
+> because I got lucky with the ordering." It is also what caught this defect: the non-determinism
+> was found on jsdom 26.1.0, with the version still untouched, so there was never a moment where a
+> phantom diff had to be told apart from a real one.
+>
+> Recorded here rather than in the sweep document, which is the maintainer's to correct.
+
+**The result, which is the point of the exercise:**
+
+| | |
+|---|---|
+| Logged query resolutions | **176**, across **46 tests** in **17 of the 18 jsdom test files** (`src/api/client.test.tsx` makes no `screen` query) |
+| By method | 46 `getByRole`, 36 `getByText`, 28 `getByLabelText`, 19 `queryByText`, 19 `getByTestId`, 16 `findByText`, 5 `findByLabelText`, 2 `queryByLabelText`, 2 `getAllByText`, 2 `findByRole`, 1 `queryByRole` |
+| Determinism, jsdom 26.1.0 | two runs, logs **identical** |
+| Determinism, jsdom 30.0.1 | two runs, logs **identical** |
+| **26.1.0 vs 30.0.1** | **176 lines either side, `diff` is EMPTY** |
+
+**Every query in the suite resolved to the same element before and after the engine swap.** That
+is the result this step needed, and stating it is the point — a green suite alone does not prove
+it, and §8 was right that it could not be settled by argument. The shim was deleted and
+`vite.config.ts` restored with `git checkout --` before the PR; `git status` shows only
+`package.json` and `package-lock.json` modified in `frontend/`.
+
+**Why the empty diff is credible rather than vacuous.** The measurement covers `getAllByText` —
+the suite's one set-valued query, at `NewScanPage.prefill.test.tsx:54`, which §8 names as the
+natural home for silent drift — at both of its runtime invocations, and it covers all 46
+`getByRole` resolutions, the query type §6's channel table identifies as the only one where the
+engine has real discriminating power. The ~17 interaction targets §8 could not argue away are
+inside the 176, because the shim logs at the query, not at the assertion.
+
+---
+
+**The other four channels were re-verified inert against the installed tree, not inherited.**
+§0.3's method note is binding, and the "already established" facts in the session brief were
+treated as hypotheses:
+
+| Channel | Re-verified how | Verdict |
+|---|---|---|
+| CSSOM rewrite (29.0.0) | `vite.config.ts`'s `test` block has **no `css` key**, so Vitest's default `css: false` applies and Mantine's stylesheets never enter jsdom | inert — no author CSS to re-parse |
+| `element.click()` → `PointerEvent` (27.0.0) | `grep -rn "\.click()" src/` → **zero hits**; all **26** interactions are `userEvent.click`/`fireEvent.click`, which construct and dispatch their own events | unreachable |
+| Passive-by-default events (27.0.0) | `grep -rn "preventDefault" src/` → **zero hits** | cannot bite |
+| `matchMedia` / `ResizeObserver` / `scrollIntoView` | grepped the **installed** `node_modules/jsdom/lib/` on **both** sides: **0 files** in 26.1.0, **0 files** in 30.0.1 | `src/test/setup.ts`'s `if (!…)` guards behave identically across the span |
+
+**jsdom 30.0.0's release notes are still unreachable, and were not guessed at.** Re-probed at the
+correct ref: `Changelog.md` and `CHANGELOG.md` both 404 at `refs/tags/v30.0.0` and
+`refs/tags/v30.0.1`, while `README.md` returns **200** at those same refs and `Changelog.md`
+returns 200 at `v29.0.0`. That is the document's own ref-versus-file discipline applied: the 404 is
+about the file, not the ref. The gap stands as §9 item 2b describes it. **The response was to
+measure behaviour rather than infer it** — the shim diff and the four channel checks above are
+what stands in for the notes, and they are stronger evidence about *this* suite than a changelog
+would have been.
+
+---
+
+**What moved in the lockfile: 338 → 340 packages, every movement attributed to a requirer.** Both
+lockfiles were parsed and each added/removed/bumped package's requirers resolved in both trees,
+rather than eyeballing the diff:
+
+- **12 added.** The new selector engine and CSSOM stack: `@asamuzakjp/dom-selector@8.3.2`,
+  `css-tree@3.2.1` → `mdn-data@2.27.1`, `@bramus/specificity@2.4.2`,
+  `@csstools/css-syntax-patches-for-csstree@1.1.7`, `bidi-js@1.0.3` → `require-from-string@2.0.2`;
+  `undici@8.10.0` and `@exodus/bytes@1.15.1`, both direct dependencies of `jsdom@30.0.1`; plus
+  three nested copies (`lru-cache@11.5.2` under jsdom and under `@asamuzakjp/dom-selector`,
+  `whatwg-url@16.0.1` under `data-urls`).
+- **10 removed**, each checked to have **no surviving requirer**: `nwsapi` (the replaced selector
+  engine), `cssstyle` → `rrweb-cssom` (the replaced CSSOM), `whatwg-encoding` → `iconv-lite` →
+  `safer-buffer`, and `ws` / `http-proxy-agent` / `https-proxy-agent` / `agent-base`, the
+  networking stack `undici` supersedes.
+- **19 version bumps**, all inside jsdom's closure: `whatwg-url` 14.2.0 → 17.1.0, `tough-cookie`
+  5.1.2 → 6.0.2 (with `tldts`/`tldts-core` 6.1.86 → 7.4.10), `parse5` 7.3.0 → 8.0.1 (with
+  `entities` 6.0.1 → 8.0.0), `data-urls` 5.0.0 → 7.0.0, `@asamuzakjp/css-color` 3.2.0 → 6.0.7 and
+  its four `@csstools/*` dependencies, `tr46` 5.1.1 → 6.0.0, `webidl-conversions` 7.0.0 → 8.0.1,
+  `html-encoding-sniffer` 4.0.0 → 6.0.0, `whatwg-mimetype` 4.0.0 → 5.0.0.
+
+**Nothing moved that is not jsdom or required by it, and the two entries that could plausibly have
+been shared were checked specifically.** `entities` crossing 6 → 8 would matter if anything outside
+jsdom's subtree required it; its **only** requirer in either tree is `parse5`, whose only requirer
+is `jsdom`. And the top-level `lru-cache@5.1.1` that `@babel/helper-compilation-targets` depends on
+is **untouched** — all three `11.5.2` copies are nested under jsdom's subtree. `vite` (6.4.3),
+`vitest` (4.1.10), `typescript` (6.0.3), `eslint` (10.8.1), `postcss` (8.5.25), `react` and
+`react-dom` (18.3.1) are unchanged in the resolved tree, read out of both lockfiles rather than
+trusted from the diff.
+
+`lockfileVersion` stays 3 and the file diff is **+275/−231** — proportionate to 12 additions
+against 10 removals and 19 bumps, with no whole-file re-normalisation, because the lockfile was
+written with **npm 11.19.0** installed into a scratch prefix to match CI's Node 24 rather than the
+sandbox's Node 22 / npm 10.9.7. That is the **sixth** consecutive lockfile touch to use this method
+and the sixth clean diff. `npm ci` was additionally run through the same npm 11 and the lockfile's
+SHA-256 re-verified unchanged afterwards, so the file a `--package-lock-only` resolution produced is
+byte-identical to what a real install writes.
+
+**Suites, measured on both sides, each from a clean install.** Baseline on 26.1.0 (`npm ci` from
+the committed lockfile): lint clean (18.1 s), `format:check` clean, **80 tests across 22 files**,
+build **7,035 modules → 645.14 kB JS (`index-Vvdzytcz.js`) / 201.38 kB CSS (`index-D2wHtcHV.css`)**,
+`npm audit` **0 vulnerabilities**. After the bump, from a fresh `rm -rf node_modules && npm ci`:
+lint clean (15.3 s), `format:check` clean, **80 tests across 22 files**, build **7,035 modules →
+645.14 kB / 201.38 kB**, audit **0**. The emitted assets carry the **same content hashes** on both
+sides — the right signal here, since jsdom is a devDependency the bundle never sees.
+
+**The count comparison was made per test, not per total**, as step 5 established. Both runs were
+captured with `--reporter=json` and reduced to sorted `file :: full test name :: status` triples,
+and the two lists **diff empty** — the same 22 files, the same 80 test names, all `passed`. The
+baseline half of that comparison was taken by reinstalling 26.1.0 from the committed lockfile
+after the bump, not quoted from an earlier note.
+
+**Which of the document's Step 6 predictions held.**
+
+- **"Moves `jsdom` only" — HELD.** Nothing else in `package.json`; nothing outside its closure in
+  the lockfile.
+- **"No config changes in `vite.config.ts`" — HELD.** The file is byte-identical to `dev`.
+- **"Two docs edits are required (§7.4)" — HELD**, and the floor is worth stating precisely:
+  §7.4 offers "Node 22.22.2+ / 24.15+ **or simply Node 24**". The first was taken. Native
+  development on Node 22 is still viable and this repo has no reason to forbid it; a bare "Node 24"
+  would have over-tightened a doc statement to match a build image.
+- **"Prerequisite check ✅ resolved — the pinned digest ships 24.18.1" — HELD**, re-resolved by
+  both of §9's methods rather than inherited.
+- **"Verifies it: `npm test` — expect 21 files / 79 tests" — the mechanism HELD, the numbers are
+  stale.** 22 files / 80 tests is the current figure, corrected in the step 4 and step 5 entries.
+  This is the third and last place in the document quoting 79/21; a step comparing against it would
+  read a genuine regression as a match.
+- **"Effort S–L, risk medium" — came in at the bottom of the effort band**, and essentially all of
+  it went on the shim: writing it, discovering it was non-deterministic, and re-basing it on DOM
+  identity. The bump itself was a one-line edit whose suite was green first run.
+- **§6's channel-table counts are stale in this tree, and the direction matters.** The table is
+  written against "12 `.tsx` test files, 17 of the 79 tests, 116 query call sites". Today it is
+  **18 `.tsx` files, 59 jsdom tests, 135 static `screen.*` call sites** (136 counting the
+  line-wrapped `getAllByText`), resolving to 176 runtime queries. Step 5's entry already flagged
+  the "17 jsdom tests" figure as a stale `.tsx` **file** count quoted as a test count, and warned
+  that a step budgeting 17 jsdom tests would under-price its own oracle. It would have: the oracle
+  is roughly 3.5× the size the table implies, in the favourable direction.
+- **§8's "~17 interaction targets" residual — CLOSED by measurement, as §8 intended.** They are
+  inside the 176 logged resolutions and none of them drifted.
+
+**What was deliberately not done.** No package other than `jsdom` moved, in `package.json` or in
+the lockfile — in particular **`vite` and `@vitejs/plugin-react` were not touched**, which is the
+whole point of the step 6/7 boundary. No source, test, or config file changed. No lint finding was
+autofixed, in bulk or individually — there were none. **The shim was not committed**: it was
+deleted and `vite.config.ts` restored before the PR, and the working tree confirmed to carry only
+the two dependency files under `frontend/`. jsdom 30.0.0's changelog contents were **not guessed
+at** — the gap was re-probed, confirmed still open, and answered by measurement instead. No step 7
+work was started. `docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were **not**
+edited — correcting the sequence document is a maintainer call, and this entry is the record of
+what its Step 6 row got right and wrong in the meantime, including the shim's specification.
+`main` was not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`, `README.md`,
+`CONTRIBUTING.md`, `CHANGELOG.md` § Unreleased/Changed, and this entry. No code behaviour, schema,
+API contract, security model, job model, auth, or CI configuration changed; no locked decision
+re-opened — React stays on 18 and Mantine on v7, and `jsdom` declares no `react`, `react-dom`,
+`@types/react*` or `@mantine/*` peer.
 
 ---
 
