@@ -139,8 +139,8 @@ and one normalized findings model.
 
 ## Integrations
 
-- **Trivy**, **Grype**, **Syft** — official binaries (currently Trivy `0.72.0`,
-  Grype `0.115.0`, Syft `1.46.0`), orchestrated and parsed from their JSON output
+- **Trivy**, **Grype**, **Syft** — official binaries (currently Trivy `0.73.0`,
+  Grype `0.116.1`, Syft `1.50.0`), orchestrated and parsed from their JSON output
   (Scrye never reimplements scanner logic). All three are Apache-2.0; their
   `LICENSE`/`NOTICE` files are bundled unmodified in the image at
   `/THIRD_PARTY_LICENSES` (see
