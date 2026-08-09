@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (141, newest first)
+### Index of §14 entries (142, newest first)
 
+- [2026-08-09 — Docs/Process — #86 frontend toolchain sweep scoped into an ordered sequence; TypeScript 7 ruled out at the source; #153's red check re-diagnosed](#2026-08-09--docsprocess--86-frontend-toolchain-sweep-scoped-into-an-ordered-sequence-typescript-7-ruled-out-at-the-source-153s-red-check-re-diagnosed)
 - [2026-08-09 — Security/Process — Settings audit: four previously-unreachable toggles verified, Secret Protection enabled, SHA-pinning confirmed clean, attribution-stripping banned](#2026-08-09--securityprocess--settings-audit-four-previously-unreachable-toggles-verified-secret-protection-enabled-sha-pinning-confirmed-clean-attribution-stripping-banned)
 - [2026-08-09 — Infra/Process — Dependabot round closed out: queue merged and closed, bundled scanners bumped, the display-name option declined, prior claims corrected](#2026-08-09--infraprocess--dependabot-round-closed-out-queue-merged-and-closed-bundled-scanners-bumped-the-display-name-option-declined-prior-claims-corrected)
 - [2026-08-09 — Infra/Process — Open-Dependabot-queue audit: only #149 was on `main`, and it was already superseded; `.github/dependabot.yml`'s `ignore` list is read from `main`, so `dev`-only edits to it are inert](#2026-08-09--infraprocess--open-dependabot-queue-audit-only-149-was-on-main-and-it-was-already-superseded-githubdependabotymls-ignore-list-is-read-from-main-so-dev-only-edits-to-it-are-inert)
@@ -721,6 +722,144 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Docs/Process — #86 frontend toolchain sweep scoped into an ordered sequence; TypeScript 7 ruled out at the source; #153's red check re-diagnosed
+
+**What changed:** one new file, `docs/upgrades/frontend-toolchain-86.md`, plus this entry. **No
+dependency version, lockfile, or config file was touched** — the session was scoping only, and
+`frontend/package-lock.json`'s SHA-256 was captured before the baseline install and re-verified
+after it. The deliverable turns `docs/ROADMAP.md` § Track A's *"Frontend tooling majors from
+Dependabot #86"* — currently one PR (**#153**) carrying eleven majors behind a single red check —
+into eight independently verifiable steps, each ordered so its failure has one plausible cause.
+
+**Method, because it is the point.** Every constraint in the document is cited to one of two kinds
+of source: a `peerDependencies` range in a **published package** read from the npm registry, or a
+**statement in upstream's migration guide/changelog** fetched as raw markdown from that project's
+own repository. Nothing was inferred from version-number proximity, and where a claim could be
+checked against the shipped artifact rather than the documentation, it was — eleven tarballs were
+downloaded and unpacked to compare config objects directly. The prior records' predictions about
+what would break were treated as hypotheses to test, not as findings to carry forward, and two of
+them did not survive.
+
+**Finding 1 — TypeScript 7 is not part of this sweep and cannot be.** `typescript@7.0.2` is the
+Go-native compiler. Read from its published tarball: `"exports"."."` is `./lib/version.cjs`, so
+`import ts from 'typescript'` yields the version string and nothing else; `lib/` contains
+`getExePath.js`, `tsc.js`, `version.cjs` and **no `typescript.js`**; `bin` has dropped `tsserver`;
+the package carries 20 platform-specific native-binary optional dependencies; and `unpackedSize`
+falls from 24.3 MB (6.0.3) to 2.5 MB. The real API sits behind `./unstable/*` subpaths talking to
+the Go binary over `vendor/vscode-jsonrpc`. Against that, `@typescript-eslint/typescript-estree@8.66.0`
+calls `require("typescript")` in 11 places across `dist/*.js` and references **114 distinct `ts.*`
+symbols** including `ts.createProgram`. `typescript-eslint`'s peer range is `>=4.8.4 <6.1.0` at
+`latest` **and at its current canary** — no published version accepts TypeScript 7, and the shape
+of the change means widening it is a rewrite upstream, not a range edit. **The sweep's TypeScript
+ceiling is 6.0.3.** (Separately verified so it is not re-derived: `tsc -b` *does* survive — running
+the 7.0.2 native binary, `--build, -b` is still in `--help` — so `npm run build` is not what blocks
+TS 7. Only the linter is. This is § Interpreter CVEs' rule applied to a toolchain claim: check it
+against the artifact before believing the metadata, in either direction.)
+
+**Finding 2 — #153's red check is not lint churn, and the prior records say it is.** The
+`Frontend — lint + build` job (check run `93006217895`) failed after **six seconds**, at `npm ci`,
+with `ERESOLVE`: `typescript-eslint@8.66.0` peer `typescript@">=4.8.4 <6.1.0"` against the proposed
+`typescript@7.0.2`. ESLint never ran. **`docs/ROADMAP.md` § Track A and the 2026-08-09
+Dependabot-queue-audit entry below both describe that failure as *"the type-aware-ESLint churn that
+roadmap item predicts, arriving on schedule."* That is incorrect** — it is an unsatisfiable
+dependency graph, and no amount of lint fixing would move it. The observation that #153 stays open
+as the sweep's reminder surface stands; only the diagnosis of its red check is corrected. Recorded
+here rather than fixed in `docs/ROADMAP.md`, which this session deliberately left unedited.
+
+**Finding 3 — the `typescript-eslint` bump does not change which rules run.** The shipped
+`recommendedTypeChecked` config is **identical** between 8.19.0 and 8.66.0 — the same 50 rules at
+the same severities, nothing added, removed, or re-severitied (diffed from
+`dist/configs/recommended-type-checked.js` in both tarballs). Across 47 minors, any new reports
+come from rule *implementations* improving, not from the config growing. This materially lowers the
+expected cost of what the sequence makes step 1.
+
+**Finding 4 — the real ordering constraint, which no prior record states.** Read across every
+stable `typescript-eslint` release from the pin forward, the peer ranges move at exactly two
+points: **8.56.0** first admits `eslint ^10.0.0`, and **8.58.0** first raises the TypeScript cap to
+`<6.1.0`. The pinned **8.19.0 caps TypeScript at `<5.8.0`** — it will not accept even 5.8. So
+`typescript-eslint` is not merely "a minor that would need reviewing twice" (the 2026-08-03
+framing); it is the **only** unblocking move in the set, and both the ESLint and the TypeScript
+steps are gated behind it. It becomes step 1, alone.
+
+**Finding 5 — ESLint 10 forces `eslint-plugin-react-hooks` 7, which forces a decision.** The
+`^10.0.0` clause first appears in react-hooks **7.1.0**; 5.1.0/6.0.0/7.0.0/7.0.1 all stop at `^9`,
+so ESLint 10 with the current pin is the same ERESOLVE class that killed #153. And from the 7.1.1
+bundle, `configs.recommended.rules` is `basicRuleConfigs` **plus** every React Compiler rule at
+preset `Recommended` — `frontend/eslint.config.js:31` spreads exactly that object, so the bump
+silently takes it from 2 rules to 16 (12 new at `error`, 2 at `warn`, enumerated in the document).
+The sequence therefore splits them: the ESLint-10 step writes the two classic rules out explicitly
+(a behaviour-preserving edit, verified against 5.1.0's shipped config), and adopting the compiler
+set is its own step that **may legitimately be declined**.
+
+**Finding 6 — Vitest 4 does not require a Vite major**, contradicting an assumption worth naming.
+`vitest@4.1.10`'s peer is `vite: ^6.0.0 || ^7.0.0 || ^8.0.0` and its migration guide's Prerequisites
+callout says *"Vitest 4.0 requires Vite >= 6.0.0"*. It lands on the pinned `vite@6.4.3`.
+Conversely **`@vitejs/plugin-react` 6 does require Vite 8** — peer `vite: "^8.0.0"` only, and a
+changelog heading *"Drop Vite 7 and below support"* — so those two move in lockstep and Vitest does
+not have to wait for them.
+
+**Finding 7 — locked decisions are not at risk from anything in the sweep**, checked package by
+package: no member declares a `react`, `react-dom`, `@types/react*`, or `@mantine/*` peer at all.
+The React Compiler rules are static analysis with no React runtime dependency. **The one adjacent
+item that *is* a locked-decision blocker is `react-router` 7 → 8**, which `docs/ROADMAP.md` groups
+with the tooling majors: `react-router@8.3.0` declares `react: ">=19.2.7"` and
+`react-dom: ">=19.2.7"`, so it is a React 19 requirement against a React 18 lock — a separate
+decision, not a quiet inclusion. It is not in #153.
+
+**Baseline recorded, and it moved since the last record.** `npm ci` from the committed lockfile,
+then lint clean, `format:check` clean, **79 tests across 21 files** passing, and `npm run build`
+green (vite 6.4.3, 7035 modules, 645.18 kB JS / 201.38 kB CSS). `npm audit` reports **two HIGH** —
+`js-yaml` 4.3.0 via `eslint → @eslint/eslintrc`, and `nanoid` 3.3.16 via `postcss` — where §14
+(2026-08-03) recorded the `react-router` HIGH as the only finding. Both new ones are **inside
+existing semver ranges**, so a lockfile refresh alone clears them, no part of the sweep required;
+ESLint 10 additionally removes the `@eslint/eslintrc` path permanently (`eslint@10.8.1` no longer
+lists it as a dependency).
+
+**Unrelated finding, surfaced by the same baseline: GHSA-qwww-vcr4-c8h2 has been re-cut upstream.**
+The registry's bulk advisory endpoint now returns two ranges — `>=8.0.0 <8.3.0` and
+`>=7.12.0 <7.18.2` — so `react-router@7.18.2` is no longer reported and `npm audit` is silent about
+it. `docs/ROADMAP.md` § Track A still carries *"Ask GitHub to re-cut GHSA-qwww-vcr4-c8h2's affected
+range for the 7.18.2 backport"* as open work, with a long justification for why it is worth the
+effort. It appears to have happened. Flagged rather than resolved, and `docs/ROADMAP.md`
+deliberately left unedited — striking a Track A item is a maintainer call.
+
+**Three of #153's targets are already stale**, which is the ordinary cost of holding a Dependabot
+PR open as a reminder: `eslint` 10.8.0 → **10.8.1**, `vite` 8.2.0 → **8.2.1**, `@types/node` 26.1.2
+→ **26.2.0**, all published 2026-08-06/07 after the PR was cut. Read targets from the registry when
+the work starts, not from the PR.
+
+**`@types/node` specifically: the sweep does not need it.** The only constraints in play are
+*optional* peers (`vite@8.2.1` wants `^20.19.0 || >=22.12.0`; `vitest@4.1.10` wants
+`^20.0.0 || ^22.0.0 || >=24.0.0`) and the pinned **24.13.3 satisfies both**. No step fails on it.
+#153 proposes 26.1.2 anyway for the reason the entry below already diagnosed — Dependabot reads its
+`ignore` list from `main`, and #147's `@types/node` stanza has not been promoted — and the
+maintainer declined promoting the config on its own, so the offer will keep arriving and keep being
+inert.
+
+**What was not determinable from this sandbox**, recorded so it is not re-attempted blind:
+TypeScript 6.0's breaking changes (`typescriptlang.org` and `devblogs.microsoft.com` are
+egress-blocked, and the notes are not in the tarball or the repo root); jsdom 27→30's breaking
+changes (jsdom ships no changelog file any more, and its GitHub Releases are unreachable —
+`github.com` 403s through the proxy and `api.github.com` is scoped to this repository); whether an
+upstream `typescript-eslint` issue tracks TS 7 support; and whether the Node inside
+`docker/Dockerfile:27`'s pinned digest is ≥ 24.15.0, which jsdom 30's `engines` requires. Each has
+a stated way to answer it in the document's §9.
+
+**Explicitly not done**, per the session's scope: no dependency version changed, no lockfile or
+config edited, no PR opened that changes code, no action taken on #153, and no speculative install
+run to "see what happens". `npm ci` was run only to establish the baseline against the **current**
+lockfile, and that lockfile's hash is unchanged.
+
+**Plan section affected:** new file `docs/upgrades/frontend-toolchain-86.md`; this §14 entry
+(including the correction to the 2026-08-09 queue-audit entry's characterisation of #153's red
+check). `docs/ROADMAP.md` was deliberately **not** edited — three items in it are affected (the #86
+sweep's framing, the `react-router` 7→8 grouping, and the GHSA re-cut request) and folding those in
+is a maintainer call. No code, schema, API contract, security model, job model, auth, CI behaviour,
+or dependency version changed; no locked decision re-opened — React stays on 18 and Mantine on v7,
+and the document's §4 is the evidence that nothing in the sweep pressures either.
 
 ---
 
