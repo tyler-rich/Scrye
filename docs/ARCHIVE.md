@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (142, newest first)
+### Index of §14 entries (143, newest first)
 
+- [2026-08-09 — Security — Frontend lockfile refreshed to clear two HIGH advisories in the build toolchain (js-yaml, nanoid); kept separate from the #86 sweep](#2026-08-09--security--frontend-lockfile-refreshed-to-clear-two-high-advisories-in-the-build-toolchain-js-yaml-nanoid-kept-separate-from-the-86-sweep)
 - [2026-08-09 — Docs/Process — #86 frontend toolchain sweep scoped into an ordered sequence; TypeScript 7 ruled out at the source; #153's red check re-diagnosed](#2026-08-09--docsprocess--86-frontend-toolchain-sweep-scoped-into-an-ordered-sequence-typescript-7-ruled-out-at-the-source-153s-red-check-re-diagnosed)
 - [2026-08-09 — Security/Process — Settings audit: four previously-unreachable toggles verified, Secret Protection enabled, SHA-pinning confirmed clean, attribution-stripping banned](#2026-08-09--securityprocess--settings-audit-four-previously-unreachable-toggles-verified-secret-protection-enabled-sha-pinning-confirmed-clean-attribution-stripping-banned)
 - [2026-08-09 — Infra/Process — Dependabot round closed out: queue merged and closed, bundled scanners bumped, the display-name option declined, prior claims corrected](#2026-08-09--infraprocess--dependabot-round-closed-out-queue-merged-and-closed-bundled-scanners-bumped-the-display-name-option-declined-prior-claims-corrected)
@@ -722,6 +723,97 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Security — Frontend lockfile refreshed to clear two HIGH advisories in the build toolchain (js-yaml, nanoid); kept separate from the #86 sweep
+
+**What changed:** `frontend/package-lock.json` only — two entries, six lines each way — plus a
+`CHANGELOG.md` § Security entry and this one. `frontend/package.json` was **not** touched, no
+package moved a major, and no `npm audit fix` was run in any form.
+
+**The two advisories.** Both were already named in the entry below, which recorded them from the
+#86 scoping session's baseline install; this entry is the one that acts on them.
+
+- **`js-yaml` 4.3.0 → 4.3.1** — **GHSA-5p4m-2wfm-xmqj**, HIGH, CVSS 7.5, CWE-407: quadratic CPU
+  consumption resolving a `!!omap`, the CVE-2026-59870 fix not having been backported to the
+  3.x/4.x lines. Affected `>=4.0.0 <4.3.1`. One path in the tree: `eslint@9.39.4` →
+  `@eslint/eslintrc@3.3.5` → `js-yaml`.
+- **`nanoid` 3.3.16 → 3.3.18** — **GHSA-2v37-7h3g-55p8**, HIGH, CVSS 5.9, CWE-835: a custom
+  generator loops indefinitely when `size` is zero. Affected `<3.3.17`. One path in the tree:
+  `postcss@8.5.25` → `nanoid`.
+
+Each package appears exactly once in the lockfile, so "one path" is the whole exposure, not the
+shortest of several.
+
+**Why a lockfile refresh sufficed — and a precision correction to how that was framed.** The
+session brief said both fixed versions "fall inside the ranges `package.json` already declares."
+The conclusion is right and the mechanism is not: `frontend/package.json` pins every dependency
+to an **exact version** (`CLAUDE.md` § Dependency hygiene) and **names neither package** — both are
+transitive. The ranges that actually decide this are the ones the *requiring* packages declare,
+read from the published manifests rather than from `npm audit`'s `fixAvailable` summary:
+`@eslint/eslintrc@3.3.5` requires `js-yaml: ^4.1.1` (4.3.1 satisfies; 4.3.1 is also the highest
+4.x published), and `postcss@8.5.25` requires `nanoid: ^3.3.16` (3.3.17 satisfies). Both fixes are
+therefore reachable without moving `eslint` or `postcss` — which *are* pinned exactly in the
+manifest — so nothing in `package.json` had to change. Worth stating explicitly because the
+distinction is what makes the "manifest untouched" claim true: it does not follow from a range in
+`package.json`, because there is no range in `package.json`.
+
+**Deviation — `nanoid` landed on 3.3.18, not the advisory's 3.3.17.** `npm update` resolves to the
+highest version satisfying the declared range, and `^3.3.16` admits 3.3.18 (published 2026-08-07,
+four days after 3.3.17). Taken rather than pinned back, because diffing the two published tarballs
+shows 3.3.18 is a follow-up to the *same* defect: 3.3.17's zero-size guard did not cover the async
+native entry point, and 3.3.18 adds `if (size <= 0) return Promise.resolve('')` there. It is the
+more complete fix for the advisory, not an unrelated bump.
+
+**The `js-yaml` fix was verified at the artifact, not from the advisory text** — § Interpreter CVEs'
+rule applied to a dependency claim. Diffing the 4.3.0 and 4.3.1 tarballs, the sole functional change
+is in the `!!omap` duplicate-key check: an array plus a linear `indexOf` per key — the quadratic
+path the advisory describes — becomes an object plus an `Object.prototype.hasOwnProperty` lookup.
+The advisory's account and the shipped code agree.
+
+**Neither package ships in the image, and that was checked rather than assumed.** Both are `dev`
+in the lockfile; `grep` over the built bundle finds no `nanoid`/`urlAlphabet` and no
+`js-yaml`/`YAMLException` (`nanoid` runs inside PostCSS at build time, `js-yaml` only parses this
+repo's own ESLint config); and `docker/Dockerfile`'s runtime stage copies
+`--from=frontend-builder /build/frontend/dist` and no `node_modules`. So the exposure is the build
+and development toolchain, and a deployed Scrye was never reachable. The fix is still taken —
+fixable is what the dogfood gate keys on.
+
+**What actually moved, which is the point of doing it this way.** The refresh was the documented
+targeted command from `CONTRIBUTING.md` § Dependabot security updates target `main` (`npm update
+<pkg>`), scoped to the two packages, and the diff was read before anything else: **exactly two
+lockfile entries**, the `version`/`resolved`/`integrity` triple on each, no transitive requirement
+moved, no unrelated churn, `package.json` byte-identical. `npm audit` afterwards reports **0** at
+every severity — the two cleared, nothing new surfaced.
+
+**Method note: the lockfile was written by npm 11, matching CI.** The sandbox's Node is 22 (npm
+10.9.7) while `ci.yml` and the Dockerfile's `frontend-builder` both build on Node 24 (npm 11.x), so
+`npm i -g npm@11` was attempted, failed on self-replacement, and npm 11.19.0 was installed into a
+scratch prefix and invoked by path instead. This is cheap insurance against a whole-file
+normalization diff from a different npm major — and the resulting six-line diff is the evidence it
+was not needed here. Recorded so the next lockfile touch can skip the detour or repeat it knowingly.
+
+**Suites, run against a clean `npm ci` from the refreshed lock:** ESLint clean, Prettier clean,
+**79 tests across 21 files** passing, `npm run build` green at **7,035 modules → 645.18 kB JS /
+201.38 kB CSS**. Those are byte-for-byte the numbers the baseline in the entry below records, which
+is the useful signal: nothing observable moved.
+
+**Kept deliberately separate from the #86 sweep, and it is not a step in it.** The entry below
+turns `docs/ROADMAP.md` § Track A into eight ordered steps, each arranged so a failure has one
+plausible cause. This change is none of them — it takes no major, edits no config, and touches no
+package that sequence moves. Folding it into a sweep step would have given that step a second
+plausible cause of failure for no benefit, and holding it until the sweep starts would have left
+two HIGH advisories open across an unbounded number of releases for no benefit either. The sweep's
+own framing of these two findings — "a lockfile refresh alone clears them, no part of the sweep
+required" — is the same conclusion, and is now discharged. **#153 stays open and unactioned**, and
+nothing here changes its state, its diagnosis, or the sweep's step order. Nothing from #153 and no
+sweep step was touched.
+
+**Plan section affected:** `frontend/package-lock.json`, `CHANGELOG.md` § Unreleased/Security, and
+this entry. `frontend/package.json`, `docs/ROADMAP.md`, `docs/upgrades/frontend-toolchain-86.md`
+and the backend lockfile were deliberately **not** edited. No code, schema, API contract, security
+model, job model, auth, or CI behaviour changed; no locked decision re-opened.
 
 ---
 
