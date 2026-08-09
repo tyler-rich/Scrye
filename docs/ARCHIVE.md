@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (143, newest first)
+### Index of §14 entries (144, newest first)
 
+- [2026-08-09 — Infra — #86 sweep step 1 landed: `typescript-eslint` 8.19.0 → 8.66.0; the scoping doc's rule-set claim was wrong in two independent ways](#2026-08-09--infra--86-sweep-step-1-landed-typescript-eslint-8190--8660-the-scoping-docs-rule-set-claim-was-wrong-in-two-independent-ways)
 - [2026-08-09 — Security — Frontend lockfile refreshed to clear two HIGH advisories in the build toolchain (js-yaml, nanoid); kept separate from the #86 sweep](#2026-08-09--security--frontend-lockfile-refreshed-to-clear-two-high-advisories-in-the-build-toolchain-js-yaml-nanoid-kept-separate-from-the-86-sweep)
 - [2026-08-09 — Docs/Process — #86 frontend toolchain sweep scoped into an ordered sequence; TypeScript 7 ruled out at the source; #153's red check re-diagnosed](#2026-08-09--docsprocess--86-frontend-toolchain-sweep-scoped-into-an-ordered-sequence-typescript-7-ruled-out-at-the-source-153s-red-check-re-diagnosed)
 - [2026-08-09 — Security/Process — Settings audit: four previously-unreachable toggles verified, Secret Protection enabled, SHA-pinning confirmed clean, attribution-stripping banned](#2026-08-09--securityprocess--settings-audit-four-previously-unreachable-toggles-verified-secret-protection-enabled-sha-pinning-confirmed-clean-attribution-stripping-banned)
@@ -723,6 +724,146 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 1 landed: `typescript-eslint` 8.19.0 → 8.66.0; the scoping doc's rule-set claim was wrong in two independent ways
+
+**What changed:** `frontend/package.json` (one line), `frontend/package-lock.json`, two lines of
+`frontend/src/pages/NewScanPage.tsx`, plus `CHANGELOG.md` and this entry. This is **step 1 of the
+eight-step sequence** in `docs/upgrades/frontend-toolchain-86.md`, executed exactly as scoped: only
+`typescript-eslint` moved, no ESLint or TypeScript config was edited, and no later step was touched.
+`typescript` stays at 5.7.2, `eslint` at 9.39.4, and `#153` remains open and unactioned.
+
+**Why it goes first and alone** is unchanged from the scoping entry below and was re-confirmed from
+the installed lockfile rather than re-derived: the pinned 8.19.0 declared `typescript: >=4.8.4
+<5.8.0` and `eslint: ^8.57.0 || ^9.0.0`; 8.66.0 declares `>=4.8.4 <6.1.0` and `^8.57.0 || ^9.0.0
+|| ^10.0.0`. Those two range widenings are the whole reason this step exists — they are what
+unblocks steps 2 (ESLint 10) and 4 (TypeScript 6.0.3). The version was re-checked against the
+registry before the bump rather than taken from the document: `latest` is still **8.66.0**, with
+only `8.66.1-alpha.*` canaries beyond it, so the doc's target was still current. The same one-liner
+that §3.1 carries also still returns `typescript: >=4.8.4 <6.1.0`, so the TypeScript **6.0.3**
+ceiling holds as of this date.
+
+**The scoping document's headline prediction was checked against the installed configs rather than
+believed, and it failed in two independent ways.** Both are recorded here because the remaining
+steps' predictions were written with the same method and inherit the same weaknesses.
+
+**Divergence 1 — an existing rule's implementation got stricter. This is the one the document's
+framing actively obscures.** The prediction that the *rule set* is unchanged is **correct and was
+confirmed at the artifact**: diffing 8.19.0's `dist/configs/recommended-type-checked.js` against
+8.66.0's `dist/configs/flat/recommended-type-checked.js` yields **50 entries either side, identical**
+— 43 `@typescript-eslint/*` rules plus 7 core-rule disables, same severities, same options. But an
+unchanged rule set does not imply an unchanged set of *reports*. Across 47 minors,
+`@typescript-eslint/no-unnecessary-type-assertion` learned to detect a case it previously missed, and
+it fired twice on code that has been in the tree unchanged:
+
+```
+src/pages/NewScanPage.tsx  139:19  registryId: '' as string
+src/pages/NewScanPage.tsx  140:24  gitCredentialId: '' as string
+    error  This assertion is unnecessary since the receiver accepts
+           the original type of the expression
+```
+
+Both assertions were genuinely redundant — `''` already widens to `string` as a mutable object-literal
+property — and both were removed **by hand, at those two sites only**. No `--fix`, no bulk autofix.
+`tsc -b` passes afterwards, confirming `useForm`'s inferred `initialValues` type is unchanged, and
+the emitted bundle carries the **same content hashes** as the pre-bump baseline
+(`index-BNB6IweX.js`, `index-D2wHtcHV.css`), which is the proof that a type-only assertion erases to
+identical JavaScript.
+
+**The transferable rule, and it applies to every remaining step: "no new rules" does not mean "no
+new findings."** A rule set proven identical bounds *which* rules can report; it says nothing about
+how well they report. The document's Step 1 row does budget for this — it says *"only detection
+improves"* and prices the step **S–M / 1–3 h "dominated by however many reports appear"** — so the
+budget was right. What is misleading is §0.3's headline, *"The typescript-eslint bump does not
+change which rules run,"* which reads as a reassurance about outcomes and is repeatedly cited as
+one. Two reports is at the very low end of the range, but the mechanism is real and will recur:
+steps 2 and 4 both cross far more implementation change than config change.
+
+**Divergence 2 — the effective rule set *did* change. The document's claim here is wrong, not
+merely incomplete.** §0.3 states the shipped `recommendedTypeChecked` is *"byte-for-byte identical…
+the same 50 rules at the same severities, nothing added, removed, or re-severitied."* The cause of
+the error is a **scope mistake**: `tseslint.configs.recommendedTypeChecked` is a **three-layer
+composite** (`base` + `eslint-recommended` + `recommended-type-checked`), and the document diffed
+only the third file, then generalised the finding to the whole composite. The layer it did not
+diff has changed:
+
+| File | 8.19.0 | 8.66.0 | Verdict |
+|---|---|---|---|
+| `dist/configs/…/recommended-type-checked.js` *(diffed by the doc)* | 50 entries | 50 entries | **identical** |
+| `dist/configs/eslint-recommended-raw.js` *(not diffed by the doc)* | 22 entries | 23 entries | **`+ no-with: 'off'`** |
+
+Because `frontend/eslint.config.js` extends `js.configs.recommended` **before** the tseslint layers,
+the resolved config that actually runs changes: `eslint --print-config` reports `no-with` going from
+`error` (`[2]`) to `off` (`[0]`) for all three file classes — app `.tsx`, library `.ts`, and the
+test override. Verified by dumping and diffing the fully-resolved config before and after, not from
+package metadata. The only other resolved-config difference is the parser identity string
+(`typescript-eslint/parser@8.19.0` → `@8.66.0`), which is expected.
+
+**The relaxation was accepted rather than restored, and the premise was verified rather than
+argued.** The case for accepting it is that `with` is already a hard compile error here — but that
+argument only holds under strict mode, and a non-module `.ts` file is not strict by default. Both
+`tsconfig.app.json` and `tsconfig.node.json` set `"strict": true` and `"moduleDetection": "force"`,
+and rather than stop at reading the flags, a probe file containing a `with` statement was compiled:
+`tsc -b` returns **`TS1101: 'with' statements are not allowed in strict mode`** and **`TS2410`**. The
+probe was deleted. So the rule is genuinely redundant on this codebase and upstream's decision to
+move it into the "TypeScript handles this" disable layer is sound. `no-with` was **not** re-added to
+`eslint.config.js`; if that judgement is ever revisited, one line in the `rules` block restores it.
+
+**Standing consequence for the rest of the sweep: the remaining steps' predictions were produced by
+the same method and should be re-verified, not trusted.** The document's evidence discipline is
+genuinely good — every claim is cited to a published peer range or an upstream guide, and eleven
+tarballs were unpacked to check artifacts directly. The failure here was not sloppiness but
+**scope**: one file was diffed and the conclusion was stated about a composite of three. Steps 2, 3
+and 4 all rest on comparable single-artifact reads — the enumeration of the 14 React Compiler rules
+from `eslint-plugin-react-hooks@7.1.1`'s bundle, the three new `eslint:recommended` rules from
+`@eslint/js@10.0.1`, the option-by-option TypeScript 6.0 audit. Each should be re-checked against
+the installed tree at the time its step is executed, exactly as this one was. The document's
+§9 item 5 already says the report counts can only be learned by executing the sequence; this entry
+extends that to the config claims themselves.
+
+**What moved in the lockfile, and why 486 changed lines is not churn.** `frontend/package.json`
+changed one line. The lockfile went **374 → 362 packages**, and every movement is inside the
+`typescript-eslint` subtree or orphaned by it — attributed rather than assumed, by parsing both
+lockfiles and resolving each removed package's requirers:
+
+- **12 version bumps** — the ten `@typescript-eslint/*` packages 8.19.0 → 8.66.0, plus
+  `ts-api-utils` 1.4.3 → 2.5.0 and, nested under `typescript-estree`, `minimatch` 9.0.9 → 10.2.6 and
+  `brace-expansion` 2.1.4 → 5.0.9.
+- **5 added** — `@typescript-eslint/project-service` and `@typescript-eslint/tsconfig-utils`, new
+  first-party packages split out of `typescript-estree`; plus three *nested* copies that exist only
+  because the top-level ones stay pinned for ESLint 9 (`ignore@7.0.6`, `eslint-visitor-keys@5.0.1`,
+  `balanced-match@4.0.4`).
+- **17 removed** — `typescript-estree` replaced `fast-glob` with `tinyglobby`, which was **already
+  in the tree at 0.2.17** and satisfies its `^0.2.15`, so no new dependency landed. Dropping
+  `fast-glob` orphaned its entire subtree: `@nodelib/fs.{walk,scandir,stat}`, `fastq` → `reusify`,
+  `run-parallel` → `queue-microtask`, `merge2`, `micromatch` → `braces` → `fill-range` →
+  `to-regex-range` → `is-number`, the top-level `picomatch@2.3.2`, and the nested
+  `fast-glob/node_modules/glob-parent@5.1.2`. `graphemer` went with the `eslint-plugin`. **Each was
+  checked to have no surviving requirer**; in particular `eslint`'s own top-level
+  `glob-parent@6.0.2` and vite/vitest's nested `picomatch@4.x` are untouched.
+
+`lockfileVersion` stays 3 and there is no normalization churn, because the lockfile was written with
+**npm 11.19.0** installed into a scratch prefix — matching CI's Node 24 rather than the sandbox's
+Node 22 / npm 10.9.7 — which is the method the lockfile-refresh entry below recorded for reuse. It
+was worth repeating: a 486-line diff from a genuine dependency change is hard to audit if a whole-file
+re-normalization is mixed into it.
+
+**Suites, run from a clean install both before and after so the comparison is real.** The pre-bump
+baseline was re-measured on 8.19.0 rather than quoted from the document, and it reproduced §1
+exactly: lint clean, `format:check` clean, **79 tests across 21 files**, build **7,035 modules →
+645.18 kB JS / 201.38 kB CSS**. After the bump and the two-line fix, every one of those is
+unchanged, down to the emitted asset hashes, and `npm audit` reports **0 vulnerabilities** at every
+severity (the two HIGHs from the entry below stay closed).
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`,
+`frontend/src/pages/NewScanPage.tsx`, `CHANGELOG.md` § Unreleased/Changed, and this entry.
+`frontend/eslint.config.js`, both tsconfigs, `docs/upgrades/frontend-toolchain-86.md` and
+`docs/ROADMAP.md` were deliberately **not** edited — correcting the sequence document's §0.3 is a
+maintainer call, and this entry is the record of what it got wrong in the meantime. No code
+behaviour, schema, API contract, security model, job model, auth, or CI configuration changed; no
+locked decision re-opened.
 
 ---
 

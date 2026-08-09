@@ -73,6 +73,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`typescript-eslint` 8.19.0 → 8.66.0** — step 1 of the frontend toolchain
+  sweep in `docs/upgrades/frontend-toolchain-86.md`, taken alone because it is
+  the only unblocking move in that sequence: the pinned 8.19.0 capped
+  `typescript` at `<5.8.0` and `eslint` at `^9`, and 8.66.0 raises those to
+  `<6.1.0` and `^10.0.0`. No other package in `frontend/package.json` moved and
+  no ESLint or TypeScript config was edited.
+
+  **Two of the scoping document's predictions did not hold, and both are worth
+  carrying into the remaining steps.**
+
+  - **An existing rule's implementation got stricter.** The rule *set* is
+    unchanged, exactly as predicted — `recommended-type-checked.js` is identical
+    across the 47-minor span, 50 entries either side. But
+    `@typescript-eslint/no-unnecessary-type-assertion` now catches what it
+    previously missed, reporting two redundant `'' as string` assertions in
+    `NewScanPage.tsx`'s `useForm` initial values. Both were removed by hand;
+    `tsc -b` confirms the inferred form type is unchanged, and the emitted
+    bundle is byte-identical (same content hashes), since the assertions erase
+    at compile time. **"No new rules" does not mean "no new findings."**
+  - **The effective rule set did change, in the relaxing direction.** The
+    document's claim that the shipped `recommendedTypeChecked` is byte-for-byte
+    identical is wrong, not merely incomplete: it diffed one of the three files
+    that config composes. The layer it did not diff,
+    `eslint-recommended-raw.js`, gains **`no-with: 'off'`** (22 → 23 entries),
+    which drops `no-with` from `error` to `off` in the resolved config. Accepted
+    rather than restored — `with` is a hard compile error under this repo's
+    tsconfigs (verified at the compiler: `TS1101` plus `TS2410`), so the rule is
+    genuinely redundant here.
+
+  The lockfile change is confined to the `typescript-eslint` subtree: the ten
+  `@typescript-eslint/*` packages plus `ts-api-utils` 1.4.3 → 2.5.0 and nested
+  `minimatch`/`brace-expansion` bumps; two new first-party splits
+  (`project-service`, `tsconfig-utils`); and three nested copies that exist only
+  because the top-level ones stay pinned for ESLint 9. `typescript-estree`'s
+  swap from `fast-glob` to `tinyglobby` — already present in the tree at a
+  satisfying version — orphans 17 packages, each checked to have no surviving
+  requirer. Net 374 → 362 packages, `npm audit` still 0 at every severity, and
+  the suites are unchanged: ESLint clean, Prettier clean, 79 tests across 21
+  files, and a build of 7,035 modules to 645.18 kB JS / 201.38 kB CSS.
 - **Bundled scanner binaries updated: Trivy 0.72.0 → 0.73.0, Grype 0.115.0 →
   0.116.1, Syft 1.46.0 → 1.50.0** — the current upstream releases, verified by
   resolving each project's tags rather than from any advisory or summary. No
