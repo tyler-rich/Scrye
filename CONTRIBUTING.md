@@ -570,6 +570,41 @@ very fix the PR exists to deliver. It also does not re-run CI (`on: pull_request
 `edited`), so the green check shown after a retarget is from the old base. PR #120 on 2026-07-31 is
 the worked example: retargeted, went stale, closed, and the bump was reapplied on `dev` instead.
 
+### `.github/dependabot.yml`'s `ignore` list is also read from `main`
+
+Same root cause as the section above — Dependabot reads repo-level configuration from the
+**default branch**, not from `target-branch` — but a different symptom. `target-branch: dev`
+governs where a bump PR opens; it does **not** govern where the `ignore` list itself is read from.
+Dependabot always reads `.github/dependabot.yml` from `main`, so a rule added or changed on `dev`
+has **no effect** until a promotion carries the file to `main`. The `target-branch` keys keep
+working normally throughout, because they're read from the same `main` copy, where they've been
+since before the rule was added — so the config *looks* fully effective and is only partly so.
+
+Concretely: `#147` added an `@types/node` major-ignore to `dev`'s copy on 2026-08-03, but `#153`
+(cut 2026-08-07, from a tree that already had `#147`) still proposed `@types/node` 26.1.2 —
+because `origin/main:.github/dependabot.yml` had no such rule and would not until the next
+promotion. This is confirmed by direct diff of `origin/main` vs `origin/dev`'s copy of the file,
+not inferred from the PR alone.
+
+Two consequences worth planning around:
+
+- **A newly added `ignore` rule stays silently inert until the next release.** Don't read a
+  re-proposed bump it should have suppressed as Dependabot misbehaving — check `main`'s copy of
+  the file first.
+- **There is no config-only fix.** The only ways to make a `dev`-added ignore rule bite
+  immediately are to accept the lag until the next promotion, or to promote
+  `.github/dependabot.yml` to `main` on its own, outside a release — which puts a commit on `main`
+  outside the release discipline (and needs the same back-merge as any other independent `main`
+  change, see step 3 above). Which to do is a maintainer call, not something to automate.
+
+**Dependabot *security* updates target `main` unconditionally — confirmed enabled 2026-08-09.**
+The section above describes the mechanism; as of 2026-08-09 the repository's Dependabot security
+updates, alerts, and grouped-security-updates settings were directly verified **on**, so `#149`
+opening against `main` (rather than `dev`) is the confirmed, by-design behavior described there —
+not a one-off. Both this and the `ignore`-list lag are the same underlying pattern: Dependabot's
+own repo-level configuration is always resolved from the default branch, regardless of what
+`target-branch` says about where a bump PR should land.
+
 ### A *version* update on `main` means something else went wrong
 
 The rule above explains a **security** update on `main`. It does **not** explain a routine version

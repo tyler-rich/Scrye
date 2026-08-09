@@ -126,3 +126,8 @@ logs/
 ehthumbs.db
 Thumbs.db
 desktop.ini
+
+# === Session scratch files ===
+# A prior-session artifact from drafting a PR body locally; not something the
+# repo should ever track. See CLAUDE.md § Attribution.
+.pr-body.md

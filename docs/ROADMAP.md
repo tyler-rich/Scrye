@@ -229,10 +229,16 @@ Small, self-contained work that closes a concrete gap.
   and private vulnerability reporting (`{"enabled": true}`), and re-read all three
   rulesets (`protect-dev`, `protect-main`, `protect-tags` — all `active`, contents in
   [`ARCHIVE.md` §14, 2026-08-09](./ARCHIVE.md)). The Actions secrets, Dependabot alert
-  toggles, and workflow-permissions settings are not readable at the API permission
-  level available here, so their 2026-08-02 Settings verification stands as the record.
-  Check the §14 entries, not this list, before re-doing any of them: a settings change
-  leaves no artifact in the repository, so §14 is the only durable record it happened.
+  toggles, and workflow-permissions settings sit behind API paths this session can't
+  reach, so those were checked the only other way available: the maintainer read them
+  directly in the GitHub UI, also on 2026-08-09 — Actions secrets empty, Dependabot
+  alerts/malware-alerts/grouped-security-updates/security-updates all on, workflow
+  permissions read-only with PR-creation off, code scanning 0 open / 6 closed on both
+  `main` and `dev`, and "Require actions to be pinned to a full-length commit SHA" still
+  off (safe to turn on — every `uses:` line in the repo is already a resolved commit
+  SHA). See [`ARCHIVE.md` §14, 2026-08-09](./ARCHIVE.md) for the full readout. Check the
+  §14 entries, not this list, before re-doing any of them: a settings change leaves no
+  artifact in the repository, so §14 is the only durable record it happened.
 
   **What remains is one untracked decision.** The branch-protection item turned out to
   be mostly done; the two genuinely open pieces of it were tracked as issues, and both
@@ -321,9 +327,9 @@ Small, self-contained work that closes a concrete gap.
   continuously by the push/PR triggers instead. See
   [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
 
-  **What remains is disposition only — the two settings edits that used to be listed
-  here are done, verified live on 2026-08-09.** A ruleset read shows all three contexts
-  — `CodeQL — python`, `CodeQL — javascript-typescript`, `CodeQL — actions` — present in
+  **The two settings edits that used to be listed here are done, verified live on
+  2026-08-09.** A ruleset read shows all three contexts — `CodeQL — python`,
+  `CodeQL — javascript-typescript`, `CodeQL — actions` — present in
   `required_status_checks` on **both** `protect-dev` and `protect-main`, and the
   committed workflow's checks run and pass on PRs into `dev`, which is only possible
   with default setup disabled (while it is enabled, the API rejects the workflow's SARIF
@@ -333,13 +339,12 @@ Small, self-contained work that closes a concrete gap.
   `protect-main` requires Backend, Frontend, and the three CodeQL contexts. See
   [`ARCHIVE.md` §14, 2026-08-09](./ARCHIVE.md).
 
-  On disposition: no alert has been dismissed — that is a deliberate hold, since a
-  dismissal with no written reason is indistinguishable from an unread finding. The §14
-  entry (2026-08-02) supplies the written reason for each; applying them (and deciding
-  whether the two `targets.py` alerts warrant a code change to make the containment
-  legible to the analyzer, rather than merely a dismissal) is the open work. Alert state
-  is not readable at the API permission level available to a code session, so
-  disposition happens in the repository's Security tab.
+  ~~**Alert disposition.**~~ **Closed 2026-08-09** — the Security tab shows **0 open /
+  6 closed** on both `branch:main` and `branch:dev`, verified directly in GitHub
+  Settings/Security by the maintainer (not readable at the API permission level
+  available to a code session). All six alerts from the first-run triage — recorded
+  with their per-alert reasoning in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md) — are
+  accounted for. Nothing further to do here.
 
 ## Medium-term
 

@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (140, newest first)
+### Index of §14 entries (141, newest first)
 
+- [2026-08-09 — Security/Process — Settings audit: four previously-unreachable toggles verified, Secret Protection enabled, SHA-pinning confirmed clean, attribution-stripping banned](#2026-08-09--securityprocess--settings-audit-four-previously-unreachable-toggles-verified-secret-protection-enabled-sha-pinning-confirmed-clean-attribution-stripping-banned)
 - [2026-08-09 — Infra/Process — Dependabot round closed out: queue merged and closed, bundled scanners bumped, the display-name option declined, prior claims corrected](#2026-08-09--infraprocess--dependabot-round-closed-out-queue-merged-and-closed-bundled-scanners-bumped-the-display-name-option-declined-prior-claims-corrected)
 - [2026-08-09 — Infra/Process — Open-Dependabot-queue audit: only #149 was on `main`, and it was already superseded; `.github/dependabot.yml`'s `ignore` list is read from `main`, so `dev`-only edits to it are inert](#2026-08-09--infraprocess--open-dependabot-queue-audit-only-149-was-on-main-and-it-was-already-superseded-githubdependabotymls-ignore-list-is-read-from-main-so-dev-only-edits-to-it-are-inert)
 - [2026-08-08 — Docs/Process — `docs/ROADMAP.md` replaced wholesale with an externally-drafted two-track revision (Track A carried forward verbatim, Track B added)](#2026-08-08--docsprocess--docsroadmapmd-replaced-wholesale-with-an-externally-drafted-two-track-revision-track-a-carried-forward-verbatim-track-b-added)
@@ -720,6 +721,94 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Security/Process — Settings audit: four previously-unreachable toggles verified, Secret Protection enabled, SHA-pinning confirmed clean, attribution-stripping banned
+
+**What changed:** the maintainer manually verified, in the GitHub UI, four settings a code session
+cannot read at all — the API paths are blocked from this environment, and no prior §14 entry
+covers them. Recorded here as facts, per this document's own rule that a settings change leaves
+no artifact in the repository and this section is the only durable record it happened.
+
+**Actions secrets: none.** No repository or environment secrets, no variables. Every workflow —
+`ci.yml`, `codeql.yml`, `dev-nightly.yml`, `publish.yml`, `rescan.yml` — runs on the built-in
+`GITHUB_TOKEN` alone, matching what each workflow's header comments already claim (locked decision
+§6: no Docker Hub, no PAT, no long-lived registry secret anywhere). Worth recording precisely
+because it is invisible and can change silently — a secret added later would leave no diff for a
+future session to notice, so this is the baseline to compare against.
+
+**Dependabot: alerts on, malware alerts on, grouped security updates on, security updates on;
+dependency graph on, automatic dependency submission off.** This is the **confirmed** mechanism
+behind `#149` opening against `main` rather than `dev` — `CONTRIBUTING.md` § Dependabot security
+updates target `main` and `CLAUDE.md` § Dependency hygiene described the *behavior* from observed
+PRs; this is the first direct settings confirmation that the feature producing it is actually
+enabled, not merely inferred from one PR's base branch. It is also the same underlying pattern as
+the `ignore`-list finding in the entry below: both are repo-level Dependabot configuration that
+GitHub resolves from the **default branch**, regardless of what `target-branch` says. `#153` (the
+frontend #86-sweep PR) stays open and deliberately unactioned, unaffected by this entry.
+
+**Workflow permissions: "Read repository contents and packages permissions", and "Allow GitHub
+Actions to create and approve pull requests" unchecked.** Both hardened — no workflow can write
+back to the repository or open its own PRs. Consistent with `CONTRIBUTING.md` § What gets
+published, which already notes each publish workflow declares its own job-level `permissions:`
+rather than depending on this repo-wide default.
+
+**Code scanning: 0 open / 6 closed on both `branch:main` and `branch:dev`.** This closes the open
+disposition item `docs/ROADMAP.md` left after the 2026-08-02 CodeQL entry (six alerts, all
+assessed false positives, none formally dismissed pending a written reason). All six are now
+closed on both branches — **CLOSED**, no further disposition action needed. `docs/ROADMAP.md`'s
+CodeQL item is updated accordingly.
+
+**Actions permissions: "Allow all actions and reusable workflows"; "Require actions to be pinned
+to a full-length commit SHA" unchecked.** This was the open question this audit set out to answer:
+whether it is safe to check that box. It is. Every `uses:` line across all five workflow files and
+the composite `.github/actions/build-image/action.yml` — `actions/checkout`, `actions/setup-python`,
+`actions/setup-node`, `docker/setup-buildx-action`, `docker/build-push-action`,
+`docker/setup-qemu-action`, `docker/login-action`, `actions/attest-build-provenance`, and
+`github/codeql-action/init` + `/analyze` — is already pinned to a full-length commit SHA, each
+re-resolved against upstream via `git ls-remote --tags` this session rather than trusted from the
+comment. **Zero references need pinning; the setting can be enabled with no workflow changes.**
+The one place this bites is `github/codeql-action`, whose tags are annotated (§ The
+annotated-tag SHA-pin trap in the project skill / `docs/ARCHIVE.md` §14 2026-08-03): `dev`'s
+`codeql.yml` pins `5595ccaf912efad79be6eef63a5619ff05969be3`, which re-resolves to
+`refs/tags/v4.37.6^{}` — the correct dereferenced-commit form — while `main`'s copy still pins
+`v4.37.4` at `ea14db8afdef5d462e69d78c4ca45002d4522418`. **This is the normal promotion gap, not a
+defect** — `dev` moved to v4.37.6 via `#154`, `main` hasn't had a promotion since — and it is
+recorded here rather than fixed, per instruction: `main` is never edited outside a release
+promotion.
+
+**Secret Protection: disabled → enabled, 2026-08-09.** The maintainer turned this on directly in
+Settings on the date of this entry. No prior state is recorded because nothing in the repository
+reflects a Settings toggle; this entry is that record.
+
+**BANNED — instruction-based PR-body attribution stripping, closed so no future session
+re-attempts it.** `CLAUDE.md` and `CONTRIBUTING.md` previously instructed sessions to re-read a
+PR's live body after opening it and strip any auto-appended attribution footer by hand. The
+2026-08-09 audit entry below already documented, twice, that a `PATCH` stripping the footer gets
+it **re-appended server-side** — verified against the live API, including a payload that itself
+carried no footer — so the instruction was not merely unreliable, it was actively producing false
+"verified clean" reports from sessions that believed the check had passed. `CLAUDE.md` § Attribution
+now states the correct contract directly: never write a footer in the first place; if one appears
+after the fact, leave it — it is not yours to remove, and the maintainer removes it by hand at
+merge. This supersedes every prior instruction in `CLAUDE.md`/`CONTRIBUTING.md` telling a session
+to re-check and strip a live PR body. **Closed, not open** — this is a settled fact about the
+environment, not a standing task.
+
+**DECLINED — promoting `.github/dependabot.yml` to `main` outside a release, to close the
+ignore-list lag immediately.** The entry below identifies that a `dev`-only `ignore` rule (e.g.
+`#147`'s `@types/node` major-ignore) has no effect until a promotion carries the file to `main`,
+and names two options: accept the lag, or promote the file to `main` on its own. **The maintainer
+declines the second option** — not defers it — on the standing rule that `main` is never edited
+outside a deliberate release promotion (`CLAUDE.md` § Git & PR conventions). The lag is an accepted
+cost of that rule, not a gap to close with a special-case exception. No review date; do not
+re-propose a standalone `main` edit to fix this.
+
+**Plan section affected:** `CLAUDE.md` § Attribution (rewritten), § Definition of done item 8
+(rewritten), `.gitignore` (`.pr-body.md` added), `CONTRIBUTING.md` § Releasing (new subsection on
+the `ignore`-list promotion lag), `docs/ROADMAP.md` (CodeQL disposition item closed). No SHA
+changed on any action reference — the audit found nothing to fix. No schema, API contract, security
+model, job model, or locked decision affected.
 
 ---
 
