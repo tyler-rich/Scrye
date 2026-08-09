@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (148, newest first)
+### Index of §14 entries (149, newest first)
 
+- [2026-08-09 — Infra — #86 sweep step 4 landed: TypeScript 5.7.2 → 6.0.3 with the ceiling re-checked; the `this`-less inference change surfaced, silently and benignly](#2026-08-09--infra--86-sweep-step-4-landed-typescript-572--603-with-the-ceiling-re-checked-the-this-less-inference-change-surfaced-silently-and-benignly)
 - [2026-08-09 — Post-v1 — `L17`/`P2-2`'s reset effect finally has a regression test; the protection #176 relies on was never actually enforced](#2026-08-09--post-v1--l17p2-2s-reset-effect-finally-has-a-regression-test-the-protection-176-relies-on-was-never-actually-enforced)
 - [2026-08-09 — Infra — #86 sweep step 3 landed: React Compiler rules adopted, `set-state-in-effect` held back over 12 findings with no honest fix (#176)](#2026-08-09--infra--86-sweep-step-3-landed-react-compiler-rules-adopted-set-state-in-effect-held-back-over-12-findings-with-no-honest-fix-176)
 - [2026-08-09 — Infra — #86 sweep step 2 landed: the ESLint 10 family, with the React Compiler rule set held inert; three of the doc's four predictions held](#2026-08-09--infra--86-sweep-step-2-landed-the-eslint-10-family-with-the-react-compiler-rule-set-held-inert-three-of-the-docs-four-predictions-held)
@@ -728,6 +729,162 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 4 landed: TypeScript 5.7.2 → 6.0.3 with the ceiling re-checked; the `this`-less inference change surfaced, silently and benignly
+
+**What changed:** `frontend/package.json` (one line), `frontend/package-lock.json` (one entry),
+`frontend/tsconfig.app.json` (an explicit `"types": []` plus the comment explaining why an
+apparently-inert line is there), plus `CHANGELOG.md` and this entry. This is **step 4 of the
+eight-step sequence** in `docs/upgrades/frontend-toolchain-86.md`, executed exactly as its
+checklist specifies. **No source file changed.** `eslint.config.js` was not touched, no other
+package moved, no step 5 or later work was started, and `main` was not touched.
+
+**The ceiling was re-checked before anything was edited, because the document says it has a shelf
+life.** §3.1's one-liner, plus two checks it does not ask for:
+
+| Package | `peerDependencies.typescript` |
+|---|---|
+| `typescript-eslint@8.66.0` (`latest`) | `>=4.8.4 <6.1.0` |
+| `typescript-eslint@8.66.1-alpha.10` (`canary`) | `>=4.8.4 <6.1.0` |
+| `@typescript-eslint/parser@8.66.0` | `>=4.8.4 <6.1.0` |
+| `@typescript-eslint/typescript-estree@8.66.0` | `>=4.8.4 <6.1.0` |
+
+**The ceiling holds unchanged.** `latest` is still 8.66.0 — no new typescript-eslint major has
+appeared, which §3.1 names as the shape TS 7 support would arrive in. The umbrella and both
+underlying packages agree, so the "checking the umbrella is sufficient" claim was verified rather
+than inherited. Separately, **6.0.3 is still the head of the 6.x line**: `typescript`'s published
+versions inside `<6.1.0` are `6.0.0-beta`, a long run of `6.0.0-dev.*`, `6.0.1-rc`, **6.0.2**
+(2026-03-23) and **6.0.3** (2026-04-16). There is no newer 6.x patch and no 6.1.x at all, so no
+deviation from the document's target was needed and none was proposed. `dist-tags.latest` is
+`7.0.2` and `next` is `7.1.0-dev.*` — the offers will keep coming and stay declined.
+
+**One engine fact worth recording so it is not re-derived:** `typescript@6.0.3` declares
+`engines.node: ">=14.17"`, identical to 5.7.2's, and still ships **both** `tsc` and `tsserver`
+bins — the second is the cheap artifact-level confirmation that 6.0.3 really is the last JS-based
+TypeScript, since 7.0.2 drops `tsserver` entirely.
+
+**The `types` edit was verified as a no-op twice, and the second method is the one that carries
+the weight.** The document's §7.2 audit was re-run against `src/` rather than trusted, and every
+leg held: **zero** references to `process`, `Buffer`, `__dirname` or `__filename`; **zero**
+`NodeJS.` namespace uses; all **22** test files import their globals from `'vitest'`, with
+`vite.config.ts` setting no `globals: true` (so nothing *could* be relying on ambient test
+globals); and all five timer call sites go through `window.setTimeout`/`window.clearTimeout`
+(`ScansPage.tsx:198-199`, `ScanDetailPage.tsx:338-343`) — DOM lib, not `@types/node`. The one
+`process` use in the repo is `vite.config.ts:7`, which belongs to `tsconfig.node.json` and its
+existing `"types": ["node"]`.
+
+That is a grep audit, and a grep audit cannot see an ambient dependency that has no identifier of
+its own. So the edit was **applied first under TypeScript 5.7.2**, where the old
+enumerate-everything default was still live and the app project was ambiently pulling in all
+fourteen installed `@types` packages (`aria-query`, `babel__*`, `chai`, `deep-eql`, `esrecurse`,
+`estree`, `json-schema`, **`node`**, `prop-types`, `react`, `react-dom`): `tsc -b --force` and
+`npm run lint` both stayed clean. Withdrawing the enumeration is therefore proven inert
+*independently of the compiler move*, which is the whole reason to sequence it that way — had it
+broken something, the failure would have had one cause instead of two.
+
+**The residual risk the document names did surface, and `tsc -b` would never have shown it.**
+§7.2 flags *"less context-sensitivity on `this`-less functions"* as the one change no config audit
+can pre-empt, and prices it as *"can produce genuinely new errors in generic callback positions."*
+Against this tree it produced **no error and no `TS6xxx` deprecation diagnostic** — `tsc -b
+--force` is clean on both projects. Stopping there would have been the §0.3 mistake in a new
+costume: a green oracle reported as if it bounded the change. So inference was measured directly,
+by emitting declarations under both compilers from a throwaway probe config (a copy of
+`tsconfig.app.json` with `emitDeclarationOnly`) and diffing the two trees. **79 `.d.ts` files
+either side; exactly one line differs**, in `src/pages/ScanDetailPage.tsx`:
+
+```
+- export declare const FindingsTable: import("react").NamedExoticComponent<FindingsTableProps>;
++ export declare const FindingsTable: import("react").MemoExoticComponent<({ findings, findingsTotal,
++     findingsLoading, findingsLoaded, }: FindingsTableProps) => import("react/jsx-runtime").JSX.Element>;
+```
+
+`React.memo` is overloaded. Under 5.7.2 the argument — a `this`-less **named function expression**
+(`ScanDetailPage.tsx:95`) — matched the `SFC<P>` overload, which needs the parameter contextually
+typed; under 6.0.3 it falls through to the `T extends ComponentType<any>` overload, which infers
+`T` as the function type itself. This is precisely the documented change, observed at the only
+`memo`/`forwardRef` site in `src/` (grepped — there is exactly one).
+
+**It is benign, established by probe rather than by reasoning about the two type aliases.** A
+scratch file asserted `ComponentProps<typeof FindingsTable>` three ways — the exact prop object
+accepted, an extra prop rejected, a missing prop rejected — and **both compilers agree on all
+three**. The probe was deleted. The repo also emits no declarations (`noEmit: true` in both
+tsconfigs; no library build), so the printed form has no consumer at all. **Reported, not
+"fixed":** no annotation was added to steer overload resolution back, because the contract did not
+move and an edit would be churn against a compiler default.
+
+**The `print-config` diff, run on one representative file per file class, per §0.3's method note.**
+App `.tsx` (`src/pages/Dashboard.tsx`), library `.ts` (`src/lib/polling.ts`) and the test override
+(`src/lib/polling.test.ts`) are **byte-identical before and after**, 135 rules each, nothing added,
+removed, or re-severitied, and — unlike step 1 — not even a parser identity string moved, since
+`typescript-eslint` did not. The three files differ from each other only in
+`react-refresh/only-export-components` (`1` in app/library, `0` under the test override), which is
+the override doing its job. This is the first step in the sweep whose resolved config diff is
+empty, and that is the expected result: a compiler bump changes what the type-aware rules *see*,
+not which rules run.
+
+**What moved in the lockfile: one package, and that is the whole diff.** Both lockfiles were
+parsed and compared key by key rather than eyeballed: **346 packages before, 346 after**, zero
+added, zero removed, and exactly one entry changed —
+`node_modules/typescript` 5.7.2 → 6.0.3, its `version`/`resolved`/`integrity` triple plus the root
+manifest's pin. `lockfileVersion` stays 3 and the file diff is **+5/−5** with no normalisation
+churn, because the lockfile was written with **npm 11.19.0** installed into a scratch prefix to
+match CI's Node 24 rather than the sandbox's Node 22 / npm 10.9.7. That is the **fourth**
+consecutive lockfile touch to use this method and the fourth clean diff; the standing-procedure
+note from step 2 stands.
+
+**Suites, measured on both sides, each from a clean install.** Baseline on 5.7.2 (`npm ci` from
+the committed lockfile): lint clean (12.4 s), `format:check` clean, **80 tests across 22 files**,
+build **7,035 modules → 645.14 kB JS (`index-Vvdzytcz.js`) / 201.38 kB CSS
+(`index-D2wHtcHV.css`)**, `npm audit` **0 vulnerabilities**. After the bump, from a fresh
+`rm -rf node_modules && npm ci`: lint clean (11.3 s), `format:check` clean, **80 tests across 22
+files**, build **7,035 modules → 645.14 kB / 201.38 kB**, audit **0**. The emitted assets carry the
+**same content hashes** on both sides, which is the proof that a type-only step changed nothing
+that ships — the same signal steps 1 and 2 produced, and the one step 3 correctly did not.
+
+**Baseline note: 80 tests, not 79.** Every prior sweep entry records 79/21. The
+`ScanDetailPage.scanIdReset` test landed on `dev` immediately before this step, so 80/22 is the
+current figure and the number future steps should compare against.
+
+**Which of the document's Step 4 predictions held.**
+
+- **The ceiling (6.0.3, not 7) — HELD**, re-verified at the registry on the day, across four
+  packages rather than the one §3.1 asks for.
+- **`types` defaulting to `[]` is a no-op here — HELD**, and upgraded from a grep audit to an
+  empirical one by applying the edit under the old compiler first.
+- **`rootDir` defaulting to `.` is a no-op here — HELD, and the guard was identified precisely.**
+  §7.2 attributes it to `noEmit: true`, and that is exactly right: the declaration probe above, by
+  turning emit on, made TypeScript 6.0 raise **`TS5011`** ("the `rootDir` setting must be
+  explicitly set…") on a config the real build compiles silently. The probe needed an explicit
+  `rootDir` to proceed. Recorded because it converts a prediction into a demonstrated mechanism —
+  and as a standing caveat: **if either tsconfig ever turns emit on, `rootDir` becomes a required
+  edit, not an inherited default.**
+- **The `this`-less inference change is the one thing no config audit can pre-empt — HELD, and
+  its failure mode is milder than priced.** The row expects *"genuinely new errors in generic
+  callback positions"*; what happened is a silent overload re-resolution with an unchanged public
+  contract. The transferable point is that **`tsc -b` is not a complete oracle for an inference
+  change** — only a diff of inferred output is — which is the same lesson §0.3 taught about
+  `--print-config` versus a plugin's own shipped config file.
+- **Effort priced M / 2–5 h, risk medium — came in at the bottom of the band**, because the
+  judgement-heavy part (per-type-error triage) had no input: there were no type errors.
+
+**What was deliberately not done.** No package other than `typescript` moved, in `package.json` or
+in the lockfile. `"ignoreDeprecations": "6.0"` was **not** set — the document is right that it
+would silence the free preview of what TypeScript 7 removes, and there was nothing to silence
+anyway. No lint finding was autofixed, in bulk or individually — there were none. No `.github/
+dependabot.yml` ignore rule was added for `typescript`, per §6's Step 4 note and the standing rule
+in that file that an ignore says *"a bot may not make this decision"* while TypeScript 7 is wanted.
+`tsconfig.node.json` was not edited. `docs/upgrades/frontend-toolchain-86.md` and
+`docs/ROADMAP.md` were **not** edited — correcting the sequence document is a maintainer call, and
+this entry is the record of what its Step 4 row got right in the meantime, which this time is all
+of it. No step 5 or later work was started; `main` was not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`,
+`frontend/tsconfig.app.json`, `CHANGELOG.md` § Unreleased/Changed, and this entry. No code
+behaviour, schema, API contract, security model, job model, auth, or CI configuration changed; no
+locked decision re-opened — React stays on 18 and Mantine on v7, and `typescript` declares no
+`react`, `react-dom`, `@types/react*` or `@mantine/*` peer.
 
 ---
 

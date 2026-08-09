@@ -93,6 +93,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **TypeScript 5.7.2 → 6.0.3, and `frontend/tsconfig.app.json` pins
+  `"types": []`** — step 4 of the frontend toolchain sweep in
+  `docs/upgrades/frontend-toolchain-86.md`. **`typescript` is the only package
+  that moved**: the lockfile diff is one entry's `version`/`resolved`/
+  `integrity` triple, 346 packages before and after, nothing added, removed, or
+  bumped transitively, `lockfileVersion` still 3. No source file changed.
+
+  **This stops at 6.0.3 deliberately, and 6.0.3 is the ceiling, not the
+  latest.** `typescript@7.0.2` is the Go-native compiler: its `"."` export is
+  `./lib/version.cjs`, `lib/typescript.js` and `tsserver` are gone, and
+  `@typescript-eslint/typescript-estree` uses 114 distinct `ts.*` symbols from
+  that removed API. Re-checked at the registry on **2026-08-09** rather than
+  taken from the scoping document: `typescript-eslint@8.66.0` (`latest`) and its
+  `8.66.1-alpha.10` canary both peer `typescript: ">=4.8.4 <6.1.0"`, and
+  `@typescript-eslint/parser` and `/typescript-estree` carry the same range —
+  so no published typescript-eslint accepts TypeScript 7. 6.0.3 (2026-04-16) is
+  the highest release inside `<6.1.0` and the last JS-based TypeScript. A future
+  `typescript@7.x` offer from Dependabot is expected and is **not** an oversight;
+  re-run `npm view typescript-eslint@latest peerDependencies.typescript` before
+  treating the ceiling as stale. No `ignore` rule was added — TypeScript 7 is
+  wanted, just not before typescript-eslint supports it.
+
+  **`"types": []` is written out rather than inherited.** TypeScript 6.0 changes
+  the option's default from "enumerate every package in `node_modules/@types`"
+  to `[]`. It is a no-op for `src/` — **verified, not assumed, and verified
+  twice**: `src/` has zero references to `process`, `Buffer`, `__dirname` or
+  `__filename` and no `NodeJS.` namespace use, all 22 test files import their
+  globals from `'vitest'` (Vitest's `globals` option is not set), and timers go
+  through `window.setTimeout` from the DOM lib. The empirical leg is the
+  stronger one: the edit was applied **under 5.7.2 first**, where the old
+  enumerate-everything default was still live, and `tsc -b --force` plus
+  `npm run lint` stayed clean — so nothing in `src/` was relying on the ambient
+  `@types` enumeration that 6.0 withdraws. `frontend/tsconfig.node.json` needed
+  no change; it already sets `"types": ["node"]` for `vite.config.ts`, which is
+  the one file that does use `process`.
+
+  **The inference change the scoping document flags as unpre-emptable did
+  surface — silently, and it is benign.** TypeScript 6.0's "less
+  context-sensitivity on `this`-less functions" produced **no error and no
+  deprecation diagnostic**; `tsc -b --force` is clean. It shows up only in
+  inferred types, found by emitting declarations under both compilers and
+  diffing them: the sole difference across 79 `.d.ts` files is `FindingsTable`
+  in `frontend/src/pages/ScanDetailPage.tsx`, where the `React.memo` overload
+  resolved for a `this`-less named function expression moves from
+  `NamedExoticComponent<FindingsTableProps>` to
+  `MemoExoticComponent<(props: FindingsTableProps) => JSX.Element>`. The public
+  contract is unchanged — a type probe confirms both compilers accept the exact
+  prop object and reject an extra and a missing prop identically — and the repo
+  emits no declarations (`noEmit: true`), so nothing consumes the printed form.
+  It is the only `memo`/`forwardRef` site in `src/`.
+
+  **Nothing else moved.** `eslint --print-config` on an app `.tsx`, a library
+  `.ts` and a test override is **byte-identical** before and after, 135 rules
+  each. Lint clean, `format:check` clean, **80 tests across 22 files**,
+  `npm audit` 0 vulnerabilities, and the build emits the **same content hashes**
+  as before (`index-Vvdzytcz.js` 645.14 kB, `index-D2wHtcHV.css` 201.38 kB,
+  7,035 modules) — the proof that a compiler-only step changed nothing that
+  ships.
+
 - **React Compiler lint rules adopted from `eslint-plugin-react-hooks@7.1.1`,
   with `react-hooks/set-state-in-effect` held back** — step 3 of the frontend
   toolchain sweep in `docs/upgrades/frontend-toolchain-86.md`. **No dependency
