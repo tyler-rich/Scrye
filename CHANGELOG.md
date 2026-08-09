@@ -93,6 +93,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`globals` 17.8.0 → 17.9.0, `@testing-library/user-event` 14.6.1 → 14.6.3,
+  and `postcss` 8.5.25 → 8.5.26** — step 8, the last step of the frontend
+  toolchain sweep in `docs/upgrades/frontend-toolchain-86.md`. Three routine
+  minors/patches with no config change and no coupling; all three were
+  confirmed still `latest` at the registry before the bump. No source, test, or
+  config file changed.
+
+  **The lockfile diff is +13/−13: 306 packages before and after, zero added,
+  zero removed, exactly the three targets bumped.** The only other movement is
+  `postcss@8.5.26` raising its own `nanoid` requirement from `^3.3.16` to
+  `^3.3.17` — which installs nothing new, because the lockfile already carries
+  `nanoid@3.3.18` from the 2026-08-09 advisory refresh. This is the cleanest
+  lockfile diff of the eight-step sweep.
+
+  **The `globals` caution the sweep document carries was discharged by
+  measurement, not by a green lint run.** A `globals` minor can silently
+  *shrink* a set, leaving `eslint.config.js`'s `globals.browser` smaller while
+  lint stays clean. It did not: `globals.browser` goes **1191 → 1196 keys,
+  five added and none removed** — `PerformanceMarkConditional`,
+  `PermissionsPolicy`, `RTCIceCandidatePair`, `WebTransportDatagramsWritable`
+  and `WebTransportSendGroup`, all read-only.
+
+  **`eslint --print-config` was diffed before and after on one representative
+  file of each file class** (app `.tsx`, library `.ts`, and the test override).
+  All three hold at **135 rules with nothing added, removed, or re-severitied**,
+  and no rule's options moved; the only difference in the resolved config is
+  those five `languageOptions.globals` entries. **The build output is
+  byte-identical** — all three emitted assets match the pre-bump baseline by
+  SHA-256, not merely by content hash, which is the meaningful signal here
+  because `postcss` runs in the build path via `frontend/postcss.config.cjs`.
+
+  Suites on both sides, each from a clean `rm -rf node_modules && npm ci`: lint
+  clean, `format:check` clean, **80 tests across 22 files** (compared per test
+  name and status, not by total — the two lists diff empty), build 630.29 kB JS
+  / 196.79 kB CSS, `npm audit` **0 vulnerabilities**.
+
 - **Vite 6.4.3 → 8.2.1 and `@vitejs/plugin-react` 4.3.4 → 6.0.5** — step 7 of
   the frontend toolchain sweep in `docs/upgrades/frontend-toolchain-86.md`,
   crossing two majors on each package. The two move in lockstep because
