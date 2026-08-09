@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (156, newest first)
+### Index of §14 entries (157, newest first)
 
+- [2026-08-09 — Docs/Process — `dependabot.yml`'s "Deliberately NOT ignored" rationale rewritten: the instruction outlived the reason it was written on](#2026-08-09--docsprocess--dependabotymls-deliberately-not-ignored-rationale-rewritten-the-instruction-outlived-the-reason-it-was-written-on)
 - [2026-08-09 — Infra/Process — The `@types/node` majors-ignore removed now that 26.2.0 has landed; no `typescript` ignore added, deliberately, because that regenerating PR is the TS7 signal](#2026-08-09--infraprocess--the-typesnode-majors-ignore-removed-now-that-2620-has-landed-no-typescript-ignore-added-deliberately-because-that-regenerating-pr-is-the-ts7-signal)
 - [2026-08-09 — Infra — `@types/node` 24.13.3 → 26.2.0: the sweep's one declined package taken deliberately, after step 4 had already shrunk its blast radius to one file](#2026-08-09--infra--typesnode-24133--2620-the-sweeps-one-declined-package-taken-deliberately-after-step-4-had-already-shrunk-its-blast-radius-to-one-file)
 - [2026-08-09 — Docs/Process — Roadmap updated for the completed #86 sweep, the re-cut react-router advisory, and the React-19-blocked router major](#2026-08-09--docsprocess--roadmap-updated-for-the-completed-86-sweep-the-re-cut-react-router-advisory-and-the-react-19-blocked-router-major)
@@ -737,6 +738,114 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Docs/Process — `dependabot.yml`'s "Deliberately NOT ignored" rationale rewritten: the instruction outlived the reason it was written on
+
+**What changed:** `.github/dependabot.yml` — the *"Deliberately NOT ignored"* comment paragraph in the
+npm `/frontend` entry, rewritten — plus this entry. **Comment-only.** No `ignore` rule, `group`,
+`schedule`, `target-branch`, `directory`, `commit-message` or any other key was added, removed, or
+modified; no dependency, lockfile, source, test, or workflow file was touched; `main` was not
+touched. The entry below flagged this paragraph as stale and left it as a maintainer call; this is
+that call being made.
+
+**The lapse, stated precisely, because it is the general pattern worth keeping.** The paragraph's
+*instruction* — leave the frontend tooling majors unignored so Dependabot keeps surfacing them — is
+still exactly right. Its *stated reason* was not: it described those majors as *"the deferred #86
+sweep tracked in docs/ROADMAP.md"* and told the reader Dependabot *"should keep surfacing them until
+that PR is done."* The sweep **is** done. So the comment, read literally on 2026-08-09, terminated
+its own instruction: a future reader who checked the roadmap would find the work complete and
+reasonably conclude the exemption had expired — and the obvious next move from there is to add the
+`typescript` ignore, which is the one thing that must not happen. **A comment whose stated condition
+has been met argues against its own instruction.** That is a sharper failure than mere staleness,
+and it is why this was worth a PR rather than a cleanup-later note.
+
+**The gate was checked before writing, not assumed.** The claim "the sweep is done" is the whole
+premise of the rewrite, so it was read at the source rather than carried from this session's own
+earlier entries: `docs/ROADMAP.md` § Track A carries the item **struck through** and marked **"Done
+2026-08-09"**, enumerating all eight step PRs — **#171, #174, #177, #179, #180, #183, #185, #187** —
+which matches the step entries below one-for-one.
+
+**Before:**
+
+```
+    # Deliberately NOT ignored: the frontend tooling majors (typescript, eslint,
+    # typescript-eslint, vite, vitest, jsdom and friends). Those are *wanted* —
+    # they are the deferred #86 sweep tracked in docs/ROADMAP.md — so Dependabot
+    # should keep surfacing them until that PR is done. An ignore rule says "a
+    # bot may not make this decision"; it is not a parking space for work we
+    # intend to do.
+```
+
+**After** — the instruction now rests on two current reasons instead of one spent one, and the
+closing maxim is kept verbatim because it never depended on the sweep:
+
+```
+    # Deliberately NOT ignored: the frontend tooling majors (typescript, eslint,
+    # typescript-eslint, vite, vitest, jsdom and friends). Those are *wanted* —
+    # we want to see them, evaluate them, and land them, which is exactly what
+    # the #86 sweep did (see docs/upgrades/frontend-toolchain-86.md).
+    #
+    # `typescript` is the one to leave unignored most deliberately. TypeScript 7
+    # is wanted, and the only thing blocking it is upstream: typescript-eslint's
+    # `typescript` peer range has never admitted 7 in any published version. So
+    # the regenerating Dependabot PR proposing typescript 7.x is not noise — it
+    # IS the notification that tells us when upstream ships support. Ignoring it
+    # would suppress that signal while changing nothing about the blocker.
+    # Re-check the range in one command:
+    #
+    #     npm view typescript-eslint@latest peerDependencies.typescript
+    #
+    # Support is expected to arrive as a new typescript-eslint MAJOR built
+    # against TS 7's ./unstable/* API, not as a point-release range widen.
+    #
+    # An ignore rule says "a bot may not make this decision"; it is not a
+    # parking space for work we intend to do.
+```
+
+**Three deliberate choices in the wording.** (1) The sweep is referenced in the **past tense as an
+example of the policy working**, not as pending work — so completing it can never again read as
+expiring the exemption; the pointer is to `docs/upgrades/frontend-toolchain-86.md` rather than to
+`docs/ROADMAP.md`, because the sequence document explains *how* such a batch gets evaluated while
+the roadmap item is now a struck-through history entry. (2) **The re-check command is inlined** so
+the next reader can test the blocker in one command without opening a session — the same one-liner
+§3.1 of the sequence document carries, kept in both places on purpose, since whoever is looking at
+an ignore list is not necessarily reading the upgrade docs. (3) The expected **shape** of upstream
+support (a new typescript-eslint major, not a range widen) is stated so a point-release bump is not
+misread as the all-clear. What the comment deliberately does **not** contain is the sweep's history,
+the packument evidence, or the per-step record — the archive holds those, and a config comment that
+grows into a changelog stops being read.
+
+**Verified after editing, by parsing rather than by reading.** Both versions of the file were loaded
+with `yaml.safe_load` and serialised to canonical JSON: the two structures are **byte-identical**,
+SHA-256 `07e71c6c…` on each side. Independently, every changed line in the raw diff was confirmed to
+be a comment line (`+18/−4`, all matching `^[+-]\s*#`). So the effective configuration — six
+ecosystems, every `target-branch: dev`, every schedule and group, and all five surviving npm ignores
+(`@mantine/*`, `react`, `react-dom`, `@types/react`, `@types/react-dom`) plus the `docker` /
+`docker-compose` ones — is provably untouched. Worth doing at the parser rather than by eye: a
+comment-only claim about a YAML file is exactly the kind that a stray indentation change would
+falsify silently.
+
+**Inert on `main` until the next promotion, like every prior change to this file.** Dependabot reads
+its configuration from the **default branch**, so nothing here takes effect until a `dev` → `main`
+promotion carries it. That has no practical consequence in this case — the paragraph is a comment,
+and comments never had runtime effect on either branch — but it is stated because the same sentence
+is true and load-bearing for every other edit to this file, and an exception that goes unstated is
+how a future reader concludes the rule has exceptions.
+
+**What was deliberately not done.** No `ignore` entry was added for `typescript` — the whole point
+of the rewrite is to make that harder to do by accident, not to do it. No key of any kind changed.
+**The currently-open Dependabot `typescript` PR was not touched** — not merged, not closed, not
+commented on; its predecessor #191 was already closed with the full reasoning earlier today, and
+re-litigating that on a successor was outside this brief. `docs/ROADMAP.md` was read but **not**
+edited, `docs/upgrades/frontend-toolchain-86.md` was not edited, and no dependency, lockfile, or
+other config file was touched. `main` was not touched.
+
+**Plan section affected:** `.github/dependabot.yml` (one comment paragraph) and this entry. No code
+behaviour, schema, API contract, security model, job model, auth, dependency version, or CI
+configuration changed; no locked decision re-opened — the ignores enforcing locked decision §2 are
+untouched, and this change cannot alter Dependabot's behaviour at all.
 
 ---
 
