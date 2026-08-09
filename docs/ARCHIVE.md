@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (147, newest first)
+### Index of §14 entries (148, newest first)
 
+- [2026-08-09 — Post-v1 — `L17`/`P2-2`'s reset effect finally has a regression test; the protection #176 relies on was never actually enforced](#2026-08-09--post-v1--l17p2-2s-reset-effect-finally-has-a-regression-test-the-protection-176-relies-on-was-never-actually-enforced)
 - [2026-08-09 — Infra — #86 sweep step 3 landed: React Compiler rules adopted, `set-state-in-effect` held back over 12 findings with no honest fix (#176)](#2026-08-09--infra--86-sweep-step-3-landed-react-compiler-rules-adopted-set-state-in-effect-held-back-over-12-findings-with-no-honest-fix-176)
 - [2026-08-09 — Infra — #86 sweep step 2 landed: the ESLint 10 family, with the React Compiler rule set held inert; three of the doc's four predictions held](#2026-08-09--infra--86-sweep-step-2-landed-the-eslint-10-family-with-the-react-compiler-rule-set-held-inert-three-of-the-docs-four-predictions-held)
 - [2026-08-09 — Docs/Process — Scoping doc corrected post-step-1; #170 (Dependabot's regenerated unsatisfiable frontend group) closed](#2026-08-09--docsprocess--scoping-doc-corrected-post-step-1-170-dependabots-regenerated-unsatisfiable-frontend-group-closed)
@@ -727,6 +728,72 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Post-v1 — `L17`/`P2-2`'s reset effect finally has a regression test; the protection #176 relies on was never actually enforced
+
+**What changed:** one new file, `frontend/src/pages/ScanDetailPage.scanIdReset.test.tsx`, plus
+`CHANGELOG.md` and this entry. **No production code changed** —
+`frontend/src/pages/ScanDetailPage.tsx` is byte-identical to `dev`, verified with `git diff` after
+the verification step below rather than assumed.
+
+**The gap, and how it surfaced.** The `:scanId` reset effect has existed since the 2026-07-13
+Frontend-review wave 2 entry (`L16 / P2-1, L17 / P2-2`, originally issue #62): React Router reuses
+the `ScanDetailPage` instance across `/scans/:id` navigations, so without it the previous scan's
+header, findings, artifacts, tag draft and poll state linger, and the status-gated artifacts and
+findings effects fire for the new id against the old `scan.status`. It was never tested. The three
+existing suites — `ScanDetailPage.findingsTable.test.tsx` (a memo-boundary render-count test that
+never mounts the page), `.latestwins.test.tsx` and `.poller.test.tsx` (both of which mount the page
+at a single `/scans/7`) — contain no navigation between two `:scanId` values. The effect could have
+been deleted and all 79 tests would have stayed green.
+
+This was found while auditing **#176**, which lists that effect as one of six sites a future change
+to `react-hooks/set-state-in-effect` may touch, and warns against "fixing" it blind. That warning
+was leaning on a test that did not exist. #176's body now says so explicitly, and this entry
+records the fix.
+
+**Why a new file rather than one of the three.** Placement was a judgement call and is recorded so
+it is not re-litigated. `findingsTable` tests a child component in isolation with no router at all —
+structurally wrong. `latestwins` and `poller` both mount the full page in a router and were the
+plausible hosts, but each is deliberately scoped to one concern with minimal fixtures ("a finished
+scan — not polled, so the findings fetches are the only traffic"), and this test needs two distinct
+scans differing in id, target, tags, findings and artifacts. Folding those fixtures into either file
+would blur a suite whose narrowness is the point. The repo's own convention is one concern per file,
+named for it — `findingsTable`, `latestwins`, `poller`, and on `ScansPage` `compare`, `latestwins`,
+`urlstate` — so `scanIdReset` follows the existing scheme.
+
+**What the test asserts.** It renders `/scans/1`, waits for the header (`Scan #1`, `alpine:3.19`),
+a finding (`CVE-SCAN-ONE`) and an artifact (`scan-one-raw.json`), then types `draft-only-tag` into
+the tag input so the draft diverges from the server value — state that `loadScan` deliberately
+preserves under `L16 / P2-1`, and which therefore only the reset can clear. It navigates to
+`/scans/2` with scan 2's `getScan` held open by a deferred promise, so the assertions land in the
+window the effect protects: after the id changes, before the new data arrives. In that window it
+requires `Loading scan` to be present and all four families of scan-1 state to be absent. It then
+resolves scan 2 and re-checks that the stale draft has not reappeared — a second, independent leg,
+because an unreset draft would survive the load as well as the navigation.
+
+**Verified to catch the regression, not merely to pass.** The reset effect was temporarily deleted
+(the 11 `setState` calls plus 2 ref writes, removed as one block by an anchored replacement), the
+test re-run, and it **failed** on the first in-flight assertion — `Loading scan` never appears
+because scan 1's page is still mounted, with `alpine:3.19` visible in the failure dump. The effect
+was then restored with `git checkout --` and the file confirmed byte-identical to `dev`. A test that
+is only ever observed passing proves nothing about what it guards; this one was observed failing for
+the right reason first.
+
+**Suites:** lint clean, `format:check` clean, **80 tests across 22 files** (was 79/21 — this one
+test), `npm run build` green, `npm audit` 0 vulnerabilities.
+
+**What was deliberately not done.** The reset effect was not refactored toward the
+`key`-prop-remount shape #176 names as the compiler-idiomatic replacement — this PR tests current
+behaviour, it does not change it. None of the other five findings #176 tracks was touched.
+`react-hooks/set-state-in-effect` stays `off`, and `frontend/eslint.config.js` was not edited.
+#176's own Definition of Done was left as it stands — closing out its test prerequisite is part of
+the work that issue tracks, not this PR. `main` was not touched.
+
+**Plan section affected:** new file `frontend/src/pages/ScanDetailPage.scanIdReset.test.tsx`,
+`CHANGELOG.md` § Unreleased/Added, and this entry. No code behaviour, schema, API contract, security
+model, job model, auth, or CI configuration changed; no locked decision re-opened.
 
 ---
 

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Regression test for the `:scanId` per-scan state reset (`L17` / `P2-2`)** —
+  `frontend/src/pages/ScanDetailPage.scanIdReset.test.tsx`. The reset effect has
+  guarded against two scans' state mixing since 2026-07-13, but nothing tested
+  it: the three existing `ScanDetailPage` suites (`findingsTable`, `latestwins`,
+  `poller`) never navigate between two `:scanId` values, so the effect could
+  have been deleted with the whole suite staying green. The gap was found while
+  auditing [#176](https://github.com/tyler-rich/Scrye/issues/176), which lists
+  that effect as one of six sites a future change may touch.
+
+  The test renders `/scans/1`, edits the tag draft away from the server value,
+  navigates to `/scans/2` with the second fetch held open, and asserts that none
+  of scan 1's header, findings, artifacts or tag draft survives — then that the
+  stale draft does not reappear once scan 2 lands. Verified to catch the
+  regression, not merely to pass: with the reset effect temporarily deleted it
+  fails on the first in-flight assertion, with scan 1's target still rendered.
+  **No production code changed** — `ScanDetailPage.tsx` is byte-identical to
+  `dev`, and none of the other five findings #176 tracks was touched.
+
 ### Security
 
 - **Frontend lockfile refreshed, closing two HIGH advisories in the build/dev
