@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (154, newest first)
+### Index of §14 entries (155, newest first)
 
+- [2026-08-09 — Infra — `@types/node` 24.13.3 → 26.2.0: the sweep's one declined package taken deliberately, after step 4 had already shrunk its blast radius to one file](#2026-08-09--infra--typesnode-24133--2620-the-sweeps-one-declined-package-taken-deliberately-after-step-4-had-already-shrunk-its-blast-radius-to-one-file)
 - [2026-08-09 — Docs/Process — Roadmap updated for the completed #86 sweep, the re-cut react-router advisory, and the React-19-blocked router major](#2026-08-09--docsprocess--roadmap-updated-for-the-completed-86-sweep-the-re-cut-react-router-advisory-and-the-react-19-blocked-router-major)
 - [2026-08-09 — Infra — #86 sweep step 8 landed: `globals` 17.9.0, `@testing-library/user-event` 14.6.3, `postcss` 8.5.26 — the sweep is complete, and its reminder-surface PR had already closed itself](#2026-08-09--infra--86-sweep-step-8-landed-globals-1790-testing-libraryuser-event-1463-postcss-8526--the-sweep-is-complete-and-its-reminder-surface-pr-had-already-closed-itself)
 - [2026-08-09 — Infra — #86 sweep step 7 landed: Vite 6.4.3 → 8.2.1 + `@vitejs/plugin-react` 4.3.4 → 6.0.5; the partial oracle was closed by a pixel diff, but only after its noise floor was calibrated](#2026-08-09--infra--86-sweep-step-7-landed-vite-643--821--vitejsplugin-react-434--605-the-partial-oracle-was-closed-by-a-pixel-diff-but-only-after-its-noise-floor-was-calibrated)
@@ -735,6 +736,160 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Infra — `@types/node` 24.13.3 → 26.2.0: the sweep's one declined package taken deliberately, after step 4 had already shrunk its blast radius to one file
+
+**What changed:** `frontend/package.json` (one line), `frontend/package-lock.json` (two entries),
+plus `CHANGELOG.md` and this entry. **`@types/node` is the only package bumped.** No source, test,
+or config file changed — `frontend/eslint.config.js`, both tsconfigs, `vite.config.ts` and
+`postcss.config.cjs` are byte-identical to `dev`. `typescript` stays at **6.0.3** and no
+`typescript-eslint` version moved; `main` was not touched.
+
+**This is a deviation, and it is the maintainer's, made explicitly.** `docs/upgrades/frontend-toolchain-86.md`
+§5 is titled *"The sweep does not need it. Keep it on the 24 line."*, the step-8 entry below records
+`@types/node` as one of the sweep's **two deliberate exclusions**, and `.github/dependabot.yml`
+carries a major-ignore for it whose comment says *"lifting this line is part of moving the Node
+major, not a bump to take on its own."* All three still describe a decision that was correct when it
+was made. The maintainer instructed this session to take 26.x anyway, on **currency** grounds rather
+than on any claim that the sweep or a security finding requires it — and it does not: the only
+`@types/node` constraints anywhere in the resolved tree are the **optional** peers of `vite@8.2.1`
+(`^20.19.0 || >=22.12.0`) and `vitest@4.1.10` (`^20.0.0 || ^22.0.0 || >=24.0.0`), read from the
+installed manifests, and the pinned 24.13.3 satisfied both. Nothing failed on it, before or after.
+
+**The target was read live rather than from the sweep document.** `@types/node`'s
+`dist-tags.latest` is **26.2.0**, not the 26.1.2 the reminder-surface PR proposes and not the 26.1.2
+the document's §2 inventory lists — the same staleness §2 warns about, arriving again. Separately,
+`dist-tags` carries a **`ts6.0` tag, and it also points at 26.2.0**, which is DefinitelyTyped's own
+statement that this release is the one intended for the TypeScript 6.0 this repo pins. Both
+packages declare `typeScriptVersion: "5.6"` and identical `typesVersions` redirects for `<=5.7`, so
+TypeScript 6.0.3 reads the modern types on either side.
+
+---
+
+**Why §5's argument no longer applies, which is the finding that made the bump cheap.** §5's case —
+inherited from #145's narrowing on 2026-08-03 — is that `tsconfig.node.json` sets
+`"types": ["node"]`, so types ahead of the pinned Node 24 runtime *"describe APIs the build does not
+have and feed them straight into the type-aware ESLint gate."* That was written while
+`tsconfig.app.json` still **inherited** TypeScript's enumerate-everything `types` default and was
+therefore ambiently pulling `@types/node` into all 80 files of `src/`. **Step 4 (#179) changed
+that**, writing `"types": []` into `tsconfig.app.json` explicitly. Measured now rather than
+reasoned about, with `tsc --listFiles`:
+
+| Project | Files loaded | Of those, from `@types/node` |
+|---|---:|---:|
+| `tsconfig.app.json` (all of `src/`) | 1,063 | **0** |
+| `tsconfig.node.json` (`vite.config.ts`) | — | **82** |
+
+**The entire surface of this bump is one file, `vite.config.ts`**, whose only Node API use is
+`process.env` at line 7 (grepped: `src/` contains zero references to `process`, `Buffer`,
+`__dirname`, `__filename` or the `NodeJS.` namespace). And the declaration it consumes is
+unchanged — `interface ProcessEnv extends Dict<string> {}` is character-identical in 24.13.3 and
+26.2.0. Recorded because it means the §5 decision and this reversal are **not in conflict**: §5 was
+right about a tree that no longer exists, and step 4 is what retired its premise.
+
+---
+
+**Node 24 compatibility was measured, not inferred from the major number — and the answer is
+"yes, with an enumerated exception list."** `@types/node` majors track Node majors loosely, so
+"26 types on a 24 runtime" is a claim that has to be checked in **both** directions. A first attempt
+by grepping declaration text produced a 400-entry "removed" list that included `fs.readFileSync`,
+which is obviously false: 26.2.0 declares its module members **without the `export` keyword** where
+24.13.3 used it, so a text-shaped diff measures the formatting, not the API. That was caught by
+spot-checking one implausible entry before believing the list — the same
+noise-floor-before-measurement discipline the step 6 and step 7 entries below record, arrived at a
+third time by a third route.
+
+The real measurement enumerates every exported symbol of every `node:` module from both packages
+using **the installed TypeScript 6.0.3 compiler API** (`createProgram` + `checker.getExportsOfModule`
+over a synthetic file importing all 44/46 modules), classifies each by `SymbolFlags.Value`, and
+diffs the two sets:
+
+| | |
+|---|---|
+| Symbol rows | 1,235 (24.13.3) → 1,426 (26.2.0) |
+| Modules | 44 → 46 — `node:ffi` and `node:quic` added, **none removed** |
+| Added | 263 names — 65 value exports, 198 type-only |
+| Dropped | 72 names — **31 value exports**, 41 type-only |
+
+Both directions were then checked against a **real Node 24.19.0** — the head of the 24 line, which
+is what `ci.yml`'s `node-version: "24"` resolves to — downloaded from `nodejs.org/dist` and run
+directly, because this sandbox is on Node 22:
+
+- **26 of the 31 dropped value exports still exist on Node 24.19.0**: 24 top-level `zlib.Z_*`
+  constants (the aliases superseded by `zlib.constants.*`), plus `assert.CallTracker` and
+  `buffer.SlowBuffer`. So **the new types really do stop describing a handful of APIs the pinned
+  runtime still has** — the claim "26.x describes Node 24 correctly" is true in the aggregate and
+  false in the particulars, and the particulars are these. The other 5 (`Z_ASCII`, `Z_BINARY`,
+  `Z_DEFLATED`, `Z_TEXT`, `Z_UNKNOWN`) are absent from Node 24 too, so dropping them is a
+  correction.
+- **44 of the 65 added value exports do not exist on Node 24.19.0**, `node:ffi` and `node:quic`
+  entirely (both `require()` throw), plus scattered additions such as
+  `diagnostics_channel.boundedChannel`. This is precisely the hazard §5 named, now quantified: the
+  types describe 44 runtime APIs the build's Node does not have.
+
+**Neither list is referenced anywhere in this repository**, and neither is reachable from `src/` at
+all, per the `--listFiles` result above. The residual is therefore real, bounded, and confined to
+`vite.config.ts`: a future edit to that one file could type-check against a Node 26 API and fail at
+build time under Node 24. It is written down rather than argued away.
+
+---
+
+**The `print-config` diff, run per §0.3's method note — on four files, not three.** App `.tsx`
+(`src/pages/Dashboard.tsx`), library `.ts` (`src/lib/polling.ts`) and the test override
+(`src/lib/polling.test.ts`) are the three classes the note prescribes; **`vite.config.ts` was added
+as a fourth**, because it is the only file whose ambient type space this bump changes and the three
+standard classes would have been structurally incapable of showing a difference. All four resolved
+configs are **byte-identical before and after, 135 rules each** — nothing added, removed, or
+re-severitied, and no parser or plugin identity string moved. That is the expected result for a step
+that touches no linting package, and it is recorded as a measured result for the reason §0.3 exists:
+the expected result is exactly the one that does not get checked.
+
+**What moved in the lockfile: 306 → 306 packages, +8/−8.** Both lockfiles were parsed and compared
+key by key: **zero added, zero removed, two bumped** — `@types/node` 24.13.3 → 26.2.0 and its sole
+dependency `undici-types` **7.18.2 → 8.3.0**, a major, pulled by 26.2.0's `~8.3.0` requirement where
+24.13.3 required `~7.18.0`. `undici-types` has no other requirer in either tree, and it contributes
+`fetch`/`Response`/`Headers` typings into the **node** project's global space only, which `src/`
+cannot see. `lockfileVersion` stays 3. The lockfile was written with **npm 11.19.0** installed into
+a scratch prefix to match CI's Node 24 rather than the sandbox's Node 22 / npm 10.9.7 — the **ninth**
+consecutive lockfile touch to use this method and the ninth clean diff — and `npm ci` was run
+through the same npm 11 with the file's SHA-256 re-verified unchanged afterwards.
+
+**Suites, measured on both sides, each from a fresh `rm -rf node_modules && npm ci`.** Baseline on
+24.13.3: lint clean (13.2 s), `format:check` clean, **80 tests across 22 files**, build
+**630.29 kB JS (`index-C771VE3z.js`) / 196.79 kB CSS (`index-BG7b_ejj.css`)**, `npm audit` **0**.
+After the bump: lint clean (12.6 s), `format:check` clean, **80 tests across 22 files**, build
+identical, audit **0**. `tsc -b --force` was run separately so the type check could not be served
+from an incremental build info file. **The test comparison was made per test, not per total** — both
+runs captured with `--reporter=json` and reduced to sorted `file :: full test name :: status`
+triples, which **diff empty**. All three emitted assets are **byte-identical by SHA-256** to the
+baseline, which is the right signal here: a types-only devDependency cannot reach the bundle.
+**No lint finding was autofixed, in bulk or individually — there were none.**
+
+**One stale record this bump creates, flagged rather than fixed.** `.github/dependabot.yml`'s
+`@types/node` stanza is a **major**-ignore, and its comment now argues against a change that has
+landed. Two reasons it was left alone: it was outside this session's explicit scope (`@types/node`
+was to move, nothing else), and it is **inert on `dev` regardless** — Dependabot reads its `ignore`
+list from the default branch, and `origin/main`'s copy of the file has no `@types/node` stanza at
+all (the finding in the queue-audit entry below, re-confirmed here). Whether to drop the stanza,
+keep it as a 27-major guard, or rewrite its rationale is a maintainer call, and the same is true of
+§5 of the sweep document, which now describes a decision that has been reversed.
+
+**What was deliberately not done.** No package other than `@types/node` moved, in `package.json` or
+in the lockfile — **`typescript` stays at 6.0.3**, and no `typescript-eslint`, `eslint`, `vite`,
+`vitest` or `jsdom` version was touched. **No lint rule was disabled, downgraded, or suppressed**,
+and no pre-release or canary package was installed. No source, test, or config file changed.
+`.github/dependabot.yml`, `docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were
+**not** edited. The separate TypeScript 7 investigation this session also ran was **investigation
+only** — no install, no config edit, no PR — and its findings are the maintainer's to act on.
+`main` was not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`, `CHANGELOG.md`
+§ Unreleased/Changed, and this entry. No code behaviour, schema, API contract, security model, job
+model, auth, or CI configuration changed; no locked decision re-opened — React stays on 18 and
+Mantine on v7, and `@types/node` declares no `react`, `react-dom`, `@types/react*` or `@mantine/*`
+peer (it declares no peers at all).
 
 ---
 
