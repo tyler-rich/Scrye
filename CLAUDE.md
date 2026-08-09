@@ -201,6 +201,12 @@ the API and confirm none of the above is present. If any appears, edit
 it out and re-read to confirm the edit held. Report in one line whether
 a strip was needed.
 
+Any future change to this policy must include its `docs/ARCHIVE.md` §14
+entry in the **same PR** that changes the policy — not as a follow-up.
+An unrecorded reversal is what let this section's own ban-then-reversal
+(PR #169, see `docs/ARCHIVE.md` §14 2026-08-09) go undocumented for
+hours; a policy PR without its §14 entry is not done.
+
 ## Definition of done (per phase — all must hold before opening the PR)
 1. Lint clean — `ruff` + `black` (Python), ESLint + Prettier (TypeScript).
 2. Tests for the phase's logic exist and pass.
