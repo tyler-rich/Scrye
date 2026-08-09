@@ -915,6 +915,67 @@ config edited, no PR opened that changes code, no action taken on #153, and no s
 run to "see what happens". `npm ci` was run only to establish the baseline against the **current**
 lockfile, and that lockfile's hash is unchanged.
 
+---
+
+**Third pass (same date, follow-up PR): the estimates were re-derived against the newly-readable
+changelogs, and two of them moved.** The first two passes wrote the per-step effort/risk table
+while jsdom 27/28/29 were still listed as unreachable. With those changelogs in hand the jsdom
+step was re-costed from the *actual test code* rather than from the changelog's tone, and the
+result is worth recording because it cuts both ways:
+
+- **Two channels are live.** The **selector-engine swap** (27.0.0, `nwsapi` →
+  `@asamuzakjp/dom-selector`) sits under **116 Testing Library query call sites** across the 12
+  `.tsx` test files — every query bottoms out in `querySelectorAll`. And the **re-derived UA
+  stylesheet** (27.0.0, plus its `display`-resolution fix) reaches the suite through exactly one
+  path, verified in the installed `@testing-library/dom@10.4.1`: `isSubtreeInaccessible()` reads
+  `getComputedStyle(element).display`, `isInaccessible()` reads `.visibility`, `config.js` sets
+  `defaultHidden: false`, and the repo never calls `configure()` — so all 34 `getByRole` sites run
+  that filter.
+- **Four channels are provably inert, including the two that sound worst.** The **CSSOM rewrite**
+  (29.0.0) has no author CSS to act on: `vite.config.ts`'s `test` block sets no `css` key, so
+  Vitest's default `css: false` applies and Mantine's stylesheets never enter jsdom. The
+  **`element.click()` → `PointerEvent`** change (27.0.0) is unreachable: there is **no `.click()`
+  anywhere in `frontend/src/`**, and all interaction goes through `userEvent.click` (8) or
+  `fireEvent.click` (6), which build and dispatch their own events. **Passive-by-default events**
+  cannot bite — no `preventDefault` anywhere in `src/`, no wheel/touch/scroll listeners. Resource
+  loading, MIME sniffing, and bad-port blocking have no subresource loads to affect.
+- **Net: effort widened S–M → S–L; risk held at medium.** The two directions roughly cancel. The
+  reason it did not rise is the property that separates this step from the Vite one: **detection is
+  complete and immediate** — 79 assertions in ~15 s, with no failure mode that survives a green
+  run.
+
+**The ordering changed as a result: jsdom and Vite 8 swapped, making jsdom step 6 and Vite step 7.**
+Membership is unchanged. Steps 4–7 carry no dependency on each other, so their order was always a
+judgement about verification cost rather than a constraint; the swap spends the cheap, total oracle
+(`npm test`) before the expensive, partial one (a build plus a human pass over the running SPA),
+keeps both test-harness steps adjacent, and stops the last test-harness change from landing on a
+just-swapped bundler — the one arrangement in which a test failure has two plausible causes. The
+original order is recorded as *not wrong*, since every step is verified green before the next
+begins.
+
+**The premise that prompted the re-check was half right, and the entry says so.** jsdom **is**
+riskier than the `typescript-eslint` step — but it already was in the first draft (Step 1 low–med
+versus jsdom medium), so the changelogs confirmed that relative order rather than overturning it;
+and `typescript-eslint` was **never** the top of the ranking. Step 3 (React Compiler, unbounded)
+and the Vite step have outranked it throughout. jsdom is now third, behind both. The document
+carries the full ranking explicitly in §8 so this is not re-litigated from the table alone. Every
+other row was re-checked and confirmed unchanged rather than left standing.
+
+**The `"types": []` recommendation moved from prose into the step that performs it.** §7.2's audit
+established that TypeScript 6.0's new `types` default is a no-op for this repo; that finding now
+also appears as a checklist item under §6, Step 4 ("Edits this step makes"), alongside the
+`package.json` bump and the PR-description note about the 6.0.3 ceiling. A verified no-op is
+precisely the edit that gets skipped and later rediscovered as a mystery, and the explicit array
+additionally pins the behaviour against TypeScript 7, where the old enumerate-everything default is
+gone. §7.2 now points at the step rather than standing alone.
+
+**Plan section affected (third pass):** `docs/upgrades/frontend-toolchain-86.md` only — §6 (step
+order, jsdom channel analysis, Step 4 checklist), §7.2/§7.3/§7.4 (cross-references renumbered),
+§8 (effort table plus a new explicit risk ranking). Still scoping only: no dependency version,
+lockfile, or config file changed, and `docs/ROADMAP.md` still deliberately unedited.
+
+---
+
 **Plan section affected:** new file `docs/upgrades/frontend-toolchain-86.md`; this §14 entry
 (including the correction to the 2026-08-09 queue-audit entry's characterisation of #153's red
 check). `docs/ROADMAP.md` was deliberately **not** edited — three items in it are affected (the #86
