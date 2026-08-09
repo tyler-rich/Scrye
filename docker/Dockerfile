@@ -43,9 +43,9 @@ RUN npm run build
 FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818 AS scanners
 ARG TARGETARCH
 # Pinned, current scanner versions (CLAUDE.md § Dependency hygiene).
-ARG TRIVY_VERSION=0.72.0
-ARG GRYPE_VERSION=0.115.0
-ARG SYFT_VERSION=1.46.0
+ARG TRIVY_VERSION=0.73.0
+ARG GRYPE_VERSION=0.116.1
+ARG SYFT_VERSION=1.50.0
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl tar \
