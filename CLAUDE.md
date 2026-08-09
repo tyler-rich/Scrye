@@ -188,14 +188,18 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 
 ## Attribution
 
-Nothing you write may contain an attribution footer, a session URL, a
-Co-Authored-By trailer, or a "Generated with" line. This applies to commit
-messages, PR titles and bodies, and PR and issue comments.
+Never write an attribution footer, a session URL, a Co-Authored-By
+trailer, or a "Generated with" line. Not in commit messages, not in PR
+titles or bodies, not in comments. Do not compose one and remove it
+later — do not write it at all.
 
-If one appears anyway, it was appended after you wrote — do not try to
-remove it. Editing a PR body to strip it does not work; the text is
-re-appended server-side, and attempting it produces false "verified clean"
-reports. Leave it and say nothing about it. I remove it by hand at merge.
+Before opening a PR or posting a comment, check the text you are about
+to submit for any of the above and remove it first.
+
+After opening a PR or posting a comment, read the posted body back from
+the API and confirm none of the above is present. If any appears, edit
+it out and re-read to confirm the edit held. Report in one line whether
+a strip was needed.
 
 ## Definition of done (per phase — all must hold before opening the PR)
 1. Lint clean — `ruff` + `black` (Python), ESLint + Prettier (TypeScript).
