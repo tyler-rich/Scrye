@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (139, newest first)
+### Index of §14 entries (140, newest first)
 
+- [2026-08-09 — Infra/Process — Dependabot round closed out: queue merged and closed, bundled scanners bumped, the display-name option declined, prior claims corrected](#2026-08-09--infraprocess--dependabot-round-closed-out-queue-merged-and-closed-bundled-scanners-bumped-the-display-name-option-declined-prior-claims-corrected)
 - [2026-08-09 — Infra/Process — Open-Dependabot-queue audit: only #149 was on `main`, and it was already superseded; `.github/dependabot.yml`'s `ignore` list is read from `main`, so `dev`-only edits to it are inert](#2026-08-09--infraprocess--open-dependabot-queue-audit-only-149-was-on-main-and-it-was-already-superseded-githubdependabotymls-ignore-list-is-read-from-main-so-dev-only-edits-to-it-are-inert)
 - [2026-08-08 — Docs/Process — `docs/ROADMAP.md` replaced wholesale with an externally-drafted two-track revision (Track A carried forward verbatim, Track B added)](#2026-08-08--docsprocess--docsroadmapmd-replaced-wholesale-with-an-externally-drafted-two-track-revision-track-a-carried-forward-verbatim-track-b-added)
 - [2026-08-08 — Security/Infra — `cryptography` bumped 49.0.0 → 50.0.0 for CVE-2026-69247; the dogfood gate caught it on an unrelated PR](#2026-08-08--securityinfra--cryptography-bumped-4900--5000-for-cve-2026-69247-the-dogfood-gate-caught-it-on-an-unrelated-pr)
@@ -719,6 +720,135 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-09 — Infra/Process — Dependabot round closed out: queue merged and closed, bundled scanners bumped, the display-name option declined, prior claims corrected
+
+**What changed:** the round the 2026-08-09 queue-audit entry below opened was finished. Merged
+into `dev`, in order, each squash-merged with the base re-confirmed as `dev` and the required
+checks (`Backend — lint + tests`, `Frontend — lint + build`, `Image — build + dogfood self-scan`,
+plus the three CodeQL contexts) verified green **on the current head after its branch was updated
+from `dev`** — never on a run predating a push or base move:
+
+1. **#159** — the audit PR itself (uvicorn 0.52.1, alembic 1.19.1, the audit's §14 entry).
+2. **#151** — `debian:bookworm-slim` digest refresh in `docker/Dockerfile`.
+3. **#154** — `github/codeql-action` v4.37.6, its SHA re-resolved against upstream before merging:
+   `5595ccaf…` is `refs/tags/v4.37.6^{}`, the dereferenced commit — the correct pin form for this
+   repo's annotated tags, so Dependabot got the #146 lesson right this time.
+4. **#160** — bundled scanners **Trivy 0.72.0 → 0.73.0, Grype 0.115.0 → 0.116.1, Syft 1.46.0 →
+   1.50.0** (details below).
+5. **#150** — the optional `trivy-server` sidecar 0.72.0 → 0.73.0, taken only after #160 so the
+   sidecar never ran ahead of the bundled binary; its proposed digest was verified independently
+   against the Docker Hub registry before merging.
+
+**Closed without merging:** **#149** (cryptography 49.0.0 → 50.0.0, the one security update on
+`main`) — closed after verifying in `dev`'s diff, not any summary, that #156 (`719f11b`) moved
+both `pyproject.toml` and `requirements.lock` to 50.0.0; `main`'s open Dependabot alert (#7)
+persists by design until a promotion carries the fix. **#157** — superseded by #159's merge.
+**#158** — replaced by #159, below. **#153** stays open, deliberately unactioned: it is the #86
+toolchain sweep's reminder surface (`docs/ROADMAP.md` § Track A now says so explicitly).
+
+**#158 → #159: the audit PR was re-opened from a renamed branch.** #158's head branch carried a
+tooling-generated `claude/` prefix. Two mechanics corrections for the future: **(a)** GitHub's
+squash-commit title is the PR title plus number — a head-branch name never enters the target
+branch's history, so the rename was about the PR page's permanent head-ref label, not the squash
+title; **(b)** the branch-rename REST endpoint (which updates open PRs' head refs in place) is not
+reachable from this execution environment, and neither `git push :ref` nor the git-refs DELETE API
+is permitted, so the achievable equivalent was: push the same commit (`8c6815b`) under
+`dependabot-queue-audit`, open #159 with an identical body, verify identical diff/base
+(4 files, +193/−11, base `dev`), close #158. The stale refs
+`claude/dependabot-main-branch-audit-fa8614` and `claude/v0.3.0-release-prep-8w9w4j` could not be
+deleted from the session and await manual deletion.
+
+**DECLINED — GitHub profile display name (not deferred; no review date, no resolution trigger).**
+The option on the table since the 2026-07-13 squash-merge-authorship entry, asserted done in the
+2026-08-02 governance entry, and re-raised as a violation by the audit entry below, was to set the
+GitHub profile display name to `tyler-rich` so that web-UI/API merge commits match
+session-authored commits. **The maintainer has declined it: the display name stays their real
+name.** The authorship invariant that matters is that **no Claude/Anthropic identity appears in
+commits or PRs**, and the maintainer's real name satisfies it. The accepted cost is two author
+strings for the same person in history — `tyler-rich` on branch commits (repo-local git config,
+unchanged and still enforced), the real name on web-UI/API merges, including the v0.3.0 promotion
+merge commit — which is cosmetic. Those merge commits are **correct as they stand**: not drift,
+not a violation, not something to fix. Consequences for prior records: the 2026-08-02 governance
+entry's item 1 ("display name set to `tyler-rich`") does not describe the current state and its
+implied obligation is void; the audit entry's "every web-UI merge violates § Git & PR
+conventions" framing is superseded (its factual observations stand); `CLAUDE.md` § Git & PR
+conventions and `docs/ROADMAP.md` were rewritten this round to record the decision so no future
+session re-raises it.
+
+**#160 — the bundled-scanner bump, and what "in lockstep" turned out to include.** Each target
+version was confirmed current by resolving upstream tags (`git ls-remote`); release notes for
+every release crossed document no breaking, deprecation, or CLI change, and Syft's JSON schema
+moves only at patch level (`internal/constants.go`: 16.1.5 → 16.1.10 between the two tags), so
+JSON parsing and persisted SBOMs are unaffected. Beyond the three `ARG`s: the `ci.yml` and
+`rescan.yml` `aquasec/trivy` / `anchore/grype` scan-image pins are documented in-file as "pinned
+to the version Scrye bundles" and moved with fresh registry-resolved digests (the old tags were
+re-resolved first and matched the committed pins — methodology check); `THIRD_PARTY_LICENSES/`
+was re-verified **fresh** per Apache-2.0 §4 — every `LICENSE` (and Trivy's `NOTICE`) fetched at
+the new tags and `cmp`'d byte-identical, Grype/Syft still 404 on `NOTICE` — so only its version
+table moved; README's Integrations versions and a CHANGELOG entry. The #135 symlink-containment
+guard was re-run locally against the real downloaded syft 1.50.0 / grype 0.116.1 on CPython
+3.14.6 (7 passed) before CI repeated it against the binaries the image ships.
+
+**Verified and found already correct — no change made (recorded so the verification itself is on
+the record):**
+
+- **The alembic timing claim in #159's CHANGELOG entry.** Checked against PyPI's release index:
+  1.19.0 published 2026-08-04T18:57Z, 1.19.1 published 2026-08-08T16:32Z, #157 opened
+  2026-08-08T09:15Z — so "1.19.1 was published after #157 opened", about seven hours after, is
+  accurate as written. A review reading had conflated 1.19.0's date with 1.19.1's ("four days
+  apart" describes the two *releases*, not 1.19.1 versus #157). Nothing corrected.
+- **The `ignore`-list-read-from-`main` finding in the audit entry below.** Re-verified on all
+  three legs: `origin/dev:.github/dependabot.yml` carries the `@types/node` major-ignore (#147),
+  `origin/main`'s copy does not, and #153 proposes `@types/node` 26.1.2 regardless. Accurate. The
+  available fixes both touch `main` — wait for the next promotion to carry `dev`'s config (cost:
+  ignored majors keep resurfacing in grouped PRs until then), or promote `.github/dependabot.yml`
+  on its own outside a release (cost: a commit on `main` outside the release discipline, plus the
+  back-merge). **Deliberately left as is** — both options are maintainer calls on `main`.
+
+**Governance re-verification against the live API (2026-08-09).** GHCR package public (anonymous
+manifest pull of `:latest` succeeds); private vulnerability reporting `{"enabled": true}`; all
+three rulesets `active`. Two changes were found done that no §14 entry records being made — the
+CodeQL migration's two settings edits: default setup is off (the committed workflow's checks run
+and pass on `dev` PRs, impossible while it is enabled) and the three CodeQL contexts are in
+`required_status_checks` on **both** `protect-dev` and `protect-main` (live ruleset read:
+`protect-dev` requires Backend/Frontend/Image-dogfood + CodeQL×3 with strict up-to-date;
+`protect-main` requires Backend/Frontend + CodeQL×3). When they were made is not recorded
+anywhere — the same invisible-settings-change failure mode this checklist exists for, this time in
+the happy direction. `docs/ROADMAP.md`'s CodeQL item was rewritten accordingly (open work is
+alert disposition only). Not re-verifiable at this session's API permission level: the Actions
+secrets, Dependabot alert toggles, workflow permissions (proxy-blocked paths), and CodeQL alert
+states — their prior Settings verifications stand as the record.
+
+**The sandbox-interpreter question, settled by installation rather than inference.** This
+sandbox's system interpreters are 3.10–3.13 (default 3.11.15), and its preinstalled `uv 0.8.17`
+resolves `3.14` to 3.14.0rc2 only — matching the 2026-08-03 and audit-entry reports. But a
+**current uv (0.12.3) installs `cpython-3.14.6` from python-build-standalone in seconds**, so "no
+3.14 here" is a statement about the tooling version, not the sandbox. On the real 3.14.6 the full
+backend suite runs **728 passed / 11 skipped / 0 failed**. `test_undeterminable_presence_fails_startup`
+was then re-reproduced on 3.13.12 and fails exactly as the 2026-08-03 entry records — the
+monkeypatched `crypto.os.stat` intercepts the test's own `assert not autogen.exists()` via
+`pathlib/_local.py`'s `os.stat()` call and raises the planted `PermissionError` — confirming the
+diagnosis by reproduction rather than by matching the failure to the entry by name. Local runs on
+an installed 3.14.6 are therefore valid evidence in this environment; upgrade uv first.
+
+**Environment caveat, extending the 2026-08-02 issue-body observation: this environment's GitHub
+ingress appends an attribution footer to every issue-comment and PR-body write, and a PATCH that
+strips it gets the footer re-appended to the PATCHed body server-side** — verified twice against
+the live API, including a direct authenticated PATCH whose payload contained no footer. Strips do
+not stick; the footer (without session link — a PATCH does at least downgrade the session-link
+variant to the generic one) remains on #149's and #150's closure/decision comments and #159's and
+#160's bodies, and needs hand-cleanup in the web UI, as #135–#137 did. Merge-API squash commit
+messages are **not** affected — every squash commit landed this round was re-read from `dev` and
+carries no footer.
+
+**Plan section affected:** `docker/Dockerfile`, `.github/workflows/ci.yml` + `rescan.yml`,
+`THIRD_PARTY_LICENSES/README.md`, `README.md`, `CHANGELOG.md` (#160); `docker/docker-compose.yml`
+(#150); `backend/pyproject.toml` + `requirements.lock` (#159); `CLAUDE.md` § Git & PR conventions
+and `docs/ROADMAP.md` (display-name decision, CodeQL item, governance list, #86/#153 note). No
+schema, API contract, security model, job model, or auth change; no locked decision re-opened.
 
 ---
 

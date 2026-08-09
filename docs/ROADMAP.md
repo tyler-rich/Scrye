@@ -105,6 +105,16 @@ Small, self-contained work that closes a concrete gap.
   single deliberate PR rather than folded into an unrelated change. These are
   deliberately **not** added to `.github/dependabot.yml`'s `ignore` list — they should
   keep being surfaced until this is done.
+
+  **Dependabot's currently open expression of this sweep is
+  [#153](https://github.com/tyler-rich/Scrye/pull/153)** (opened 2026-08-07): the same
+  eight majors at slightly newer targets (`typescript-eslint` has moved on to 8.66.0),
+  plus `@types/node` 26 and two routine minors. It stays open **deliberately
+  unactioned** — it is the reminder surface for this item, not a PR to merge or to pick
+  apart. (`@types/node` 26 appears in it despite the majors-ignore added on `dev` in
+  #147 because Dependabot reads `.github/dependabot.yml` — including `ignore` — from the
+  repository's default branch, so an ignore rule added on `dev` takes effect only once a
+  promotion carries it to `main`; see [`ARCHIVE.md` §14, 2026-08-09](./ARCHIVE.md).)
 - **`react-router` 7 → 8.** Belongs with the tooling majors above, and is now a **pure
   currency item with no security component**. It was previously coupled to
   GHSA-qwww-vcr4-c8h2 (#123), whose only recorded fix was the 8.3.0 major; that advisory
@@ -194,15 +204,35 @@ Small, self-contained work that closes a concrete gap.
   a code session, which is exactly why several sat invisible in `ARCHIVE.md` §14 prose
   for weeks before being collected here.
 
-  **Six of the original eight items are now closed.** Five were verified in GitHub
-  Settings on 2026-08-02 — the GitHub profile display name, the dormant Docker Hub
-  secrets, GHCR package visibility, Dependabot security alerts, and the Actions workflow
-  permissions; what that verification actually found (including the two that turned out
-  to be correct already rather than newly changed) is in
-  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md). **Private vulnerability reporting is the
-  sixth** — see below. Check that entry, not this list, before re-doing any of them: a
-  settings change leaves no artifact in the repository, so §14 is the only durable
-  record it happened.
+  **Six of the original eight items are now closed.** Four were verified in GitHub
+  Settings on 2026-08-02 — the dormant Docker Hub secrets, GHCR package visibility,
+  Dependabot security alerts, and the Actions workflow permissions; what that
+  verification actually found (including the two that turned out to be correct already
+  rather than newly changed) is in [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
+  **Private vulnerability reporting is the fifth** — see below.
+
+  **The GitHub profile display name is the sixth, closed as a decision rather than a
+  change — declined 2026-08-09, not deferred.** The display name stays the maintainer's
+  real name. Merges performed through the GitHub web UI or API author the resulting
+  commit as that display name — repo-local `git config` cannot override it — so those
+  commits, including the v0.3.0 promotion merge commit, carry it and **are correct as
+  they stand**; they are not drift and not something to fix. The authorship invariant
+  this project actually enforces is that no AI-tooling identity appears in commits or
+  PRs, and the maintainer's real name satisfies it. The accepted cost is two author
+  strings for the same person in history (`tyler-rich` on branch commits via repo-local
+  git config, which continues unchanged; the display name on web-UI/API merge commits),
+  which is cosmetic. No review date, no resolution trigger — do not re-raise. See
+  [`ARCHIVE.md` §14, 2026-08-09](./ARCHIVE.md).
+
+  A 2026-08-09 re-verification of this list against the live API confirmed GHCR package
+  visibility (an anonymous manifest pull of `ghcr.io/tyler-rich/scrye:latest` succeeds)
+  and private vulnerability reporting (`{"enabled": true}`), and re-read all three
+  rulesets (`protect-dev`, `protect-main`, `protect-tags` — all `active`, contents in
+  [`ARCHIVE.md` §14, 2026-08-09](./ARCHIVE.md)). The Actions secrets, Dependabot alert
+  toggles, and workflow-permissions settings are not readable at the API permission
+  level available here, so their 2026-08-02 Settings verification stands as the record.
+  Check the §14 entries, not this list, before re-doing any of them: a settings change
+  leaves no artifact in the repository, so §14 is the only durable record it happened.
 
   **What remains is one untracked decision.** The branch-protection item turned out to
   be mostly done; the two genuinely open pieces of it were tracked as issues, and both
@@ -291,33 +321,25 @@ Small, self-contained work that closes a concrete gap.
   continuously by the push/PR triggers instead. See
   [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
 
-  **What remains is disposition, and two settings edits.** No alert has been dismissed —
-  that is a deliberate hold, since a dismissal with no written reason is
-  indistinguishable from an unread finding. The §14 entry supplies the written reason
-  for each; applying them (and deciding whether the two `targets.py` alerts warrant a
-  code change to make the containment legible to the analyzer, rather than merely a
-  dismissal) is the open work.
+  **What remains is disposition only — the two settings edits that used to be listed
+  here are done, verified live on 2026-08-09.** A ruleset read shows all three contexts
+  — `CodeQL — python`, `CodeQL — javascript-typescript`, `CodeQL — actions` — present in
+  `required_status_checks` on **both** `protect-dev` and `protect-main`, and the
+  committed workflow's checks run and pass on PRs into `dev`, which is only possible
+  with default setup disabled (while it is enabled, the API rejects the workflow's SARIF
+  outright). The same read shows `protect-dev` requiring `Backend — lint + tests`,
+  `Frontend — lint + build`, and `Image — build + dogfood self-scan` alongside the three
+  CodeQL contexts, with strict "require branches to be up to date" enforcement;
+  `protect-main` requires Backend, Frontend, and the three CodeQL contexts. See
+  [`ARCHIVE.md` §14, 2026-08-09](./ARCHIVE.md).
 
-  - **Disable default setup** (Settings → Code security → Code scanning → CodeQL
-    analysis → ⋯ → *Switch to advanced*). This is **not optional and not cosmetic**: the
-    two configurations are mutually exclusive server-side — while default setup is
-    enabled the API rejects the committed workflow's SARIF with *"CodeQL analyses from
-    advanced configurations cannot be processed when the default setup is enabled"*, so
-    the new workflow's checks stay red. Alert history is preserved across the
-    conversion. The §14 entry gives the exact order (disable → re-run the PR's failed
-    CodeQL jobs to prove they go green → merge → *then* edit the rulesets), which keeps
-    the unscanned window to about a minute.
-  - **Add the three contexts to `protect-dev`'s — and `protect-main`'s — required status
-    checks**: `CodeQL — python`, `CodeQL — javascript-typescript`, `CodeQL — actions`
-    (U+2014 em dash, one ordinary space each side, exactly as in `Backend — lint +
-    tests`). `required_status_checks` is an **explicit allowlist of contexts**, currently
-    naming only `Backend — lint + tests` and `Frontend — lint + build` on both rulesets,
-    so until these are added CodeQL runs and is visible but does not block a merge. Do
-    it **after** the merge, never before: a required context with nothing reporting
-    blocks a PR forever, and an open PR that predates the workflow has no CodeQL run to
-    report. Same hazard, same fix as
-    [#136](https://github.com/tyler-rich/Scrye/issues/136); both edits can be made in
-    one pass.
+  On disposition: no alert has been dismissed — that is a deliberate hold, since a
+  dismissal with no written reason is indistinguishable from an unread finding. The §14
+  entry (2026-08-02) supplies the written reason for each; applying them (and deciding
+  whether the two `targets.py` alerts warrant a code change to make the containment
+  legible to the analyzer, rather than merely a dismissal) is the open work. Alert state
+  is not readable at the API permission level available to a code session, so
+  disposition happens in the repository's Security tab.
 
 ## Medium-term
 
