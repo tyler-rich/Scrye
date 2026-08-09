@@ -743,7 +743,7 @@ downloaded and unpacked to compare config objects directly. The prior records' p
 what would break were treated as hypotheses to test, not as findings to carry forward, and two of
 them did not survive.
 
-**Finding 1 — TypeScript 7 is not part of this sweep and cannot be.** `typescript@7.0.2` is the
+**Finding 1 — TypeScript 7 is not part of this sweep, as of 2026-08-09.** `typescript@7.0.2` is the
 Go-native compiler. Read from its published tarball: `"exports"."."` is `./lib/version.cjs`, so
 `import ts from 'typescript'` yields the version string and nothing else; `lib/` contains
 `getExePath.js`, `tsc.js`, `version.cjs` and **no `typescript.js`**; `bin` has dropped `tsserver`;
@@ -752,12 +752,21 @@ falls from 24.3 MB (6.0.3) to 2.5 MB. The real API sits behind `./unstable/*` su
 the Go binary over `vendor/vscode-jsonrpc`. Against that, `@typescript-eslint/typescript-estree@8.66.0`
 calls `require("typescript")` in 11 places across `dist/*.js` and references **114 distinct `ts.*`
 symbols** including `ts.createProgram`. `typescript-eslint`'s peer range is `>=4.8.4 <6.1.0` at
-`latest` **and at its current canary** — no published version accepts TypeScript 7, and the shape
-of the change means widening it is a rewrite upstream, not a range edit. **The sweep's TypeScript
-ceiling is 6.0.3.** (Separately verified so it is not re-derived: `tsc -b` *does* survive — running
-the 7.0.2 native binary, `--build, -b` is still in `--help` — so `npm run build` is not what blocks
-TS 7. Only the linter is. This is § Interpreter CVEs' rule applied to a toolchain claim: check it
-against the artifact before believing the metadata, in either direction.)
+`latest` **and at its current canary** — no version published as of this date accepts TypeScript 7,
+and the shape of the change means widening it is a rewrite upstream, not a range edit. **The
+sweep's TypeScript ceiling is 6.0.3.** (Separately verified so it is not re-derived: `tsc -b` *does*
+survive — running the 7.0.2 native binary, `--build, -b` is still in `--help` — so `npm run build`
+is not what blocks TS 7. Only the linter is. This is § Interpreter CVEs' rule applied to a
+toolchain claim: check it against the artifact before believing the metadata, in either direction.)
+
+**This finding is written as a dated ceiling, not a permanent blocker**, and the document carries
+the re-check with it: `npm view typescript-eslint@latest peerDependencies.typescript`, watching the
+**stable** tag rather than a canary, with the note that support is expected to arrive as a new
+typescript-eslint **major** built against TS 7's `./unstable/*` API rather than as a point-release
+range widen. Corroborated from the TypeScript side by the 6.0 release notes, which call 6.0 a
+transition release *"API compatible with TypeScript 5.9"* whose deprecated options are *"removed
+entirely in TypeScript 7.0"* — which is precisely why step 4 (to 6.0.3) is safe and a step beyond
+it is not.
 
 **Finding 2 — #153's red check is not lint churn, and the prior records say it is.** The
 `Frontend — lint + build` job (check run `93006217895`) failed after **six seconds**, at `npm ci`,
@@ -767,7 +776,12 @@ Dependabot-queue-audit entry below both describe that failure as *"the type-awar
 roadmap item predicts, arriving on schedule."* That is incorrect** — it is an unsatisfiable
 dependency graph, and no amount of lint fixing would move it. The observation that #153 stays open
 as the sweep's reminder surface stands; only the diagnosis of its red check is corrected. Recorded
-here rather than fixed in `docs/ROADMAP.md`, which this session deliberately left unedited.
+here rather than fixed in `docs/ROADMAP.md`, which this session deliberately left unedited, and
+**posted on the PR itself** so the correction reaches anyone triaging the queue without reading
+this file:
+[#153 (comment)](https://github.com/tyler-rich/Scrye/pull/153#issuecomment-5230438598). The PR was
+**not** closed — closing it only makes Dependabot regenerate an equivalent grouped PR carrying the
+same unsatisfiable pairing.
 
 **Finding 3 — the `typescript-eslint` bump does not change which rules run.** The shipped
 `recommendedTypeChecked` config is **identical** between 8.19.0 and 8.66.0 — the same 50 rules at
@@ -818,13 +832,26 @@ existing semver ranges**, so a lockfile refresh alone clears them, no part of th
 ESLint 10 additionally removes the `@eslint/eslintrc` path permanently (`eslint@10.8.1` no longer
 lists it as a dependency).
 
-**Unrelated finding, surfaced by the same baseline: GHSA-qwww-vcr4-c8h2 has been re-cut upstream.**
-The registry's bulk advisory endpoint now returns two ranges — `>=8.0.0 <8.3.0` and
-`>=7.12.0 <7.18.2` — so `react-router@7.18.2` is no longer reported and `npm audit` is silent about
-it. `docs/ROADMAP.md` § Track A still carries *"Ask GitHub to re-cut GHSA-qwww-vcr4-c8h2's affected
-range for the 7.18.2 backport"* as open work, with a long justification for why it is worth the
-effort. It appears to have happened. Flagged rather than resolved, and `docs/ROADMAP.md`
-deliberately left unedited — striking a Track A item is a maintainer call.
+**Unrelated finding, surfaced by the same baseline and then verified at source: GHSA-qwww-vcr4-c8h2
+was re-cut upstream — an amendment to the advisory itself, not a registry-side quirk.** The npm
+registry's bulk endpoint returning two ranges was only the trigger; the claim was confirmed against
+the **GitHub Advisory Database record**, read from the `github/advisory-database` repository via
+`raw.githubusercontent.com` (`advisories/github-reviewed/2026/07/GHSA-qwww-vcr4-c8h2/…json`) after
+`api.osv.dev` and `github.com/advisories/…` both proved unreachable from here. Three legs: the
+record now carries **two `affected` entries** for `react-router` (`introduced 7.12.0 / fixed 7.18.2`
+and `introduced 8.0.0 / fixed 8.3.0`); its `published` and `github_reviewed_at` are both
+**2026-07-24T16:44:43Z** while `modified` is **2026-08-07T18:14:58Z**, so the record was edited
+fourteen days after review; and §14 (2026-08-03) independently records `npm audit` reporting this
+advisory as one contiguous **`7.12.0 - 8.2.0`** during the v0.3.0 release prep, which dates the
+split to between 2026-08-03 and that `modified` stamp. What is **not** readable from here is the
+per-revision diff — GitHub renders advisory revision history only on the web page, and the
+advisory-database repo's git log is not exposed through raw content — so the `modified` timestamp
+is the amendment evidence, not a revision-by-revision account.
+
+**This is exactly what `docs/ROADMAP.md` § Track A asks for** under *"Ask GitHub to re-cut
+GHSA-qwww-vcr4-c8h2's affected range for the 7.18.2 backport"*, down to its "leave the 8.x range as
+it is" condition. Flagged rather than acted on, and `docs/ROADMAP.md` deliberately left unedited —
+striking a Track A item is a maintainer call.
 
 **Three of #153's targets are already stale**, which is the ordinary cost of holding a Dependabot
 PR open as a reminder: `eslint` 10.8.0 → **10.8.1**, `vite` 8.2.0 → **8.2.1**, `@types/node` 26.1.2
@@ -839,14 +866,49 @@ the work starts, not from the PR.
 maintainer declined promoting the config on its own, so the offer will keep arriving and keep being
 inert.
 
-**What was not determinable from this sandbox**, recorded so it is not re-attempted blind:
-TypeScript 6.0's breaking changes (`typescriptlang.org` and `devblogs.microsoft.com` are
-egress-blocked, and the notes are not in the tarball or the repo root); jsdom 27→30's breaking
-changes (jsdom ships no changelog file any more, and its GitHub Releases are unreachable —
-`github.com` 403s through the proxy and `api.github.com` is scoped to this repository); whether an
-upstream `typescript-eslint` issue tracks TS 7 support; and whether the Node inside
-`docker/Dockerfile:27`'s pinned digest is ≥ 24.15.0, which jsdom 30's `engines` requires. Each has
-a stated way to answer it in the document's §9.
+**Four lookups first reported as blocked were retried against different sources and resolved.** In
+three of the four the block was not what it looked like, which is the transferable lesson:
+
+- **TypeScript 6.0's breaking changes — resolved.** `typescriptlang.org` and
+  `devblogs.microsoft.com` are genuinely egress-blocked, but the release notes are **source markdown
+  in `microsoft/TypeScript-Website`, on its `v2` branch** (`packages/documentation/copy/en/
+  release-notes/TypeScript 6.0.md`), which `raw.githubusercontent.com` serves. Fetch the docs
+  repository, not the rendered site. The full option-by-option audit against both tsconfigs is now
+  in the document's §7.2; the two changes upstream says *"will affect many projects"* — `types`
+  defaulting to `[]` and `rootDir` defaulting to `.` — are **no-ops for this repo**, verified rather
+  than assumed (`frontend/src/` has zero references to `process`/`Buffer`/`__dirname`/`__filename`,
+  no `NodeJS.` namespace use, every test imports its globals from `'vitest'`, and timers go through
+  `window.setTimeout`; `tsconfig.node.json` already sets `"types": ["node"]`). The residual risk is
+  the *"less context-sensitivity on `this`-less functions"* inference change, which no config audit
+  can pre-empt.
+- **jsdom 27/28/29 — resolved, and the original report was my error.** The changelog **does** exist
+  at `refs/tags/v29.0.0/Changelog.md`; it was deleted at `v30.0.0`. The first pass reported "all
+  candidate paths 404" after probing `refs/tags/26.1.0` and friends — **jsdom's tags carry a `v`
+  prefix**, so those refs simply do not exist, and a bad ref 404s identically to a missing file.
+  Recorded because the failure mode is general: a 404 from `raw.githubusercontent.com` is evidence
+  about the *path*, not about the file, until the ref is independently confirmed (fetching a known
+  file such as `README.md` at the same ref is the cheap check).
+- **The Node version behind the pinned digest — resolved: `node:24-bookworm-slim@sha256:235600a8…`
+  ships Node 24.18.1**, which satisfies jsdom 30's `^24.15.0` floor, so that prerequisite is closed
+  with no Dockerfile change. `docker run` was unavailable (CLI present, no daemon), so it was
+  resolved against the registry by **two independent methods that agree**: Docker Hub's tag index
+  maps that digest to exactly `24.18.1-bookworm-slim` and `24.18-bookworm-slim`, and the image's
+  config blob carries `NODE_VERSION=24.18.1`. Method note for reuse: Docker Hub serves manifests
+  directly but **307-redirects blobs to `production.cloudfront.docker.com`, which is egress-blocked
+  here**, so the blob was pulled through **`mirror.gcr.io`**, a pull-through cache that serves blobs
+  on its own domain.
+- **The GHSA verification** described above, via the `github/advisory-database` repository.
+
+**Still genuinely blocked**, with the stated method left in place in the document's §9: **jsdom
+30.0.0's own release notes** (the changelog file is gone as of that tag — eight candidate filenames
+probed at the correct `v30.0.0` ref, all 404 — and the notes live only in GitHub Releases, which
+403 through the proxy), and **whether an upstream `typescript-eslint` issue tracks TS 7 support**.
+The jsdom 30 gap is partly mitigated by artifact comparison rather than guesswork: `matchMedia`,
+`ResizeObserver`, and `scrollIntoView` appear in **zero** files of the shipped `lib/` in 26.1.0,
+29.1.1 *and* 30.0.1, so `src/test/setup.ts`'s `if (!…)` polyfill guards behave identically across
+the span — retiring the specific "the polyfill silently steps aside" risk the first pass flagged.
+The typescript-eslint gap does not block the decision at all, since §3.1's registry one-liner
+answers "can we take TS 7 yet" without the issue tracker.
 
 **Explicitly not done**, per the session's scope: no dependency version changed, no lockfile or
 config edited, no PR opened that changes code, no action taken on #153, and no speculative install

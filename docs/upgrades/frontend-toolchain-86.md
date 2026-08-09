@@ -16,6 +16,11 @@
 > engine constraint below was read from the npm registry or from the published
 > package tarball on that date. Where a claim comes from a migration guide rather
 > than package metadata, the guide is named.
+>
+> **One constraint is dated and will expire:** the TypeScript ceiling of 6.0.3
+> holds only while `typescript-eslint`'s `typescript` peer range does. **§3.1
+> carries the one-command re-check** — run it before treating that ceiling as
+> current.
 
 ---
 
@@ -24,14 +29,17 @@
 Four things are true that the existing records do not say, and one thing they say
 is wrong.
 
-1. **TypeScript 7 is not part of this sweep and cannot be.** `typescript@7.0.2` is
-   the Go-native compiler. Its `"."` export is `./lib/version.cjs` — importing
+1. **TypeScript 7 is not part of this sweep — as of 2026-08-09.** `typescript@7.0.2`
+   is the Go-native compiler. Its `"."` export is `./lib/version.cjs` — importing
    `'typescript'` yields the version string and nothing else. The classic compiler
    API (`lib/typescript.js`) is not in the package. `@typescript-eslint/typescript-estree`
    calls `require("typescript")` in 11 places and uses 114 distinct `ts.*` symbols
-   from that API. No published `typescript-eslint` accepts TypeScript 7 — its peer
-   range is `>=4.8.4 <6.1.0` right up to the current canary. **The TypeScript
-   ceiling for this sweep is 6.0.3.**
+   from that API. No `typescript-eslint` published **as of 2026-08-09** accepts
+   TypeScript 7 — its peer range is `>=4.8.4 <6.1.0` right up to the current canary.
+   **The TypeScript ceiling for this sweep is 6.0.3.** This is a dated ceiling, not
+   a permanent blocker — **§3.1 gives the one-command way to re-check it**, and
+   anyone reading this more than a few weeks after 2026-08-09 should run that check
+   before treating the ceiling as current.
 
 2. **#153's red check is not lint churn.** `Frontend — lint + build` failed after
    **6 seconds**, at `npm ci`, with `ERESOLVE`: `typescript-eslint@8.66.0` peer
@@ -53,12 +61,16 @@ is wrong.
    longer depends on `@eslint/eslintrc`, which is this repo's only path to
    `js-yaml` — one of the two HIGH findings in the current baseline (§1).
 
-5. **GHSA-qwww-vcr4-c8h2 has been re-cut upstream.** The registry's advisory
-   endpoint now returns two ranges — `>=8.0.0 <8.3.0` and `>=7.12.0 <7.18.2` — so
-   `react-router@7.18.2` is no longer reported. `docs/ROADMAP.md` § Track A still
-   carries *"Ask GitHub to re-cut GHSA-qwww-vcr4-c8h2's affected range for the
-   7.18.2 backport"* as open work. It appears to be done. Reported here, not acted
-   on; `docs/ROADMAP.md` was deliberately left unedited.
+5. **GHSA-qwww-vcr4-c8h2 was re-cut upstream — confirmed at the GitHub Advisory
+   Database itself, not inferred from npm.** The advisory record now carries **two
+   separate `affected` entries** — `react-router` `[7.12.0, 7.18.2)` and
+   `react-router` `[8.0.0, 8.3.0)` — where it previously carried one contiguous
+   `>= 7.12.0, < 8.3.0`. It is an **upstream amendment, not a registry-side
+   quirk**; the evidence is in §9. This is exactly the change `docs/ROADMAP.md`
+   § Track A asks for under *"Ask GitHub to re-cut GHSA-qwww-vcr4-c8h2's affected
+   range for the 7.18.2 backport"*, including its "leave the 8.x range as it is"
+   condition. Reported here, not acted on; `docs/ROADMAP.md` was deliberately left
+   unedited.
 
 ---
 
@@ -138,12 +150,35 @@ Every constraint below is cited to one of two kinds of source: **[peer]** = a
 **[guide]** = a statement in upstream's migration guide/changelog. Nothing here is
 inferred from version-number proximity.
 
-### 3.1 TypeScript ← typescript-eslint (hard cap, and the reason TS 7 is out)
+### 3.1 TypeScript ← typescript-eslint (the cap, as of 2026-08-09, and how to re-check it)
 
-**[peer]** `typescript-eslint@8.66.0` (published 2026-08-03, current `latest`)
-declares `typescript: ">=4.8.4 <6.1.0"`. Its canary, `8.66.1-alpha.10`
-(2026-08-07), declares the same. **No published version of `typescript-eslint`
-accepts TypeScript 7.**
+> **This constraint has a shelf life. Re-check it before acting on it.**
+>
+> ```sh
+> npm view typescript-eslint@latest peerDependencies.typescript
+> # 2026-08-09 → >=4.8.4 <6.1.0     (TypeScript 6.0.x is the ceiling)
+> # if the upper bound is ever >=7.0.0, TypeScript 7 is back on the table
+> ```
+>
+> **What to watch:** the `typescript` entry of **`typescript-eslint`'s**
+> `peerDependencies` (the umbrella package this repo pins). It is the single field
+> that decides the ceiling — `@typescript-eslint/typescript-estree` and
+> `@typescript-eslint/parser` carry the same range and move together, so checking
+> the umbrella is sufficient. Watch the **stable `latest`** tag; a `canary`/`rc-v8`
+> tag admitting TS 7 is a signal that work has started, not that it has shipped.
+> Upstream's process is documented — see the **[guide]** citation at the end of
+> this section — and pins a *"New TypeScript Version"* tracking issue per release.
+>
+> **The likely shape of the answer, so a widened range is not over-read:** because
+> TypeScript 7 replaces the API rather than changing it (below), support is
+> expected to arrive as a **new typescript-eslint major** built against the
+> `./unstable/*` surface, not as a point-release range widen. Treat a jump in the
+> major version number alongside the range change as the real signal.
+
+**[peer]** `typescript-eslint@8.66.0` (published 2026-08-03, `latest` on
+**2026-08-09**) declares `typescript: ">=4.8.4 <6.1.0"`. Its canary,
+`8.66.1-alpha.10` (2026-08-07), declares the same. **As of that date, no published
+version of `typescript-eslint` accepts TypeScript 7.**
 
 The cap is not upstream being cautious. From the published `typescript@7.0.2`
 tarball:
@@ -172,6 +207,15 @@ stable version of TypeScript"* — with support tracked per release under the
 *"New TypeScript Version"* issue label. There is no published TS 7 support, and
 the shape of the change (a whole new async/RPC API surface, itself marked
 `unstable`) means it is a rewrite upstream, not a range widen.
+
+**Upstream says the same thing from the TypeScript side.** The TypeScript 6.0
+release notes describe 6.0 as *"a significant transition release, designed to
+prepare developers for TypeScript 7.0, the upcoming native port of the TypeScript
+compiler"*, and state that it *"continues to be **API compatible with TypeScript
+5.9**"*. That is the sentence that makes **Step 4 safe and Step 4-plus-one not**:
+`typescript-eslint` works against 6.0 because 6.0 keeps the 5.9 API, and cannot
+work against 7.0 because 7.0 does not. Options that 6.0 merely *deprecates* are
+*"removed entirely in TypeScript 7.0"*.
 
 **Also true, and worth recording so nobody re-derives it:** `tsc -b` survives.
 Running the TS 7.0.2 native binary directly, `--build, -b` is still in `tsc --help`
@@ -483,17 +527,23 @@ the compiler set is a supported configuration and costs nothing.
 |---|---|
 | **Moves** | `typescript` only |
 | **Prerequisite** | Step 1 (`typescript-eslint >= 8.58.0`) |
-| **Config changes** | Unknown — see §8. `tsconfig.app.json` / `tsconfig.node.json` may need edits for options TS 6 deprecates or removes; the release notes were not reachable from this sandbox. |
-| **Expected breakage** | Type errors from stricter checking in `tsc -b`, plus whatever the type-aware lint rules make of changed inference. |
-| **Verifies it** | `npm run build` (the `tsc -b` half) **and** `npm run lint` — both consume the compiler. |
+| **Config changes** | **One recommended, none strictly required** — see §7.2. TS 6.0 changes the default of `types` from "everything in `node_modules/@types`" to `[]`; add an explicit `"types": []` to `tsconfig.app.json` to pin that rather than inherit it. `tsconfig.node.json` already sets `"types": ["node"]`. |
+| **Expected breakage** | Now characterised from the actual release notes (§7.2). The default changes that bite most projects — `types: []` and `rootDir: "."` — are **no-ops here** (verified). What remains is the **`this`-less function context-sensitivity** inference change, which can produce genuinely new errors in generic callback positions, plus whatever the type-aware lint rules make of changed inference. |
+| **Verifies it** | `npm run build` (the `tsc -b` half) **and** `npm run lint` — both consume the compiler. Watch for `TS6xxx` deprecation diagnostics as well as errors. |
 | **Judgement?** | **Judgement** on each type error. |
-| **Effort / risk** | **M** — 2–5 h. **Risk: medium**, and the least well-characterised step in this document. |
+| **Effort / risk** | **M** — 2–5 h. **Risk: medium**, and now the *best*-characterised of the judgement-heavy steps rather than the worst. |
 
-**State plainly in the PR that this stops at 6.0.3 and why** (§3.1), so the next
-Dependabot offer of `typescript@7.x` is not read as an oversight. A note in
+**State plainly in the PR that this stops at 6.0.3, why, and when that was last
+checked** (§3.1), so the next Dependabot offer of `typescript@7.x` is neither read
+as an oversight nor waved through on a stale reading. A note in
 `.github/dependabot.yml` is *not* recommended: per the standing rule there, an
 ignore says "a bot may not make this decision", and TypeScript 7 is wanted — just
 not until `typescript-eslint` ships support.
+
+**`ignoreDeprecations: "6.0"` exists as an escape hatch** and should not be used
+here: it silences 6.0's deprecation diagnostics, and those diagnostics are the
+free preview of what TypeScript 7 removes outright. Taking them now is the point
+of the step.
 
 ---
 
@@ -535,11 +585,12 @@ do not do both in one PR.
 |---|---|
 | **Moves** | `jsdom` only |
 | **Config changes** | **None in `vite.config.ts`** — jsdom is reached only through Vitest's `environment: 'jsdom'`; nothing in `frontend/src/` imports it. **Two docs edits are required** (§7.4) for the raised Node floor. |
-| **Expected breakage** | Four majors of DOM-implementation change under 17 `.tsx` render tests. Specific thing to watch: `src/test/setup.ts` polyfills `matchMedia`, `ResizeObserver`, and `Element.prototype.scrollIntoView` behind `if (!…)` guards — if jsdom 30 now implements any of them, the polyfill silently steps aside and the *real* implementation runs, which is a behaviour change the guard is designed to hide. |
-| **Prerequisite check** | **[peer]** `jsdom@30.0.1` `engines.node: "^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0"`. CI resolves `node-version: "24"` to 24.18.0 (seen in #153's job log) — fine. **Confirm the pinned `node:24-bookworm-slim@sha256:235600a8…` in `docker/Dockerfile:27` is ≥ 24.15.0 before merging** (could not be resolved from this sandbox). There is no `.npmrc`, so `engine-strict` is off and a mismatch would be a non-fatal `EBADENGINE` warning, not a failed build — which is exactly why it needs checking by hand rather than being left to CI. |
+| **Expected breakage** | Four majors of DOM-implementation change under 17 `.tsx` render tests. The 27/28/29 changelogs are now in hand (below); 30's is not (§9). **The `setup.ts` risk previously flagged here does not materialise** — `matchMedia`, `ResizeObserver`, and `scrollIntoView` appear in **zero** files of the shipped `lib/` in 26.1.0, 29.1.1, *and* 30.0.1, so the `if (!…)` guards still take the polyfill branch and nothing silently steps aside. |
+| **What 27/28/29 actually changed** | From the upstream `Changelog.md` (present through tag `v29.0.0`, removed at `v30.0.0`). **27.0.0** is the big one for a render suite: the CSS selector engine was swapped `nwsapi` → `@asamuzakjp/dom-selector`, `element.click()` now fires a `PointerEvent` instead of a `MouseEvent`, certain events became passive by default, the user-agent stylesheet was re-derived from the HTML Standard, `cssstyle` was upgraded, and many `Window`-object conformance fixes landed (named properties, data → accessor properties). **28.0.0** overhauled resource loading and added MIME sniffing to frames — inert here, since no test loads a subresource. **29.0.0** replaced the whole CSSOM implementation (`@acemir/cssom` + `cssstyle` → internal `css-tree`-based) and raised the Node 22 floor to 22.13.0. The through-line is **CSS and selectors**, which is exactly what Mantine-heavy render tests exercise via Testing Library queries and `toHaveTextContent`-style assertions. |
+| **Prerequisite check** | ✅ **Resolved — no action needed.** **[peer]** `jsdom@30.0.1` `engines.node: "^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0"`. CI resolves `node-version: "24"` to 24.18.0 (seen in #153's job log). The pinned `node:24-bookworm-slim@sha256:235600a8…` in `docker/Dockerfile:27` ships **Node 24.18.1** (§9, resolved), which satisfies `^24.15.0`. There is no `.npmrc`, so `engine-strict` is off and a mismatch would have been a non-fatal `EBADENGINE` warning rather than a failed build — which is why it was worth resolving by hand rather than trusting a green CI run. |
 | **Verifies it** | `npm test` — expect 21 files / 79 tests |
 | **Judgement?** | mechanical, unless a test fails |
-| **Effort / risk** | **S–M** — 1–3 h. **Risk: medium**, mostly because jsdom's changelog was not reachable (§8), so this step is the least predictable per unit of size. |
+| **Effort / risk** | **S–M** — 1–3 h. **Risk: medium.** Better characterised than at first pass, but 30.0.0's own notes remain unreachable, so treat `npm test` as the real oracle. |
 
 ---
 
@@ -595,16 +646,66 @@ works); `@eslint/compat` (no removed `SourceCode` methods are used); the
 `@eslint/v9-to-v10` codemods (they target eslintrc configs, custom rules,
 `RuleTester`, and `Linter`/`ESLint` API usage — this repo has none of those).
 
-### 7.2 `frontend/tsconfig.app.json` / `tsconfig.node.json` — unknown (Step 4)
+### 7.2 `frontend/tsconfig.app.json` / `tsconfig.node.json` — one recommended edit (Step 4)
 
-No required edit could be established, because TypeScript 6.0's release notes were
-not reachable from this sandbox (§8). The options in play, for whoever does have
-access: `target: ES2022`, `lib`, `module: ESNext`, `moduleResolution: bundler`,
-`allowImportingTsExtensions`, `isolatedModules`, `moduleDetection: force`,
-`noEmit`, `jsx: react-jsx`, `useDefineForClassFields`, `noUncheckedSideEffectImports`,
-`noUncheckedIndexedAccess`, and the project-references pair in `tsconfig.json`.
-None of these is a legacy option of the kind a major typically removes, so the
-expectation is *no edit*, but that is an expectation, not a finding.
+Established from the **TypeScript 6.0 release notes**, checked option by option
+against both tsconfigs. TS 6.0 is a transition release: it is API-compatible with
+5.9 and mostly *deprecates* rather than removes, with removal deferred to 7.0.
+
+**Recommended edit — pin `types` rather than inherit the new default:**
+
+```jsonc
+// frontend/tsconfig.app.json
+  "noUncheckedIndexedAccess": true,
+  "types": []                        // add: TS 6.0's new default, made explicit
+```
+
+TS 6.0 changes the default `types` from "enumerate everything in
+`node_modules/@types`" to `[]`, and upstream names this the change that *"will
+affect many projects"*, recommending an explicit array *"to improve build
+performance and predictability"*. **It is a no-op for this repo, verified rather
+than assumed:** `frontend/src/` contains **zero** references to `process`,
+`Buffer`, `__dirname`, or `__filename`, no `NodeJS.` namespace use, every test
+file imports `describe`/`it`/`expect` from `'vitest'` rather than relying on
+globals, and timers go through `window.setTimeout` (DOM lib, not `@types/node`).
+`@types/react` is unaffected — it is resolved through the `'react'` module
+specifier, not through global type-root inclusion. `tsconfig.node.json` already
+sets `"types": ["node"]` explicitly and needs nothing.
+
+**Defaults that changed but this repo already sets explicitly — no edit:**
+`strict` (already `true`), `module` (already `ESNext`), `target` (already
+`ES2022`; the new floating default is `es2025`), `noUncheckedSideEffectImports`
+(already `true`).
+
+**`rootDir` now defaults to `.` instead of the inferred common prefix.** No edit:
+both projects set `noEmit: true`, so there is no output layout to shift, and with
+`include: ["src"]` every input is already under `.`.
+
+**Deprecations that do not apply here** — none of these appears in either
+tsconfig: `target: es5`, `--downlevelIteration`, `--moduleResolution node`
+(this repo uses `bundler`), `--moduleResolution classic`, `--baseUrl`,
+`--esModuleInterop false` / `--allowSyntheticDefaultImports false` (unset, so
+`true`), `--alwaysStrict false`, `outFile`, `amd`/`umd`/`systemjs` module values,
+legacy namespace `module` syntax, `asserts` on imports, `no-default-lib`
+directives. `libReplacement` now defaults to `false` — not set here, and inert
+without other configuration.
+
+**`tsc` CLI:** *"Specifying command-line files when `tsconfig.json` exists is now
+an error"* (`TS5112`). `npm run build` runs bare `tsc -b`, passing no file
+arguments, so this does not fire.
+
+**The one change that can produce real new errors:** *"Less context-sensitivity on
+`this`-less functions"* — TypeScript 6.0 narrows when it will infer a callback
+parameter's type from an expected type. This is a type-inference change, not a
+config flag, so it cannot be pre-audited from the config files; it surfaces as
+errors from `tsc -b` at generic callback sites. Two smaller ones worth knowing:
+the `dom` lib now contains `dom.iterable` and `dom.asynciterable` (making
+`tsconfig.app.json`'s explicit `"DOM.Iterable"` redundant but harmless), and
+`--stableTypeOrdering` is a new opt-in flag for 6→7 migration that this repo does
+not need while `noEmit` is set.
+
+**Do not set `"ignoreDeprecations": "6.0"`.** It silences exactly the diagnostics
+that preview what TypeScript 7.0 removes.
 
 ### 7.3 `frontend/vite.config.ts` — no required edit (Steps 5 and 6)
 
@@ -633,12 +734,12 @@ Both currently state **"Node 22+"** for native development —
 on an unsupported runtime. Raise both statements to **Node 22.22.2+ / 24.15+**, or
 simply to "Node 24" to match the image and CI.
 
-### 7.5 `.github/workflows/ci.yml` and `docker/Dockerfile` — no edit expected
+### 7.5 `.github/workflows/ci.yml` and `docker/Dockerfile` — no edit needed
 
-`node-version: "24"` resolves to the current 24.x and satisfies every engines
-constraint in the sweep. The Dockerfile's digest pin needs the ≥ 24.15.0 check
-described in Step 7, and a digest refresh if it falls short — which is the routine
-Dependabot `docker`-ecosystem bump, not a change this sweep authors.
+`node-version: "24"` resolves to the current 24.x and satisfies every `engines`
+constraint in the sweep. **The Dockerfile's digest pin was checked and passes:**
+`node:24-bookworm-slim@sha256:235600a8…` ships **Node 24.18.1**, above jsdom 30's
+`^24.15.0` floor (§9, resolved). No digest refresh is needed for this sweep.
 
 ---
 
@@ -688,14 +789,80 @@ up taken by accident.
 
 ---
 
-## 9. What could not be determined from here, and what would answer it
+## 9. Open questions — resolved and still open
+
+Four of the six questions this document opened with have since been answered at
+source. They are kept here, marked, rather than deleted, so the method is on the
+record and nobody re-runs a lookup that already succeeded — or trusts a "blocked"
+note that is no longer true.
+
+### ✅ Resolved
+
+**1. TypeScript 6.0's breaking changes — RESOLVED.** The release notes are in the
+**`microsoft/TypeScript-Website` repository**, on its **`v2`** branch, at
+`packages/documentation/copy/en/release-notes/TypeScript 6.0.md`, and
+`raw.githubusercontent.com` serves it (785 lines). `typescriptlang.org` and
+`devblogs.microsoft.com` remain egress-blocked — the fix was to stop looking for
+the rendered page and fetch the source markdown the site is built from. The full
+option-by-option audit against both tsconfigs is now in **§7.2**; the headline is
+that the two changes which "affect many projects" (`types` defaulting to `[]`,
+`rootDir` defaulting to `.`) are **no-ops for this repo**, and the one change that
+can produce real errors is an inference change no config audit can pre-empt.
+
+**2a. jsdom 27 / 28 / 29 breaking changes — RESOLVED.** The upstream
+`Changelog.md` **does** exist, at tags up to and including **`v29.0.0`**; it was
+removed at `v30.0.0`. The earlier "all candidate paths 404" finding was a
+**tag-naming error on my part** — jsdom tags are `v30.0.0`, not `30.0.0`, so the
+first round of probes asked for refs that do not exist and the 404s said nothing
+about the file. Corrected path:
+`raw.githubusercontent.com/jsdom/jsdom/refs/tags/v29.0.0/Changelog.md`. Contents
+summarised in **§6, Step 7**.
+
+**4. The Node version behind the pinned digest — RESOLVED: Node 24.18.1**, which
+satisfies jsdom 30's `^24.15.0`. **`docker run` was not available** — the Docker
+CLI is installed but no daemon is running — so the digest was resolved against the
+registry by **two independent methods that agree**:
+
+- **Docker Hub tag metadata.** Paging `hub.docker.com/v2/repositories/library/node/tags?name=bookworm-slim`
+  for a tag whose `digest` equals `sha256:235600a8…` matches exactly two tags,
+  **`24.18.1-bookworm-slim`** and `24.18-bookworm-slim`, both last updated
+  2026-07-30.
+- **The image config blob.** The pinned digest is an OCI image index; its
+  `linux/amd64` manifest (`sha256:a09aabc6…`) points at config blob
+  `sha256:c825877c…`, whose `config.Env` contains **`NODE_VERSION=24.18.1`**
+  (`created: 2026-07-30T19:05:08Z`). Note for whoever repeats this: Docker Hub
+  serves manifests directly but **307-redirects blobs to
+  `production.cloudfront.docker.com`, which is egress-blocked here**, so the blob
+  was fetched through **`mirror.gcr.io`** — a pull-through cache of Docker Hub
+  that serves blobs on its own domain — using its own token endpoint.
+
+**Advisory verification (new).** §0.5's claim was re-checked against the **GitHub
+Advisory Database record itself**, not the npm registry's derived view:
+`raw.githubusercontent.com/github/advisory-database/main/advisories/github-reviewed/2026/07/GHSA-qwww-vcr4-c8h2/GHSA-qwww-vcr4-c8h2.json`.
+**Verdict: an upstream re-cut, not a registry-side quirk.** Three legs:
+
+- The GHSA record now contains **two `affected` entries** for `react-router` —
+  `introduced 7.12.0 / fixed 7.18.2` and `introduced 8.0.0 / fixed 8.3.0`.
+- Its timestamps show an amendment: `published` and `github_reviewed_at` are both
+  **2026-07-24T16:44:43Z**, while `modified` is **2026-08-07T18:14:58Z** — the
+  record was edited **fourteen days after review**.
+- That window is corroborated inside this repo: `docs/ARCHIVE.md` §14
+  (2026-08-03, v0.3.0 release prep) records `npm audit` reporting the
+  `react-router` HIGH as one contiguous range, **`7.12.0 - 8.2.0`**. The split is
+  therefore datable to between 2026-08-03 and the `modified` stamp of 2026-08-07.
+
+  *Caveat on the word "revision history":* GitHub renders a per-revision history
+  on the advisory's web page, which is unreachable here, and the advisory-database
+  repo's git log is not readable through `raw.githubusercontent.com`. The
+  `modified` ≠ `published` timestamp is the amendment evidence available; the
+  individual diff between revisions is not.
+
+### ◻ Still open
 
 | # | Open question | Why it could not be answered | What would answer it |
 |---|---|---|---|
-| 1 | **TypeScript 6.0's breaking changes** — what, if anything, `tsconfig.app.json` / `tsconfig.node.json` must change (§7.2), and what type errors 5.7 → 6.0 produces. | The TypeScript release notes live on `typescriptlang.org` / `devblogs.microsoft.com`, both blocked by this environment's egress proxy, and the notes are not in the npm tarball or the `microsoft/TypeScript` repo root. | Read the TS 6.0 release notes from an unrestricted network; or run `tsc --noEmit` with 6.0.3 against `frontend/src/` — deliberately **not** done here, since Step 4 exists to do exactly that under CI. |
-| 2 | **jsdom 27 → 30 breaking changes.** Four majors of DOM behaviour, entirely unenumerated. | jsdom no longer ships a `Changelog.md` in the repo or the tarball (all candidate paths 404 on `raw.githubusercontent.com`), and its GitHub Releases are unreachable — `github.com` returns 403 through the proxy, and `api.github.com` is scoped to `tyler-rich/Scrye` only. | Read `jsdom/jsdom` GitHub Releases for 27.0.0 / 28.0.0 / 29.0.0 / 30.0.0 from an unrestricted network. Step 7's `npm test` is the empirical substitute. |
-| 3 | **Is there an upstream `typescript-eslint` issue tracking TypeScript 7 support, and a rough timeline?** This decides whether TS 7 is a next-quarter item or a next-year one. | The typescript-eslint issue tracker is not reachable (same GitHub scoping as above). Their docs describe a *"New TypeScript Version"* pinned-issue process but the issues themselves cannot be listed. | Search `typescript-eslint/typescript-eslint` issues for label `New TypeScript Version` and the TS 7 entry; and watch for the first `typescript-eslint` release whose `typescript` peer range exceeds `<6.1.0`, which is checkable from the registry with no browser at all. |
-| 4 | **Is the Node inside `docker/Dockerfile:27`'s pinned digest ≥ 24.15.0?** Step 7's prerequisite. | Docker Hub / the registry API is not reachable from this sandbox, and no Docker daemon is available to pull the digest. | `docker run --rm node:24-bookworm-slim@sha256:235600a8… node --version`, or read the tag's manifest from any host with registry access. |
+| 2b | **jsdom 30.0.0's own breaking changes.** 27–29 are resolved above; 30 is not. | jsdom **deleted `Changelog.md` at `v30.0.0`** — verified by probing eight candidate filenames at the correct `refs/tags/v30.0.0` ref, all 404, against `Changelog.md` returning 200 at `v29.0.0`. Its notes now live only in GitHub Releases: `github.com` returns 403 through the proxy and `api.github.com` is scoped to `tyler-rich/Scrye`. | Read `jsdom/jsdom`'s GitHub Release notes for 30.0.0 from an unrestricted network. **Partly mitigated:** the specific risk Step 7 flagged was checked directly against the shipped `lib/` of 26.1.0, 29.1.1, and 30.0.1 — `matchMedia`, `ResizeObserver`, and `scrollIntoView` are implemented in **none** of them, so `src/test/setup.ts`'s polyfill guards behave identically. Step 7's `npm test` remains the oracle for the rest. |
+| 3 | **Is there an upstream `typescript-eslint` issue tracking TypeScript 7 support, and a rough timeline?** This decides whether TS 7 is a next-quarter item or a next-year one. | The typescript-eslint issue tracker is not reachable (same GitHub scoping as above). Their docs describe a *"New TypeScript Version"* pinned-issue process but the issues themselves cannot be listed. | Search `typescript-eslint/typescript-eslint` issues for label `New TypeScript Version`. **No browser needed for the decision itself:** §3.1's `npm view typescript-eslint@latest peerDependencies.typescript` answers "can we take TS 7 yet" directly from the registry. The issue tracker only adds a timeline. |
 | 5 | **How many lint reports each of steps 1, 2, 3, and 4 actually produces.** Every effort estimate above is a range because of this. | Answering it means installing the candidate toolchain and running it, which mutates the lockfile — explicitly out of scope for this session. | Executing the sequence. This is not a gap in the scoping; it is the reason the sequence is ordered the way it is — each step's report count is measured against exactly one changed variable. |
 | 6 | **Whether Vite 8's Lightning CSS minification changes Mantine's rendered output.** | Requires building and looking at the app. | Step 6's verification: build, diff the emitted CSS against the §1 baseline, and run the SPA in both colour schemes. |
 
@@ -710,7 +877,22 @@ So the next person can re-run it rather than re-derive it.
   is the same data npm resolves against, so it is the authority for anything
   phrased as **[peer]**.
 - **Advisory ranges:** `POST https://registry.npmjs.org/-/npm/v1/security/advisories/bulk`
-  — how §0.5's GHSA re-cut was confirmed.
+  for the npm-derived view, and the **GitHub Advisory Database record itself** —
+  `raw.githubusercontent.com/github/advisory-database/main/advisories/github-reviewed/<YYYY>/<MM>/<GHSA>/<GHSA>.json`
+  — for the authoritative one. `api.osv.dev` is egress-blocked here;
+  `github.com/advisories/…` returns 403; the advisory-database repo is the
+  reachable route to the same data.
+- **Container images without a Docker daemon:** manifests from
+  `registry-1.docker.io` (token from `auth.docker.io`), tag↔digest mapping from
+  `hub.docker.com/v2/repositories/library/<image>/tags`, and **config blobs from
+  `mirror.gcr.io`** — Docker Hub 307-redirects blobs to
+  `production.cloudfront.docker.com`, which is blocked.
+- **Docs that live on a blocked site:** fetch the **source markdown from the
+  documentation repository** instead of the rendered page. TypeScript's release
+  notes are in `microsoft/TypeScript-Website` on the **`v2`** branch, not `main`.
+  Note also that **jsdom's git tags carry a `v` prefix** — `refs/tags/v29.0.0`,
+  not `29.0.0` — and a wrong ref returns the same 404 as a missing file, which is
+  how the changelog was first mis-reported as absent.
 - **Package internals:** published tarballs downloaded and unpacked into a
   scratch directory — `typescript@7.0.2`, `@typescript/typescript-linux-x64@7.0.2`,
   `@typescript-eslint/typescript-estree@8.66.0`,
