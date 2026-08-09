@@ -32,6 +32,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`uvicorn[standard]` 0.52.0 → 0.52.1 and `alembic` 1.18.5 → 1.19.1**, the
+  mergeable half of Dependabot **#157**, reapplied by hand because Dependabot
+  edits `pyproject.toml` only and leaves `backend/requirements.lock` stale — its
+  own branch fails CI's lock-drift gate. `requirements.lock` was regenerated with
+  the pinned `uv 0.8.17` command from `CONTRIBUTING.md` § Backend dependency lock;
+  the diff is those two packages and their hashes, with no transitive churn.
+  Neither release changes a deployed Scrye's behaviour, configuration or schema.
+  - **uvicorn 0.52.1** is four WebSocket-only fixes (closing handshake, write
+    flow control, connection loss during a backpressured write, and denial-
+    response headers). Scrye serves no WebSocket route and the SPA opens no
+    socket, so none of it is reachable here — pure currency.
+  - **alembic 1.19.1, not the 1.19.0 Dependabot proposed.** 1.19.0 (2026-08-04)
+    added named-CHECK-constraint autogenerate detection; 1.19.1 (2026-08-08,
+    published after #157 opened) fixes a defect in exactly that feature, where
+    column-bound check constraints produced wrong autogenerate results. Both
+    changes are confined to the migration-*authoring* path — no shipped migration
+    and no runtime behaviour is affected.
 - **Routine dependency currency across the backend, frontend and CI**, triaged
   from the three grouped Dependabot PRs opened after v0.3.0 (#144, #145, #146)
   and reapplied by hand rather than merged as-built. No change to a deployed
