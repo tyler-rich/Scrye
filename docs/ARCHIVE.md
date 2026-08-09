@@ -824,6 +824,51 @@ are mid-transition. **The normalisation is the only edit made to what gets logge
 validated the only way it can be: by re-running the unmodified suite twice on jsdom 26.1.0 and
 confirming the two logs are byte-identical. They are.
 
+> **Standing note — the shim specification in `docs/upgrades/frontend-toolchain-86.md` §8 is
+> methodologically broken, and not only for this step. Use the shape below instead, in any future
+> drift check.**
+>
+> This is a defect in the *technique*, not a one-off miss in one step's execution, and it recurs
+> anywhere the app under test mints identifiers per render. §8 prescribes logging
+> `element.outerHTML.slice(0, 120)` keyed by test name and call index. Any React app on Mantine
+> hits `useId` on essentially every labelled control, input, alert and popover — and React's own
+> `useId`, Emotion, Radix, Headless UI, Chakra and MUI all do the same thing — so a fresh random
+> id appears *inside the first 120 characters* of most elements, on every run. The log is then
+> re-randomised per run and a diff of two logs measures the id generator, not the DOM. A second,
+> subtler source is the same: `outerHTML` captures the element's **contents**, so any element
+> caught mid-transition (a button with and without its loading spinner, a list mid-fetch) differs
+> between runs while being the same element. Both were live here.
+>
+> **Why it is worse than merely noisy.** The failure is silent and points the wrong way. A
+> spec-conformant shim run once per version produces a large non-empty diff on a bump that changed
+> nothing, and "non-empty diff" is exactly the signal the check exists to raise. Reading that
+> output honestly means investigating ~20 phantom drifts, or — the likelier outcome under time
+> pressure — concluding the whole measurement is unreliable and waving it through on the green
+> suite, which is the state §8 built the checklist item to escape. A check that cries wolf is worse
+> than no check, because it discredits itself.
+>
+> **The template.** Two properties, both required:
+>
+> 1. **Log element *identity*, not rendered bytes.** The element's **DOM index path** from the
+>    document root (`html>body>div[0]>…>button[1]`) is what "the query resolved to a different
+>    element" actually means. It is stable against the element's own contents changing, and it
+>    moves precisely when the resolved node moves. Keep a normalised `outerHTML` slice alongside it
+>    as a human-readable label for reading a non-empty diff — not as the identity.
+> 2. **Normalise the generated ids** — here `mantine-[a-z0-9]{6,}` → `mantine-ID`. Adapt the
+>    pattern to whatever the app mints (`:r0:`-style for bare React `useId`, `css-…` for Emotion,
+>    `radix-…` for Radix). Normalisation is the only edit permitted to what gets logged; anything
+>    further starts hiding the thing being measured.
+>
+> **And the step that makes it a measurement rather than a hope: calibrate the noise floor first.**
+> Run the shim **twice on the unchanged version** and confirm the two logs are byte-identical
+> *before* touching the dependency. That costs one extra test run — ~20 s here — and it is the only
+> thing that distinguishes "the diff is empty because nothing drifted" from "the diff is empty
+> because I got lucky with the ordering." It is also what caught this defect: the non-determinism
+> was found on jsdom 26.1.0, with the version still untouched, so there was never a moment where a
+> phantom diff had to be told apart from a real one.
+>
+> Recorded here rather than in the sweep document, which is the maintainer's to correct.
+
 **The result, which is the point of the exercise:**
 
 | | |
