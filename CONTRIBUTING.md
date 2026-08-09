@@ -16,8 +16,12 @@ everyone.
 ### Prerequisites
 
 - **Python 3.14** (3.14.6 or later)
-- **Node 22+** (the image and CI both build with Node 24, the Active LTS; the 20
-  line reached end-of-life on 2026-04-30)
+- **Node 22.22.2+ or 24.15+** (the image and CI both build with Node 24, the
+  Active LTS; the 20 line reached end-of-life on 2026-04-30). The odd-looking
+  floor is `jsdom@30`'s `engines.node` — `^22.22.2 || ^24.15.0 || >=26.0.0` —
+  which the frontend test suite runs on. A plain "Node 22" or "Node 24" that
+  predates those patches installs, but `npm test` then runs on a runtime jsdom
+  does not support.
 - **Docker** + the **Compose v2** plugin (for the integrated run; Buildx for a
   multi-arch image build)
 - For native scan runs: the **`trivy`**, **`grype`**, and **`syft`** binaries on
