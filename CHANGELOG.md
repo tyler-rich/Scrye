@@ -93,6 +93,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Vite 6.4.3 → 8.2.1 and `@vitejs/plugin-react` 4.3.4 → 6.0.5** — step 7 of
+  the frontend toolchain sweep in `docs/upgrades/frontend-toolchain-86.md`,
+  crossing two majors on each package. The two move in lockstep because
+  `@vitejs/plugin-react@6.0.5` declares `vite: "^8.0.0"` as a **required**
+  (non-optional) peer — it does not merely tolerate Vite 8. These are the only
+  two packages bumped; `frontend/vite.config.ts`, both tsconfigs,
+  `eslint.config.js` and every source and test file are untouched.
+
+  **Vite 8 replaces Rollup + esbuild with Rolldown + Oxc, and CSS minification
+  moves to Lightning CSS.** This is the one step in the sweep that changes what
+  ships, so the emitted bundle was compared against the pre-bump baseline
+  rather than assumed equivalent:
+
+  | | Vite 6.4.3 | Vite 8.2.1 | Δ |
+  |---|---|---|---|
+  | modules transformed | 7,035 | 7,018 | −17 |
+  | JS | 645.14 kB (gzip 193.61) | 630.29 kB (gzip 187.36) | −14.85 kB (−2.30%) |
+  | CSS | 201.38 kB (gzip 29.30) | 196.79 kB (gzip 28.63) | −4.59 kB (−2.28%) |
+  | build time | 7.30 s | 1.28 s | −5.7× |
+
+  **The module delta is entirely CommonJS-interop scaffolding, not application
+  code.** Both bundlers' module lists were captured and diffed: the 19 ids
+  present only under Vite 6 are `commonjsHelpers.js` plus the
+  `?commonjs-es-import` / `?commonjs-exports` / `?commonjs-module` proxy
+  modules `@rollup/plugin-commonjs` mints when converting `react`, `react-dom`,
+  `scheduler`, `cookie`, `fast-deep-equal` and `set-cookie-parser` to ESM.
+  Rolldown handles CommonJS natively and mints none. Exactly one id is new
+  (`vite/preload-helper.js`, a Vite-internal helper). **No application or
+  library module was added or removed.**
+
+  **The CSS was verified declaration by declaration, because a Lightning CSS
+  regression fails no test.** Both stylesheets were parsed, their comma-joined
+  selector lists split into individual selectors (so the minifiers' rule
+  merging and splitting cancels out), colours canonicalised, and the shorthands
+  Lightning CSS introduced expanded back to longhands. Result: **1,171
+  (context, selector) keys on each side, none gained, none lost, and zero
+  declarations added or dropped.** Every difference is a semantics-preserving
+  minifier rewrite — 29 vendor prefixes removed where the unprefixed property
+  is present (`-moz-appearance` ×14, `-webkit-appearance` ×14,
+  `-webkit-transform`), `transparent` → `#00000000`, `center` → `50%`,
+  `0rem` → `0`, `.15s ease` → `.15s` (`ease` is the initial
+  `transition-timing-function`), `top/right/bottom/left: 0` → `inset: 0`,
+  `padding-inline-start/end` → `padding-inline`, `:nth-of-type(1)` →
+  `:first-of-type`, `*:before` → `:before`, adjacent rules with identical
+  declaration blocks merged, and the six `::-webkit-*` spin/search-button
+  selectors **split** out of one comma list into six rules — which is a
+  correctness improvement, since a browser that fails to parse one selector in
+  a comma list discards the whole rule.
+
+  **Rendering was compared pixel by pixel, with a calibrated noise floor.** Six
+  routes (dashboard, scans list, new scan, scan detail, settings, account) were
+  rendered from both builds against a stubbed API in headless Chromium, in
+  **both light and dark mode**. A first pass diffed non-zero, and re-running the
+  *same* build twice showed a ~135-pixel noise floor from in-flight animations —
+  so that pass measured nothing. With animations frozen the noise floor is
+  **exactly zero across all twelve views**, and against it **all twelve views
+  are pixel-identical between Vite 6 and Vite 8.**
+
+  **The one genuine behaviour change is the browser target.** Vite 8's default
+  build target is `baseline-widely-available`, which resolves to **Chrome 111,
+  Edge 111, Firefox 114, Safari 16.4** — up from esbuild's `modules` default
+  (roughly Chrome 87 / Firefox 78 / Safari 14). Every syntax Lightning CSS
+  newly emitted is inside that target: Media Queries Level 4 range syntax
+  (`(device-width<=31.25em)`, Safari 16.4+), multi-position gradient colour
+  stops (Safari 12.1+), and unprefixed `appearance` (Safari 15.4+). No project
+  document states a browser floor, so none needed correcting.
+
+  **No `vite.config.ts` change was required**, as the sweep document predicts:
+  the config has no `build.rollupOptions` (so the `rollupOptions` →
+  `rolldownOptions` rename does not apply), no `esbuild`, `optimizeDeps` or
+  `manualChunks` keys, and `plugins: [react()]` passes no options.
+
+  **`@vitejs/plugin-react` 6.0.0 removed every Babel feature — and this repo
+  passed no `babel` option, so nothing had to move to `@rolldown/plugin-babel`
+  and nothing was dropped.** There is no `.babelrc`, no `babel.config.*`, and
+  no `babel` key anywhere in `frontend/`. React Fast Refresh now runs through
+  Oxc; the dev server was smoke-tested to confirm it still serves
+  `/@react-refresh` and still injects `$RefreshReg$` into `.tsx` transforms,
+  even though the `react-refresh` npm package has left the tree.
+
+  The lockfile moves 339 → 305 packages, every movement attributable: 30 added
+  (`rolldown` + 15 platform bindings, `lightningcss` + 12 platform bindings,
+  `@oxc-project/types`, `@rolldown/pluginutils`, `detect-libc`), 61 removed
+  (`esbuild` + 25 `@esbuild/*`, `rollup` + 25 `@rollup/rollup-*`, plugin-react
+  4's Babel subtree, and `react-refresh`), and 3 bumped (the two targets plus a
+  `picomatch` dedupe). `@babel/core` and `@babel/parser` remain in the tree,
+  but their only requirer is now `eslint-plugin-react-hooks@7.1.1` rather than
+  plugin-react. Lint, `format:check` and `npm audit` (0 vulnerabilities) are
+  clean, and the suite is unchanged at **80 tests across 22 files**, compared
+  per test name rather than by total.
+
 - **jsdom 26.1.0 → 30.0.1** — step 6 of the frontend toolchain sweep in
   `docs/upgrades/frontend-toolchain-86.md`, crossing four majors (27, 28, 29,
   30). **`jsdom` is the only package bumped**; `vite` stays at 6.4.3 (step 7),
