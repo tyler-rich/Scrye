@@ -87,83 +87,59 @@ Small, self-contained work that closes a concrete gap.
   `version-update:semver-major`, so digest refreshes of the pinned 24 tag still arrive —
   which is why odd-numbered lines like the **#126** Node 25 proposal (never LTS, EOL
   2026-06-01) do not show up here.
-- **Frontend tooling majors from Dependabot #86.** After the Mantine/React ignores
-  landed (locked decision §2 — `ARCHIVE.md` §14, 2026-07-26), the rest of that grouped
-  PR is still wanted and still unapplied. **#145** (2026-08-03) re-proposed the same set
-  at newer targets, which is the current shopping list: **TypeScript 5.7 → 7.0**,
-  **ESLint 9 → 10** (with **`@eslint/js` 9 → 10** moving in lockstep),
-  **`typescript-eslint` 8.19 → 8.65**, **Vite 6 → 8** (with
-  **`@vitejs/plugin-react` 4 → 6**), **Vitest 3 → 4**, **jsdom 26 → 30**,
-  **`eslint-plugin-react-hooks` 5 → 7**, and **`eslint-plugin-react-refresh` 0.4 → 0.5**.
-  None of these is locked. They are grouped here because they share one risk: every one
-  of them lands on the **type-aware ESLint gate** turned on 2026-07-24, so the real work
-  is the lint-config churn they shake out, not the version numbers.
-  `eslint-plugin-react-hooks` 7 is the sharpest edge — its recommended set pulls in the
-  React Compiler rules — and `@eslint/js`/`@vitejs/plugin-react` cannot move
-  independently of ESLint/Vite, which is why the routine triage in #147 left all eight
-  behind rather than picking off the ones that happened to be minors. Best done as a
-  single deliberate PR rather than folded into an unrelated change. These are
-  deliberately **not** added to `.github/dependabot.yml`'s `ignore` list — they should
-  keep being surfaced until this is done.
+- ~~**Frontend tooling majors from Dependabot #86.**~~ **Done 2026-08-09** — landed as an
+  ordered eight-step sequence, one PR per step, each verified green before the next began:
+  **[#171](https://github.com/tyler-rich/Scrye/pull/171)** `typescript-eslint` 8.19.0 →
+  8.66.0 · **[#174](https://github.com/tyler-rich/Scrye/pull/174)** the ESLint 10 family
+  (`eslint` 9.39.4 → 10.8.1, `@eslint/js` → 10.0.1, `eslint-plugin-react-hooks` 5.1.0 →
+  7.1.1, `eslint-plugin-react-refresh` 0.4.16 → 0.5.3) ·
+  **[#177](https://github.com/tyler-rich/Scrye/pull/177)** the React Compiler rule set
+  adopted, with `react-hooks/set-state-in-effect` held off over twelve reports that have no
+  honest fix (tracked in [#176](https://github.com/tyler-rich/Scrye/issues/176)) ·
+  **[#179](https://github.com/tyler-rich/Scrye/pull/179)** TypeScript 5.7.2 → 6.0.3 ·
+  **[#180](https://github.com/tyler-rich/Scrye/pull/180)** Vitest 3.2.7 → 4.1.10 ·
+  **[#183](https://github.com/tyler-rich/Scrye/pull/183)** jsdom 26.1.0 → 30.0.1 ·
+  **[#185](https://github.com/tyler-rich/Scrye/pull/185)** Vite 6.4.3 → 8.2.1 with
+  `@vitejs/plugin-react` 4.3.4 → 6.0.5 ·
+  **[#187](https://github.com/tyler-rich/Scrye/pull/187)** `globals` 17.9.0,
+  `@testing-library/user-event` 14.6.3, `postcss` 8.5.26.
 
-  **Dependabot's currently open expression of this sweep is
-  [#153](https://github.com/tyler-rich/Scrye/pull/153)** (opened 2026-08-07): the same
-  eight majors at slightly newer targets (`typescript-eslint` has moved on to 8.66.0),
-  plus `@types/node` 26 and two routine minors. It stays open **deliberately
-  unactioned** — it is the reminder surface for this item, not a PR to merge or to pick
-  apart. (`@types/node` 26 appears in it despite the majors-ignore added on `dev` in
-  #147 because Dependabot reads `.github/dependabot.yml` — including `ignore` — from the
-  repository's default branch, so an ignore rule added on `dev` takes effect only once a
-  promotion carries it to `main`; see [`ARCHIVE.md` §14, 2026-08-09](./ARCHIVE.md).)
-- **`react-router` 7 → 8.** Belongs with the tooling majors above, and is now a **pure
-  currency item with no security component**. It was previously coupled to
-  GHSA-qwww-vcr4-c8h2 (#123), whose only recorded fix was the 8.3.0 major; that advisory
-  was closed on 2026-08-02 by the **7.18.2 backport** instead, so nothing about the 8
-  line is required (see [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md)). Do not re-argue
-  it as a security fix — as of 7.18.2 there is nothing left for it to fix. The
-  migration's actual cost is that v8 folds `react-router-dom` back into `react-router`,
-  so **every import site in `frontend/src/` moves** (twelve files today), plus whatever
-  the type-aware ESLint gate makes of the new type surface — which is the same risk the
-  bumps above share, and the reason to do them together.
-- **Ask GitHub to re-cut GHSA-qwww-vcr4-c8h2's affected range for the 7.18.2 backport.**
-  The advisory still ranges **`>= 7.12.0, < 8.3.0`** — re-confirmed during the v0.3.0
-  release prep on 2026-08-03, where `npm audit` against the current lockfile reported
-  `react-router` HIGH at `7.12.0 - 8.2.0`. `react-router` 7.18.2 is inside that range
-  while *carrying the fix*, so `npm audit` and Dependabot will report a HIGH against a
-  package we have actually patched, indefinitely and with no version we can move to that
-  silences it short of the 8 major above. The follow-up is an **advisory-improvement
-  request** (the *Suggest improvements for this vulnerability* path on the GHSA page)
-  asking for the range to be re-cut to **`>= 7.12.0, < 7.18.2`**, with the 8.x range
-  left as it is.
-
-  **Why it is worth the effort rather than something to live with.** A permanent false
-  HIGH on a dependency we have already fixed is not a cosmetic annoyance: it trains
-  everyone reading the output — us, and anyone reviewing a Dependabot queue — to dismiss
-  that package's alerts on sight, which is exactly how a *real* future `react-router`
-  advisory gets waved through. Scrye is a vulnerability scanner that gates its own CI on
-  its own findings; a standing known-bogus HIGH in that pipeline is a direct hit on the
-  signal the project exists to produce. It also is not only our problem — **every
-  consumer on 7.18.2 sees the same false positive**, so the fix is worth making upstream
-  rather than papering over locally with an ignore rule.
-
-  **The evidence is already gathered; do not re-derive it.** The tarball comparison is
-  recorded in [`ARCHIVE.md` §14, 2026-08-03](./ARCHIVE.md) (v0.3.0 release prep):
-  `throwIfPotentialCSRFAttack()` is byte-identical across 7.18.1, 7.18.2 and 8.3.0, and
-  the fix is entirely at the call site in `index-react-server.js`'s
-  `generateMiddlewareResponse` — 7.18.1 runs the origin check and
-  `processServerAction()` inside one `try`, while 7.18.2 isolates the check in its own
-  `try`, rewrites the rejected request to `method: "GET"`, and gates the action behind
-  `if (!potentialCSRFAttackError)`, which is the same code 8.3.0 ships. Upstream's
-  `CHANGELOG.md` at 7.18.2 lists exactly one patch change, *"Harden RSC CSRF
-  codepaths"*
-  ([remix-run/react-router#15353](https://github.com/remix-run/react-router/pull/15353)),
-  so the backport is the entire 7.18.1 → 7.18.2 diff. Background and the reachability
-  assessment are in [#123](https://github.com/tyler-rich/Scrye/issues/123) (closed) and
-  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md).
-
-  Independent of Scrye's own exposure, which is nil either way: the SPA is
-  declarative-only, so the vulnerable RSC entry point is never imported and never enters
-  the bundle. This item is about the advisory's metadata, not about risk.
+  **Two packages from the original group were deliberately excluded rather than
+  overlooked.** **TypeScript 7** — the Go-native compiler — is out because no published
+  `typescript-eslint` accepts it: its peer range is `>=4.8.4 <6.1.0` at both `latest` and
+  canary, and support is expected to arrive as a new `typescript-eslint` major built
+  against TS 7's API rather than as a range widen, so the sweep's ceiling is **6.0.3**.
+  **`@types/node` 26** is out because nothing in the toolchain needs it: the only
+  constraints in play are optional peers that the pinned 24.x already satisfies. Both will
+  keep appearing in Dependabot's grouped frontend PR until they are either taken or ignored
+  on the default branch — Dependabot reads `.github/dependabot.yml`, including its `ignore`
+  list, from the default branch rather than from `target-branch`. Per-step records,
+  including what each step's predictions got right and wrong, are in
+  [`ARCHIVE.md` §14, 2026-08-09](./ARCHIVE.md).
+- ~~**Ask GitHub to re-cut GHSA-qwww-vcr4-c8h2's affected range for the 7.18.2
+  backport.**~~ **Done 2026-08-09** — no request was needed: the advisory has already been
+  re-cut upstream, in exactly the shape this item asked for. The GitHub Advisory Database
+  record now carries **two** affected ranges for `react-router` — **`>= 7.12.0, < 7.18.2`**
+  and **`>= 8.0.0, < 8.3.0`** — in place of the single `>= 7.12.0, < 8.3.0` that spanned
+  the backport, with the 8.x range left as it was. Verified live on 2026-08-09 against the
+  advisory record itself in the `github/advisory-database` repository (`published` and
+  `github_reviewed_at` 2026-07-24, `modified` 2026-08-07, so the record was amended after
+  review), and independently against the npm registry's advisory endpoint, which returns
+  those same two ranges and returns **nothing** for 7.18.2. The pinned `react-router`
+  7.18.2 therefore no longer matches the advisory, and the standing false HIGH in
+  `npm audit` and Dependabot — which is what made this worth raising upstream, since a
+  known-bogus finding in a vulnerability scanner's own pipeline teaches everyone to dismiss
+  that package's alerts on sight — is gone for every consumer on 7.18.2, not just for
+  Scrye. The evidence that the backport genuinely carries the fix is unchanged and does not
+  need re-deriving: `throwIfPotentialCSRFAttack()` is byte-identical across 7.18.1, 7.18.2
+  and 8.3.0, and the fix is entirely at the call site in `index-react-server.js`'s
+  `generateMiddlewareResponse`, matching upstream's single 7.18.2 patch note *"Harden RSC
+  CSRF codepaths"*
+  ([remix-run/react-router#15353](https://github.com/remix-run/react-router/pull/15353)).
+  Scrye's own exposure was nil either way — the SPA is declarative-only, so the vulnerable
+  RSC entry point never enters the bundle. Background in
+  [#123](https://github.com/tyler-rich/Scrye/issues/123) (closed) and
+  [`ARCHIVE.md` §14, 2026-08-02](./ARCHIVE.md) / [2026-08-03](./ARCHIVE.md).
 - ~~**Retire the deprecated Starlette status-code constants.**~~ **Done 2026-08-03** —
   `HTTP_422_UNPROCESSABLE_ENTITY` → `HTTP_422_UNPROCESSABLE_CONTENT` and
   `HTTP_413_REQUEST_ENTITY_TOO_LARGE` → `HTTP_413_CONTENT_TOO_LARGE` across all 24 call
@@ -461,6 +437,23 @@ Architectural directions, mostly gated on a scale threshold or an explicit decis
   GitHub-hosted arm64 runners are free — the cost concern that previously gated this is
   gone, making it a straightforward win whenever the multi-arch cold-build time becomes
   annoying.
+- **`react-router` 7 → 8 — blocked on a React 19 decision, not on a tooling bump.**
+  `react-router@8.3.0` (the current `latest`) declares `react: ">=19.2.7"` and
+  `react-dom: ">=19.2.7"` as peer dependencies — verified at the published package on
+  2026-08-09. Scrye pins **React and React DOM at 18.3.1**, so adopting the 8 line means
+  first deciding to move the frontend to React 19: a deliberate choice about the app's
+  foundation, reaching Mantine and every component in the tree, rather than a routine
+  dependency bump. It is listed here for that reason and not alongside the toolchain
+  currency work, which shares none of that constraint.
+
+  Nothing forces the move. This is a **pure currency item with no security component**: it
+  was once coupled to GHSA-qwww-vcr4-c8h2, but that advisory was closed by the **7.18.2**
+  backport on 2026-08-02 and has since been re-cut upstream to exclude 7.18.2 entirely (see
+  the struck item under Near-term), so there is nothing left for the 8 major to fix — do
+  not re-argue it as a security fix. If and when React 19 is taken, the migration's own
+  cost is that v8 folds `react-router-dom` back into `react-router`, so **every import site
+  in `frontend/src/` moves** (twelve files today), plus whatever the type-aware ESLint gate
+  makes of the new type surface.
 
 ---
 
