@@ -18,7 +18,18 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+
+    // TypeScript 6.0 changes this option's default from "enumerate every package
+    // in node_modules/@types" to `[]`. Written out rather than inherited so the
+    // behaviour is pinned rather than tracking a compiler default, and so it
+    // survives TypeScript 7, where the old default is gone for good. `src/` needs
+    // no ambient @types package: `@types/react` is reached through the `react`
+    // module specifier, tests import their globals from `'vitest'`, and timers go
+    // through `window.setTimeout` (DOM lib, not @types/node). Verified as a no-op
+    // under 5.7.2 before the compiler moved, not assumed.
+    // `tsconfig.node.json` already sets `"types": ["node"]` for `vite.config.ts`.
+    "types": []
   },
   "include": ["src"]
 }
