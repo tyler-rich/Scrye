@@ -589,6 +589,7 @@ entry, and the anchors jump straight to it.
 - [2026-08-09 — Infra — #86 sweep step 1 landed: `typescript-eslint` 8.19.0 → 8.66.0; the scoping doc's rule-set claim was wrong in two independent ways](#2026-08-09--infra--86-sweep-step-1-landed-typescript-eslint-8190--8660-the-scoping-docs-rule-set-claim-was-wrong-in-two-independent-ways)
 - [2026-08-09 — Security — Frontend lockfile refreshed to clear two HIGH advisories in the build toolchain (js-yaml, nanoid); kept separate from the #86 sweep](#2026-08-09--security--frontend-lockfile-refreshed-to-clear-two-high-advisories-in-the-build-toolchain-js-yaml-nanoid-kept-separate-from-the-86-sweep)
 - [2026-08-09 — Docs/Process — #86 frontend toolchain sweep scoped into an ordered sequence; TypeScript 7 ruled out at the source; #153's red check re-diagnosed](#2026-08-09--docsprocess--86-frontend-toolchain-sweep-scoped-into-an-ordered-sequence-typescript-7-ruled-out-at-the-source-153s-red-check-re-diagnosed)
+- [2026-08-09 — Docs/Process — PR #169 reversed the attribution-stripping ban hours after it was recorded; the reversal itself went undocumented until now](#2026-08-09--docsprocess--pr-169-reversed-the-attribution-stripping-ban-hours-after-it-was-recorded-the-reversal-itself-went-undocumented-until-now)
 - [2026-08-09 — Security/Process — Settings audit: four previously-unreachable toggles verified, Secret Protection enabled, SHA-pinning confirmed clean, attribution-stripping banned](#2026-08-09--securityprocess--settings-audit-four-previously-unreachable-toggles-verified-secret-protection-enabled-sha-pinning-confirmed-clean-attribution-stripping-banned)
 - [2026-08-09 — Infra/Process — Dependabot round closed out: queue merged and closed, bundled scanners bumped, the display-name option declined, prior claims corrected](#2026-08-09--infraprocess--dependabot-round-closed-out-queue-merged-and-closed-bundled-scanners-bumped-the-display-name-option-declined-prior-claims-corrected)
 - [2026-08-09 — Infra/Process — Open-Dependabot-queue audit: only #149 was on `main`, and it was already superseded; `.github/dependabot.yml`'s `ignore` list is read from `main`, so `dev`-only edits to it are inert](#2026-08-09--infraprocess--open-dependabot-queue-audit-only-149-was-on-main-and-it-was-already-superseded-githubdependabotymls-ignore-list-is-read-from-main-so-dev-only-edits-to-it-are-inert)
@@ -2145,6 +2146,46 @@ sweep's framing, the `react-router` 7→8 grouping, and the GHSA re-cut request)
 is a maintainer call. No code, schema, API contract, security model, job model, auth, CI behaviour,
 or dependency version changed; no locked decision re-opened — React stays on 18 and Mantine on v7,
 and the document's §4 is the evidence that nothing in the sweep pressures either.
+
+---
+
+### 2026-08-09 — Docs/Process — PR #169 reversed the attribution-stripping ban hours after it was recorded; the reversal itself went undocumented until now
+
+**What changed:** nothing in this entry — it is a correction to the record, written after the fact
+once the conflict it describes was noticed and flagged by the maintainer. The §14 entry below
+("Settings audit... attribution-stripping banned") rewrote `CLAUDE.md` § Attribution to ban
+instruction-based PR-body footer stripping outright: never write a footer, and if one appears after
+the fact, **leave it** — the maintainer removes it by hand at merge. **#169** ("docs: update
+Attribution section to require verify-and-strip workflow"), opened and merged the same day at
+09:30–09:35 UTC — a few hours after the ban was recorded — replaced that same section with the
+opposite instruction: check outgoing text before submitting, and **read the posted PR/comment body
+back from the API afterward, stripping and re-verifying if a footer appears.** That is the text
+`CLAUDE.md` § Attribution carries today. **#169 has no §14 entry of its own** — grepping the archive
+for "#169" or "verify-and-strip" turns up nothing before this entry — so the ban stood as the
+written record for the rest of this document's history while the actual policy in `CLAUDE.md` had
+already moved back to strip-and-reverify. Three later sessions (**#177**, **#180**) opened and
+merged PRs under the reinstated instruction; their current bodies carry no footer and no comment
+documents the check running, so nothing here confirms or disputes whether the ban's original
+"a PATCH re-appends the footer server-side" finding still reproduces — that empirical question is
+untouched by this entry.
+
+**This entry does not relitigate which policy is correct.** `CLAUDE.md` § Attribution's current
+text — strip-and-reverify, per #169 — is the standing policy, full stop. What this entry records is
+narrower: the ban entry below is **superseded** by #169, and the supersession went unrecorded for
+the length of time between #169 merging and this entry, in direct violation of `CLAUDE.md` § Git &
+PR conventions' own rule that a deviation is logged in `docs/ARCHIVE.md` "the moment you implement
+something differently than the plan specifies" — not as a later cleanup pass. A reader relying on
+the archive's §14 index alone, without cross-checking `CLAUDE.md`'s live text, would have gone on
+believing stripping was banned indefinitely.
+
+**The gap this closes: a policy PR is not done until its own §14 entry lands in the same PR.**
+`CLAUDE.md` § Attribution now says so directly, so a future attribution-policy change can't repeat
+this — see `CLAUDE.md` § Attribution for the added line.
+
+**Plan section affected:** `CLAUDE.md` § Attribution (one line added, see above). No code, schema,
+API contract, security model, job model, or locked decision affected. This entry does not change
+the ban entry's own text below — it stands as written, with this entry marking it superseded rather
+than editing it in place, so both the original finding and its reversal remain on the record.
 
 ---
 
