@@ -21,6 +21,14 @@
 > holds only while `typescript-eslint`'s `typescript` peer range does. **§3.1
 > carries the one-command re-check** — run it before treating that ceiling as
 > current.
+>
+> **Corrected 2026-08-09, after step 1 landed as #171:** §0.3's original claim
+> that the typescript-eslint bump leaves the resolved rule set fully unchanged
+> was wrong — it diffed one of three layers in a composite config and
+> generalised. See §0.3 for the correction and the method note it adds, binding
+> on every step below that has not yet run. Sequence membership and ordering are
+> unchanged; only claims and method notes were corrected. `docs/ARCHIVE.md` §14
+> carries the full record, dated 2026-08-09.
 
 ---
 
@@ -49,13 +57,51 @@ is wrong.
    roadmap item predicts, arriving on schedule."* That characterisation is
    incorrect and is corrected in the §14 entry accompanying this document.
 
-3. **The typescript-eslint bump does not change which rules run.** The shipped
-   `recommendedTypeChecked` config is **byte-for-byte identical** between 8.19.0
-   and 8.66.0 — the same 50 rules at the same severities, nothing added, removed,
-   or re-severitied (verified by diffing
-   `dist/configs/recommended-type-checked.js` from both tarballs). Any new reports
-   across that 47-minor span come from rule *implementations* getting better, not
-   from the config growing.
+3. **CORRECTED 2026-08-09, after step 1 landed — the typescript-eslint bump does
+   not leave rule *selection* fully unchanged, and an unchanged rule set would not
+   have implied an unchanged set of findings anyway.** What was actually verified,
+   and remains true: the shipped **`dist/configs/recommended-type-checked.js`**
+   file is **byte-for-byte identical** between 8.19.0 and 8.66.0 — the same 50
+   rules at the same severities (verified by diffing that one file from both
+   tarballs). What was **not** verified, and turned out to be false when checked:
+   `tseslint.configs.recommendedTypeChecked` is a **three-layer composite**
+   (`base` + `eslint-recommended` + `recommended-type-checked`), and only the
+   third layer was diffed; the finding was then generalised to the whole
+   composite. The undiffed `dist/configs/eslint-recommended-raw.js` layer went
+   **22 → 23 entries** across the same span, adding `no-with: 'off'`. Because
+   `frontend/eslint.config.js` extends `js.configs.recommended` **before** the
+   tseslint layers, that addition changes the fully-resolved config this repo
+   actually lints with: `eslint --print-config` shows `no-with` going from
+   `error` (`[2]`) to `off` (`[0]`) across all three file classes (app `.tsx`,
+   library `.ts`, test override). So the resolved rule set **did** change — one
+   core rule was disabled — not "nothing added, removed, or re-severitied" as
+   this section previously claimed. (The disablement was accepted, not restored,
+   after independent verification that `with` is unreachable here regardless: a
+   probe `with` statement fails `tsc -b` with `TS1101`/`TS2410` under this
+   repo's `"strict": true` tsconfigs. See `docs/ARCHIVE.md` §14, 2026-08-09,
+   "#86 sweep step 1 landed", for the full account.)
+
+   Separately, **even a genuinely unchanged rule set does not predict an
+   unchanged set of reports.** Rule *implementations* get stricter across a
+   47-minor span independent of which rules are selected — step 1 alone produced
+   two new `@typescript-eslint/no-unnecessary-type-assertion` reports on code
+   that had been in the tree, unedited, the whole time. Read every "Expected
+   breakage" row in §6 as a floor on what a step can surface, not a ceiling —
+   it names the known, artifact-verified deltas; report volume from
+   implementation changes is separate and was never boundable without running
+   the step.
+
+   > **Method note, binding on every step below that has not yet run.** Do not
+   > trust this document's characterisation of a step's config or rule-set
+   > impact — re-verify against the **installed** tree when the step is
+   > actually executed, and check **every layer** of any composite config, not
+   > just the plugin's own top-level config file. The check that would have
+   > caught the `no-with` miss, and is the one to run before and after each
+   > remaining step: resolve the **fully-merged** config with
+   > `eslint --print-config <file>` for one representative file of each file
+   > class (app `.tsx`, library `.ts`, test override) and diff the two outputs —
+   > not a diff of the plugin's own shipped config file, which only shows one
+   > layer of what actually gets applied.
 
 4. **ESLint 10 removes a live HIGH advisory from the tree.** `eslint@10.8.1` no
    longer depends on `@eslint/eslintrc`, which is this repo's only path to
@@ -479,8 +525,8 @@ lockfile outside the sweep.
 | | |
 |---|---|
 | **Moves** | `typescript-eslint` only |
-| **Config changes** | **none.** `tseslint.config()`, `tseslint.configs.recommendedTypeChecked`, and `parserOptions.projectService` are all unchanged across the span. |
-| **Expected breakage** | New reports from the 50 already-enabled rules. The rule set is **identical** to 8.19.0's (verified, §0.3), so nothing new is switched on — only detection improves. The likely sources on this codebase are `no-floating-promises` / `no-misused-promises` (the two rules P3-8 turned the gate on for) getting better at async call sites, and `no-unnecessary-condition`-family rules interacting with `noUncheckedIndexedAccess`. |
+| **Config changes** | **none authored**, but the resolved config is not fully unchanged either — see the corrected **Expected breakage** row. `tseslint.config()`, `tseslint.configs.recommendedTypeChecked`, and `parserOptions.projectService` are unedited across the span; what moved is the composite `recommendedTypeChecked` *resolves to*, not anything in this repo's own config file. |
+| **Expected breakage** | **[UPDATED post-landing, 2026-08-09 — this step has run; see `docs/ARCHIVE.md` §14, "#86 sweep step 1 landed."]** Two things happened, not one. (1) `no-with` moved from `error` to `off` in the fully-resolved config — `recommendedTypeChecked`'s undiffed `eslint-recommended-raw.js` layer gained `no-with: 'off'` (22 → 23 entries); accepted after independent verification that `with` cannot compile here (`tsc -b` → `TS1101`/`TS2410`) under this repo's strict tsconfigs. (2) New reports from the 50 already-selected rules: `@typescript-eslint/no-unnecessary-type-assertion` fired twice on unedited code (`NewScanPage.tsx:139-140`), fixed by hand at those two sites, no bulk autofix. Both are corrections of the original prediction here, which said the rule set was identical and only detection would improve — see §0.3. |
 | **Verifies it** | `npm run lint` is the whole test. If it is clean, this step is done. |
 | **Judgement?** | Mechanical to apply; **judgement** on each new report — fix the code or add a scoped disable with a comment. Do not blanket-disable a rule to get green. |
 | **Effort / risk** | **S–M** — 1–3 h, dominated by however many reports appear. **Risk: low–medium.** Lint-only; cannot affect the shipped bundle. |
@@ -498,7 +544,7 @@ and a Rolldown bundling difference arrive in the same red check.
 |---|---|
 | **Moves** | `eslint` 9.39.4 → **10.8.1**, `@eslint/js` 9.39.4 → **10.0.1**, `eslint-plugin-react-hooks` 5.1.0 → **7.1.1** *(peer-forced)*, `eslint-plugin-react-refresh` 0.4.16 → **0.5.3** |
 | **Config changes** | **One required edit** in `frontend/eslint.config.js` — see §7.1. Replace the `...reactHooks.configs.recommended.rules` spread (line 31) with the two rules written out, so the plugin's 5→7 major does **not** silently enable 14 React Compiler rules in the same PR as the ESLint major. |
-| **Expected breakage** | (a) three rules newly in `eslint:recommended` — `no-unassigned-vars`, `no-useless-assignment`, `preserve-caught-error` (verified in the shipped `@eslint/js@10.0.1` config, and named in the migration guide); (b) **JSX reference tracking** — ESLint 10 now resolves `<Card />` to the imported `Card`, which changes `no-unused-vars` / `no-undef` results across 51 `.tsx` files; (c) `no-shadow-restricted-names` now reports `globalThis` by default. |
+| **Expected breakage** | (a) three rules newly in `eslint:recommended` — `no-unassigned-vars`, `no-useless-assignment`, `preserve-caught-error` (verified in the shipped `@eslint/js@10.0.1` config, and named in the migration guide); (b) **JSX reference tracking** — ESLint 10 now resolves `<Card />` to the imported `Card`, which changes `no-unused-vars` / `no-undef` results across 51 `.tsx` files; (c) `no-shadow-restricted-names` now reports `globalThis` by default; (d) **`eslint-plugin-react-refresh` 0.4.16 → 0.5.3 is bundled into this step and is not a routine bump** — 0.5.0 is **ESM-only and requires flat config** (this repo has been flat-config since Phase 0, so that requirement is a no-op here — confirmed, not assumed), renames the `customHOCs` option to `extraHOCs` (this repo's one usage, `frontend/eslint.config.js`'s `react-refresh/only-export-components` rule, sets no HOC option at all, so the rename is also a no-op here), and tightens HOC validation generally. Re-verify the option-name point against the installed 0.5.3 package when this step actually runs, per the method note in §0.3 — it was not re-checked against a live install for this scoping pass. |
 | **Doesn't apply here** | The eslintrc removal (this repo has been flat-config since Phase 0), `eslint-env` comments (none), `--flag v10_config_lookup_from_file` (not used), POSIX character classes (no bracket expressions in any glob), the `stylish` formatter's colour handling (CI output only), and every plugin/integration-developer change (no custom rules). |
 | **Verifies it** | `npm run lint`; plus confirm `npm ls @eslint/eslintrc` reports nothing — that is the js-yaml path gone. |
 | **Judgement?** | **Judgement**, mostly on JSX reference tracking's fallout and on whether each new-rule report is a real defect. |
@@ -915,8 +961,12 @@ typescript-eslint — but it already was in this document's first draft (Step 1
 low–med, jsdom medium), so the changelogs *confirmed* that relative order rather
 than overturning it. And **typescript-eslint was never the top of the ranking**:
 Step 3 and the Vite step have outranked it since the first draft. What actually
-changed is the gap: Step 1's risk fell further once its rule set was proven
-identical across the span (§0.3), while jsdom's surface became concrete.
+changed is the gap: Step 1's risk fell further once the *diffed* portion of its
+rule set was proven identical across the span (§0.3 — since corrected: one
+undiffed composite layer did change, and was accepted after separate
+verification), while jsdom's surface became concrete. The correction narrows
+the claim; it does not raise Step 1's risk rating, since the one change found
+was independently verified as safe rather than merely assumed unchanged.
 
 **jsdom is not the highest-risk step either.** It sits third, and the property
 that keeps it there is the strength of its oracle. That property was originally
