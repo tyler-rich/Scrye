@@ -7,8 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`cryptography` bumped 49.0.0 → 50.0.0, closing CVE-2026-69247** (HIGH) — a
+  Bleichenbacher-style oracle in the PKCS7 decryption helpers, where
+  `pkcs7_decrypt_der` and its variants exposed distinguishable errors and timing
+  while unwrapping an encrypted key. Upstream's fix substitutes a random key on
+  failure, per RFC 3218. Verified against pyca/cryptography's own `CHANGELOG.rst`
+  rather than the scanner's `FIXED IN` column: the entry is recorded under
+  **50.0.0 (2026-07-31)**, and 49.0.0 (2026-06-12) predates it.
+
+  **Scrye was never exposed.** It uses four symbols from the library, all in
+  `backend/app/core/crypto.py` — `AESGCM`, `HKDF`, `hashes` and `InvalidTag` — and
+  never calls PKCS7 at all, so the vulnerable code path is unreachable. The bump
+  is taken because the finding is *fixable*, which is what the dogfood gate keys
+  on (`CLAUDE.md` § Dependency hygiene), not because the path was live.
+
+  50.0.0 is a major, and its breaking changes miss Scrye's surface: FFDH is
+  deprecated, X.509 verification APIs stabilised, and SCT/X.509 validation
+  tightened — none of which Scrye touches. (The ChaCha20 counter change landed in
+  49.0.0 and was already absorbed.) `backend/requirements.lock` was regenerated
+  with the pinned `uv 0.8.17` command from `CONTRIBUTING.md` § Backend dependency
+  lock; the diff is that one package and its hashes, with no transitive churn.
+
 ### Changed
 
+- **Bundled scanner binaries updated: Trivy 0.72.0 → 0.73.0, Grype 0.115.0 →
+  0.116.1, Syft 1.46.0 → 1.50.0** — the current upstream releases, verified by
+  resolving each project's tags rather than from any advisory or summary. No
+  breaking changes, deprecations, or CLI changes in any release crossed, and
+  Syft's JSON schema moves only at patch level (16.1.5 → 16.1.10), so Scrye's
+  JSON parsing and the persisted-SBOM format are unaffected. Highlights: Trivy
+  gains native discovery of VEX documents stored as OCI artifacts; Grype 0.116
+  adds lightweight Go reachability analysis that reduces false positives and
+  dedupes govulndb/GHSA twins; Syft picks up vcpkg and macOS `.app` cataloging.
+  The CI dogfood gate's `aquasec/trivy` / `anchore/grype` scan images (pinned to
+  the bundled versions by design) and the weekly re-scan move in lockstep, with
+  digests resolved from the registry. `THIRD_PARTY_LICENSES/` re-verified at the
+  new tags: every bundled `LICENSE` (and Trivy's `NOTICE`) is byte-identical
+  upstream, and Grype/Syft still ship no `NOTICE`, so only the version table
+  changes.
+- **`uvicorn[standard]` 0.52.0 → 0.52.1 and `alembic` 1.18.5 → 1.19.1**, the
+  mergeable half of Dependabot **#157**, reapplied by hand because Dependabot
+  edits `pyproject.toml` only and leaves `backend/requirements.lock` stale — its
+  own branch fails CI's lock-drift gate. `requirements.lock` was regenerated with
+  the pinned `uv 0.8.17` command from `CONTRIBUTING.md` § Backend dependency lock;
+  the diff is those two packages and their hashes, with no transitive churn.
+  Neither release changes a deployed Scrye's behaviour, configuration or schema.
+  - **uvicorn 0.52.1** is four WebSocket-only fixes (closing handshake, write
+    flow control, connection loss during a backpressured write, and denial-
+    response headers). Scrye serves no WebSocket route and the SPA opens no
+    socket, so none of it is reachable here — pure currency.
+  - **alembic 1.19.1, not the 1.19.0 Dependabot proposed.** 1.19.0 (2026-08-04)
+    added named-CHECK-constraint autogenerate detection; 1.19.1 (2026-08-08,
+    published after #157 opened) fixes a defect in exactly that feature, where
+    column-bound check constraints produced wrong autogenerate results. Both
+    changes are confined to the migration-*authoring* path — no shipped migration
+    and no runtime behaviour is affected.
 - **Routine dependency currency across the backend, frontend and CI**, triaged
   from the three grouped Dependabot PRs opened after v0.3.0 (#144, #145, #146)
   and reapplied by hand rather than merged as-built. No change to a deployed
