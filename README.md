@@ -226,7 +226,7 @@ and one normalized findings model.
 - Optional sidecars: a **Trivy server** (shared vuln-DB cache) and a read-only
   **docker-socket-proxy** (to scan running images). Both off by default — see
   [Optional sidecars](#optional-sidecars).
-- For native (non-container) development: **Python 3.14**, **Node 22.22.2+ or
+- For native (non-container) development: **Python 3.14.7+**, **Node 22.22.2+ or
   24.15+** (the image and CI build with **Node 24**, the Active LTS), and the
   `trivy`/`grype`/`syft` binaries on `PATH`. See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
