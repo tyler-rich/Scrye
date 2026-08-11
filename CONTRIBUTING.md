@@ -15,7 +15,9 @@ everyone.
 
 ### Prerequisites
 
-- **Python 3.14** (3.14.6 or later)
+- **Python 3.14** (3.14.7 or later — the runtime image pins 3.14.7, the first release
+  carrying the six CPython interpreter-CVE fixes `ci/grype.yaml` waives; 3.14.0–3.14.4 are
+  additionally ruled out by the incremental-GC leak reverted in 3.14.5)
 - **Node 22.22.2+ or 24.15+** (the image and CI both build with Node 24, the
   Active LTS; the 20 line reached end-of-life on 2026-04-30). The odd-looking
   floor is `jsdom@30`'s `engines.node` — `^22.22.2 || ^24.15.0 || >=26.0.0` —

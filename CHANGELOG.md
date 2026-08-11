@@ -29,6 +29,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Runtime base image moved to Python 3.14.7** (`python:3.14-slim-bookworm`,
+  digest-pinned; 3.14.6 before), and the locked runtime floor raised to **3.14.7**
+  to match. 3.14.7 (released 2026-08-05) is the first release carrying the fixes
+  for the six CPython interpreter CVEs Scrye's own dogfood scan has been waiving:
+  **CVE-2026-15308** (`html.parser` quadratic-complexity DoS), **CVE-2026-12003**
+  (`getpath.py` in-tree search-path fallback), **CVE-2025-15366** (`imaplib`
+  command injection), and the `tarfile` set **CVE-2026-11940** (hardlink→symlink
+  extraction escape), **CVE-2026-11972** (streaming-mode EOF infinite loop) and
+  **CVE-2026-0864** (oversized extended-header memory exhaustion). All six fixes
+  were confirmed present by reading CPython at the `v3.14.7` tag and diffing
+  against `v3.14.6`, per-file and per-CVE.
+
+  **The waivers remain in place even so, and this is not a contradiction.** Grype
+  still reports all six against the 3.14.7 image, because its vulnerability data
+  records them as fixed only in 3.15.x and has no entry for the 3.14 backports.
+  The fixes are in the interpreter Scrye ships; the scanner has not caught up.
+  The waivers will be removed — not re-dated — once a Grype-DB refresh reflects
+  the backports. `CVE-2025-15367` (`poplib`) is unaffected either way: its fix is
+  still `main`-only, and `Lib/poplib.py` is byte-identical between 3.14.6 and
+  3.14.7.
+
+- **`pip` no longer ships in the runtime image**, closing two fixable HIGH
+  findings that were not Scrye dependencies at all: **GHSA-6v7p-g79w-8964**
+  (`msgpack` 1.1.2) and **CVE-2025-47273** (`setuptools` 70.3.0), both of which
+  are versions *vendored inside pip* by the base image and therefore not ours to
+  bump. Nothing in the runtime used pip — the container applies migrations with
+  Alembic and serves with uvicorn — so it is deleted rather than excused with a
+  scanner exception. Image builds are unaffected: the build stage still installs
+  the hash-pinned lock with pip.
+
 - **Frontend lockfile refreshed, closing two HIGH advisories in the build/dev
   toolchain: GHSA-5p4m-2wfm-xmqj (`js-yaml`) and GHSA-2v37-7h3g-55p8
   (`nanoid`).** Both are transitive devDependencies, and both fixed versions

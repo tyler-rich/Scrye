@@ -578,8 +578,10 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (157, newest first)
+### Index of §14 entries (160, newest first)
 
+- [2026-08-11 — Security/Infra — Runtime base image moved to Python 3.14.7; all six Group A interpreter fixes verified at the source, and the waivers kept anyway because Grype's DB has not caught up](#2026-08-11--securityinfra--runtime-base-image-moved-to-python-3147-all-six-group-a-interpreter-fixes-verified-at-the-source-and-the-waivers-kept-anyway-because-grypes-db-has-not-caught-up)
+- [2026-08-11 — Process — Locked runtime floor raised 3.14.6 → 3.14.7 (locked decision §2), on a second independent reason rather than a replacement one](#2026-08-11--process--locked-runtime-floor-raised-3146--3147-locked-decision-2-on-a-second-independent-reason-rather-than-a-replacement-one)
 - [2026-08-09 — Docs/Process — `dependabot.yml`'s "Deliberately NOT ignored" rationale rewritten: the instruction outlived the reason it was written on](#2026-08-09--docsprocess--dependabotymls-deliberately-not-ignored-rationale-rewritten-the-instruction-outlived-the-reason-it-was-written-on)
 - [2026-08-09 — Infra/Process — The `@types/node` majors-ignore removed now that 26.2.0 has landed; no `typescript` ignore added, deliberately, because that regenerating PR is the TS7 signal](#2026-08-09--infraprocess--the-typesnode-majors-ignore-removed-now-that-2620-has-landed-no-typescript-ignore-added-deliberately-because-that-regenerating-pr-is-the-ts7-signal)
 - [2026-08-09 — Infra — `@types/node` 24.13.3 → 26.2.0: the sweep's one declined package taken deliberately, after step 4 had already shrunk its blast radius to one file](#2026-08-09--infra--typesnode-24133--2620-the-sweeps-one-declined-package-taken-deliberately-after-step-4-had-already-shrunk-its-blast-radius-to-one-file)
@@ -740,6 +742,185 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
 
 ---
+
+### 2026-08-11 — Security/Infra — Runtime base image moved to Python 3.14.7; all six Group A interpreter fixes verified at the source, and the waivers kept anyway because Grype's DB has not caught up
+
+**What changed:** `docker/Dockerfile`'s two `FROM python:3.14-slim-bookworm@…` lines — the
+`backend-builder` stage and the `runtime` stage, which must always move together — went from
+`sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30` (**3.14.6**) to
+`sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52` (**3.14.7**, released
+**2026-08-05**). `ci/grype.yaml`'s Group A-1 (#98) and Group A-2 (#116) blocks keep all six
+waivers but are rewritten to rest on a different reason, and the runtime stage now deletes `pip`
+(see "The bump's own side effect" below). CONTRIBUTING's Python prerequisite moves to
+3.14.7-or-later. The locked floor moves in the entry below, deliberately separate.
+
+**The one number this was for.** 3.14.7 was the resolution trigger both #98 and #116 name.
+Baseline first, per the fail-first rule: with the six `- vulnerability:` entries lifted and the
+digest **still 3.14.6**, the Grype gate reported exactly those six and exited 2
+(CI run 31456533896) — proof the waivers were suppressing what they claimed, no more and no
+fewer. After the digest bump, with the waivers still lifted, the same gate reported **the same
+six, unchanged, against `python 3.14.7`** and exited 2 again (CI run 31457878086):
+
+```
+NAME    INSTALLED  FIXED IN  TYPE    VULNERABILITY   SEVERITY
+python  3.14.7     3.15.0b4  binary  CVE-2026-11940  High
+python  3.14.7     3.15.0    binary  CVE-2026-15308  High
+python  3.14.7     3.15.0b4  binary  CVE-2026-11972  High
+python  3.14.7     3.15.0a6  binary  CVE-2025-15366  Medium
+python  3.14.7     3.15.0b3  binary  CVE-2026-12003  Medium
+python  3.14.7     3.15.0b4  binary  CVE-2026-0864   Medium
+```
+
+So **no waiver was retired.** That is the Grype-DB lag #98 and #116 each predicted verbatim
+("expect the waivers to outlive 3.14.7 by a Grype-DB refresh cycle"), and the `FIXED IN` column
+is the mechanism: Grype's DB knows these only as fixed in 3.15.x, has no record of the 3.14
+backports, compares 3.14.7 < 3.15.0b4, and matches. The gate was **not** forced green and the
+findings were **not** re-labelled as fixed.
+
+**Source verification — the thing that actually establishes the fix, per CLAUDE.md § Dependency
+hygiene.** Each file was read at the `v3.14.7` tag and diffed against `v3.14.6`. This is the
+second verification for every one of the six; the earlier ones (2026-07-26, 2026-07-30) compared
+the **`3.14` branch** against `v3.14.6` and could therefore only show a fix was *queued*. Reading
+the released tag is what shows it *shipped* — the distinction the 2026-07-26 imaplib entry was
+written to teach.
+
+| CVE | File | In `v3.14.7` | In `v3.14.6` |
+| --- | --- | --- | --- |
+| CVE-2026-15308 | `Lib/html/parser.py` | `feed()` accumulates into `_pending`/`_pending_len` and only joins+parses past `_parse_threshold` (which doubles when nothing parsed); `close()` flushes the pending list | `self.rawdata = self.rawdata + data; self.goahead(0)`, unguarded |
+| CVE-2026-12003 | `Modules/getpath.py` | no `BUILD_LANDMARK` constants, no `isfile(joinpath(real_executable_dir, BUILD_LANDMARK))` fallback; an inline `gh-151544; CVE-2026-12003` comment sits where they were | both constants (posix + nt) and the fallback |
+| CVE-2025-15366 | `Lib/imaplib.py` | `_control_chars = re.compile(b'[\x00\r\n]')` and `raise ValueError("NUL, CR and LF not allowed in commands")` inside `IMAP4._command()`'s argument loop, before each arg is appended | neither the constant nor the guard |
+| CVE-2026-11972 | `Lib/tarfile.py` | `_Stream.seek()`: `data = self.read(self.bufsize)` then `if not data: break` | `self.read(self.bufsize)`, result discarded (CWE-252) |
+| CVE-2026-11940 | `Lib/tarfile.py` | `makelink_with_filter()` calls `filter_function(unfiltered.replace(name=tarinfo.name, deep=False), extraction_root)` before the fallback, and `_extract()` passes `filter_function=filter_function` into `_extract_one()` | neither |
+| CVE-2026-0864 | `Lib/tarfile.py` | `_EXTHEADER_READ_CHUNK = 1024 * 1024` + `_safe_read()`, used by both `_proc_gnulong()` and `_proc_pax()` | `tarfile.fileobj.read(self._block(self.size))` directly in both |
+
+`Include/patchlevel.h` reads `PY_VERSION "3.14.7"` / `PY_MICRO_VERSION 7` at the tag, and
+`Misc/NEWS.d/3.14.7.rst` carries all seven upstream issues behind the six CVEs — gh-153030,
+gh-151544, gh-143921, gh-151981, gh-151558, gh-151987, gh-151497 — with
+`.. release date: 2026-08-05`.
+
+**What the waiver blocks now say.** Their membership is unchanged (seven entries, same as
+before); their *reason* is inverted, which is the whole point of rewriting rather than re-dating
+them:
+
+| | before 2026-08-11 | now |
+| --- | --- | --- |
+| why waived | unfixable at the pinned version; waiting on a 3.14.x release carrying the backports | **fixed** in the pinned interpreter, verified at the source; waived only because the scanner's data lags |
+| trigger | 3.14.7 ships and the digest moves to it | a Grype-DB refresh that records the 3.14 backports — then **delete** both blocks outright |
+| review | 2026-10-25 | 2026-10-25, kept rather than pushed out: the pending event is a daily-cadence DB refresh, not a release months away |
+
+A file-level note above both blocks carries that table's substance plus the observed scan output,
+so the next reader does not have to reconstruct why a waiver survived its own trigger.
+
+**Group B (#52, poplib) is untouched, and was re-checked to earn that.** `Lib/poplib.py` is
+**byte-identical** between `v3.14.6` and `v3.14.7`, so 3.14.7 clears nothing there and the
+standing acceptance is unaffected. Its block is byte-identical to `dev`'s. Two sentences inside it
+point at "Group A above" as where CVE-2025-15366 went in 2026-07-26; that reference still
+resolves, since Group A still exists.
+
+**The bump's own side effect, and why it is a fix rather than a waiver.** The 3.14.7 image turned
+the **Trivy** gate red with two fixable HIGHs that had never appeared before — `msgpack` 1.1.2
+(GHSA-6v7p-g79w-8964, fixed 1.2.1) and `setuptools` 70.3.0 (CVE-2025-47273, fixed 78.1.1). Both
+versions are exactly pip's vendored pins (`pip/_vendor/vendor.txt`), and neither is a Scrye
+dependency: `requirements.lock` pins setuptools **83.0.0** and carries no msgpack at all. 3.14.6
+bundles pip **26.1.2** and 3.14.7 bundles **26.2.1** (`Lib/ensurepip/__init__.py: _PIP_VERSION`),
+which is what surfaced them — though note both pip versions vendor those *same two pins* and both
+ship `vendor.txt` in the wheel, so the pins themselves did not change and a Trivy-DB refresh
+between the two runs (four minutes apart, each downloading fresh from `mirror.gcr.io`) cannot be
+excluded as a contributing cause. Either way they are not ours to bump, and the fix chosen was
+**not** a `ci/trivyignore` entry: the runtime stage now deletes pip from both prefixes that carry
+one — `/opt/venv` (seeded by `python -m venv`) and `/usr/local` (the base image's
+`--with-ensurepip` build) — plus `ensurepip`, whose entire payload is that same pip wheel.
+`backend-builder` keeps pip, since it installs the hash-pinned lock with it (SC-1). Nothing in the
+runtime needs pip: the entrypoint runs `alembic upgrade head` then `exec uvicorn`, and no
+application code imports pip, ensurepip or pkg_resources. The step asserts pip is off `PATH` and
+that the venv still imports alembic/fastapi/sqlalchemy/uvicorn, so a version glob that stops
+matching after a future base bump fails the build instead of silently shipping pip again. It is
+guarded by a new static test in `backend/tests/test_dockerfile_supply_chain.py`, verified to fail
+against the pre-strip Dockerfile. **Trivy went green on the next run**; no stage boundary, layer
+ordering, or cache scope changed (§ Build performance § Invariants).
+
+**How the digest was established, without trusting a rendered page.** `HEAD
+/v2/library/python/manifests/3.14-slim-bookworm` on `registry-1.docker.io` returns
+`docker-content-digest: sha256:23c59390…`, and the same request for `3.14.7-slim-bookworm` returns
+the **identical** digest (`3.14.8-slim-bookworm` 404s, so 3.14.7 is current). The index is an OCI
+image index carrying **linux/amd64 and linux/arm64** children — both legs `publish.yml` builds.
+Its per-arch annotations name the build source
+`docker-library/python@228f71e70a42ba9f9a092321b971031603bb88ff:3.14/slim-bookworm`, created
+2026-08-05, whose Dockerfile declares `ENV PYTHON_VERSION 3.14.7`; the same lookup on the outgoing
+digest resolves to rev `7914d06` with `ENV PYTHON_VERSION 3.14.6`, and the two recipes differ
+**only** in `PYTHON_VERSION`/`PYTHON_SHA256`.
+
+**Environment limitation — a property of where this ran, not a skipped check.** The authoring
+sandbox's egress policy denies the registry blob hosts (`production.cloudfront.docker.com`,
+`pkg-containers.githubusercontent.com`) and `www.python.org`, so **no image could be pulled or
+built locally and no 3.14.x interpreter could be obtained there**. Consequently: the image build,
+the dogfood Trivy/Grype scans, and the interpreter version all come from **CI**, which does pull
+and build the real image — the `INSTALLED 3.14.7` column in the scan output above is the built
+image reporting its own interpreter, and the Trivy report independently shows the image's pip
+moving 26.1.2 → 26.2.1. The 3.14.7-vs-3.14.6 source diffs come from `raw.githubusercontent.com` at
+the two tags, and the digest facts from the registry API. What is genuinely **not** evidenced:
+`python -V` was never executed against the pinned digest locally, and the backend suite has
+**not** run on 3.14.7 anywhere — CI's `Set up Python 3.14` resolves the hosted tool cache to
+**3.14.6**, so the green `pytest` on this branch is 3.14.6 (`7 passed` for the symlink-containment
+guard in the image job; the full backend job green). A future session with registry access should
+close that by running the suite on a real 3.14.7.
+
+**Issues #98 and #116 stay open.** Closing keywords are inert here regardless — GitHub only
+auto-closes on a merge into the default branch, and this targeted `dev` — but more importantly
+they should not be closed yet: each tracks a waiver that still exists. Their resolution trigger
+(3.14.7 in the pinned image) is satisfied and their evidence sections are now superseded by the
+released-tag verification above, but the correct close is by hand, after the Grype-DB refresh lets
+both blocks be deleted.
+
+**Index count corrected in passing.** The §14 index header read "157" while the index block and
+the entry list both held **158** — a stale count, off by one, predating this change. With the two
+entries added here it now reads **160**, which matches both the index lines and the dated `###`
+headings (checked programmatically, not by eye).
+
+**Plan section affected:** §0 (#7), §2 (tech stack), §9.1 (base image / dogfood self-scan),
+§12 (Phase 6 self-scan), CLAUDE.md § Dependency hygiene (interpreter-CVE source verification),
+`ci/` triage allowlists. No application code, schema, API-contract, security-model, job-model, or
+auth change.
+
+### 2026-08-11 — Process — Locked runtime floor raised 3.14.6 → 3.14.7 (locked decision §2), on a second independent reason rather than a replacement one
+
+**What changed:** `CLAUDE.md` § Locked decisions #2 now states the runtime floor as **3.14.7**,
+was 3.14.6. The existing incremental-GC rationale is kept verbatim in substance — never
+3.14.0–3.14.4, whose GC work-estimate bug let a long-running server's cyclic-garbage backlog grow
+resident memory several-fold, reverted in 3.14.5 — and the interpreter-CVE rationale is added
+**alongside** it: 3.14.7 is the first release carrying the six Group A-1 (#98) / Group A-2 (#116)
+fixes, so dropping below it reinstates all six. `CONTRIBUTING.md`'s prerequisite moves with it
+(`3.14.6 or later` → `3.14.7 or later`).
+
+**Why this is its own entry.** Two reasons. First, it is a **locked-decision edit** — the class of
+change CLAUDE.md § When to ask vs. decide says to stop and ask about — and it was made on explicit
+maintainer instruction, not folded in as a side effect of a dependency bump. Recording it
+separately means the authorisation is legible next to the change instead of buried in the middle
+of a CVE entry. Second, the two documents move for **different reasons on different evidence**:
+the entry above is about six CVEs and what a scanner does or does not know about them; this is
+about what interpreter Scrye is permitted to run on at all. Merging them would make the floor look
+like a consequence of the scan result — and the scan result was that all six *still report*, which
+would then read as an argument against the very floor being raised.
+
+**The two reasons are independent and both load-bearing, which is why neither replaced the other.**
+The GC reason bounds the floor from below at **3.14.5** and is about availability under long
+uptime — exactly Scrye's workload. The CVE reason raises it to **3.14.7** and is about six fixes
+present in the interpreter. Had the CVE reason been written as a replacement, a future reader
+resolving the CVEs (once Grype's DB catches up and the waivers are deleted) could reasonably
+conclude the floor could return to 3.14.5/3.14.6 — reintroducing the GC leak. The floor text
+therefore states both and says explicitly that each binds separately.
+
+**Not changed:** the `3.14` **minor**-version pins in `.github/workflows/ci.yml`
+(`python-version: "3.14"`) and `backend/pyproject.toml` (`requires-python = ">=3.14"`), which
+track the minor line deliberately and are not micro-version floors; `CLAUDE.md` § Dependency
+hygiene's mention of 3.14.6, which is a historical statement about what the 3.13 → 3.14 bump did
+and must stay as written; the released CHANGELOG sections naming 3.14.6, for the same reason; and
+`frontend/src/components/settings/AboutPanel.test.tsx`'s `python_version: '3.14.6'`, which is a
+mock API payload asserting the About tab renders whatever the backend reports, not a floor.
+
+**Plan section affected:** CLAUDE.md § Locked decisions #2, §0 (#7), §2 (tech stack);
+`CONTRIBUTING.md` § Prerequisites. Process/docs only — no code, schema, security-model, or
+job-model change.
 
 ### 2026-08-09 — Docs/Process — `dependabot.yml`'s "Deliberately NOT ignored" rationale rewritten: the instruction outlived the reason it was written on
 

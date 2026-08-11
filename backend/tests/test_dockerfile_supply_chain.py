@@ -9,6 +9,8 @@ Dockerfile edit can't silently drop them:
 - the scanner binaries' checksum files are cosign-signature-verified before the
   sha256sum check (SC-8).
 - the runtime image does not ship the backend test suite or dev scripts (SC-14).
+- the runtime image does not ship ``pip`` (whose vendored msgpack/setuptools are
+  reported as fixable HIGHs we cannot bump), while ``backend-builder`` keeps it.
 - the app package is built with ``--no-build-isolation`` against the hash-pinned
   setuptools from the lock, so no build-time dependency floats (SC-12).
 """
@@ -125,9 +127,9 @@ def test_pip_is_stripped_from_the_runtime_stage_only() -> None:
     assert "/usr/local/lib/python3.*/ensurepip" in runtime_stage
     # The removal must be self-verifying, so a glob that stops matching after a
     # future base-image bump fails the build instead of silently shipping pip.
-    assert "if command -v pip >/dev/null 2>&1; then" in runtime_stage, (
-        "the runtime stage must assert pip is actually gone, not just attempt an rm"
-    )
+    assert (
+        "if command -v pip >/dev/null 2>&1; then" in runtime_stage
+    ), "the runtime stage must assert pip is actually gone, not just attempt an rm"
 
     # ...and pip must SURVIVE in backend-builder, which installs the hash-pinned
     # lock with it (SC-1). Stripping it there would break the build.
