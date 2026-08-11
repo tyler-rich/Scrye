@@ -823,9 +823,19 @@ both moved together.
 
 **One surface is outside this repository and could not be fixed here:** the synced `scrye` skill
 (`~/.claude/skills/synced/scrye/SKILL.md`) still says to "edit the PR body in place" and "re-read
-the live body after every edit". It is not a repo file, so no commit can reach it — recorded here
-so a future session that reads a strip instruction there knows it is stale relative to
-`CLAUDE.md`, which wins.
+the live body after every edit". It is not a repo file, so **no commit from any session can reach
+it** — the maintainer updates it by hand, out of band.
+
+**Precedence, stated explicitly so it is not rediscovered:** where the synced skill and the repo
+files disagree on attribution, **`CLAUDE.md` and `CONTRIBUTING.md` win**, and the skill is to be
+treated as **known-stale on this subject pending a manual sync**. This is not a judgement call for
+a future session to make on the evidence in front of it — a session that reads a strip instruction
+in the skill and follows it is reproducing the **#169** failure mode exactly: two sources
+disagreeing on the same action, the wrong one followed, and nothing written down saying which
+governed. It is written down here. The skill carries one further staleness of the same class — it
+asserts the merging account's profile display name "must read `tyler-rich`", which the 2026-08-09
+display-name decision (below, and `CLAUDE.md` § Git & PR conventions) **declined** — so the skill
+is stale on both attribution points, not just the strip one.
 
 **3. `CLAUDE.md`'s git-identity step is restated as a hard gate.** Unchanged in substance, but it
 was reading as a suggestion and it is the single point of failure for commit authorship. The Cloud
