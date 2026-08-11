@@ -33,21 +33,26 @@ export default tseslint.config(
       // only `rules-of-hooks` and `exhaustive-deps`. Adopted deliberately; see
       // docs/upgrades/frontend-toolchain-86.md, Step 3.
       ...reactHooks.configs.recommended.rules,
-      // The one rule from that set held back. It reports 18 sites, and only 6
-      // are the synchronous setState-in-effect the rule's rationale describes;
-      // those 6 are tracked in #176 and must be refactored before this override
-      // is removed. Two of them (ScanDetailPage's :scanId reset, L17/P2-2, and
-      // ScansPage's compare reconcile, P3-2) are deliberate effects that each
-      // closed a real bug — #176 says so, so they don't get "fixed" blind.
-      //
-      // The other 12 are the fetch-on-mount idiom, where every setState runs
-      // after an await. They are not what this rule is for: with `load` defined
-      // in the component body `void load()` reports while the semantically
+      // The one rule from that set not at its preset severity ('error'). #176's
+      // six genuine synchronous-setState sites are all refactored away; the 13
+      // reports that remain are all the fetch-on-mount idiom, where every
+      // setState runs after an await (12 loaders, plus ScanDetailPage's
+      // `void loadFindings()`, which kept reporting after its synchronous flip
+      // was removed). Those reports track what the compiler can see, not a
+      // behavioural difference: `void load()` reports while the semantically
       // identical `void (async () => { await load(); })()` does not, and moving
-      // `load` behind a custom hook silences every shape — so the report tracks
-      // what the compiler can see, not a behavioural difference. Deliberately
-      // not in #176: there is no fix there that is an improvement.
-      'react-hooks/set-state-in-effect': 'off',
+      // `load` behind a custom hook silences every shape — so there is no fix
+      // for them that is an actual improvement, only ways to hide them.
+      //
+      // 'warn' is a maintainer decision (2026-08-11, closing out #176) in
+      // preference to 13 per-site disables or a data-fetching refactor: the
+      // known reports stay visible in lint output without failing it (`npm run
+      // lint` sets no --max-warnings). The cost is that a NEW report from this
+      // rule also arrives as a warning — and a genuine synchronous
+      // setState-in-effect looks exactly like these — so any change in this
+      // rule's report count is worth reading in review, not scrolling past.
+      // See docs/ARCHIVE.md §14, 2026-08-11 (#176 part 2).
+      'react-hooks/set-state-in-effect': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
