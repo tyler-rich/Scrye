@@ -25,10 +25,14 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 ## Locked decisions — do not re-open
 1. **Name:** Scrye.
 2. **Stack:** React 18 + TS + Vite + **Mantine v7** frontend; **Python 3.14 + FastAPI + Pydantic
-   v2 + SQLAlchemy 2.0 + Alembic** backend; **SQLite**. The runtime floor is **3.14.6** —
+   v2 + SQLAlchemy 2.0 + Alembic** backend; **SQLite**. The runtime floor is **3.14.7** —
    never 3.14.0–3.14.4, whose incremental GC leaked resident memory in long-running servers
-   (reverted in 3.14.5). (Originally locked to Python 3.12; revised to 3.13 in Phase 6, then to
-   3.14 post-v1 — see `docs/ARCHIVE.md` § Deviations.)
+   (reverted in 3.14.5), and no longer 3.14.5/3.14.6 either, because **3.14.7 is the first
+   release carrying the six interpreter-CVE fixes** `ci/grype.yaml` waives as Group A-1 (#98)
+   and Group A-2 (#116) — dropping below it reinstates all six. Both reasons are load-bearing
+   and independent: the GC one bounds the floor from below at 3.14.5, the CVE one raises it to
+   3.14.7. (Originally locked to Python 3.12; revised to 3.13 in Phase 6, then to 3.14 post-v1;
+   floor raised 3.14.6 → 3.14.7 on 2026-08-11 — see `docs/ARCHIVE.md` § Deviations.)
 3. **Job model:** single-container **in-process async worker** (DB-backed `scans` table +
    concurrency semaphore). **No Redis/arq in v1** — but keep a thin worker interface so it could be
    swapped later.
