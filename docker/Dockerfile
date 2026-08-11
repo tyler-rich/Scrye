@@ -238,6 +238,43 @@ COPY --chown=1000:1000 THIRD_PARTY_LICENSES/ /THIRD_PARTY_LICENSES/
 RUN sed -i 's/\r$//' /app/entrypoint.sh \
     && chmod 0755 /app/entrypoint.sh
 
+# Remove pip from the RUNTIME image only — `backend-builder` above still needs it
+# and keeps it (it installs the hash-pinned lock with `pip --require-hashes`).
+# Nothing in the runtime needs pip: the entrypoint runs `alembic upgrade head`
+# then `exec uvicorn`, and no application code imports pip, ensurepip, or
+# pkg_resources.
+#
+# Why it is deleted rather than waived: pip ships *vendored* copies of other
+# projects (`pip/_vendor/vendor.txt` pins `msgpack==1.1.2` and
+# `setuptools==70.3.0`), and the dogfood Trivy gate reports two fixable HIGHs
+# against them — GHSA-6v7p-g79w-8964 (msgpack, fixed 1.2.1) and CVE-2025-47273
+# (setuptools, fixed 78.1.1). Neither is a Scrye dependency: `requirements.lock`
+# pins setuptools 83.0.0 and no msgpack at all. They are whatever the
+# digest-pinned base image's bundled pip happens to vendor, so we cannot bump
+# them — but we can decline to ship pip, which removes the finding at the source
+# instead of excusing it in ci/trivyignore. (Surfaced by the 3.14.7 base-image
+# bump: 3.14.6 bundled pip 26.1.2, 3.14.7 bundles 26.2.1. See docs/ARCHIVE.md
+# §14, 2026-08-11.)
+#
+# Both prefixes carry a copy: /opt/venv (seeded by `python -m venv` in
+# backend-builder) and /usr/local (the base image's `--with-ensurepip` build).
+# `ensurepip` goes with them — its entire payload is that same pip wheel, so
+# leaving it would keep the vulnerable vendored code in the image and let
+# `python -m ensurepip` put pip back. The globs are version-agnostic on purpose,
+# so a future 3.x base bump cannot silently stop matching.
+RUN set -eux; \
+    rm -rf /opt/venv/lib/python3.*/site-packages/pip \
+           /opt/venv/lib/python3.*/site-packages/pip-*.dist-info \
+           /opt/venv/lib/python3.*/ensurepip \
+           /usr/local/lib/python3.*/site-packages/pip \
+           /usr/local/lib/python3.*/site-packages/pip-*.dist-info \
+           /usr/local/lib/python3.*/ensurepip; \
+    rm -f /opt/venv/bin/pip* /usr/local/bin/pip*; \
+    if command -v pip >/dev/null 2>&1; then \
+      echo "pip is still on PATH in the runtime image" >&2; exit 1; \
+    fi; \
+    python -c "import alembic, fastapi, sqlalchemy, uvicorn"
+
 WORKDIR /app/backend
 USER 1000:1000
 

@@ -94,6 +94,47 @@ def test_backend_dev_only_trees_excluded_from_runtime_image() -> None:
     assert "COPY --chown=1000:1000 backend/ /app/backend/" in dockerfile_text
 
 
+def test_pip_is_stripped_from_the_runtime_stage_only() -> None:
+    # The runtime image must not ship pip. Nothing in it needs pip (the entrypoint
+    # runs `alembic upgrade head` then `exec uvicorn`, and no app code imports
+    # pip/ensurepip/pkg_resources), while pip *does* ship vendored copies of other
+    # projects — `pip/_vendor/vendor.txt` pins msgpack and setuptools — which the
+    # dogfood Trivy gate reports as fixable HIGHs (GHSA-6v7p-g79w-8964,
+    # CVE-2025-47273) against versions we cannot bump, since they are whatever the
+    # digest-pinned base image's bundled pip vendors. Deleting pip removes the
+    # finding at its source rather than excusing it in ci/trivyignore, so this
+    # guard exists to stop a future Dockerfile edit quietly reintroducing it.
+    # See docs/ARCHIVE.md §14 (2026-08-11).
+    text = _dockerfile_text()
+    runtime_stage = text.split("AS runtime", 1)[1]
+    builder_stage = text.split("AS backend-builder", 1)[1].split("AS runtime", 1)[0]
+
+    # Both prefixes that carry a pip: the copied venv and the base image's own.
+    assert "/opt/venv/lib/python3.*/site-packages/pip" in runtime_stage, (
+        "the runtime stage must delete the venv's pip (seeded by `python -m venv` "
+        "in backend-builder)"
+    )
+    assert "/usr/local/lib/python3.*/site-packages/pip" in runtime_stage, (
+        "the runtime stage must delete the base image's pip (installed by its "
+        "`--with-ensurepip` build)"
+    )
+    # ensurepip's payload is the same pip wheel, so it must go too — otherwise the
+    # vulnerable vendored code stays in the image and `python -m ensurepip` can
+    # restore pip outright.
+    assert "/opt/venv/lib/python3.*/ensurepip" in runtime_stage
+    assert "/usr/local/lib/python3.*/ensurepip" in runtime_stage
+    # The removal must be self-verifying, so a glob that stops matching after a
+    # future base-image bump fails the build instead of silently shipping pip.
+    assert "if command -v pip >/dev/null 2>&1; then" in runtime_stage, (
+        "the runtime stage must assert pip is actually gone, not just attempt an rm"
+    )
+
+    # ...and pip must SURVIVE in backend-builder, which installs the hash-pinned
+    # lock with it (SC-1). Stripping it there would break the build.
+    assert "pip install --require-hashes -r requirements.lock" in builder_stage
+    assert "rm -rf /opt/venv/lib/python3.*/site-packages/pip" not in builder_stage
+
+
 def test_backend_app_install_is_no_deps_and_no_build_isolation() -> None:
     # The application package itself is installed with --no-deps so the resolver
     # can't reach back out to PyPI for an unpinned copy of a runtime dependency
