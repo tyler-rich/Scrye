@@ -191,7 +191,30 @@ export const FindingsTable = memo(function FindingsTable({
   );
 });
 
-/** Detail view for a single scan: status, summary, artifacts, findings. */
+/**
+ * Route element for `/scans/:scanId`: keys {@link ScanDetailPage} by the scan
+ * id so React remounts it — state, refs, and effects reset wholesale — whenever
+ * the id changes. React Router reuses the matched element across `/scans/:id`
+ * navigations, so without the remount the previous scan's header, findings,
+ * artifacts, tag draft, and poll state linger, and the artifacts/findings
+ * effects (gated on the stale `scan.status`) fire for the new id against the
+ * old status (L17 / P2-2). A remount also voids the old scan's in-flight
+ * request resolutions — they land on the unmounted instance as no-ops — which
+ * the per-field reset effect this replaces could not do.
+ */
+export function ScanDetailRoute() {
+  const { scanId } = useParams();
+  return <ScanDetailPage key={scanId} />;
+}
+
+/**
+ * Detail view for a single scan: status, summary, artifacts, findings.
+ *
+ * Mount via {@link ScanDetailRoute}: every piece of per-scan state below
+ * assumes a fresh component instance per scan id, and the keyed remount is
+ * what provides that. Rendering this component bare across `:scanId` changes
+ * reintroduces L17 / P2-2.
+ */
 export function ScanDetailPage() {
   const { scanId } = useParams();
   const id = Number(scanId);
@@ -299,28 +322,6 @@ export function ScanDetailPage() {
       setFindingsSettledKey(findingsKey);
     }
   }, [id, severityFilter, classFilter, findingsKey]);
-
-  // Reset all per-scan state when the :scanId param changes. React Router
-  // reuses this component instance across /scans/:id navigations, so without
-  // this the header, findings, artifacts, tag draft, and poll state of the
-  // previous scan linger — and the artifacts/findings effects (gated on the
-  // stale scan.status) would fire for the new id against the old status
-  // (L17 / P2-2).
-  useEffect(() => {
-    setScan(null);
-    setArtifacts([]);
-    setFindings([]);
-    setFindingsTotal(0);
-    setFindingsLoaded(false);
-    setFindingsSettledKey(null);
-    findingsGuard.current.begin();
-    setSeverityFilter(null);
-    setClassFilter(null);
-    setTagDraft([]);
-    lastSyncedTags.current = [];
-    setError(null);
-    setPollHalt(null);
-  }, [id]);
 
   useEffect(() => {
     void loadScan();

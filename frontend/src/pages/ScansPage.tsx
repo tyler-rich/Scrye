@@ -186,6 +186,18 @@ export function ScansPage() {
       });
       if (!historyGuard.current.isCurrent(token)) return;
       setData(result);
+      // Reconcile the compare selection in the same update that changes the
+      // visible rows. `compare` holds full row snapshots that would otherwise
+      // outlive a filter/page change or a delete elsewhere — showing a phantom
+      // "1/2 selected" for an unreachable row and diffing against a scan that
+      // now 404s. This is the only place the rows ever change, so dropping any
+      // selected id no longer present here keeps the selection honest, in the
+      // same commit as the rows themselves (P3-2).
+      const visible = new Set(result.items.map((s) => s.id));
+      setCompare((prev) => {
+        const kept = prev.filter((s) => visible.has(s.id));
+        return kept.length === prev.length ? prev : kept;
+      });
       setError(null);
     } catch (err: unknown) {
       if (!historyGuard.current.isCurrent(token)) return;
@@ -216,20 +228,6 @@ export function ScansPage() {
   useEffect(() => {
     void refreshOptions();
   }, [refreshOptions]);
-
-  // Reconcile the compare selection whenever the visible rows change. `compare`
-  // holds full row snapshots that would otherwise outlive a filter/page change
-  // or a delete elsewhere — showing a phantom "1/2 selected" for an unreachable
-  // row and diffing against a scan that now 404s. Dropping any selected id that
-  // is no longer in the current results keeps the selection honest (P3-2).
-  useEffect(() => {
-    if (!data) return;
-    const visible = new Set(data.items.map((s) => s.id));
-    setCompare((prev) => {
-      const kept = prev.filter((s) => visible.has(s.id));
-      return kept.length === prev.length ? prev : kept;
-    });
-  }, [data]);
 
   const patch = (change: Partial<HistoryFilters>) => {
     setFilters((prev) => ({ ...prev, ...change }));

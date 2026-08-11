@@ -10,7 +10,7 @@ import { AccountPage } from './pages/AccountPage';
 import { Dashboard } from './pages/Dashboard';
 import { LoginPage } from './pages/LoginPage';
 import { NewScanPage } from './pages/NewScanPage';
-import { ScanDetailPage } from './pages/ScanDetailPage';
+import { ScanDetailRoute } from './pages/ScanDetailPage';
 import { ScanDiffPage } from './pages/ScanDiffPage';
 import { ScansPage } from './pages/ScansPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -150,7 +150,7 @@ export function App() {
           <Route path="/scans" element={<ScansPage />} />
           <Route path="/scans/new" element={<NewScanPage />} />
           <Route path="/scans/diff/:baseId/:compareId" element={<ScanDiffPage />} />
-          <Route path="/scans/:scanId" element={<ScanDetailPage />} />
+          <Route path="/scans/:scanId" element={<ScanDetailRoute />} />
           <Route
             path="/settings"
             element={user.role !== 'viewer' ? <SettingsPage /> : <Navigate to="/" replace />}

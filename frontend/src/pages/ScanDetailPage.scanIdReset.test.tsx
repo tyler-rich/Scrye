@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Route, Routes, useNavigate } from 'react-router-dom';
 
-import { ScanDetailPage } from './ScanDetailPage';
+import { ScanDetailRoute } from './ScanDetailPage';
 import { act, renderWithProviders, screen, userEvent, waitFor } from '../test/render';
 
 vi.mock('../api/scans', async () => {
@@ -101,8 +101,9 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 /** Renders the route plus a control that navigates between the two scans, so
- * the test exercises a real `:scanId` change on a reused component instance —
- * which is the condition the reset effect exists for. */
+ * the test exercises a real `:scanId` change through the app's own route
+ * element. React Router reuses the matched element across that change — which
+ * is the condition ScanDetailRoute's keyed remount exists for. */
 function NavigateTo({ to }: { to: string }) {
   const navigate = useNavigate();
   return <button onClick={() => void navigate(to)}>go to {to}</button>;
@@ -132,7 +133,7 @@ describe('ScanDetailPage — L17 / P2-2 per-scan state reset on :scanId change',
       <>
         <NavigateTo to="/scans/2" />
         <Routes>
-          <Route path="/scans/:scanId" element={<ScanDetailPage />} />
+          <Route path="/scans/:scanId" element={<ScanDetailRoute />} />
         </Routes>
       </>,
       { initialEntries: ['/scans/1'] },
