@@ -969,6 +969,18 @@ were on an issue comment; this success was on a PR body.** A single success on a
 does not refute #196, and the one-attempt cap is calibrated for the case where it fails, not the
 case where it holds.
 
+**Addendum (2026-08-11, after #203): the harder test ran, and the strip held again.** #203 — the
+first PR opened by a session running with **no `.claude/settings.json` at all**, the strictly
+weaker starting position the paragraph above predicted — got a footer appended on creation, one
+`PATCH` per the rule, and a clean confirming re-read. That is **two strip successes in a row on PR
+bodies since the reinstatement**: #202's under both key sets still live, #203's with nothing at the
+settings layer — no `attribution` keys, no `includeGitInstructions`. Two-for-two post-reversal is a
+real trend, not one lucky data point. It also narrows the open question above in the only direction
+available: whatever role the settings keys played in #202's hold, #203 held **without them**, so
+they are not *needed* for a strip to hold (whether they ever *contributed* remains unfalsifiable
+here, as stated). **Still no signal either way on issue comments** — none has been posted since the
+reinstatement, so #196's failed surface remains untested against the capped rule.
+
 **Known drift, outside this repo:** the synced `scrye` skill
 (`~/.claude/skills/synced/scrye/SKILL.md`) carries its own copy of the prohibition in its
 § "Git identity and attribution", including the #196 reasoning and a paragraph asserting the footer
