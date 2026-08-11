@@ -53,7 +53,7 @@ ignore:
   #               (was issue #98, closed 2026-08-11)   verified 2026-07-26, 2026-08-11
   #   Group A-2 → THIS FILE + docs/ARCHIVE.md §14   tarfile (three CVEs)
   #               (was issue #116, closed 2026-08-11)  verified 2026-07-30, 2026-08-11
-  #   Group B   → issue #52 (still open)            poplib          verified 2026-07-26
+  #   Group B   → issue #52 (still open)            poplib          verified 2026-07-26, 2026-08-11
   #
   # GROUP A HAS NO OPEN TRACKING ISSUE, deliberately. #98 and #116 were closed on
   # 2026-08-11 because their resolution trigger had already fired — all six fixes
@@ -207,10 +207,17 @@ ignore:
   # any maintenance branch, and no 3.14.x point release will clear it. This is a
   # standing acceptance, not a deferral with a pending action behind it.
   #
-  # Verified at the source on 2026-07-26: `POP3._putcmd()` in Lib/poplib.py raises on
-  # `re.search(b'[\x00-\x1F\x7F]', line)` on `main` only — the `3.14` branch, the
-  # `3.13` branch and the `v3.14.6` tag all still hand the line straight to
-  # `_putline()` with no validation.
+  # Verified at the source on 2026-07-26 (`main` vs the `3.14` branch, the `3.13`
+  # branch and the `v3.14.6` tag) and re-verified on 2026-08-11 against the now-pinned
+  # `v3.14.7` tag: `POP3._putcmd()` in Lib/poplib.py raises on
+  # `re.search(b'[\x00-\x1F\x7F]', line)` on `main` only — v3.14.7, like v3.14.6
+  # before it, still hands the line straight to `_putline()` with no validation. The
+  # 3.14.6 → 3.14.7 runtime bump (docs/ARCHIVE.md §14, 2026-08-11) changed which
+  # interpreter Scrye runs; it did not change this finding. gh-143923 still lists no
+  # backport PR as of 2026-08-11 — PR #143924 carried backport labels for 3.10–3.14
+  # before merge, all removed prior to merging into `main` on 2026-01-20 over
+  # backward-compatibility concerns (control characters like tab/backspace are
+  # RFC-violating but in current use).
   #
   # This waiver covered imaplib as well until 2026-07-26. It no longer does: that
   # fix WAS backported and moved to Group A above. The two diverged because imaplib's
@@ -218,12 +225,14 @@ ignore:
   # regression concern behind the original decline; poplib's still rejects the whole
   # [\x00-\x1F\x7F] range and has had no such narrowing.
   #
-  # REVIEW ANNUALLY — next 2027-07-25. The review is a re-confirmation that the
-  # acceptance still holds (severity unchanged, no backport appeared on the branch in
-  # use, Scrye still doesn't use poplib), NOT a prompt to schedule a 3.15 move. A
-  # 3.15 upgrade should be justified on support-lifecycle grounds if and when it
-  # happens; per CLAUDE.md § Dependency hygiene, do not scope an interpreter bump as
-  # a reaction to this one. Tracked in issue #52
-  # (https://github.com/tyler-rich/Scrye/issues/52); see docs/ARCHIVE.md §14
-  # (2026-07-25, 2026-07-26).
+  # REVIEW ANNUALLY — next 2027-07-25, unchanged by the 2026-08-11 re-verification.
+  # The review is a re-confirmation that the acceptance still holds (severity
+  # unchanged, no backport appeared on the branch in use, Scrye still doesn't use
+  # poplib), NOT a prompt to schedule a 3.15 move. A 3.15 upgrade should be justified
+  # on support-lifecycle grounds if and when it happens; per CLAUDE.md § Dependency
+  # hygiene, do not scope an interpreter bump as a reaction to this one. Tracked in
+  # issue #52 (https://github.com/tyler-rich/Scrye/issues/52) — unlike Group A's #98
+  # and #116, #52 stays open: its fix is `main`-only with no resolution trigger on
+  # the 3.14 line, so there is nothing for a point release to fire. See
+  # docs/ARCHIVE.md §14 (2026-07-25, 2026-07-26, 2026-08-11).
   - vulnerability: CVE-2025-15367   # poplib command injection (MEDIUM)

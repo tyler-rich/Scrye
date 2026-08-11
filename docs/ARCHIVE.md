@@ -578,9 +578,10 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (163, newest first)
+### Index of §14 entries (164, newest first)
 
 - [2026-08-11 — Docs/Process — `includeGitInstructions: false` added to `.claude/settings.json`; a standing PR-body content rule added to CLAUDE.md](#2026-08-11--docsprocess--includegitinstructions-false-added-to-claudesettingsjson-a-standing-pr-body-content-rule-added-to-claudemd)
+- [2026-08-11 — Security/Process — Issue #52 (CVE-2025-15367, poplib) re-verified against the now-pinned v3.14.7 tag; cross-references to the closed #98/#116 retargeted to their new tracking location](#2026-08-11--securityprocess--issue-52-cve-2025-15367-poplib-re-verified-against-the-now-pinned-v3147-tag-cross-references-to-the-closed-98116-retargeted-to-their-new-tracking-location)
 - [2026-08-11 — Docs/Process — Attribution moved to the settings layer via a committed `.claude/settings.json`; the strip-PATCH instruction removed from CLAUDE.md and CONTRIBUTING.md](#2026-08-11--docsprocess--attribution-moved-to-the-settings-layer-via-a-committed-claudesettingsjson-the-strip-patch-instruction-removed-from-claudemd-and-contributingmd)
 - [2026-08-11 — Process — Issues #98 and #116 closed on source-verification evidence rather than Grype-DB agreement; Group A tracking moves into `ci/grype.yaml` plus this log](#2026-08-11--process--issues-98-and-116-closed-on-source-verification-evidence-rather-than-grype-db-agreement-group-a-tracking-moves-into-cigrypeyaml-plus-this-log)
 - [2026-08-11 — Security/Infra — Runtime base image moved to Python 3.14.7; all six Group A interpreter fixes verified at the source, and the waivers kept anyway because Grype's DB has not caught up](#2026-08-11--securityinfra--runtime-base-image-moved-to-python-3147-all-six-group-a-interpreter-fixes-verified-at-the-source-and-the-waivers-kept-anyway-because-grypes-db-has-not-caught-up)
@@ -810,6 +811,77 @@ block; anything on #199's branch; any footer already posted on an existing PR, i
 **Plan section affected:** CLAUDE.md § Git & PR conventions, § Attribution (cross-reference only —
 its own text is unchanged). Docs/settings only — no application code, schema, API contract,
 security-model, job-model, auth, gate threshold, or waiver-membership change.
+
+---
+
+### 2026-08-11 — Security/Process — Issue #52 (CVE-2025-15367, poplib) re-verified against the now-pinned v3.14.7 tag; cross-references to the closed #98/#116 retargeted to their new tracking location
+
+**What changed:** #52's issue body and `ci/grype.yaml`'s Group B comment block, both re-verified
+and re-dated — **not** a change of decision. The acceptance stands unchanged: CVE-2025-15367
+remains waived on any interpreter below 3.15.
+
+**Why this was needed.** #52's source-verification table was dated 2026-07-26 and named
+`v3.14.6` as "the pinned runtime." PR #195 moved the runtime to 3.14.7 that same day (2026-08-11,
+see the two entries above). Per this repo's issue convention (§ Issue conventions), a body's
+verification section must cover exactly the state it claims to cover — a stale "the pinned
+runtime" row naming a version the project no longer runs is precisely the failure mode that
+convention exists to prevent. Separately, #52 cross-referenced #98 as a live Group A tracker;
+#98 (and #116, though #52 never named #116 directly) were closed the same day, with their
+tracking moved into `ci/grype.yaml` plus this log (see the entry above). A body pointing at a
+closed issue as a live tracker is stale in the same way.
+
+**Re-verification method.** Per CLAUDE.md § Dependency hygiene, verified independently at the
+source rather than trusting #52's existing table, PR #195's archive entry, or Grype's `FIXED IN`
+column: `Lib/poplib.py` fetched directly from the `v3.14.7` tag and from `main` (shallow clone,
+`git show v3.14.7:Lib/poplib.py` / `git show origin/main:Lib/poplib.py`). Result — unchanged from
+2026-07-26:
+
+| ref | `POP3._putcmd()` guard |
+| --- | --- |
+| `main` | present — `if re.search(b'[\x00-\x1F\x7F]', line): raise ValueError('Control characters not allowed in commands')` |
+| `v3.14.7` (the pinned runtime) | **absent** — `_putcmd()` hands the line straight to `_putline()` |
+
+Also re-checked gh-143923 for any backport PR that has appeared since 2026-07-26: none has. PR
+#143924 (the `main` fix, merged 2026-01-20) carried backport labels for 3.10–3.14 before merge;
+all were removed prior to merging over a stated backward-compatibility concern (control characters
+such as tab/backspace are RFC-violating but in current use, and a backport would break that). No
+open backport PR exists against any maintenance branch as of 2026-08-11.
+
+**Reachability re-confirmed.** `grep -r poplib backend/` returns no matches — this covers Scrye's
+own code only, and is not a claim that no bundled third-party dependency ever imports `poplib`
+(the same scope #52's original verification stated).
+
+**#52's body changes:**
+- The source-verification table's heading moved from `(2026-07-26)` to
+  `(2026-07-26; re-verified 2026-08-11)`; its `v3.14.6 (the pinned runtime)` row was replaced with
+  `v3.14.7 (the pinned runtime)`, still absent, plus a sentence recording the backport-label
+  removal detail above and the 2026-08-11 re-check of gh-143923.
+- The "Group A tracker" section's `tracked in **#98**` line was rewritten: #98 was closed
+  2026-08-11 once its resolution trigger fired (all three fixes verified present in 3.14.7), and
+  its tracking now lives in `ci/grype.yaml`'s Group A-1 block plus this file's §14, not a numbered
+  issue. #98 is kept as a historical link.
+- The "Closing this issue" section's `Ref:` line gained `2026-08-11` and a parenthetical on #98's
+  closure and where its tracking moved.
+- The argument itself — why this is a standing acceptance, not a deferral; why no 3.15 upgrade
+  should be scoped off it — is unchanged, per the explicit scope of this re-verification.
+
+**`ci/grype.yaml`'s Group B block changes:** the source-verification paragraph now cites
+`v3.14.7` rather than `v3.14.6` as the pinned runtime and records the 2026-08-11 re-check
+(including the gh-143923/PR #143924 backport-label detail); the block-index row at the top of the
+interpreter section gained `, 2026-08-11` alongside its existing `verified 2026-07-26`; the
+`REVIEW ANNUALLY` paragraph gained a clause noting the annual cadence (next 2027-07-25) is
+unchanged by this re-verification, and its `#52` reference now explicitly contrasts with Group
+A's #98/#116 — #52 stays open because its fix is `main`-only with no point-release trigger,
+unlike the two closed issues.
+
+**Not changed, deliberately, per explicit task scope:** the CVE-2025-15367 waiver itself; #52's
+review date or its annual cadence (still 2027-07-25); the Group A-1/A-2 waiver blocks and their
+2026-11-01 review date (settled in the #196 work, only described here where #52 references them);
+any argument for or scoping of a 3.15 upgrade; #52 remains open.
+
+**Plan section affected:** CLAUDE.md § Dependency hygiene (interpreter-CVE source verification),
+`ci/` triage allowlists, § Issue conventions. Docs/process only — no application code, schema,
+API contract, security-model, job-model, auth, gate threshold, or waiver membership change.
 
 ---
 
