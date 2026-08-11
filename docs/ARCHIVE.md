@@ -763,6 +763,15 @@ record now that the issues they cited are closed:
 - the file-header NOTE stops saying interpreter waivers are for CVEs "unfixable on the current
   3.14.x line", since half of them are now the opposite.
 
+One stale pointer of the same class lived **outside** `ci/grype.yaml` and was caught by reading the
+dogfood job's own log rather than by grepping the file under edit: `.github/workflows/ci.yml`'s
+*"Waived by ci/grype.yaml (informational)"* step hardcodes a header line, which printed
+`Blocks: A-1 (issue #98) · A-2 (issue #116) · B (issue #52)` on **every** run. It now reads
+`A-1 · A-2 (no open issue — tracked in ci/grype.yaml + docs/ARCHIVE.md §14) · B (issue #52)`. It is
+a bare `echo` string — no `jq` filter, gate threshold, `--exclude`, `--fail-on`, step condition, or
+job structure changed, and the waiver listing it heads is computed from the report exactly as
+before.
+
 **Membership, waiver format, and gate behaviour are unchanged.** The `ignore:` list still parses
 to the same ten entries — three `package.location` excludes for the bundled scanner binaries, and
 the same seven `vulnerability` IDs. Every fact already in the blocks is kept verbatim: the CVE
