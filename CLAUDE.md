@@ -173,9 +173,10 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   **The consequence of skipping it:** the Cloud VM image ships with *both* the repo-local and the
   global identity preset to `Claude <noreply@anthropic.com>` — verified directly in a session — so
   the wrong identity is the default state of every session, not an edge case. There is **no
-  settings-level backstop**: `.claude/settings.json` has no git-identity key, so these two commands
-  are the *only* thing producing correctly-authored commits. Skip them and every commit in the
-  session is authored as Claude and has to be rewritten before the PR can open.
+  settings-level backstop**: the repo carries no `.claude/settings.json` at all (deleted 2026-08-11
+  — see § Attribution), and no Claude Code setting configures git identity in any case, so these two
+  commands are the *only* thing producing correctly-authored commits. Skip them and every commit in
+  the session is authored as Claude and has to be rewritten before the PR can open.
   Every commit and PR must use this name/email — no Claude/Anthropic identity, no co-author
   trailer, no bot account. This is in addition to, not instead of, the Attribution rule below.
   Note: GitHub authors a **squash-merge** commit — and the **merge commit** a promotion
@@ -211,16 +212,19 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 
 ## Attribution
 
-**Cloud sessions have no user-scope `~/.claude/settings.json`.** Each session runs
-in a fresh VM with no home-directory provisioning, so a setting configured in the
-maintainer's own `~/.claude/settings.json` has never applied to a single Cloud
-session. Any Claude Code setting that must apply to this repo therefore has to
-live in the **committed, project-scope `.claude/settings.json`** — the repo is
-cloned into every VM, so settings there travel with it, and project scope
-outranks user scope in the precedence order. That file is where the attribution
-footer is turned off (`attribution.commit: ""`, `attribution.pr: ""`,
-`attribution.sessionUrl: false`). The footer is a **harness feature configured in
-settings**, not something a session can suppress by following an instruction.
+**There is no `.claude/settings.json` in this repository, and the footer has no
+settings-level backstop.** The committed project-scope settings file that #197
+introduced (`attribution.commit: ""`, `attribution.pr: ""`,
+`attribution.sessionUrl: false`) and that #200 extended
+(`includeGitInstructions: false`) was **deleted in full** on 2026-08-11. Three
+sequential attempts to fix the footer at the settings layer did not stop it: #197
+added the attribution keys, #200 added `includeGitInstructions` on top of them,
+and #201 — running after both had merged — still got a footer on its PR body,
+which that session attributed to "the harness" rather than to anything Claude Code
+settings govern. The settings-file approach is judged **not to have worked and is
+fully abandoned, not paused** — do not reintroduce the file to fix the footer.
+The **strip described below is now the only mechanism suppressing the footer.**
+(See `docs/ARCHIVE.md` §14, 2026-08-11.)
 
 Never write an attribution footer, a session URL, a Co-Authored-By
 trailer, or a "Generated with" line. Not in commit messages, not in PR
@@ -230,31 +234,32 @@ later — do not write it at all.
 Before opening a PR or posting a comment, check the text you are about
 to submit for any of the above and remove it first.
 
+**After opening a PR, or posting an issue comment, re-read the live body via the
+API.** If an attribution footer is present, issue **one** `PATCH` to remove it,
+then re-read once to confirm.
+
+**If the footer is re-appended, STOP.** Do not retry a second time on that same
+body. Report it in the session summary as "strip attempted, did not hold."
+
+**Never more than one attempt per body.** The reason, stated here so a later
+session does not raise the cap: each `PATCH` executes under a **bot identity** and
+leaves a permanent, publicly visible **"claude (Bot)"** entry in GitHub's edit
+history. **#196** recorded two such entries from two attempts, with the footer
+surviving both. Capping at one attempt bounds that known cost while still trying
+to produce a clean body; a second attempt has never once changed the outcome and
+only doubles the visible bot attribution.
+
 Verify commit authorship before and after pushing, with
-`git log --format="%an <%ae>%n%B"`.
-
-**Never issue a follow-up `PATCH` to a PR body or an issue comment for the
-purpose of removing an attribution footer.** If a footer appears on a posted
-body, report it in the session summary and leave it alone.
-
-The reason, not just the rule — read it before deciding this is an oversight to
-helpfully repair: **a strip `PATCH` executes under a bot identity**, the server
-re-appends the footer anyway, and the edit leaves a permanent **"claude (Bot)"**
-entry in GitHub's *public* edit history. That is a worse and more visible
-attribution leak than the footer it targets, and it is the only write in this
-project's workflow that lands under a non-maintainer identity. Observed on
-**PR #196**: the comment was created by `tyler-rich`, then the edit-history
-dropdown shows **two** edits attributed to "claude (Bot)" — exactly the two strip
-attempts — and the footer was re-appended regardless. Every other write here
-(posting the comment, opening the PR, editing a body as ordinary work) lands
-correctly as `tyler-rich`. The strip instruction is the sole cause of the bot
-attribution, it has never once succeeded, and it is not to be reinstated.
+`git log --format="%an <%ae>%n%B"`. This check is unchanged and is independent of
+the strip above — commit authorship has always worked, and the git-identity
+commands in § Git & PR conventions are what make it work.
 
 Any future change to this policy must include its `docs/ARCHIVE.md` §14
 entry in the **same PR** that changes the policy — not as a follow-up.
 An unrecorded reversal is what let this section's own ban-then-reversal
 (PR #169, see `docs/ARCHIVE.md` §14 2026-08-09) go undocumented for
-hours; a policy PR without its §14 entry is not done.
+hours; a policy PR without its §14 entry is not done. This policy has now been
+reversed **four** times — read the §14 log end to end before changing it a fifth.
 
 ## Definition of done (per phase — all must hold before opening the PR)
 1. Lint clean — `ruff` + `black` (Python), ESLint + Prettier (TypeScript).
@@ -266,8 +271,8 @@ hours; a policy PR without its §14 entry is not done.
 7. No secrets, keys, or tokens committed; `.gitignore` still covers all sensitive paths.
 8. Commits are **verified** — not assumed — to be under the user's git identity, checked via
    `git log --format="%an <%ae>%n%B"` immediately before opening the PR. See § Attribution for
-   what you write yourself (never a footer) versus what appears after the fact (never yours to
-   remove).
+   what you write yourself (never a footer) versus what appears after the fact (one strip attempt
+   per body, then stop).
 
 ## Coding standards
 - **Python:** type hints everywhere; module/function docstrings; `ruff` + `black` clean; meaningful
