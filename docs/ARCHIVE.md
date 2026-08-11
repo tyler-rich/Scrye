@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (167, newest first)
+### Index of §14 entries (168, newest first)
 
+- [2026-08-11 — Release/Process — v0.3.1 release prep: #194 traced to one stale-image CVE already closed on dev; version bumped in sixteen places; CHANGELOG cut](#2026-08-11--releaseprocess--v031-release-prep-194-traced-to-one-stale-image-cve-already-closed-on-dev-version-bumped-in-sixteen-places-changelog-cut)
 - [2026-08-11 — Post-v1 — #176 part 2: findings 4 and 6 replaced (keyed remount; reconcile-in-load), and `set-state-in-effect` enabled at `'warn'` rather than the preset `'error'`](#2026-08-11--post-v1--176-part-2-findings-4-and-6-replaced-keyed-remount-reconcile-in-load-and-set-state-in-effect-enabled-at-warn-rather-than-the-preset-error)
 - [2026-08-11 — Docs/Process — `.claude/settings.json` deleted outright after three failed settings-layer attempts; the strip-`PATCH` rule reinstated with a one-attempt cap](#2026-08-11--docsprocess--claudesettingsjson-deleted-outright-after-three-failed-settings-layer-attempts-the-strip-patch-rule-reinstated-with-a-one-attempt-cap)
 - [2026-08-11 — Post-v1 — #176 part 1: findings 1, 2, 3 and 5 refactored off synchronous setState-in-effect; findings 4 and 6 and the rule flip deferred to a follow-up](#2026-08-11--post-v1--176-part-1-findings-1-2-3-and-5-refactored-off-synchronous-setstate-in-effect-findings-4-and-6-and-the-rule-flip-deferred-to-a-follow-up)
@@ -747,6 +748,260 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-11 — Release/Process — v0.3.1 release prep: #194 traced to one stale-image CVE already closed on dev; version bumped in sixteen places; CHANGELOG cut
+
+**What changed:** the `CONTRIBUTING.md` § Releasing "Before you tag" checklist run for **v0.3.1**,
+on `dev`, ahead of the promotion PR. The version moved `0.3.0` → `0.3.1` in sixteen places,
+`CHANGELOG.md` `[Unreleased]` was cut to `[0.3.1] - 2026-08-11`, and issue **#194** was traced to
+its actual cause rather than treated as a defect. **No application code, schema, migration or
+configuration changed** — `git diff origin/main origin/dev -- backend/app/ backend/alembic/
+.env.example` is empty.
+
+**1. What #194 actually reported, read from the run rather than the issue body.** #194's body names
+no CVE; it links [run 31358739031](https://github.com/tyler-rich/Scrye/actions/runs/31358739031).
+Reading that run's `:latest` job (93363224040) step by step:
+
+- Step 6, the **Trivy gate** (`--ignore-unfixed --severity HIGH,CRITICAL`, the three bundled
+  scanner binaries `--skip-files`'d, `ci/trivyignore` applied), failed with **exactly one
+  finding**: `cryptography` (METADATA) **49.0.0**, `CVE-2026-69247`, **HIGH**, status `fixed`,
+  fixed version **50.0.0**. Nothing else — **zero** Debian/OS findings survived the gate, even
+  though the informational full-severity scan in the same job reported 335 of them
+  (LOW 138 / MEDIUM 128 / HIGH 51 / CRITICAL 18), none fixable at HIGH+.
+- Step 7, the **Grype gate**, is recorded `skipped` — Trivy's `--exit-code 1` ended the job first.
+  **Trivy's list is therefore not known to be the complete set**, which is why §2 below exists.
+- The `:dev` leg of the same matrix (job 93363223989) passed **both** gates in that run.
+
+**2. Whether Grype would have added anything, and the limitation that prevented a direct answer.**
+
+*Attempted and blocked.* The pinned `grype v0.116.1` was downloaded and run against
+`registry:ghcr.io/tyler-rich/scrye:latest` with `origin/main`'s `ci/grype.yaml` and the same three
+`--exclude`s. The authoring sandbox's egress policy answers **403 to CONNECT** for both
+`grype.anchore.io` (the vulnerability DB) and `pkg-containers.githubusercontent.com` (GHCR blobs),
+so neither the DB nor the image could be fetched. This is the same limitation PR #195 recorded.
+**Not evidenced: a direct Grype run against the published `:latest` image.** Re-running
+`rescan.yml` would answer it and was out of scope for this session.
+
+*What was established instead, category by category.* `:latest`'s Grype surface is: OS/Debian
+packages, Python site-packages, the CPython binary, pip's vendored copies, the bundled scanner
+binaries, and the built SPA. Each is identical-or-better on `dev`:
+
+| Category | `:latest` (v0.3.0) | `dev` |
+|---|---|---|
+| bundled `trivy`/`grype`/`syft` | `--exclude`d from the gate | same three `--exclude`s |
+| CPython interpreter | seven waivers | **byte-identical** waiver set — `diff` of the `- vulnerability:` lines in `origin/main:ci/grype.yaml` vs `origin/dev:ci/grype.yaml` is empty |
+| Python site-packages | 38 packages | 38 packages; the whole `requirements.lock` delta is four: `alembic` 1.18.5→1.19.1, **`cryptography` 49.0.0→50.0.0**, `fastapi` 0.140.13→0.141.1, `uvicorn` 0.51.0→0.52.1 |
+| pip's vendored copies | pip present | pip **deleted outright** from the runtime stage (#195), so any finding there is closed by construction |
+| OS/Debian | 0 fixable HIGH/CRITICAL per the Trivy gate | base image additionally moves to the newer 3.14.7 bookworm digest |
+| the SPA | `dist/` only, no `node_modules` in the runtime stage | unchanged |
+
+*The decisive evidence is empirical, and it is stronger than a re-scan of `:latest` would have
+been:* **`dev`'s exact tree passes both gates today.** PR #203's head `c1d9895` carries tree
+`b2ed842869f640a43075cddf709b83b5968611a7`, which is identical to `origin/dev`'s tip tree, and its
+`Image — build + dogfood self-scan` job ([run 31496642829](https://github.com/tyler-rich/Scrye/actions/runs/31496642829),
+13:34 UTC 2026-08-11) reports the Trivy gate green and the Grype gate **`No vulnerabilities
+found`**, with `Total waived: 7` and every waived row reading `python 3.14.7`. So whatever Grype
+would have said about `:latest`, the tree being promoted is clean against both scanners' current
+DBs, with the seven documented waivers as the only suppressed items.
+
+**3. That the fix is real, verified at the source rather than from a `FIXED IN` column.** Per
+CLAUDE.md § Dependency hygiene. `dev` pins `cryptography==50.0.0` in both `pyproject.toml` and
+`requirements.lock`. pyca/cryptography's `CHANGELOG.rst` **at the `50.0.0` tag** opens the
+`50.0.0 - 2026-07-31` section with a `**SECURITY ISSUE**` entry for exactly this defect —
+`pkcs7_decrypt_der` and its PEM/S-MIME variants no longer expose distinguishable errors or timing
+while unwrapping a `RecipientInfo`'s `encryptedKey`, a random key being substituted on failure per
+RFC 3218. Corroborated in the code, not just the changelog: `src/rust/src/pkcs7.rs` at `50.0.0`
+carries the RFC-3218 comment, `let random_key = crate::backend::rand::get_rand_bytes(py,
+key_size)?`, and the two branches that return it (lines 303–328); the same file at `49.0.0`
+contains no occurrence of `random`, `3218`, `oracle` or `constant-time`. **49.0.0 is vulnerable,
+50.0.0 is not, and `dev` ships 50.0.0.** #194 is therefore a stale published image, not a defect.
+
+*The six interpreter CVEs were independently re-verified too*, since this release carries the
+3.14.7 bump and the `[Unreleased]` § Security text asserts all six are fixed. Diffing
+`raw.githubusercontent.com` at `v3.14.6` and `v3.14.7`: `Include/patchlevel.h` reads `3.14.6` and
+`3.14.7` respectively; `Lib/html/parser.py` gains `_pending`/`_parse_threshold` and loses the
+unguarded `rawdata = self.rawdata + data`; `Modules/getpath.py` loses all four `BUILD_LANDMARK`
+references and gains the inline `CVE-2026-12003` comment; `Lib/imaplib.py` gains `_control_chars`;
+`Lib/tarfile.py` gains `_EXTHEADER_READ_CHUNK`, the result-capturing `data = self.read(self.bufsize)`
+in `_Stream.seek()`, the `unfiltered.replace(name=tarinfo.name, deep=False)` re-filter call, and the
+`filter_function=filter_function` argument on `_extract()`'s call into `_extract_one()`. And
+`Lib/poplib.py` is **byte-identical** between the two tags, confirming the `[Unreleased]` claim that
+CVE-2025-15367 is unaffected either way. All six fixed, all six still reported by Grype (§2's
+`Total waived: 7`) — the "fixed *and* waived" state the waiver blocks describe, neither "fixed" nor
+"still vulnerable" alone.
+
+**4. Version bumped `0.3.0` → `0.3.1`, not `0.4.0`.** A patch under SemVer, and the maintainer's
+call. Nothing in the release is a new user-facing capability and nothing moves the schema: the
+backend application tree and `backend/alembic/` are **unchanged** between `main` and `dev`, and so
+is `.env.example`, so there is no API surface, no configuration key and no migration to consider.
+Everything in the release is a fix, a dependency bump, or build/dev-time toolchain currency.
+
+**The one candidate considered and rejected** was the bundled-scanner bump (Trivy 0.73.0, Grype
+0.116.1, Syft 1.50.0), which does bring capabilities a user could observe in results — Trivy's OCI
+VEX discovery, Grype's Go reachability analysis, Syft's vcpkg/`.app` cataloging. It is dependency
+currency of an orchestrated binary rather than a Scrye feature, its `[Unreleased]` entry files it
+under `### Changed`, and Scrye's own surface is untouched, so it does not carry a minor on its own.
+Recorded here so the reasoning is not re-derived at the next scanner bump.
+
+**5. Every version-string occurrence — sixteen, across nine files.** Found by grepping the whole
+repo, not from any list. `frontend/package-lock.json`'s two root fields were written with
+`npm version 0.3.1 --no-git-tag-version`, never by hand.
+
+| File | Occurrences | What carries it |
+|---|---|---|
+| `backend/app/__init__.py` | 1 | `__version__` — the only runtime-load-bearing copy |
+| `backend/pyproject.toml` | 1 | packaging metadata |
+| `frontend/package.json` | 1 | npm metadata |
+| `frontend/package-lock.json` | 2 | the two root `version` fields |
+| `docker/docker-compose.yml` | 1 | `image: scrye:<v>` — a **local** build tag, not a registry ref |
+| `docker/Dockerfile` | 1 | the build-command comment at the head of the file |
+| `README.md` | 5 | the `/healthz` sample output; the tag table's `(e.g. \`:0.3.1\`)`; the `docker pull ghcr.io/tyler-rich/scrye:0.3.1` pin example; and the `docker build`/`docker buildx build` `-t scrye:0.3.1` commands |
+| `.github/dependabot.yml` | 2 | the docker-ecosystem `ignore:` comment, which quotes the Compose pin verbatim and the rejected GHCR-qualified alternative |
+| `frontend/src/components/settings/AboutPanel.test.tsx` | 2 | the `BASE_ABOUT` fixture's `version` and the version-stat assertion bound to it |
+
+`backend/tests/test_version.py` guards only the first four rows and passes on the result; the
+Compose file, the Dockerfile comment, the README, `dependabot.yml` and the frontend fixture are
+reached by nothing but a grep, which is why the grep is the method.
+
+**This cut found no occurrence the previous cut failed to bump — but it did find the previous
+cut's *record* under-counting one file.** The 2026-08-03 entry describes the documentation set as
+"`README.md` ×3". `README.md` carried **five** at `v0.2.0` and five at `v0.3.0`, and all five were
+correctly at `0.3.0` in the released tree — so the bump was complete and only the prose count was
+wrong. Naming it here so the next cut does not read "×3" as an inventory and stop looking after
+three.
+
+**Deliberately left at `0.3.0`,** matching the two prior cuts' reasoning: the `## [0.3.0]`
+CHANGELOG section, its `[0.3.0]:` compare link and the narrative references inside past release
+sections; every prior §14 entry and the `docs/ROADMAP.md` / `docs/upgrades/frontend-toolchain-86.md`
+references to the *v0.3.0 promotion* (release history — rewriting it falsifies the record);
+`docs/ARCHIVE.md`'s `tecnativa/docker-socket-proxy:0.3.0`, which is a different project's version
+entirely; `backend/tests/test_trivy_policy.py`'s `https://openvex.dev/ns/v0.2.0` (the OpenVEX spec
+context version); `backend/tests/test_backup.py:317`'s `app_version="0.1.0"` backup-record fixture,
+realistic precisely because it is historical; and `docker/Dockerfile:249`'s `setuptools==70.3.0`
+plus `CHANGELOG.md`'s copy of it, where `0.3.0` is a coincidental substring of an unrelated
+package version. `AboutPanel.test.tsx`'s `python_version: '3.14.6'` was likewise left alone, per
+PR #195's treatment of the same mock payload.
+
+**6. `CHANGELOG.md` `[Unreleased]` cut to `[0.3.1] - 2026-08-11`,** with a fresh empty
+`[Unreleased]` above it and the reference-link block gaining
+`[0.3.1]: …/compare/v0.3.0...v0.3.1`, `[Unreleased]` re-pointed at `…/compare/v0.3.1...HEAD`. Done
+**before** the promotion, as in the v0.2.0 and v0.3.0 cuts, so `main` receives an already-correct
+CHANGELOG rather than a commit landing on it after the fact.
+
+Every claim was re-checked against the current source rather than against what the entry said when
+written. All fourteen frontend version claims verify against `frontend/package.json` exactly
+(`typescript` 6.0.3, `eslint` 10.8.1, `@eslint/js` 10.0.1, `eslint-plugin-react-hooks` 7.1.1,
+`eslint-plugin-react-refresh` 0.5.3, `typescript-eslint` 8.66.0, `vite` 8.2.1,
+`@vitejs/plugin-react` 6.0.5, `vitest` 4.1.10, `jsdom` 30.0.1, `globals` 17.9.0,
+`@testing-library/user-event` 14.6.3, `postcss` 8.5.26, `@types/node` 26.2.0); `js-yaml` and
+`@eslint/eslintrc` are absent from the lockfile entirely and `nanoid` is at 3.3.18 marked `dev`,
+both as the ESLint-10 entry states; the four backend deltas match `requirements.lock`; and the
+Dockerfile's scanner args match the versions the scanner entry names. **Three things did not hold,
+and all three were corrected:**
+
+- **The `### Added` entry was removed from the CHANGELOG entirely.** It described #178's
+  `ScanDetailPage.scanIdReset.test.tsx` and closed with "**No production code changed** —
+  `ScanDetailPage.tsx` is byte-identical to `dev`". Both halves stopped being true within the same
+  release: #201 and #203 each changed `ScanDetailPage.tsx`, and #203 rewrote that very test's
+  harness to mount through the new `ScanDetailRoute`. It is also test-only work, which belongs in
+  this log rather than in release notes. It is not re-written here because §14 already carries it
+  in full — see the 2026-08-09 entry, "`L17`/`P2-2`'s reset effect finally has a regression test".
+  Maintainer decision, 2026-08-11.
+- **The step-3 React Compiler entry's `set-state-in-effect` claims were corrected.** It said the
+  rule was "held back" and "left `off`"; #203 later enabled it at **`'warn'`** in the same release.
+  The heading clause and the finding paragraph now say "held back until the #176 work later in this
+  release" and "held at `off` for this step", and a closing **Superseded later in this release**
+  paragraph states the shipped severity, the 0 errors / 13 warnings result, and that the 12
+  fetch-on-mount findings remain undisguised with no `eslint-disable` anywhere.
+- **A `### Fixed` section was added** for the #176 work in #201 and #203, which was absent from
+  `[Unreleased]` and is **not** purely internal refactoring. Five deltas are user-observable and
+  are now in the release notes: the findings list no longer flashing "No findings match the current
+  filters" over an unanswered request; a delete-confirm dialog left open across a navigation now
+  closing instead of re-arming against the newly-opened scan; a late `getScan(oldId)` no longer
+  repainting over the scan now displayed; an in-flight tag save no longer writing the previous
+  scan's response into the new view; and the scans list no longer committing a frame in which new
+  rows and an unreconciled compare selection coexist. Maintainer decision, 2026-08-11.
+
+**Deliberately excluded from the CHANGELOG as non-user-observable,** and named here so the omission
+reads as a decision rather than an oversight — all of it is already recorded in §14: **#196**
+(closing #98/#116 and moving Group A tracking into `ci/grype.yaml` plus this log), **#197**, **#200**
+and **#202** (the `.claude/settings.json` attempt, `includeGitInstructions`, the PR-body content
+rule, and the file's deletion with the capped strip reinstated), **#198** (repo-files-win precedence
+over the synced skill), and **#199** (the #52 poplib re-verification against `v3.14.7`). None of
+these changes anything a deployed Scrye does; #197/#200/#202 in particular are session-tooling and
+convention changes, which are archive material by construction.
+
+One cosmetic inconsistency was found and **left alone**: the lockfile package counts across the
+sweep's last three steps read 339 → 305 (#185), then "306 before and after" (#187 and #190). The
+tree has 305 entries under `packages` excluding the root and 306 including it, so the two entries
+simply count differently. Nothing about the world is misstated, and rewriting a released-in-this-
+section number to unify a convention is not worth the churn.
+
+**7. `THIRD_PARTY_LICENSES/` re-verified from scratch, not inherited from the v0.3.0 result.** The
+version table matches `docker/Dockerfile`'s args exactly — `TRIVY_VERSION=0.73.0`,
+`GRYPE_VERSION=0.116.1`, `SYFT_VERSION=1.50.0` — and each bundled file was re-fetched from
+`raw.githubusercontent.com` at that exact tag and `cmp`'d:
+
+| File | Upstream at the pinned tag | Result |
+|---|---|---|
+| `trivy/LICENSE` | `aquasecurity/trivy@v0.73.0` | **byte-identical**, 11 357 bytes |
+| `trivy/NOTICE` | `aquasecurity/trivy@v0.73.0` | **byte-identical**, 137 bytes |
+| `grype/LICENSE` | `anchore/grype@v0.116.1` | **byte-identical**, 11 357 bytes |
+| `grype/NOTICE` | `anchore/grype@v0.116.1` | HTTP **404** — no `NOTICE` upstream, none bundled, as documented |
+| `syft/LICENSE` | `anchore/syft@v1.50.0` | **byte-identical**, 11 357 bytes |
+| `syft/NOTICE` | `anchore/syft@v1.50.0` | HTTP **404** — same |
+
+Apache-2.0 §4(c)/(d) is satisfied: the real text travels with the distribution, unparaphrased.
+
+**8. `backend/requirements.lock`: no drift, and no regeneration needed.** `pyproject.toml`'s
+dependencies are untouched by this PR. Verified anyway with the pinned command from
+`CONTRIBUTING.md` § Backend dependency lock (`uv==0.8.17`, `--group build --generate-hashes
+--python-version 3.14`), run against a copy of `pyproject.toml` **and the existing lock** so uv
+could read it as a preference set: the output `diff`s empty against the committed file. Recorded
+because the first attempt wrote to a fresh path, removed that preference input, and produced a
+large spurious diff (`annotated-doc` 0.0.4→0.0.5, `certifi`, `cffi`, …) that looked like real
+drift and was not — **run the command with the existing lock present, or the check lies.**
+
+**9. Dependabot queue: empty.** `GET /repos/tyler-rich/Scrye/pulls?state=open` returns **zero open
+pull requests of any kind**, so there is nothing to land, close or defer, and no `baseRefName` to
+check. The last round was #159/#160 (2026-08-08) and #190/#192 (2026-08-09); everything since has
+been reapplied by hand on `dev`, which is why the queue is clear. The `[Unreleased]` § Changed
+entries covering `@types/node`, `globals`/`user-event`/`postcss` and the scanner bumps are those
+reapplications. **Nothing in this release was merged from a Dependabot branch as-built.**
+
+**10. Verification — and PR #195's open gap is now closed.** Backend: `ruff check .` clean,
+`black --check .` clean (178 files), `pytest` **729 passed, 11 skipped, 0 failed**. Frontend:
+`npm run lint` exit 0 at **0 errors / 13 warnings** (all `react-hooks/set-state-in-effect`, the
+count the #176 part-2 entry records), `npm run format:check` clean, `npm test` **96 tests across 26
+files**, `npm run build` (`tsc -b` + Vite) clean. The eleven skips are all environmental and
+unrelated to this change: three `test_spa.py` (frontend not built at that point), two
+`test_entrypoint_preflight.py` (root bypasses directory permission bits), six
+`test_scanner_symlink_containment.py` (the pinned `syft`/`grype` binaries are not on `PATH` here —
+CI's image job supplies them from the image it builds).
+
+**That `pytest` run is on a real CPython 3.14.7**, which the 2026-08-11 entry for PR #195 recorded
+as explicitly *not evidenced*: "the backend suite has **not** run on 3.14.7 anywhere — CI's
+`Set up Python 3.14` resolves the hosted tool cache to **3.14.6**", closing with "a future session
+with registry access should close that by running the suite on a real 3.14.7." **Consider it
+closed.** The interpreter came from `python-build-standalone` via `uv python install 3.14.7` —
+`python -V` reports `Python 3.14.7` — rather than from a container image, which is why it worked
+here where the image pull did not: that path uses GitHub release assets, which this sandbox's
+egress policy permits, while the registry blob hosts it denies. **Note the uv version matters and
+the repo's pin is the wrong tool for this job:** the pinned `uv==0.8.17` (correct, and used
+unchanged, for the lockfile in §8) offers only `cpython-3.14.0rc2` from its bundled index, and
+3.14.0rc2 is precisely the interpreter the 2026-08-02 triage entry records as breaking every
+pydantic model construction with a `TypeError` (`typing._eval_type()` gained `prefer_fwd_module`
+between rc2 and final). A current uv was installed **separately, for the interpreter download
+only**, and never used to touch `requirements.lock`. CI still resolves 3.14.6, so this remains a
+local result rather than a standing gate.
+
+**Plan section affected:** `CHANGELOG.md` (`[0.3.1]` cut, new `### Fixed`, `### Added` removed, two
+step-3 corrections); `backend/app/__init__.py`, `backend/pyproject.toml`, `frontend/package.json`,
+`frontend/package-lock.json`, `docker/docker-compose.yml`, `docker/Dockerfile`, `README.md`,
+`.github/dependabot.yml`, `frontend/src/components/settings/AboutPanel.test.tsx` (version strings);
+§14 (this log). No locked decision, schema, security model, API surface or configuration changed.
 
 ---
 
