@@ -78,9 +78,11 @@ ignore:
   # is no longer a below-3.15 acceptance. See docs/ARCHIVE.md §14 (2026-07-26).
   # REVIEW BY 2026-10-25 (covers the next 1-2 CPython point releases at their
   # ~2-month cadence, plus Grype-DB refresh lag on the backport).
-  - vulnerability: CVE-2026-15308   # html.parser quadratic-complexity CPU DoS (HIGH)
-  - vulnerability: CVE-2026-12003   # getpath.py in-tree search-path fallback (MEDIUM)
-  - vulnerability: CVE-2025-15366   # imaplib command injection (MEDIUM)
+  # BASELINE (temporary, this commit only — see the commit message): the three
+  # `- vulnerability:` entries for CVE-2026-15308 / CVE-2026-12003 /
+  # CVE-2025-15366 are lifted here so the dogfood scan reports them against the
+  # still-pinned 3.14.6 digest. This is the fail-first half of the 3.14.7 bump's
+  # evidence; the next commit bumps the digest and re-runs the same scan.
   #
   # Group A-2 (issue #116) — the `tarfile` set. Same shape and same trigger as A-1:
   # each fix is merged to the `3.14` maintenance branch and absent from released
@@ -114,9 +116,9 @@ ignore:
   # bundles are a JSON envelope, not tar), so the residual risk is unreachable
   # stdlib code in the image — the same rationale the poplib acceptance rests on.
   # REVIEW BY 2026-10-25 (aligned with #98 — same trigger, one review covers both).
-  - vulnerability: CVE-2026-11940   # tarfile hardlink→symlink extraction escape (HIGH)
-  - vulnerability: CVE-2026-11972   # tarfile streaming-mode EOF infinite loop (HIGH)
-  - vulnerability: CVE-2026-0864    # tarfile oversized extended-header memory exhaustion (MEDIUM)
+  # BASELINE (temporary, this commit only): the three `- vulnerability:` entries
+  # for CVE-2026-11940 / CVE-2026-11972 / CVE-2026-0864 are lifted here for the
+  # same reason as the A-1 block above.
   #
   # Group B (issue #52) — ACCEPTED RISK ON ANY INTERPRETER BELOW 3.15. Not "pending an upgrade":
   # the fix exists only on `main`, upstream issue gh-143923 lists no backport PR for
