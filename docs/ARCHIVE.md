@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (166, newest first)
+### Index of §14 entries (167, newest first)
 
+- [2026-08-11 — Post-v1 — #176 part 2: findings 4 and 6 replaced (keyed remount; reconcile-in-load), and `set-state-in-effect` enabled at `'warn'` rather than the preset `'error'`](#2026-08-11--post-v1--176-part-2-findings-4-and-6-replaced-keyed-remount-reconcile-in-load-and-set-state-in-effect-enabled-at-warn-rather-than-the-preset-error)
 - [2026-08-11 — Docs/Process — `.claude/settings.json` deleted outright after three failed settings-layer attempts; the strip-`PATCH` rule reinstated with a one-attempt cap](#2026-08-11--docsprocess--claudesettingsjson-deleted-outright-after-three-failed-settings-layer-attempts-the-strip-patch-rule-reinstated-with-a-one-attempt-cap)
 - [2026-08-11 — Post-v1 — #176 part 1: findings 1, 2, 3 and 5 refactored off synchronous setState-in-effect; findings 4 and 6 and the rule flip deferred to a follow-up](#2026-08-11--post-v1--176-part-1-findings-1-2-3-and-5-refactored-off-synchronous-setstate-in-effect-findings-4-and-6-and-the-rule-flip-deferred-to-a-follow-up)
 - [2026-08-11 — Docs/Process — `includeGitInstructions: false` added to `.claude/settings.json`; a standing PR-body content rule added to CLAUDE.md](#2026-08-11--docsprocess--includegitinstructions-false-added-to-claudesettingsjson-a-standing-pr-body-content-rule-added-to-claudemd)
@@ -749,6 +750,125 @@ entry, and the anchors jump straight to it.
 
 ---
 
+### 2026-08-11 — Post-v1 — #176 part 2: findings 4 and 6 replaced (keyed remount; reconcile-in-load), and `set-state-in-effect` enabled at `'warn'` rather than the preset `'error'`
+
+**What changed:** the two remaining genuine `react-hooks/set-state-in-effect` sites — the ones
+#176's "Do not fix 4 and 6 blind" section covers — are replaced behaviour-preservingly, and the
+rule's override in `frontend/eslint.config.js` moves from `'off'` to **`'warn'`**, a maintainer
+decision recorded below. The rule now takes effect for the first time. #176 stays open for the
+maintainer to close by hand.
+
+**Finding 4 (`ScanDetailPage`, `L17`/`P2-2`) — the reset effect became a keyed remount.** The
+per-`:scanId` reset effect (11 setStates plus 2 ref writes) is deleted. In its place `App.tsx`
+mounts the page through a new `ScanDetailRoute` wrapper in `ScanDetailPage.tsx` —
+`<ScanDetailPage key={scanId} />` — so React unmounts and remounts the component whenever the id
+changes, which is the compiler-idiomatic replacement #176 itself names. Behaviour is preserved
+because a remount resets strictly everything the effect reset: all state and both refs come back
+to their initial values, and the mount effects then run for the new id in the same order the reset
+path produced (`getScan`, then artifacts/findings once the new scan's own status allows).
+
+**The remount enumeration** — what could have depended on component instance identity across
+`/scans/:id` navigations, checked item by item:
+
+- **State.** The effect reset 11 of the component's stateful values; a remount resets those 11
+  plus the three the effect never covered — `savingTags`, `deleting`, and the delete-confirm
+  modal's `confirmOpened`. That is the one observable delta, and it is fully characterised: a
+  delete-confirm modal open at the moment of navigation previously *stayed open and re-targeted
+  the new scan* (its text and its `remove()` closure both read the post-navigation id), where it
+  now closes; an in-flight `saveTags` previously left its button loading and, on settling, wrote
+  the **old** scan's server response into the view now showing the new id. Both deltas are in the
+  safe direction — the lingering modal could delete a scan the operator never confirmed.
+- **Refs.** `findingsGuard` and `lastSyncedTags` are recreated fresh, equivalent to the effect's
+  `begin()` / `[]` resets.
+- **In-flight requests of the old scan.** Their resolutions now land on the unmounted instance as
+  no-ops. Under the effect version, a late `getScan(oldId)` resolution could repaint the old
+  scan's header and tags *over* the new id's loading view — `loadScan` has no latest-wins guard,
+  and the reset effect could not cancel an already-started promise. The remount closes that
+  window outright.
+- **The status poll.** Its effect cleanup (`cancelled = true`, `clearTimeout`) runs on unmount
+  exactly as it ran on dependency change; no timer survives.
+- **Scroll and focus.** Identical under both versions: navigation collapses the subtree to the
+  "Loading scan" state either way, and the app has no scroll restoration.
+- **Nothing outside the component consumes its instance** — it provides no context, registers no
+  external listeners, and no parent holds a ref into it. Other routes are untouched.
+- **The key granularity.** The key is the raw `:scanId` param string where the effect keyed on
+  `Number(scanId)`; the two differ only for aliasing spellings of one id (`/scans/01` vs
+  `/scans/1`), which no in-app link produces — and there the keyed version remounts where the
+  effect would not have reset, the safe direction.
+
+**The test-harness consequence, stated because a regression-test file changed:**
+`ScanDetailPage.scanIdReset.test.tsx` mounted `<ScanDetailPage />` bare inside its own `<Routes>`,
+bypassing `App.tsx` — with the protection now living on the route element, that harness would have
+exercised nothing and failed. Its route element is now `<ScanDetailRoute />`, the exact
+arrangement the app ships; every assertion in the test is unchanged.
+(`ScanDetailPage.findingsSpinner.test.tsx` still mounts the page bare — it never navigates, so no
+id changes under it.)
+
+**Finding 6 (`ScansPage`, `P3-2`) — the reconcile effect moved into `load()`.** `load()` is the
+only place `data` — the visible rows — is ever set, so the effect that reconciled the compare
+selection "whenever the rows change" fires on exactly the renders that follow a `load()`
+resolution and no others. The same reconciliation (drop any selected id not in the incoming
+rows, keep the array identity when nothing was dropped) now runs inside `load()` immediately
+after `setData`, behind the same latest-wins guard. Behaviour is preserved — same trigger set,
+same reconciliation — minus one frame: the effect version committed a render in which the new
+rows and the stale selection coexisted (the phantom "1/2 selected") before correcting itself;
+the two setStates now batch into a single commit.
+
+**Fail-first verification, per regression test.** Naive version = the effect deleted with no
+replacement (for finding 4, the wrapper rendering `<ScanDetailPage />` without the key; for
+finding 6, `load()` without the reconcile block):
+
+- `ScanDetailPage.scanIdReset.test.tsx` — against naive: **FAILED on its first in-flight
+  assertion**, exactly as #176 predicted (`findByText('Loading scan')` times out with scan 1's
+  target still rendered). Against the replacement: passes.
+- `ScansPage.compare.test.tsx`, "drops a selection that filters/pages out" — against naive:
+  **FAILED** (the phantom "Compare scans" button survives the reload). Against the replacement:
+  passes.
+- `ScansPage.compare.test.tsx`, "drops a selected scan that was deleted" — against naive:
+  **passed; it failed to fail.** All three of its assertions held vacuously: the deleted row's
+  checkbox leaves the DOM because the row itself left the table, the surviving scan's checkbox
+  reads checked from the stale snapshot too, and the Compare button is present under both
+  versions. The observable that actually discriminates — the bar reads "Comparing 1/2 selected"
+  with Compare disabled, versus a stale "2/2" with Compare *enabled against the deleted scan* —
+  was never asserted. With maintainer approval the test was strengthened by exactly those two
+  assertions, then re-proven: against naive it now **FAILS** (`Comparing 1/2 selected` not
+  found), against the replacement it passes. The gap predates this change — the test was added
+  by #178 for an effect that already worked, so its fail-first property was never established
+  the way the scanIdReset test's was.
+
+**How the rule-flip tension resolved, and on what evidence.** Part 1 flagged that #176's
+definition of done — override removed *and* `npm run lint` clean *and* the fetch-on-mount
+findings not suppressed — cannot all hold. Measured on the refactored tree: the installed
+`eslint-plugin-react-hooks@7.1.1`'s `configs.recommended` assigns `set-state-in-effect` severity
+**`error`** (read from the plugin's config object directly); with the override removed,
+`npm run lint` (bare `eslint .`, no `--max-warnings` anywhere, including CI's identical
+invocation) reports **13 problems (13 errors, 0 warnings)** and exits 1. Findings 4 and 6 no
+longer report; the 13 are the fetch-on-mount population — the 12 loaders plus
+`ScanDetailPage`'s `void loadFindings()`, the migrated finding-5 line part 1 documented. Every
+path to a clean lint therefore suppresses them in some form, which is the decision #176 did not
+contain. The maintainer chose **`'warn'`** (2026-08-11) over the alternatives — 13 per-site
+`eslint-disable`s (honest but heavy against the disables-are-last-resort rule), keeping the rule
+`'off'` (the rule never takes effect), or the data-fetching refactor (out of scope, its own
+decision). Result: the rule is live and visible, lint and CI pass at 0 errors / 13 warnings, and
+the accepted cost is that a **new, genuine** synchronous-setState site also arrives as a warning
+rather than an error — the config comment tells reviewers to read any change in this rule's
+report count rather than scroll past it.
+
+**The 12 fetch-on-mount findings are deliberately untouched:** no `eslint-disable`, no call-site
+wrapping, no loaders-behind-a-hook refactor. Per #176 there is no fix for them that is an actual
+improvement — the report tracks what the compiler can see, not a behavioural difference — so they
+now warn, undisguised.
+
+**Verification:** `npm run lint` exit 0 — **0 errors, 13 warnings**, all
+`react-hooks/set-state-in-effect` · `npm run format:check` clean · `npm test` **26 files / 96
+tests** passing (unchanged from part 1) · `npm run build` (`tsc -b` + Vite) clean.
+
+**Plan section affected:** §14 (this log); `docs/upgrades/frontend-toolchain-86.md` Step 3, whose
+held-back rule is now enabled at `'warn'`. No locked decision, schema, security-model, routing
+behaviour beyond the one route element, or data-fetching layer was touched.
+
+---
+
 ### 2026-08-11 — Docs/Process — `.claude/settings.json` deleted outright after three failed settings-layer attempts; the strip-`PATCH` rule reinstated with a one-attempt cap
 
 **What changed:** the committed `.claude/settings.json` is **deleted from the repository in full**,
@@ -848,6 +968,18 @@ Also note the surface difference from the failures that motivated #197: **#196's
 were on an issue comment; this success was on a PR body.** A single success on a different surface
 does not refute #196, and the one-attempt cap is calibrated for the case where it fails, not the
 case where it holds.
+
+**Addendum (2026-08-11, after #203): the harder test ran, and the strip held again.** #203 — the
+first PR opened by a session running with **no `.claude/settings.json` at all**, the strictly
+weaker starting position the paragraph above predicted — got a footer appended on creation, one
+`PATCH` per the rule, and a clean confirming re-read. That is **two strip successes in a row on PR
+bodies since the reinstatement**: #202's under both key sets still live, #203's with nothing at the
+settings layer — no `attribution` keys, no `includeGitInstructions`. Two-for-two post-reversal is a
+real trend, not one lucky data point. It also narrows the open question above in the only direction
+available: whatever role the settings keys played in #202's hold, #203 held **without them**, so
+they are not *needed* for a strip to hold (whether they ever *contributed* remains unfalsifiable
+here, as stated). **Still no signal either way on issue comments** — none has been posted since the
+reinstatement, so #196's failed surface remains untested against the capped rule.
 
 **Known drift, outside this repo:** the synced `scrye` skill
 (`~/.claude/skills/synced/scrye/SKILL.md`) carries its own copy of the prohibition in its

@@ -569,30 +569,35 @@ red check, which is #153's problem in miniature. It is also the one step where
 "decline it" is a legitimate outcome: keeping the two classic rules and skipping
 the compiler set is a supported configuration and costs nothing.
 
-> **This step's held-back rule is being closed out in two parts.** Step 3 landed
-> the compiler rule set with one exception: `react-hooks/set-state-in-effect` is
-> still `'off'` by an override in `frontend/eslint.config.js`, because it reports
-> 18 findings of which only 6 are worth changing. Retiring that override is
-> tracked by **[#176](https://github.com/tyler-rich/Scrye/issues/176)** and is
-> being done across two sessions, not one:
+> **This step's held-back rule was closed out in two parts.** Step 3 landed
+> the compiler rule set with one exception: `react-hooks/set-state-in-effect` was
+> held `'off'` by an override in `frontend/eslint.config.js`, because it reported
+> 18 findings of which only 6 were worth changing. Retiring that override was
+> tracked by **[#176](https://github.com/tyler-rich/Scrye/issues/176)** and was
+> done across two sessions, not one:
 >
 > - **Part 1 (landed 2026-08-11).** Findings **1, 2, 3 and 5** — `LoginPage`'s
 >   `oidc_error` banner, `OidcLinkCard`'s `oidc_link*` banners, `NewScanPage`'s
 >   scanner clamp, and `ScanDetailPage`'s findings loading state — refactored,
 >   behaviour preserved, each with a test proven to fail against the pre-refactor
 >   version of its own file. **The override was deliberately left in place.**
-> - **Part 2 (open).** Findings **4** and **6** — `ScanDetailPage`'s per-`:scanId`
->   reset and `ScansPage`'s compare-selection reconciliation — plus the removal of
->   the override. Both effects are deliberate, both closed real bugs, and both
->   have regression tests; #176 says so, and finding 4's idiomatic replacement is
->   a `key` prop in a different file. That is why they were not folded into part 1.
+> - **Part 2 (landed 2026-08-11).** Findings **4** and **6** — `ScanDetailPage`'s
+>   per-`:scanId` reset and `ScansPage`'s compare-selection reconciliation —
+>   replaced behaviour-preservingly: the reset became a keyed remount
+>   (`ScanDetailRoute` keys the page by `:scanId` on the route element), and the
+>   reconcile moved into `load()`, the only place the visible rows ever change.
+>   Each replacement was proven against its regression tests failing first.
+>   **The rule is now enabled — at `'warn'`, not the preset `'error'`.**
 >
-> Part 2 also has to settle something #176 does not currently answer: the 12
-> fetch-on-mount findings are out of scope *and* reported at `error`, so removing
-> the override cannot leave `npm run lint` clean on its own. `docs/ARCHIVE.md` §14
-> (2026-08-11, "#176 part 1") carries the full account, including the probe
-> evidence that finding 5's line still reports after its genuine synchronous
-> setState was removed.
+> The tension part 1 flagged resolved exactly as predicted: with the override
+> removed, the fetch-on-mount findings (13 reports — finding 5's line reports on
+> the same footing) come back at `error`, so `npm run lint` cannot be clean
+> without suppressing them in some form. The maintainer chose `'warn'`
+> (2026-08-11) over 13 per-site disables or a data-fetching refactor: the rule is
+> live and its known reports stay visible without failing lint or CI.
+> `docs/ARCHIVE.md` §14 (2026-08-11, "#176 part 2") carries the full account,
+> including the remount enumeration for finding 4 and the fail-first evidence
+> per test.
 
 ---
 

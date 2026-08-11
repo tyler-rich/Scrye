@@ -92,5 +92,11 @@ describe('ScansPage — P3-2 compare selection reconciliation', () => {
     );
     expect(screen.getByLabelText('Select scan 2 to compare')).toBeChecked();
     expect(screen.getByRole('button', { name: /Compare scans/i })).toBeInTheDocument();
+    // These two are what actually discriminates: without reconciliation the
+    // stale snapshot still reads "Comparing 2/2 selected" with Compare enabled
+    // against the deleted scan — the checkbox assertions above hold either way,
+    // because the deleted row's checkbox leaves the DOM with its row.
+    expect(screen.getByText(/Comparing 1\/2 selected/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Compare scans/i })).toBeDisabled();
   });
 });
