@@ -325,7 +325,7 @@ jobs:
             exit 0
           fi
           echo "Waived by ci/grype.yaml — deliberate exceptions, NOT findings."
-          echo "Blocks: A-1 (issue #98) · A-2 (issue #116) · B (issue #52)"
+          echo "Blocks: A-1 · A-2 (no open issue — tracked in ci/grype.yaml + docs/ARCHIVE.md §14) · B (issue #52)"
           echo
           jq -r '
             .ignoredMatches[]
