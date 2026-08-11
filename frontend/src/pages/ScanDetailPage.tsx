@@ -203,7 +203,13 @@ export function ScanDetailPage() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [findingsTotal, setFindingsTotal] = useState(0);
-  const [findingsLoading, setFindingsLoading] = useState(false);
+  // The findings request `findings`/`findingsTotal` were last settled for, as a
+  // key. "Loading" is then derived rather than stored: a stored flag could only
+  // be raised synchronously from the effect that starts the fetch, which
+  // commits an extra render — and one in which the table has already dropped
+  // its spinner but has no rows yet, so it renders "no findings match" over a
+  // request still in flight.
+  const [findingsSettledKey, setFindingsSettledKey] = useState<string | null>(null);
   const [findingsLoaded, setFindingsLoaded] = useState(false);
   // Latest-wins guard so rapid severity/class filter toggles can't render an
   // earlier filter's response over a later one (L18 / P2-3).
@@ -223,6 +229,12 @@ export function ScanDetailPage() {
   const [pollHalt, setPollHalt] = useState<'error' | 'gone' | null>(null);
   const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Which findings request the current view calls for, and whether what is on
+  // screen is that request's result yet. Findings are only ever fetched for a
+  // succeeded scan, so nothing is in flight before then.
+  const findingsKey = `${id}|${severityFilter ?? ''}|${classFilter ?? ''}`;
+  const findingsLoading = scan?.status === 'succeeded' && findingsSettledKey !== findingsKey;
 
   const loadScan = useCallback(async (): Promise<'ok' | 'error' | 'gone'> => {
     try {
@@ -263,25 +275,30 @@ export function ScanDetailPage() {
 
   const loadFindings = useCallback(async () => {
     const token = findingsGuard.current.begin();
-    setFindingsLoading(true);
     try {
       const page = await listFindings(id, {
         severity: severityFilter ?? undefined,
         finding_class: classFilter ?? undefined,
         limit: FINDINGS_LIMIT,
       });
+      // Only the latest request settles the view, on either outcome: a
+      // superseded one returns above and leaves the key unmatched, so the
+      // spinner stays up for the request that replaced it. Settling in both
+      // branches rather than a `finally` keeps every setState behind the
+      // `await` — a `finally` is also reachable synchronously, on the path
+      // where the call itself throws.
       if (!findingsGuard.current.isCurrent(token)) return;
       setFindings(page.items);
       setFindingsTotal(page.total);
       setFindingsLoaded(true);
       setError(null);
+      setFindingsSettledKey(findingsKey);
     } catch (err: unknown) {
       if (!findingsGuard.current.isCurrent(token)) return;
       setError(err instanceof ApiError ? err.message : 'Failed to load findings.');
-    } finally {
-      if (findingsGuard.current.isCurrent(token)) setFindingsLoading(false);
+      setFindingsSettledKey(findingsKey);
     }
-  }, [id, severityFilter, classFilter]);
+  }, [id, severityFilter, classFilter, findingsKey]);
 
   // Reset all per-scan state when the :scanId param changes. React Router
   // reuses this component instance across /scans/:id navigations, so without
@@ -295,7 +312,7 @@ export function ScanDetailPage() {
     setFindings([]);
     setFindingsTotal(0);
     setFindingsLoaded(false);
-    setFindingsLoading(false);
+    setFindingsSettledKey(null);
     findingsGuard.current.begin();
     setSeverityFilter(null);
     setClassFilter(null);

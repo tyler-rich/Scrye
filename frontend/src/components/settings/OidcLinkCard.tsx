@@ -52,6 +52,12 @@ const LINK_SUCCESS: Record<string, string> = {
   unchanged: 'That identity was already linked to your account — nothing changed.',
 };
 
+/** The link outcome the callback redirects back with, as `oidc_link*` params. */
+function linkParams(): { ok: string | null; failed: string | null } {
+  const params = new URLSearchParams(window.location.search);
+  return { ok: params.get('oidc_link'), failed: params.get('oidc_link_error') };
+}
+
 /**
  * Link the signed-in admin's *own* account to an OIDC identity, and unlink it.
  *
@@ -69,8 +75,19 @@ export function OidcLinkCard({ enabled }: { enabled: boolean }) {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // The callback returns the browser here with the outcome in the query string.
+  // Both banners are seeded during the initial render — the values are in the
+  // URL before anything renders, so reading them from an effect would only add
+  // a cascading render. The parameters are stripped in the effect below, which
+  // is the part that genuinely touches something outside React.
+  const [error, setError] = useState<string | null>(() => {
+    const failed = linkParams().failed;
+    return failed ? (LINK_ERRORS[failed] ?? 'Linking failed.') : null;
+  });
+  const [notice, setNotice] = useState<string | null>(() => {
+    const ok = linkParams().ok;
+    return ok ? (LINK_SUCCESS[ok] ?? 'Linking finished.') : null;
+  });
 
   const load = useCallback(() => {
     void getOidcLinkStatus()
@@ -80,15 +97,11 @@ export function OidcLinkCard({ enabled }: { enabled: boolean }) {
 
   useEffect(load, [load, enabled]);
 
-  // The callback returns the browser here with the outcome in the query string;
-  // read it once, then strip it so a refresh doesn't replay a stale banner.
+  // The outcome has been read into the banners above; strip it from the URL so
+  // a refresh doesn't replay a stale banner.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const ok = params.get('oidc_link');
-    const failed = params.get('oidc_link_error');
+    const { ok, failed } = linkParams();
     if (!ok && !failed) return;
-    if (ok) setNotice(LINK_SUCCESS[ok] ?? 'Linking finished.');
-    if (failed) setError(LINK_ERRORS[failed] ?? 'Linking failed.');
     window.history.replaceState({}, '', window.location.pathname);
   }, []);
 

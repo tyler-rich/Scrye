@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (164, newest first)
+### Index of §14 entries (165, newest first)
 
+- [2026-08-11 — Post-v1 — #176 part 1: findings 1, 2, 3 and 5 refactored off synchronous setState-in-effect; findings 4 and 6 and the rule flip deferred to a follow-up](#2026-08-11--post-v1--176-part-1-findings-1-2-3-and-5-refactored-off-synchronous-setstate-in-effect-findings-4-and-6-and-the-rule-flip-deferred-to-a-follow-up)
 - [2026-08-11 — Docs/Process — `includeGitInstructions: false` added to `.claude/settings.json`; a standing PR-body content rule added to CLAUDE.md](#2026-08-11--docsprocess--includegitinstructions-false-added-to-claudesettingsjson-a-standing-pr-body-content-rule-added-to-claudemd)
 - [2026-08-11 — Security/Process — Issue #52 (CVE-2025-15367, poplib) re-verified against the now-pinned v3.14.7 tag; cross-references to the closed #98/#116 retargeted to their new tracking location](#2026-08-11--securityprocess--issue-52-cve-2025-15367-poplib-re-verified-against-the-now-pinned-v3147-tag-cross-references-to-the-closed-98116-retargeted-to-their-new-tracking-location)
 - [2026-08-11 — Docs/Process — Attribution moved to the settings layer via a committed `.claude/settings.json`; the strip-PATCH instruction removed from CLAUDE.md and CONTRIBUTING.md](#2026-08-11--docsprocess--attribution-moved-to-the-settings-layer-via-a-committed-claudesettingsjson-the-strip-patch-instruction-removed-from-claudemd-and-contributingmd)
@@ -744,6 +745,123 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-11 — Post-v1 — #176 part 1: findings 1, 2, 3 and 5 refactored off synchronous setState-in-effect; findings 4 and 6 and the rule flip deferred to a follow-up
+
+**What changed:** four of the six genuine `react-hooks/set-state-in-effect` sites #176 enumerates
+were refactored so they no longer call setState synchronously from an effect body. Behaviour is
+preserved at every site. **`frontend/eslint.config.js` is untouched** — the rule stays `'off'`, its
+override and comment exactly as they were.
+
+**Why the issue is being done in two sittings.** #176's own "Do not fix 4 and 6 blind" section is
+the reason: findings 4 (`ScanDetailPage`'s per-`:scanId` reset, `L17`/`P2-2`) and 6 (`ScansPage`'s
+compare-selection reconciliation, `P3-2`) are deliberate effects that each closed a real bug, and
+each has a regression test standing over it. Replacing them needs its own reasoning — finding 4's
+compiler-idiomatic replacement is a `key` prop on the route element, i.e. a change in a *different*
+file with its own check that nothing depends on instance identity across navigations. That work,
+and the removal of the override, are a follow-up. Neither effect was touched here beyond the single
+substitution recorded below, and neither regression test was edited.
+
+**The sites, re-located rather than trusted.** #176's line numbers predate #177 and have shifted, so
+the rule was temporarily enabled against a throwaway config that extends the real one, and the
+sites read out of its output. It reported **18**, and the 6-vs-12 split matched the issue exactly —
+including that `NewScanPage.tsx:124` (`if (canLaunch) void loadTargets()`) is the twelfth
+fetch-on-mount site, not finding 3.
+
+**What replaced each of the four:**
+
+1. **`LoginPage.tsx` — `oidc_error` banner.** The mount effect that called `setError(...)` and then
+   `history.replaceState` is split. The message is now seeded by a lazy `useState` initializer via a
+   module-level `oidcErrorCode()` helper — the value is knowable from the URL before anything
+   renders, so nothing about it needs an effect. The effect that remains does only the
+   `replaceState`, which is the part that genuinely touches something outside React.
+2. **`components/settings/OidcLinkCard.tsx` — `oidc_link` / `oidc_link_error` banners.** Same shape,
+   same treatment: both banners are seeded by lazy initializers over a shared `linkParams()` helper,
+   and the effect keeps only the `replaceState`. Both parameters are still honoured independently,
+   including the unknown-code fallbacks.
+3. **`NewScanPage.tsx` — scanner clamped to the target type.** The effect maintaining derived state
+   (`if (!allowed.includes(scanner)) setScanner(allowed[0])`) is gone; the clamp moved into a
+   `chooseTargetType` handler wired to the target-type control. That control is the only thing that
+   can invalidate the pairing — the scanner picker only ever offers the current type's own scanners
+   — so the invariant is unchanged and now holds at every commit rather than from the second one.
+   **Deliberately not** a derive-during-render (`allowed.includes(scanner) ? scanner : allowed[0]`):
+   that would *shadow* the displaced choice instead of overwriting it, so leaving a target type and
+   returning would resurrect a scanner the user is no longer on. The clamp stays destructive, as it
+   was. A test pins that specific difference.
+4. **`ScanDetailPage.tsx` — findings loading state.** `findingsLoading` existed only to be flipped
+   `true` synchronously at the top of `loadFindings`, which *was* the report. It is replaced by
+   `findingsSettledKey` plus a derived
+   `findingsLoading = scan?.status === 'succeeded' && findingsSettledKey !== findingsKey`, where
+   `findingsKey` is `${id}|${severityFilter}|${classFilter}`. The settle now happens in both
+   post-`await` branches of `loadFindings` rather than in a `finally`. Superseded requests still
+   leave the spinner up, because the latest-wins guard makes them return before settling the key.
+   **This fixes a real flash:** the commit in which the scan became `succeeded` previously rendered
+   an empty findings list with the loader already down, i.e. "No findings match the current filters"
+   over a request that had not answered yet.
+
+**The one touch to finding 4, and the maintainer decision behind it.** Removing `findingsLoading`
+leaves `setFindingsLoading(false)` inside the per-`:scanId` reset effect uncompilable. The
+maintainer was asked and chose **substitution over deletion**: the line is now
+`setFindingsSettledKey(null)`. The effect keeps its structure, its comment and its intent — reset
+every piece of per-scan state — and `ScanDetailPage.scanIdReset.test.tsx` is unaffected and still
+passes. (Deletion would also have been correct: `findingsKey` embeds the scan id, so a settled key
+from the previous scan can never match the new one. Substitution was preferred as the smaller
+touch.)
+
+**Fail-first verification, per site.** Each site got a test that fails against the pre-refactor
+version of *that file* and passes against the new one, checked by reverting the single file with
+`git checkout HEAD --` and re-running. Because these are behaviour-preserving refactors, the
+biting assertion in each case is about *which commit* the correct value appears in — which is
+exactly what the rule is about — while the surrounding assertions pin the behaviour and pass
+against both versions:
+
+| Site | New test file | The assertion that bites | Pre-refactor result |
+|---|---|---|---|
+| 1 | `pages/LoginPage.oidcError.test.tsx` | the banner is present in the **first** commit | `expected false to be true` |
+| 2 | `components/settings/OidcLinkCard.callback.test.tsx` | exactly **1** commit before the status fetch lands | `expected 2 to be 1` |
+| 3 | `pages/NewScanPage.scannerClamp.test.tsx` | **no** commit has zero scanner options selected | `[1,1,…] to not include +0` |
+| 5 | `pages/ScanDetailPage.findingsSpinner.test.tsx` | **no** commit says "no findings match" while the first request is in flight | `[Array(11)] to not include true` |
+
+Per-commit observation is done with React's `<Profiler onRender>`, which fires once per commit with
+that commit's DOM already in place. Testing Library's `render` flushes passive effects inside
+`act`, so a plain post-render assertion cannot see the intermediate state at all and would have
+passed against both versions.
+
+**The measurement afterwards, and where it does not match #176's expectations.** With the rule
+temporarily re-enabled the count is **15**, not the 14 a clean removal of four sites would predict.
+Sites 1, 2 and 3 are gone outright. **`ScanDetailPage.tsx`'s `void loadFindings()` still reports** —
+and the reason matters for whoever takes the follow-up:
+
+- **The genuine defect #176 named for finding 5 is fixed.** The issue's own words are that it is
+  "reported because `loadFindings` opens with a synchronous `setFindingsLoading(true)` before its
+  first `await`". There is no longer any setState before the first `await`.
+- **What remains is the analyser artifact #176 documents for the other 12.** Probed against the
+  installed 7.1.1 with four-shape variants: `void load()` reports even when `load`'s *only* setState
+  follows an `await` and there is no `try`/`catch` at all; adding a `try`/`catch` reports even when
+  the `catch` calls no setState whatsoever. The only shapes that went silent were ones where the
+  compiler evidently bails on the function (a ref read guarding an early return after the `await`) —
+  a bailout, not a fix. So there is no honest shape that clears this line, which is precisely
+  #176's own finding about the fetch-on-mount population.
+- **Therefore finding 5 has migrated into that population.** The line is now reported on exactly the
+  same footing as the 12 the issue puts out of scope, and #176's attribution of the report to the
+  synchronous flip was, on this evidence, imprecise — the report would have stood without it.
+
+**A consequence the follow-up has to confront, recorded here so it is not rediscovered late.**
+#176's definition of done pairs "remove the override" with "`npm run lint` is clean". Those cannot
+both hold: the 12 fetch-on-mount findings are reported at `error`, they are explicitly out of scope,
+and the issue says there is no fix for them that is an improvement. Enabling the rule therefore
+needs a decision the issue does not currently contain — a per-site disable, a `'warn'` severity, the
+data-fetching-layer refactor, or leaving the rule off. Not resolved here; flagged for the session
+that does findings 4 and 6.
+
+**Verification:** `npm run lint` clean · `npm run format:check` clean · `npm test` **26 files / 96
+tests** passing (was 22/80 at #178; +4 files, +16 tests) · `npm run build` clean · `tsc -b` clean.
+
+**Plan section affected:** §14 (this log); `docs/upgrades/frontend-toolchain-86.md` Step 3, which
+now records that its held-back rule closes out in two parts. No locked decision, schema, security
+model, routing configuration or data-fetching layer was touched. #176 stays **open**.
 
 ---
 
