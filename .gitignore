@@ -131,3 +131,13 @@ desktop.ini
 # A prior-session artifact from drafting a PR body locally; not something the
 # repo should ever track. See CLAUDE.md § Attribution.
 .pr-body.md
+
+# === Claude Code ===
+# `.claude/settings.json` IS tracked — it is the only scope in which a Claude
+# Code setting reaches a Cloud session (see CLAUDE.md § Attribution), so do NOT
+# add a blanket `.claude/` rule here. Only the local override file is ignored:
+# Claude Code writes permission approvals and personal overrides into it
+# automatically. The documented auto-ignore for that file writes to the *global*
+# git excludes file, which does not exist in an ephemeral Cloud VM, so the repo
+# has to cover it explicitly.
+.claude/settings.local.json
