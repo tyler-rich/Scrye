@@ -196,6 +196,18 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   bottom of `docs/ARCHIVE.md` (what changed, why, which phase). The PR description only needs a
   one-line pointer — e.g. "See `docs/ARCHIVE.md` § Deviations for changes made in this phase" — not
   the full explanation repeated there.
+- **A PR body describes the change, for someone reading the repository — it is not a session
+  report.** None of the following ever appear in a PR body, an issue body, or an issue comment:
+  - Verification that the session configured or checked its own git identity or commit authorship.
+  - Attribution-footer status — whether one appeared, and what was or wasn't done about it.
+  - Any statement that the session is not merging, that merging is the maintainer's call, or what
+    CLAUDE.md permits the session to do.
+  - Meta-commentary about what the task instructed, what was in or out of scope for the session, or
+    which stop conditions did or didn't fire.
+  All of that belongs in the session's chat summary to the maintainer instead. State the reason
+  inline wherever this rule is applied so a later session doesn't reinstate it: this content reads
+  as process boilerplate to anyone outside the session, and the repository is public. This is a
+  standing convention, not tied to any one PR.
 
 ## Attribution
 
