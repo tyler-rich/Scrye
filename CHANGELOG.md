@@ -7,25 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [0.3.1] - 2026-08-11
 
-- **Regression test for the `:scanId` per-scan state reset (`L17` / `P2-2`)** —
-  `frontend/src/pages/ScanDetailPage.scanIdReset.test.tsx`. The reset effect has
-  guarded against two scans' state mixing since 2026-07-13, but nothing tested
-  it: the three existing `ScanDetailPage` suites (`findingsTable`, `latestwins`,
-  `poller`) never navigate between two `:scanId` values, so the effect could
-  have been deleted with the whole suite staying green. The gap was found while
-  auditing [#176](https://github.com/tyler-rich/Scrye/issues/176), which lists
-  that effect as one of six sites a future change may touch.
+### Fixed
 
-  The test renders `/scans/1`, edits the tag draft away from the server value,
-  navigates to `/scans/2` with the second fetch held open, and asserts that none
-  of scan 1's header, findings, artifacts or tag draft survives — then that the
-  stale draft does not reappear once scan 2 lands. Verified to catch the
-  regression, not merely to pass: with the reset effect temporarily deleted it
-  fails on the first in-flight assertion, with scan 1's target still rendered.
-  **No production code changed** — `ScanDetailPage.tsx` is byte-identical to
-  `dev`, and none of the other five findings #176 tracks was touched.
+- **Five state-carryover and rendering defects on the scans pages**, surfaced by
+  working through the six `react-hooks/set-state-in-effect` sites
+  [#176](https://github.com/tyler-rich/Scrye/issues/176) enumerates. Every
+  replacement was made to preserve behaviour; these are the places where the old
+  behaviour turned out to be wrong. No API, schema or configuration changed.
+
+  - **The findings list no longer flashes "No findings match the current
+    filters" over a request that has not answered yet.** The loading flag was
+    raised synchronously inside `loadFindings`, so the render in which a scan
+    first became `succeeded` showed an empty list with the loader already down.
+    It is now derived from whether the settled request matches the current
+    `scan | severity | class` key, so a superseded request leaves the spinner up
+    instead of briefly declaring the list empty.
+
+  - **A delete-confirm dialog left open while you navigate to another scan now
+    closes, instead of re-arming itself against the scan you just opened.**
+    Both the dialog's text and the deletion it performs read the *current* route
+    id, so a dialog opened for one scan survived the navigation and would delete
+    a different one — a scan the operator had never been asked to confirm.
+
+  - **A slow response for a scan you have navigated away from can no longer
+    repaint over the scan you are now looking at.** `loadScan` has no
+    latest-wins guard and the previous reset could not cancel an already-started
+    request, so a late reply could redraw the old scan's header and tags on top
+    of the new one's loading view.
+
+  - **An in-flight tag save no longer writes the previous scan's tags into the
+    view you moved to**, and no longer leaves its button stuck in the loading
+    state across the navigation.
+
+  - **The scans list no longer renders a frame in which new rows and a
+    not-yet-reconciled compare selection coexist** — the momentary wrong
+    "selected" count after a filter change, page change or deletion. The
+    reconciliation used to run in an effect one commit behind the rows; it now
+    batches into the same commit as the rows it reconciles against.
+
+  The first is a change inside `ScanDetailPage`; the next three all follow from
+  replacing its per-`:scanId` reset effect with a keyed remount of the route
+  element, which resets everything the effect reset plus the three values it had
+  always missed; the last is `ScansPage`. See `docs/ARCHIVE.md` §14 (2026-08-11,
+  the two `#176` entries) for the site-by-site enumeration of what could have
+  depended on the old behaviour.
 
 ### Security
 
@@ -479,7 +506,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ships.
 
 - **React Compiler lint rules adopted from `eslint-plugin-react-hooks@7.1.1`,
-  with `react-hooks/set-state-in-effect` held back** — step 3 of the frontend
+  with `react-hooks/set-state-in-effect` held back until the `#176` work later
+  in this release** — step 3 of the frontend
   toolchain sweep in `docs/upgrades/frontend-toolchain-86.md`. **No dependency
   version moved**; `frontend/package.json` and `frontend/package-lock.json` are
   byte-identical. Step 2's holding edit in `frontend/eslint.config.js` is
@@ -510,8 +538,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `index-BNB6IweX.js` 645.18 kB → `index-Vvdzytcz.js` 645.14 kB. The CSS is
   untouched and keeps its hash (`index-D2wHtcHV.css`).
 
-  **`react-hooks/set-state-in-effect` — 18 findings, rule left `off` with the
-  reason in the config and the work tracked in
+  **`react-hooks/set-state-in-effect` — 18 findings, rule held at `off` for this
+  step with the reason in the config and the work tracked in
   [#176](https://github.com/tyler-rich/Scrye/issues/176).** Only **6** of the 18
   are the synchronous setState-in-effect the rule's rationale describes, and
   two of those are deliberate effects that each closed a real bug —
@@ -527,6 +555,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   custom hook silences every shape. There is no fix for those 12 that is an
   improvement — only hiding the call from the analyser, or a data-fetching
   refactor that is its own decision.
+
+  **Superseded later in this release.** All six in-scope sites were subsequently
+  replaced (see § Fixed above), and the rule now ships enabled at **`'warn'`**
+  rather than `off` — a deliberate choice over the alternatives, since the
+  plugin's own preset severity is `error` and the 12 fetch-on-mount findings
+  remain, undisguised, with no `eslint-disable` anywhere. Lint and CI pass at 0
+  errors / 13 warnings.
 
 - **ESLint 9.39.4 → 10.8.1, with `@eslint/js` 9.39.4 → 10.0.1,
   `eslint-plugin-react-hooks` 5.1.0 → 7.1.1 and `eslint-plugin-react-refresh`
@@ -1397,7 +1432,8 @@ model, in a single hardened container.
   + tmpfs, resource limits, healthcheck, loopback-only port binding); CSRF
   protection, rate-limited auth, and an audit log.
 
-[Unreleased]: https://github.com/tyler-rich/Scrye/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/tyler-rich/Scrye/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/tyler-rich/Scrye/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/tyler-rich/Scrye/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tyler-rich/Scrye/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tyler-rich/Scrye/releases/tag/v0.1.0
