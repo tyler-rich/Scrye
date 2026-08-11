@@ -165,10 +165,17 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
   `publish.yml` (releases) and
   `dev-nightly.yml` (nightly `:dev`) workflows (locked decision §6). A phase's PR is not done until
   its CI run is green — do not ask the user to merge a PR with failing or missing checks.
-- **All commits and PRs are authored as the user, not as Claude.** Configure the local git identity
-  for this repo (not global) before the first commit:
+- **All commits and PRs are authored as the user, not as Claude. Setting the repo-local git
+  identity is a hard gate, not a suggestion — run it before you stage anything:**
   `git config user.name "tyler-rich"` and
-  `git config user.email "170156756+tyler-rich@users.noreply.github.com"`.
+  `git config user.email "170156756+tyler-rich@users.noreply.github.com"`
+  (repo-local, **not** `--global`).
+  **The consequence of skipping it:** the Cloud VM image ships with *both* the repo-local and the
+  global identity preset to `Claude <noreply@anthropic.com>` — verified directly in a session — so
+  the wrong identity is the default state of every session, not an edge case. There is **no
+  settings-level backstop**: `.claude/settings.json` has no git-identity key, so these two commands
+  are the *only* thing producing correctly-authored commits. Skip them and every commit in the
+  session is authored as Claude and has to be rewritten before the PR can open.
   Every commit and PR must use this name/email — no Claude/Anthropic identity, no co-author
   trailer, no bot account. This is in addition to, not instead of, the Attribution rule below.
   Note: GitHub authors a **squash-merge** commit — and the **merge commit** a promotion
@@ -192,6 +199,17 @@ CSV/Markdown/JSON; full history with filters; backup/restore; local + OIDC auth.
 
 ## Attribution
 
+**Cloud sessions have no user-scope `~/.claude/settings.json`.** Each session runs
+in a fresh VM with no home-directory provisioning, so a setting configured in the
+maintainer's own `~/.claude/settings.json` has never applied to a single Cloud
+session. Any Claude Code setting that must apply to this repo therefore has to
+live in the **committed, project-scope `.claude/settings.json`** — the repo is
+cloned into every VM, so settings there travel with it, and project scope
+outranks user scope in the precedence order. That file is where the attribution
+footer is turned off (`attribution.commit: ""`, `attribution.pr: ""`,
+`attribution.sessionUrl: false`). The footer is a **harness feature configured in
+settings**, not something a session can suppress by following an instruction.
+
 Never write an attribution footer, a session URL, a Co-Authored-By
 trailer, or a "Generated with" line. Not in commit messages, not in PR
 titles or bodies, not in comments. Do not compose one and remove it
@@ -200,10 +218,25 @@ later — do not write it at all.
 Before opening a PR or posting a comment, check the text you are about
 to submit for any of the above and remove it first.
 
-After opening a PR or posting a comment, read the posted body back from
-the API and confirm none of the above is present. If any appears, edit
-it out and re-read to confirm the edit held. Report in one line whether
-a strip was needed.
+Verify commit authorship before and after pushing, with
+`git log --format="%an <%ae>%n%B"`.
+
+**Never issue a follow-up `PATCH` to a PR body or an issue comment for the
+purpose of removing an attribution footer.** If a footer appears on a posted
+body, report it in the session summary and leave it alone.
+
+The reason, not just the rule — read it before deciding this is an oversight to
+helpfully repair: **a strip `PATCH` executes under a bot identity**, the server
+re-appends the footer anyway, and the edit leaves a permanent **"claude (Bot)"**
+entry in GitHub's *public* edit history. That is a worse and more visible
+attribution leak than the footer it targets, and it is the only write in this
+project's workflow that lands under a non-maintainer identity. Observed on
+**PR #196**: the comment was created by `tyler-rich`, then the edit-history
+dropdown shows **two** edits attributed to "claude (Bot)" — exactly the two strip
+attempts — and the footer was re-appended regardless. Every other write here
+(posting the comment, opening the PR, editing a body as ordinary work) lands
+correctly as `tyler-rich`. The strip instruction is the sole cause of the bot
+attribution, it has never once succeeded, and it is not to be reinstated.
 
 Any future change to this policy must include its `docs/ARCHIVE.md` §14
 entry in the **same PR** that changes the policy — not as a follow-up.

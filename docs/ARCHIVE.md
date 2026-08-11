@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (161, newest first)
+### Index of §14 entries (162, newest first)
 
+- [2026-08-11 — Docs/Process — Attribution moved to the settings layer via a committed `.claude/settings.json`; the strip-PATCH instruction removed from CLAUDE.md and CONTRIBUTING.md](#2026-08-11--docsprocess--attribution-moved-to-the-settings-layer-via-a-committed-claudesettingsjson-the-strip-patch-instruction-removed-from-claudemd-and-contributingmd)
 - [2026-08-11 — Process — Issues #98 and #116 closed on source-verification evidence rather than Grype-DB agreement; Group A tracking moves into `ci/grype.yaml` plus this log](#2026-08-11--process--issues-98-and-116-closed-on-source-verification-evidence-rather-than-grype-db-agreement-group-a-tracking-moves-into-cigrypeyaml-plus-this-log)
 - [2026-08-11 — Security/Infra — Runtime base image moved to Python 3.14.7; all six Group A interpreter fixes verified at the source, and the waivers kept anyway because Grype's DB has not caught up](#2026-08-11--securityinfra--runtime-base-image-moved-to-python-3147-all-six-group-a-interpreter-fixes-verified-at-the-source-and-the-waivers-kept-anyway-because-grypes-db-has-not-caught-up)
 - [2026-08-11 — Process — Locked runtime floor raised 3.14.6 → 3.14.7 (locked decision §2), on a second independent reason rather than a replacement one](#2026-08-11--process--locked-runtime-floor-raised-3146--3147-locked-decision-2-on-a-second-independent-reason-rather-than-a-replacement-one)
@@ -741,6 +742,136 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-11 — Docs/Process — Attribution moved to the settings layer via a committed `.claude/settings.json`; the strip-PATCH instruction removed from CLAUDE.md and CONTRIBUTING.md
+
+**What changed:** two separate problems, two separate fixes, landed together because they are the
+same subject and this document's own rule requires an attribution-policy change to carry its §14
+entry in the same PR.
+
+**1. The footer itself is now disabled at the settings layer, in project scope.** A new committed
+`.claude/settings.json` sets `attribution.commit: ""`, `attribution.pr: ""`, and
+`attribution.sessionUrl: false` — the documented combination for hiding all attribution. The
+footer that has appeared on PR bodies and issue comments throughout this project's history is a
+**Claude Code harness feature configured through settings**, not text any session composed, which
+is why five prior rounds of instructing sessions harder never moved it.
+
+**Why project scope specifically, and not the maintainer's own config.** The maintainer's
+user-scope `~/.claude/settings.json` already carried this configuration. It has never applied to a
+single session here: **each Cloud session is a fresh VM with no home-directory provisioning**, so
+that file does not exist in the environment where the work actually happens — confirmed by a
+diagnostic session, and re-confirmed in this one (`$HOME/.claude/` exists and holds hook scripts
+and synced skills, but no `settings.json` of any kind). Project scope is the fix because the repo
+*is* cloned into every VM, so a committed settings file travels with it, and project scope also
+outranks user scope in the precedence order. **The generalisation is the durable part and is now
+in `CLAUDE.md` § Attribution:** any Claude Code setting that must apply to this repo has to live in
+the committed `.claude/settings.json`; user-scope config is inert here.
+
+**Verified rather than assumed.** User and project settings files are validated **strictly** — a
+malformed key rejects the file as a whole and would silently disable the entire fix — so the file
+was checked, not eyeballed: it parses as JSON, and it validates with **zero errors** against the
+published `https://json.schemastore.org/claude-code-settings.json`, whose `attribution` block
+declares exactly `commit: string`, `pr: string`, `sessionUrl: boolean` with
+`additionalProperties: false`. Nothing about the fix's *effect* is claimed here — that is verified
+empirically on the next real session, deliberately not by opening a throwaway PR to test it.
+
+**DECLINED — `includeGitInstructions` / `CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS`.** Not deferred,
+not overlooked. That key strips all built-in git/PR guidance out of the session's system prompt,
+which is a real capability cost, and it is **not needed** once the three `attribution` keys are
+set — they target the footer directly. Do not add it as a belt-and-braces measure.
+
+**2. The strip-`PATCH` instruction is removed from both files that carried it.** `CLAUDE.md`
+§ Attribution's "read the posted body back from the API … edit it out and re-read to confirm the
+edit held" is replaced with a flat prohibition: **never issue a follow-up `PATCH` to a PR body or
+an issue comment for the purpose of removing an attribution footer**; if a footer appears, report
+it in the session summary and leave it alone.
+
+**The reason is stated inline in `CLAUDE.md`, not just the rule, and that is load-bearing.**
+Without a reason a future session reads "don't strip the footer" as an oversight and helpfully
+restores the old instruction — which is precisely how this policy already flip-flopped once, via
+**#169** (see the 2026-08-09 entry below). The reason: **a strip `PATCH` executes under a bot
+identity.** On **PR #196** the edit-history dropdown shows the comment created by `tyler-rich`,
+then **two** edits attributed to **"claude (Bot)"** — those two edits are exactly the two strip
+attempts recorded in the 2026-08-11 entry below — and the footer was re-appended anyway. Every
+other write in this project's workflow (posting the comment, opening the PR, editing a body as
+ordinary work) lands correctly as `tyler-rich`. So the strip instruction is the **sole** cause of
+bot-attributed writes in this repository, it has **never once succeeded**, and its net effect is a
+permanent, public, more-visible attribution leak in GitHub's edit history in exchange for a footer
+that stays put regardless.
+
+**This is the third state of this policy, and it is not a re-run of the flip-flop.** The
+2026-08-09 audit entry below banned stripping; **#169** reinstated it hours later with no §14
+entry; the 2026-08-09 correction entry below recorded that reversal and left #169's
+strip-and-reverify text standing as policy. This entry ends that cycle on **new evidence the
+earlier rounds did not have** — the #196 edit-history attribution, which reframes stripping from
+"unreliable" to "actively harmful" — and, more importantly, **removes the reason anyone was
+stripping in the first place** by fixing the footer at its actual source. The two prior entries
+stand as written; this one supersedes both on the operative instruction.
+
+**The full attribution-instruction surface was audited, not just `CLAUDE.md`.** `CONTRIBUTING.md`
+§ Opening a PR, step 4 carried the same instruction in one line ("If your tooling appends one,
+re-read the PR body after opening and strip it") and is rewritten to match — no-footer requirement
+and the `git log --format="%an <%ae>%n%B"` authorship check kept, the strip clause replaced with
+the prohibition and a pointer to `CLAUDE.md` § Attribution. A full grep of `CONTRIBUTING.md` for
+`strip|footer|attribution|co-author|generated by|session link|re-read|patch|by hand` confirms
+line 480 was its **only** stripping reference; the other hits are unrelated (`.gitattributes`
+line-ending stripping, hand-editing lockfiles, hand-merging Dependabot bumps). Two files
+contradicting each other on the same action is the #169 failure mode this PR exists to end, so
+both moved together.
+
+**One surface is outside this repository and could not be fixed here:** the synced `scrye` skill
+(`~/.claude/skills/synced/scrye/SKILL.md`) still says to "edit the PR body in place" and "re-read
+the live body after every edit". It is not a repo file, so no commit can reach it — recorded here
+so a future session that reads a strip instruction there knows it is stale relative to
+`CLAUDE.md`, which wins.
+
+**3. `CLAUDE.md`'s git-identity step is restated as a hard gate.** Unchanged in substance, but it
+was reading as a suggestion and it is the single point of failure for commit authorship. The Cloud
+VM image ships with **both** the repo-local *and* the global identity preset to
+`Claude <noreply@anthropic.com>` — verified directly in this session before anything was staged —
+so wrong authorship is the **default state of every session**, not an edge case. There is **no
+settings-level backstop**: `.claude/settings.json` has no git-identity key, so
+`git config user.name "tyler-rich"` / `git config user.email
+"170156756+tyler-rich@users.noreply.github.com"` (repo-local, never `--global`) are the *only*
+thing producing correctly-authored commits. The consequence of skipping them is now stated
+explicitly in the rule.
+
+**4. Ignore files.**
+
+- **`.gitignore` — `.claude/settings.local.json` added, with the specific path and not a blanket
+  `.claude/` rule**, which would have excluded the very file this change adds. Claude Code writes
+  permission approvals and personal overrides into `settings.local.json` automatically, and the
+  documented auto-ignore mechanism for it writes to the **global** git excludes file, which does
+  not exist in an ephemeral Cloud VM — so the repo has to cover it explicitly. Both outcomes were
+  verified after the edit rather than assumed: `git check-ignore -v .claude/settings.json` exits 1
+  (not ignored — the file is trackable, and it is present in the pushed tree), and
+  `git check-ignore -v .claude/settings.local.json` exits 0, matching `.gitignore:143`. Nothing in
+  `.gitignore` previously mentioned `.claude` in any form — the directory was not deliberately
+  excluded, it simply had never existed.
+- **`.dockerignore` is denylist-style** (an ordered list of exclusions; no leading `*` with `!`
+  re-includes), which means an **unlisted directory is sent to the build context by default**.
+  `.claude/` was therefore reachable in principle and is now listed alongside `.git/`, `.github/`,
+  and `docs/`. In practice no build context has ever carried it — the directory did not exist in
+  this repository until this commit — so this is a pre-emptive exclusion, not the discovery of
+  something that shipped. It matters here specifically because this project **dogfoods a Trivy +
+  Grype scan of its own image**, and session tooling config has no business in the context that
+  scan is computed over. **No other `.dockerignore` line was touched and no `docker/Dockerfile`
+  change was made**, so the build context is altered in exactly one way: `.claude/` is excluded.
+
+**Deliberately not done:** no retroactive cleanup of footers on existing PRs, issues, or comments;
+no change to how sessions authenticate to GitHub or to the MCP tooling; no `docker/Dockerfile`
+change; no empirical test of the settings fix (the maintainer verifies it on the next real
+session). The footer on **this** PR's own body, if one appears, is left in place — this is the PR
+that makes that the rule.
+
+**Plan section affected:** new file `.claude/settings.json`; `CLAUDE.md` § Attribution (rewritten
+— Cloud-scope note added, strip-and-reverify replaced with the prohibition plus its reason) and
+§ Git & PR conventions (git-identity bullet strengthened); `CONTRIBUTING.md` § Opening a PR step 4;
+`.gitignore`; `.dockerignore`. No application code, schema, API contract, security model, job
+model, auth, CI behaviour, gate threshold, or dependency version changed; no locked decision
+re-opened.
 
 ---
 
