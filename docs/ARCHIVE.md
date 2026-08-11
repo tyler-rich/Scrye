@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (160, newest first)
+### Index of §14 entries (161, newest first)
 
+- [2026-08-11 — Process — Issues #98 and #116 closed on source-verification evidence rather than Grype-DB agreement; Group A tracking moves into `ci/grype.yaml` plus this log](#2026-08-11--process--issues-98-and-116-closed-on-source-verification-evidence-rather-than-grype-db-agreement-group-a-tracking-moves-into-cigrypeyaml-plus-this-log)
 - [2026-08-11 — Security/Infra — Runtime base image moved to Python 3.14.7; all six Group A interpreter fixes verified at the source, and the waivers kept anyway because Grype's DB has not caught up](#2026-08-11--securityinfra--runtime-base-image-moved-to-python-3147-all-six-group-a-interpreter-fixes-verified-at-the-source-and-the-waivers-kept-anyway-because-grypes-db-has-not-caught-up)
 - [2026-08-11 — Process — Locked runtime floor raised 3.14.6 → 3.14.7 (locked decision §2), on a second independent reason rather than a replacement one](#2026-08-11--process--locked-runtime-floor-raised-3146--3147-locked-decision-2-on-a-second-independent-reason-rather-than-a-replacement-one)
 - [2026-08-09 — Docs/Process — `dependabot.yml`'s "Deliberately NOT ignored" rationale rewritten: the instruction outlived the reason it was written on](#2026-08-09--docsprocess--dependabotymls-deliberately-not-ignored-rationale-rewritten-the-instruction-outlived-the-reason-it-was-written-on)
@@ -742,6 +743,90 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
 
 ---
+
+### 2026-08-11 — Process — Issues #98 and #116 closed on source-verification evidence rather than Grype-DB agreement; Group A tracking moves into `ci/grype.yaml` plus this log
+
+**What changed:** **#98** (Group A-1 — `html.parser` / `getpath.py` / `imaplib`) and **#116**
+(Group A-2 — the three `tarfile` CVEs) were **closed**, each with a comment recording why. In
+`ci/grype.yaml`, both Group A comment blocks were rewritten so they stand alone as the tracking
+record now that the issues they cited are closed:
+
+- the forward-looking *"Tracked in issue #98 (…)"* pointer and A-2's equivalent are replaced with
+  a statement that the CVEs are **verified fixed in the pinned interpreter** — cited to **PR #195**,
+  which read CPython at the released `v3.14.7` tag — and are **waived only pending a Grype-DB
+  refresh**, tracked by **this file plus `docs/ARCHIVE.md` §14** rather than a numbered issue;
+- the *"WHICH BLOCK IS TRACKED WHERE"* index at the top of the interpreter section is re-pointed
+  the same way, with `(was issue #98, closed 2026-08-11)` / `(was issue #116, closed 2026-08-11)`
+  kept as the historical link. Group B's row still reads `issue #52 (still open)`;
+- the shared review date moves **2026-10-25 → 2026-11-01**, quarterly thereafter if extended past
+  that, and is now labelled explicitly as advisory (see below);
+- the file-header NOTE stops saying interpreter waivers are for CVEs "unfixable on the current
+  3.14.x line", since half of them are now the opposite.
+
+**Membership, waiver format, and gate behaviour are unchanged.** The `ignore:` list still parses
+to the same ten entries — three `package.location` excludes for the bundled scanner binaries, and
+the same seven `vulnerability` IDs. Every fact already in the blocks is kept verbatim: the CVE
+lists, both per-CVE source-evidence tables, the observed dogfood scan output, the `FIXED IN`
+mechanism, and the "DELETE both blocks outright when the DB catches up" instruction. This was a
+reference-target and review-date change, not a rewrite of the evidence. Group B (#52, poplib) is
+untouched in both the file and its issue.
+
+**Why close instead of waiting for the scanner to agree.** #98 and #116 were opened as *deferrals
+with a stated resolution trigger*: a released 3.14.x carrying the backports. That trigger **fired**
+— 3.14.7 shipped on 2026-08-05, the digest moved to it, and PR #195 verified all six fixes present
+by reading `Lib/html/parser.py`, `Modules/getpath.py`, `Lib/imaplib.py` and `Lib/tarfile.py` at the
+`v3.14.7` tag and diffing against `v3.14.6` (the entry below has the per-file table). What is left
+behind the waivers is **only** that Grype's DB records these as fixed in 3.15.x and has no entry
+for the 3.14 maintenance-branch backports, so it compares `3.14.7 < 3.15.0b4` and matches anyway.
+
+Scanner data-lag is a materially weaker reason to hold a tracking issue open than an active risk
+acceptance. Both issues themselves predicted it in as many words ("expect the waivers to outlive
+3.14.7 by a Grype-DB refresh cycle"), so the lag is the *expected* state, not a new finding needing
+a tracker. Keeping them open would have left two issues whose entire remaining content was "waiting
+for a third party's database to refresh", while the substantive record — what was verified, how,
+and what to do about it — lives in `ci/grype.yaml` and here regardless. The evidence sections in
+both issues are also now superseded: they compared the **`3.14` branch** against `v3.14.6` and
+could only show a fix was *queued*, whereas #195 read the released tag and showed it *shipped*.
+
+**This does not change the convention for future waivers.** A new CVE waiver still gets its own
+tracking issue, exactly as before. This is a one-off for a pair whose resolution trigger had
+already fired, and `ci/grype.yaml` says so in the same paragraph that records the closure, so a
+reader of the file cannot mistake it for a general policy. It also does not touch the review-date
+convention for any **other** open waiver issue — **#52** (Group B, poplib) keeps its standing
+annual re-confirmation, next 2027-07-25, and remains an open issue because its fix is `main`-only
+and no 3.14.x will ever clear it.
+
+**The 2026-11-01 re-check date is advisory, and nothing in this repo enforces it.** There is no
+scheduled workflow, no webhook, and no bot watching for a Grype-DB refresh, and none was built —
+that was explicitly out of scope. When the DB does catch up, the waivers simply **go inert**: they
+stop matching anything, the gate stays green either way, and no signal is emitted. The only ways
+anyone finds out are (a) reading `ci/grype.yaml` for some other reason and noticing the blocks no
+longer match, or (b) checking deliberately. The date is therefore a documented **intention** for a
+human to act on. It is stated in exactly that form in all three places it appears — the two close
+comments and the file's `REVIEW BY` note — rather than left to look like a mechanism.
+
+**When the trigger does fire, the action is deletion, not re-dating.** Both Group A blocks come out
+of `ci/grype.yaml` **outright** — that instruction predates this change and is kept unedited. Until
+then, removing them turns the gate red over three HIGHs whose fixes are already in the image.
+
+**Attribution note.** The two close comments were posted through the GitHub API, which appended a
+"Generated with Claude Code" footer server-side. A direct `PATCH` to each comment stripping the
+footer was attempted and did **not** hold: the API re-appends it on write, so the re-read after the
+patch still shows it. Recorded here as a property of this posting path, since CLAUDE.md
+§ Attribution requires the strip to be attempted and its outcome reported — nothing was composed
+with a footer, and no other surface (commits, PR body, files) carries one.
+
+**Not changed:** which CVEs are waived; the waiver/gate logic (`--only-fixed --fail-on high`, the
+`--exclude` list, `check-for-app-update`); `CLAUDE.md` § Locked decisions #2, whose "Group A-1 (#98)
+/ Group A-2 (#116)" wording is a historical identification of the two sets and still resolves to
+the closed issues; #52's review-date convention; the pinned base-image digest; the historical `#98`
+/ `#116` references in past §14 entries, in PR #195's own record, and in the "the Grype-DB lag both
+#98 and #116 predicted" line inside the file — all describe what happened and stay as written.
+
+**Plan section affected:** §9.1 (dogfood self-scan triage), §12 (Phase 6 self-scan), CLAUDE.md
+§ Dependency hygiene (interpreter-CVE source verification), `ci/` triage allowlists. Process and
+comments only — no application code, schema, API contract, security-model, job-model, auth, gate
+threshold, or waiver membership change.
 
 ### 2026-08-11 — Security/Infra — Runtime base image moved to Python 3.14.7; all six Group A interpreter fixes verified at the source, and the waivers kept anyway because Grype's DB has not caught up
 
