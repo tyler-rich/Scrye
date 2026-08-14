@@ -578,8 +578,9 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (168, newest first)
+### Index of §14 entries (169, newest first)
 
+- [2026-08-14 — Docs/Process — v0.4.0 enrichment feeds scoped: one sync framework but two key spaces, and an EPSS section landed deliberately unverified](#2026-08-14--docsprocess--v040-enrichment-feeds-scoped-one-sync-framework-but-two-key-spaces-and-an-epss-section-landed-deliberately-unverified)
 - [2026-08-11 — Release/Process — v0.3.1 release prep: #194 traced to one stale-image CVE already closed on dev; version bumped in sixteen places; CHANGELOG cut](#2026-08-11--releaseprocess--v031-release-prep-194-traced-to-one-stale-image-cve-already-closed-on-dev-version-bumped-in-sixteen-places-changelog-cut)
 - [2026-08-11 — Post-v1 — #176 part 2: findings 4 and 6 replaced (keyed remount; reconcile-in-load), and `set-state-in-effect` enabled at `'warn'` rather than the preset `'error'`](#2026-08-11--post-v1--176-part-2-findings-4-and-6-replaced-keyed-remount-reconcile-in-load-and-set-state-in-effect-enabled-at-warn-rather-than-the-preset-error)
 - [2026-08-11 — Docs/Process — `.claude/settings.json` deleted outright after three failed settings-layer attempts; the strip-`PATCH` rule reinstated with a one-attempt cap](#2026-08-11--docsprocess--claudesettingsjson-deleted-outright-after-three-failed-settings-layer-attempts-the-strip-patch-rule-reinstated-with-a-one-attempt-cap)
@@ -750,6 +751,143 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
 
 ---
+
+### 2026-08-14 — Docs/Process — v0.4.0 enrichment feeds scoped: one sync framework but two key spaces, and an EPSS section landed deliberately unverified
+
+**What changed:** a new scoping document, `docs/scoping/v0.4.0-enrichment.md`, fixing the shape of
+the Track B Phase 1 enrichment work (EPSS · CISA KEV · endoflife.date) before any of it is built.
+**Documentation only — no code, schema, migration, endpoint or configuration changed in this PR.**
+The document itself proposes four new tables and a config surface, but proposes them; nothing is
+implemented.
+
+**The key-space call, which is the decision this document exists to make.** The three feeds look
+like one feature — scheduled sync of a public feed into a local cache, read at display time,
+offline-graceful — and the brief was explicitly to say whether one framework covers both key
+spaces or whether unification is a forced abstraction. **The call is: share the mechanism, do not
+share the key space.**
+
+The deciding argument is not the key type, which is where the question naturally starts. It is that
+**the feeds do not enrich the same object.** EPSS and KEV enrich a *finding* — they answer "how
+urgent is this CVE", they render as columns on a findings row, and they sort a findings list.
+endoflife.date enriches a *target* — a 400-finding scan of an EOL base image has **one** EOL fact,
+not 400. Wiring endoflife.date through a findings-level join would attach one fact to every row
+that happens to share a scan, which is a broadcast rather than a join, and that is the shape that
+tells you an abstraction is being forced.
+
+The key-space difference follows from that and independently confirms it. `findings.vuln_id`
+already holds the CVE ID verbatim, so EPSS and KEV join by equality on a value that exists;
+endoflife.date has **no key in Scrye at all** and needs one manufactured from scan metadata, then
+matched by version prefix against a release cycle, then compared against today's date. Verified at
+source, upstream's own identifier surface will not close that gap either: `products/python.md`
+declares `identifiers:` as `purl:` entries while `products/debian.md` declares `cpe:` entries.
+
+So: **one** `FeedSource` protocol, sync engine, scheduler hook and import seam; **one** polymorphic
+`feed_sync_state` table (the part that genuinely is uniform, and the only part that should be
+polymorphic); **three** typed cache tables; **two** read paths. A single polymorphic cache table was
+rejected on four independent grounds, the sharpest being that it breaks EPSS sorting — "sortable by
+EPSS" needs `ORDER BY` on a typed indexed column, and through a JSON payload that becomes one
+partial expression index per feed, i.e. three tables wearing a coat.
+
+**Verified at source, not from summaries — and where that was not possible, said so.** The brief
+required feed facts to come from the feeds rather than from blog posts, `docs/ROADMAP.md` prose, or
+model prior knowledge. The authoring sandbox's egress policy blocked **every** EPSS host
+(`first.org`, `api.first.org`, `epss.empiricalsecurity.com`, `epss.cyentia.com` — all 403 to
+CONNECT), plus `www.cisa.gov` and `endoflife.date` directly.
+
+KEV and endoflife.date were verified anyway, because both publish upstream to GitHub and
+`raw.githubusercontent.com` was reachable. These are **not third-party mirrors** — `cisagov/kev-data`
+is CISA-operated and states its own synchronization with `cisa.gov/kev`, and
+`endoflife-date/endoflife.date` *is* the dataset the website and API are generated from. What that
+produced: the real 1,665-entry KEV catalogue (1,583,191 bytes; 180,562 gzipped; `catalogVersion`
+2026.08.11), its draft-07 schema's required-field set, its cadence quoted from the README, and
+**CC0** licensing quoted verbatim; and for endoflife.date the MIT `LICENSE` verbatim, the v0 OpenAPI
+schema, and ~462 tracked products.
+
+Three findings from that verification changed the design rather than merely decorating it:
+
+- **endoflife.date is MIT, but one field inside it is not.** The README states verbatim that
+  *"Product descriptions are adapted from the English Wikipedia, under CC BY-SA 3.0 license"* —
+  attribution **and share-alike**, which MIT does not carry. The document's recommendation is to
+  **not ingest that field at all**: the feature needs dates and cycles, not prose, so declining it
+  sidesteps a share-alike obligation for zero feature loss. Recorded as a live ambiguity rather
+  than resolved, per the brief.
+- **KEV's `dueDate` is not a countdown.** Populated on all 1,665 rows, but only **one** entry had a
+  due date in the future as of 2026-08-14. The roadmap's "KEV remediation due dates surfaced as a
+  countdown" is therefore an overdue badge in the common case; designing it as a live timer would
+  be designing for the exception.
+- **`eol` is not one date.** endoflife.date carries `eoas`, `eol` and `eoes` separately, and
+  Debian 12 (Bookworm) is currently past `eol` (2026-07-11) but inside `eoes` (2028-06-30) — which
+  is the base of Scrye's own runtime image. A naive "past eol ⇒ red" flag would light up on
+  Scrye's own security-supported base.
+
+**EPSS landed as a work order, on maintainer direction.** The session surfaced the blockage and
+paused rather than filling the section from prior knowledge — which was available, and is exactly
+what the brief prohibited. The maintainer first elected to unblock the hosts; when the allowlist
+change had not reached the session, the maintainer directed that the verified two-thirds land now
+with every EPSS-specific fact marked `[UNVERIFIED]` and a follow-up session filling it in. § 3 is
+therefore a table of required facts plus an exact, runnable `curl` script, and it states inline
+that its emptiness is a decision rather than an oversight. Nothing in §§ 5–13 depends on an EPSS
+fact beyond a row-count sizing premise that is called out where it is used.
+
+**Claims are tagged, because a later session will act on this as if it were checked.** Four tags —
+`[VERIFIED]` (fetched in-session, with URL and date), `[MEASURED]` (benchmarked in-session),
+`[ASSERTED]` (judgment, argue with it), `[UNVERIFIED]` (a research task, not an input). This is the
+direct descendant of the 2026-07-25 interpreter-CVE lesson: a scoping document that asserts in the
+same voice it verifies is how #52's wrong "3.14.6 carries the fix" claim propagated into a runtime
+bump that cleared nothing.
+
+**Measured rather than estimated.** Four questions that would normally be answered by estimate were
+benchmarked instead: `WITHOUT ROWID` for `epss_scores` is **10.23 MiB vs 17.68 MiB** at 280k rows
+and faster to look up (2.12 ms vs 2.77 ms for a 1,000-key `IN`); the sort-by-EPSS `LEFT JOIN` runs
+**3.5 ms** for a 100-row page over 500k findings × 280k scores; the atomic cache swap holds the
+write lock for **0.17 s** against the configured 5,000 ms `busy_timeout`; and
+`SQLITE_LIMIT_VARIABLE_NUMBER` measured 250,000 against a 1,000-row page cap. The benchmarks ran on
+the sandbox's Python 3.11.15 / SQLite 3.45.1 rather than the runtime image, and the document says
+so and flags the compile-time limit as needing a re-check.
+
+The join measurement carries a load-bearing consequence: the plan resolves the driving side by
+`SEARCH f USING COVERING INDEX ix_findings_scan_severity_vuln`, so **no new index on `findings` is
+needed** — which is what makes the whole design additive.
+
+**Two consequences the implementing session must not miss**, both recorded in the document:
+
+- **Backup silently includes new tables.** `backend/app/backup/bundle.py` builds a bundle from
+  `Base.metadata.sorted_tables` minus an explicit exclusion list, so 280k EPSS rows would land in
+  every bundle by default — and the bundle is assembled and encrypted **in memory in a single
+  pass**, with an existing warning threshold at 250,000 findings rows. All four new tables,
+  `feed_sync_state` included, must join `_EXCLUDED_TABLES`: the data is a re-fetchable copy of a
+  public feed, and restoring a stale `last_success_at` onto a host with an empty cache would assert
+  a sync that never happened there.
+- **The egress guard needs no change, and `SCRYE_ALLOW_INTERNAL_EGRESS` is not the answer to
+  anything here.** The three feeds are public hosts resolving to public addresses, so they pass
+  `validate_egress_url()` unchanged. That flag only widens the guard to RFC-1918/ULA/CGNAT, which a
+  public host never touches; documenting it as an enrichment prerequisite would push deployments
+  into widening their SSRF posture for nothing. It becomes correct in exactly one case — a feed URL
+  overridden to an internal mirror — where it is already the right control and the guard's existing
+  error message already names it. The real gap is **redirects**: the guard validates the host you
+  asked for, so a 3xx moves the connection to a host it never saw. Enrichment must set
+  `follow_redirects=False` and re-validate each hop, as `registry_check.py` already does. Noted but
+  deliberately not acted on: `backend/app/auth/oidc.py` opens three `httpx` clients with no egress
+  validation at all — flagged only so a later session does not cite it as the house pattern.
+
+**One stop-and-ask is left open rather than decided.** The EOL feature needs a product identity for
+a scan, which Scrye does not store; the document recommends a `scan_platform` side table populated
+from Trivy's `Metadata.OS` at normalize time (reading the raw artifact at read time fails, because
+retention deletes artifacts while keeping findings). That is a data-model addition, so per
+`CLAUDE.md` § When to ask vs. decide it is recorded as **recommended, not approved**, and § 14 item
+2 of the document requires the implementing session to confirm it with the maintainer.
+
+**Why:** `docs/ROADMAP.md` Track B Phase 1 lists EPSS/KEV enrichment and end-of-life enrichment as
+separate bullets, which is how they read and is not how they should be built — the shared mechanism
+is the whole cost, and discovering that after two of the three were built would mean retrofitting
+the third. The document also discharges the roadmap's standing deferral that feed *"attribution
+[is] handled per source at implementation"* for the two feeds that could be verified, and turns it
+into an explicit, sourced work order for the one that could not.
+
+**Plan section affected:** none structurally — no schema, security-model, job-model, auth or
+locked-decision change, and no application code touched. `docs/scoping/` is a new directory; this
+is the first document in it. `docs/ROADMAP.md` is unchanged: Track B Phase 1's bullets stay as
+written until the work actually lands.
 
 ### 2026-08-11 — Release/Process — v0.3.1 release prep: #194 traced to one stale-image CVE already closed on dev; version bumped in sixteen places; CHANGELOG cut
 
