@@ -24,7 +24,7 @@
 # each 24.x patch); do not let a Dependabot major stand in for it — node majors
 # are ignored in .github/dependabot.yml precisely so the digest refresh is what
 # Dependabot offers here.
-FROM node:24-bookworm-slim@sha256:235600a8101ab264e117b1768e925532262668dc9b581ef1dd7d96ced463b8e7 AS frontend-builder
+FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS frontend-builder
 WORKDIR /build/frontend
 
 # Install deps from the lockfile first for better layer caching. The BuildKit
