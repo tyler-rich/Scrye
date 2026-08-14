@@ -578,8 +578,41 @@ recent work already sits and where a reader looks first. The index itself is sor
 regardless of physical position**, so it — not the scroll order — is the reliable way to find an
 entry, and the anchors jump straight to it.
 
-### Index of §14 entries (135, newest first)
+### Index of §14 entries (168, newest first)
 
+- [2026-08-11 — Release/Process — v0.3.1 release prep: #194 traced to one stale-image CVE already closed on dev; version bumped in sixteen places; CHANGELOG cut](#2026-08-11--releaseprocess--v031-release-prep-194-traced-to-one-stale-image-cve-already-closed-on-dev-version-bumped-in-sixteen-places-changelog-cut)
+- [2026-08-11 — Post-v1 — #176 part 2: findings 4 and 6 replaced (keyed remount; reconcile-in-load), and `set-state-in-effect` enabled at `'warn'` rather than the preset `'error'`](#2026-08-11--post-v1--176-part-2-findings-4-and-6-replaced-keyed-remount-reconcile-in-load-and-set-state-in-effect-enabled-at-warn-rather-than-the-preset-error)
+- [2026-08-11 — Docs/Process — `.claude/settings.json` deleted outright after three failed settings-layer attempts; the strip-`PATCH` rule reinstated with a one-attempt cap](#2026-08-11--docsprocess--claudesettingsjson-deleted-outright-after-three-failed-settings-layer-attempts-the-strip-patch-rule-reinstated-with-a-one-attempt-cap)
+- [2026-08-11 — Post-v1 — #176 part 1: findings 1, 2, 3 and 5 refactored off synchronous setState-in-effect; findings 4 and 6 and the rule flip deferred to a follow-up](#2026-08-11--post-v1--176-part-1-findings-1-2-3-and-5-refactored-off-synchronous-setstate-in-effect-findings-4-and-6-and-the-rule-flip-deferred-to-a-follow-up)
+- [2026-08-11 — Docs/Process — `includeGitInstructions: false` added to `.claude/settings.json`; a standing PR-body content rule added to CLAUDE.md](#2026-08-11--docsprocess--includegitinstructions-false-added-to-claudesettingsjson-a-standing-pr-body-content-rule-added-to-claudemd)
+- [2026-08-11 — Security/Process — Issue #52 (CVE-2025-15367, poplib) re-verified against the now-pinned v3.14.7 tag; cross-references to the closed #98/#116 retargeted to their new tracking location](#2026-08-11--securityprocess--issue-52-cve-2025-15367-poplib-re-verified-against-the-now-pinned-v3147-tag-cross-references-to-the-closed-98116-retargeted-to-their-new-tracking-location)
+- [2026-08-11 — Docs/Process — Attribution moved to the settings layer via a committed `.claude/settings.json`; the strip-PATCH instruction removed from CLAUDE.md and CONTRIBUTING.md](#2026-08-11--docsprocess--attribution-moved-to-the-settings-layer-via-a-committed-claudesettingsjson-the-strip-patch-instruction-removed-from-claudemd-and-contributingmd)
+- [2026-08-11 — Process — Issues #98 and #116 closed on source-verification evidence rather than Grype-DB agreement; Group A tracking moves into `ci/grype.yaml` plus this log](#2026-08-11--process--issues-98-and-116-closed-on-source-verification-evidence-rather-than-grype-db-agreement-group-a-tracking-moves-into-cigrypeyaml-plus-this-log)
+- [2026-08-11 — Security/Infra — Runtime base image moved to Python 3.14.7; all six Group A interpreter fixes verified at the source, and the waivers kept anyway because Grype's DB has not caught up](#2026-08-11--securityinfra--runtime-base-image-moved-to-python-3147-all-six-group-a-interpreter-fixes-verified-at-the-source-and-the-waivers-kept-anyway-because-grypes-db-has-not-caught-up)
+- [2026-08-11 — Process — Locked runtime floor raised 3.14.6 → 3.14.7 (locked decision §2), on a second independent reason rather than a replacement one](#2026-08-11--process--locked-runtime-floor-raised-3146--3147-locked-decision-2-on-a-second-independent-reason-rather-than-a-replacement-one)
+- [2026-08-09 — Docs/Process — `dependabot.yml`'s "Deliberately NOT ignored" rationale rewritten: the instruction outlived the reason it was written on](#2026-08-09--docsprocess--dependabotymls-deliberately-not-ignored-rationale-rewritten-the-instruction-outlived-the-reason-it-was-written-on)
+- [2026-08-09 — Infra/Process — The `@types/node` majors-ignore removed now that 26.2.0 has landed; no `typescript` ignore added, deliberately, because that regenerating PR is the TS7 signal](#2026-08-09--infraprocess--the-typesnode-majors-ignore-removed-now-that-2620-has-landed-no-typescript-ignore-added-deliberately-because-that-regenerating-pr-is-the-ts7-signal)
+- [2026-08-09 — Infra — `@types/node` 24.13.3 → 26.2.0: the sweep's one declined package taken deliberately, after step 4 had already shrunk its blast radius to one file](#2026-08-09--infra--typesnode-24133--2620-the-sweeps-one-declined-package-taken-deliberately-after-step-4-had-already-shrunk-its-blast-radius-to-one-file)
+- [2026-08-09 — Docs/Process — Roadmap updated for the completed #86 sweep, the re-cut react-router advisory, and the React-19-blocked router major](#2026-08-09--docsprocess--roadmap-updated-for-the-completed-86-sweep-the-re-cut-react-router-advisory-and-the-react-19-blocked-router-major)
+- [2026-08-09 — Infra — #86 sweep step 8 landed: `globals` 17.9.0, `@testing-library/user-event` 14.6.3, `postcss` 8.5.26 — the sweep is complete, and its reminder-surface PR had already closed itself](#2026-08-09--infra--86-sweep-step-8-landed-globals-1790-testing-libraryuser-event-1463-postcss-8526--the-sweep-is-complete-and-its-reminder-surface-pr-had-already-closed-itself)
+- [2026-08-09 — Infra — #86 sweep step 7 landed: Vite 6.4.3 → 8.2.1 + `@vitejs/plugin-react` 4.3.4 → 6.0.5; the partial oracle was closed by a pixel diff, but only after its noise floor was calibrated](#2026-08-09--infra--86-sweep-step-7-landed-vite-643--821--vitejsplugin-react-434--605-the-partial-oracle-was-closed-by-a-pixel-diff-but-only-after-its-noise-floor-was-calibrated)
+- [2026-08-09 — Infra — #86 sweep step 6 landed: jsdom 26.1.0 → 30.0.1; the selector-drift shim diffed empty, but only after the shim itself had to be fixed](#2026-08-09--infra--86-sweep-step-6-landed-jsdom-2610--3001-the-selector-drift-shim-diffed-empty-but-only-after-the-shim-itself-had-to-be-fixed)
+- [2026-08-09 — Infra — #86 sweep step 5 landed: Vitest 3.2.7 → 4.1.10 on the pinned Vite 6; the "no config changes" prediction held, the "low breakage" one did not](#2026-08-09--infra--86-sweep-step-5-landed-vitest-327--4110-on-the-pinned-vite-6-the-no-config-changes-prediction-held-the-low-breakage-one-did-not)
+- [2026-08-09 — Infra — #86 sweep step 4 landed: TypeScript 5.7.2 → 6.0.3 with the ceiling re-checked; the `this`-less inference change surfaced, silently and benignly](#2026-08-09--infra--86-sweep-step-4-landed-typescript-572--603-with-the-ceiling-re-checked-the-this-less-inference-change-surfaced-silently-and-benignly)
+- [2026-08-09 — Post-v1 — `L17`/`P2-2`'s reset effect finally has a regression test; the protection #176 relies on was never actually enforced](#2026-08-09--post-v1--l17p2-2s-reset-effect-finally-has-a-regression-test-the-protection-176-relies-on-was-never-actually-enforced)
+- [2026-08-09 — Infra — #86 sweep step 3 landed: React Compiler rules adopted, `set-state-in-effect` held back over 12 findings with no honest fix (#176)](#2026-08-09--infra--86-sweep-step-3-landed-react-compiler-rules-adopted-set-state-in-effect-held-back-over-12-findings-with-no-honest-fix-176)
+- [2026-08-09 — Infra — #86 sweep step 2 landed: the ESLint 10 family, with the React Compiler rule set held inert; three of the doc's four predictions held](#2026-08-09--infra--86-sweep-step-2-landed-the-eslint-10-family-with-the-react-compiler-rule-set-held-inert-three-of-the-docs-four-predictions-held)
+- [2026-08-09 — Docs/Process — Scoping doc corrected post-step-1; #170 (Dependabot's regenerated unsatisfiable frontend group) closed](#2026-08-09--docsprocess--scoping-doc-corrected-post-step-1-170-dependabots-regenerated-unsatisfiable-frontend-group-closed)
+- [2026-08-09 — Infra — #86 sweep step 1 landed: `typescript-eslint` 8.19.0 → 8.66.0; the scoping doc's rule-set claim was wrong in two independent ways](#2026-08-09--infra--86-sweep-step-1-landed-typescript-eslint-8190--8660-the-scoping-docs-rule-set-claim-was-wrong-in-two-independent-ways)
+- [2026-08-09 — Security — Frontend lockfile refreshed to clear two HIGH advisories in the build toolchain (js-yaml, nanoid); kept separate from the #86 sweep](#2026-08-09--security--frontend-lockfile-refreshed-to-clear-two-high-advisories-in-the-build-toolchain-js-yaml-nanoid-kept-separate-from-the-86-sweep)
+- [2026-08-09 — Docs/Process — #86 frontend toolchain sweep scoped into an ordered sequence; TypeScript 7 ruled out at the source; #153's red check re-diagnosed](#2026-08-09--docsprocess--86-frontend-toolchain-sweep-scoped-into-an-ordered-sequence-typescript-7-ruled-out-at-the-source-153s-red-check-re-diagnosed)
+- [2026-08-09 — Docs/Process — PR #169 reversed the attribution-stripping ban hours after it was recorded; the reversal itself went undocumented until now](#2026-08-09--docsprocess--pr-169-reversed-the-attribution-stripping-ban-hours-after-it-was-recorded-the-reversal-itself-went-undocumented-until-now)
+- [2026-08-09 — Security/Process — Settings audit: four previously-unreachable toggles verified, Secret Protection enabled, SHA-pinning confirmed clean, attribution-stripping banned](#2026-08-09--securityprocess--settings-audit-four-previously-unreachable-toggles-verified-secret-protection-enabled-sha-pinning-confirmed-clean-attribution-stripping-banned)
+- [2026-08-09 — Infra/Process — Dependabot round closed out: queue merged and closed, bundled scanners bumped, the display-name option declined, prior claims corrected](#2026-08-09--infraprocess--dependabot-round-closed-out-queue-merged-and-closed-bundled-scanners-bumped-the-display-name-option-declined-prior-claims-corrected)
+- [2026-08-09 — Infra/Process — Open-Dependabot-queue audit: only #149 was on `main`, and it was already superseded; `.github/dependabot.yml`'s `ignore` list is read from `main`, so `dev`-only edits to it are inert](#2026-08-09--infraprocess--open-dependabot-queue-audit-only-149-was-on-main-and-it-was-already-superseded-githubdependabotymls-ignore-list-is-read-from-main-so-dev-only-edits-to-it-are-inert)
+- [2026-08-08 — Docs/Process — `docs/ROADMAP.md` replaced wholesale with an externally-drafted two-track revision (Track A carried forward verbatim, Track B added)](#2026-08-08--docsprocess--docsroadmapmd-replaced-wholesale-with-an-externally-drafted-two-track-revision-track-a-carried-forward-verbatim-track-b-added)
+- [2026-08-08 — Security/Infra — `cryptography` bumped 49.0.0 → 50.0.0 for CVE-2026-69247; the dogfood gate caught it on an unrelated PR](#2026-08-08--securityinfra--cryptography-bumped-4900--5000-for-cve-2026-69247-the-dogfood-gate-caught-it-on-an-unrelated-pr)
+- [2026-08-03 — Infra/Process — Post-v0.3.0 Dependabot triage: three grouped PRs reapplied on `dev`, an annotated-tag SHA-pin corrected, eight toolchain majors held back](#2026-08-03--infraprocess--post-v030-dependabot-triage-three-grouped-prs-reapplied-on-dev-an-annotated-tag-sha-pin-corrected-eight-toolchain-majors-held-back)
 - [2026-08-03 — Release/Process — v0.3.0 release prep: version bumped to 0.3.0, CHANGELOG cut with an upgrade-notes block for migration 0009](#2026-08-03--releaseprocess--v030-release-prep-version-bumped-to-030-changelog-cut-with-an-upgrade-notes-block-for-migration-0009)
 - [2026-08-03 — Post-v1 — PR #142 verified green on the pinned Python 3.14.6 in CI; `test_undeterminable_presence_fails_startup`'s local-sandbox failure was 3.13-specific](#2026-08-03--post-v1--pr-142-verified-green-on-the-pinned-python-3146-in-ci-test_undeterminable_presence_fails_startups-local-sandbox-failure-was-313-specific)
 - [2026-08-03 — Post-v1 — `test_cancel_queued_scan` de-flaked: worker slot acquisition made observable, sleep removed](#2026-08-03--post-v1--test_cancel_queued_scan-de-flaked-worker-slot-acquisition-made-observable-sleep-removed)
@@ -715,6 +748,4461 @@ entry, and the anchors jump straight to it.
 - [2026-06-30 — Phase 0 — Scanner versions bumped to current releases](#2026-06-30--phase-0--scanner-versions-bumped-to-current-releases)
 - [2026-06-30 — Phase 0 — Optional sidecars gated behind Compose profiles](#2026-06-30--phase-0--optional-sidecars-gated-behind-compose-profiles)
 - [2026-06-30 — Phase 0 — Branch name `phase/P0`](#2026-06-30--phase-0--branch-name-phasep0)
+
+---
+
+### 2026-08-11 — Release/Process — v0.3.1 release prep: #194 traced to one stale-image CVE already closed on dev; version bumped in sixteen places; CHANGELOG cut
+
+**What changed:** the `CONTRIBUTING.md` § Releasing "Before you tag" checklist run for **v0.3.1**,
+on `dev`, ahead of the promotion PR. The version moved `0.3.0` → `0.3.1` in sixteen places,
+`CHANGELOG.md` `[Unreleased]` was cut to `[0.3.1] - 2026-08-11`, and issue **#194** was traced to
+its actual cause rather than treated as a defect. **No application code, schema, migration or
+configuration changed** — `git diff origin/main origin/dev -- backend/app/ backend/alembic/
+.env.example` is empty.
+
+**1. What #194 actually reported, read from the run rather than the issue body.** #194's body names
+no CVE; it links [run 31358739031](https://github.com/tyler-rich/Scrye/actions/runs/31358739031).
+Reading that run's `:latest` job (93363224040) step by step:
+
+- Step 6, the **Trivy gate** (`--ignore-unfixed --severity HIGH,CRITICAL`, the three bundled
+  scanner binaries `--skip-files`'d, `ci/trivyignore` applied), failed with **exactly one
+  finding**: `cryptography` (METADATA) **49.0.0**, `CVE-2026-69247`, **HIGH**, status `fixed`,
+  fixed version **50.0.0**. Nothing else — **zero** Debian/OS findings survived the gate, even
+  though the informational full-severity scan in the same job reported 335 of them
+  (LOW 138 / MEDIUM 128 / HIGH 51 / CRITICAL 18), none fixable at HIGH+.
+- Step 7, the **Grype gate**, is recorded `skipped` — Trivy's `--exit-code 1` ended the job first.
+  **Trivy's list is therefore not known to be the complete set**, which is why §2 below exists.
+- The `:dev` leg of the same matrix (job 93363223989) passed **both** gates in that run.
+
+**2. Whether Grype would have added anything, and the limitation that prevented a direct answer.**
+
+*Attempted and blocked.* The pinned `grype v0.116.1` was downloaded and run against
+`registry:ghcr.io/tyler-rich/scrye:latest` with `origin/main`'s `ci/grype.yaml` and the same three
+`--exclude`s. The authoring sandbox's egress policy answers **403 to CONNECT** for both
+`grype.anchore.io` (the vulnerability DB) and `pkg-containers.githubusercontent.com` (GHCR blobs),
+so neither the DB nor the image could be fetched. This is the same limitation PR #195 recorded.
+**Not evidenced: a direct Grype run against the published `:latest` image.** Re-running
+`rescan.yml` would answer it and was out of scope for this session.
+
+*What was established instead, category by category.* `:latest`'s Grype surface is: OS/Debian
+packages, Python site-packages, the CPython binary, pip's vendored copies, the bundled scanner
+binaries, and the built SPA. Each is identical-or-better on `dev`:
+
+| Category | `:latest` (v0.3.0) | `dev` |
+|---|---|---|
+| bundled `trivy`/`grype`/`syft` | `--exclude`d from the gate | same three `--exclude`s |
+| CPython interpreter | seven waivers | **byte-identical** waiver set — `diff` of the `- vulnerability:` lines in `origin/main:ci/grype.yaml` vs `origin/dev:ci/grype.yaml` is empty |
+| Python site-packages | 38 packages | 38 packages; the whole `requirements.lock` delta is four: `alembic` 1.18.5→1.19.1, **`cryptography` 49.0.0→50.0.0**, `fastapi` 0.140.13→0.141.1, `uvicorn` 0.51.0→0.52.1 |
+| pip's vendored copies | pip present | pip **deleted outright** from the runtime stage (#195), so any finding there is closed by construction |
+| OS/Debian | 0 fixable HIGH/CRITICAL per the Trivy gate | base image additionally moves to the newer 3.14.7 bookworm digest |
+| the SPA | `dist/` only, no `node_modules` in the runtime stage | unchanged |
+
+*The decisive evidence is empirical, and it is stronger than a re-scan of `:latest` would have
+been:* **`dev`'s exact tree passes both gates today.** PR #203's head `c1d9895` carries tree
+`b2ed842869f640a43075cddf709b83b5968611a7`, which is identical to `origin/dev`'s tip tree, and its
+`Image — build + dogfood self-scan` job ([run 31496642829](https://github.com/tyler-rich/Scrye/actions/runs/31496642829),
+13:34 UTC 2026-08-11) reports the Trivy gate green and the Grype gate **`No vulnerabilities
+found`**, with `Total waived: 7` and every waived row reading `python 3.14.7`. So whatever Grype
+would have said about `:latest`, the tree being promoted is clean against both scanners' current
+DBs, with the seven documented waivers as the only suppressed items.
+
+**3. That the fix is real, verified at the source rather than from a `FIXED IN` column.** Per
+CLAUDE.md § Dependency hygiene. `dev` pins `cryptography==50.0.0` in both `pyproject.toml` and
+`requirements.lock`. pyca/cryptography's `CHANGELOG.rst` **at the `50.0.0` tag** opens the
+`50.0.0 - 2026-07-31` section with a `**SECURITY ISSUE**` entry for exactly this defect —
+`pkcs7_decrypt_der` and its PEM/S-MIME variants no longer expose distinguishable errors or timing
+while unwrapping a `RecipientInfo`'s `encryptedKey`, a random key being substituted on failure per
+RFC 3218. Corroborated in the code, not just the changelog: `src/rust/src/pkcs7.rs` at `50.0.0`
+carries the RFC-3218 comment, `let random_key = crate::backend::rand::get_rand_bytes(py,
+key_size)?`, and the two branches that return it (lines 303–328); the same file at `49.0.0`
+contains no occurrence of `random`, `3218`, `oracle` or `constant-time`. **49.0.0 is vulnerable,
+50.0.0 is not, and `dev` ships 50.0.0.** #194 is therefore a stale published image, not a defect.
+
+*The six interpreter CVEs were independently re-verified too*, since this release carries the
+3.14.7 bump and the `[Unreleased]` § Security text asserts all six are fixed. Diffing
+`raw.githubusercontent.com` at `v3.14.6` and `v3.14.7`: `Include/patchlevel.h` reads `3.14.6` and
+`3.14.7` respectively; `Lib/html/parser.py` gains `_pending`/`_parse_threshold` and loses the
+unguarded `rawdata = self.rawdata + data`; `Modules/getpath.py` loses all four `BUILD_LANDMARK`
+references and gains the inline `CVE-2026-12003` comment; `Lib/imaplib.py` gains `_control_chars`;
+`Lib/tarfile.py` gains `_EXTHEADER_READ_CHUNK`, the result-capturing `data = self.read(self.bufsize)`
+in `_Stream.seek()`, the `unfiltered.replace(name=tarinfo.name, deep=False)` re-filter call, and the
+`filter_function=filter_function` argument on `_extract()`'s call into `_extract_one()`. And
+`Lib/poplib.py` is **byte-identical** between the two tags, confirming the `[Unreleased]` claim that
+CVE-2025-15367 is unaffected either way. All six fixed, all six still reported by Grype (§2's
+`Total waived: 7`) — the "fixed *and* waived" state the waiver blocks describe, neither "fixed" nor
+"still vulnerable" alone.
+
+**4. Version bumped `0.3.0` → `0.3.1`, not `0.4.0`.** A patch under SemVer, and the maintainer's
+call. Nothing in the release is a new user-facing capability and nothing moves the schema: the
+backend application tree and `backend/alembic/` are **unchanged** between `main` and `dev`, and so
+is `.env.example`, so there is no API surface, no configuration key and no migration to consider.
+Everything in the release is a fix, a dependency bump, or build/dev-time toolchain currency.
+
+**The one candidate considered and rejected** was the bundled-scanner bump (Trivy 0.73.0, Grype
+0.116.1, Syft 1.50.0), which does bring capabilities a user could observe in results — Trivy's OCI
+VEX discovery, Grype's Go reachability analysis, Syft's vcpkg/`.app` cataloging. It is dependency
+currency of an orchestrated binary rather than a Scrye feature, its `[Unreleased]` entry files it
+under `### Changed`, and Scrye's own surface is untouched, so it does not carry a minor on its own.
+Recorded here so the reasoning is not re-derived at the next scanner bump.
+
+**5. Every version-string occurrence — sixteen, across nine files.** Found by grepping the whole
+repo, not from any list. `frontend/package-lock.json`'s two root fields were written with
+`npm version 0.3.1 --no-git-tag-version`, never by hand.
+
+| File | Occurrences | What carries it |
+|---|---|---|
+| `backend/app/__init__.py` | 1 | `__version__` — the only runtime-load-bearing copy |
+| `backend/pyproject.toml` | 1 | packaging metadata |
+| `frontend/package.json` | 1 | npm metadata |
+| `frontend/package-lock.json` | 2 | the two root `version` fields |
+| `docker/docker-compose.yml` | 1 | `image: scrye:<v>` — a **local** build tag, not a registry ref |
+| `docker/Dockerfile` | 1 | the build-command comment at the head of the file |
+| `README.md` | 5 | the `/healthz` sample output; the tag table's `(e.g. \`:0.3.1\`)`; the `docker pull ghcr.io/tyler-rich/scrye:0.3.1` pin example; and the `docker build`/`docker buildx build` `-t scrye:0.3.1` commands |
+| `.github/dependabot.yml` | 2 | the docker-ecosystem `ignore:` comment, which quotes the Compose pin verbatim and the rejected GHCR-qualified alternative |
+| `frontend/src/components/settings/AboutPanel.test.tsx` | 2 | the `BASE_ABOUT` fixture's `version` and the version-stat assertion bound to it |
+
+`backend/tests/test_version.py` guards only the first four rows and passes on the result; the
+Compose file, the Dockerfile comment, the README, `dependabot.yml` and the frontend fixture are
+reached by nothing but a grep, which is why the grep is the method.
+
+**This cut found no occurrence the previous cut failed to bump — but it did find the previous
+cut's *record* under-counting one file.** The 2026-08-03 entry describes the documentation set as
+"`README.md` ×3". `README.md` carried **five** at `v0.2.0` and five at `v0.3.0`, and all five were
+correctly at `0.3.0` in the released tree — so the bump was complete and only the prose count was
+wrong. Naming it here so the next cut does not read "×3" as an inventory and stop looking after
+three.
+
+**Deliberately left at `0.3.0`,** matching the two prior cuts' reasoning: the `## [0.3.0]`
+CHANGELOG section, its `[0.3.0]:` compare link and the narrative references inside past release
+sections; every prior §14 entry and the `docs/ROADMAP.md` / `docs/upgrades/frontend-toolchain-86.md`
+references to the *v0.3.0 promotion* (release history — rewriting it falsifies the record);
+`docs/ARCHIVE.md`'s `tecnativa/docker-socket-proxy:0.3.0`, which is a different project's version
+entirely; `backend/tests/test_trivy_policy.py`'s `https://openvex.dev/ns/v0.2.0` (the OpenVEX spec
+context version); `backend/tests/test_backup.py:317`'s `app_version="0.1.0"` backup-record fixture,
+realistic precisely because it is historical; and `docker/Dockerfile:249`'s `setuptools==70.3.0`
+plus `CHANGELOG.md`'s copy of it, where `0.3.0` is a coincidental substring of an unrelated
+package version. `AboutPanel.test.tsx`'s `python_version: '3.14.6'` was likewise left alone, per
+PR #195's treatment of the same mock payload.
+
+**6. `CHANGELOG.md` `[Unreleased]` cut to `[0.3.1] - 2026-08-11`,** with a fresh empty
+`[Unreleased]` above it and the reference-link block gaining
+`[0.3.1]: …/compare/v0.3.0...v0.3.1`, `[Unreleased]` re-pointed at `…/compare/v0.3.1...HEAD`. Done
+**before** the promotion, as in the v0.2.0 and v0.3.0 cuts, so `main` receives an already-correct
+CHANGELOG rather than a commit landing on it after the fact.
+
+Every claim was re-checked against the current source rather than against what the entry said when
+written. All fourteen frontend version claims verify against `frontend/package.json` exactly
+(`typescript` 6.0.3, `eslint` 10.8.1, `@eslint/js` 10.0.1, `eslint-plugin-react-hooks` 7.1.1,
+`eslint-plugin-react-refresh` 0.5.3, `typescript-eslint` 8.66.0, `vite` 8.2.1,
+`@vitejs/plugin-react` 6.0.5, `vitest` 4.1.10, `jsdom` 30.0.1, `globals` 17.9.0,
+`@testing-library/user-event` 14.6.3, `postcss` 8.5.26, `@types/node` 26.2.0); `js-yaml` and
+`@eslint/eslintrc` are absent from the lockfile entirely and `nanoid` is at 3.3.18 marked `dev`,
+both as the ESLint-10 entry states; the four backend deltas match `requirements.lock`; and the
+Dockerfile's scanner args match the versions the scanner entry names. **Three things did not hold,
+and all three were corrected:**
+
+- **The `### Added` entry was removed from the CHANGELOG entirely.** It described #178's
+  `ScanDetailPage.scanIdReset.test.tsx` and closed with "**No production code changed** —
+  `ScanDetailPage.tsx` is byte-identical to `dev`". Both halves stopped being true within the same
+  release: #201 and #203 each changed `ScanDetailPage.tsx`, and #203 rewrote that very test's
+  harness to mount through the new `ScanDetailRoute`. It is also test-only work, which belongs in
+  this log rather than in release notes. It is not re-written here because §14 already carries it
+  in full — see the 2026-08-09 entry, "`L17`/`P2-2`'s reset effect finally has a regression test".
+  Maintainer decision, 2026-08-11.
+- **The step-3 React Compiler entry's `set-state-in-effect` claims were corrected.** It said the
+  rule was "held back" and "left `off`"; #203 later enabled it at **`'warn'`** in the same release.
+  The heading clause and the finding paragraph now say "held back until the #176 work later in this
+  release" and "held at `off` for this step", and a closing **Superseded later in this release**
+  paragraph states the shipped severity, the 0 errors / 13 warnings result, and that the 12
+  fetch-on-mount findings remain undisguised with no `eslint-disable` anywhere.
+- **A `### Fixed` section was added** for the #176 work in #201 and #203, which was absent from
+  `[Unreleased]` and is **not** purely internal refactoring. Five deltas are user-observable and
+  are now in the release notes: the findings list no longer flashing "No findings match the current
+  filters" over an unanswered request; a delete-confirm dialog left open across a navigation now
+  closing instead of re-arming against the newly-opened scan; a late `getScan(oldId)` no longer
+  repainting over the scan now displayed; an in-flight tag save no longer writing the previous
+  scan's response into the new view; and the scans list no longer committing a frame in which new
+  rows and an unreconciled compare selection coexist. Maintainer decision, 2026-08-11.
+
+**Deliberately excluded from the CHANGELOG as non-user-observable,** and named here so the omission
+reads as a decision rather than an oversight — all of it is already recorded in §14: **#196**
+(closing #98/#116 and moving Group A tracking into `ci/grype.yaml` plus this log), **#197**, **#200**
+and **#202** (the `.claude/settings.json` attempt, `includeGitInstructions`, the PR-body content
+rule, and the file's deletion with the capped strip reinstated), **#198** (repo-files-win precedence
+over the synced skill), and **#199** (the #52 poplib re-verification against `v3.14.7`). None of
+these changes anything a deployed Scrye does; #197/#200/#202 in particular are session-tooling and
+convention changes, which are archive material by construction.
+
+One cosmetic inconsistency was found and **left alone**: the lockfile package counts across the
+sweep's last three steps read 339 → 305 (#185), then "306 before and after" (#187 and #190). The
+tree has 305 entries under `packages` excluding the root and 306 including it, so the two entries
+simply count differently. Nothing about the world is misstated, and rewriting a released-in-this-
+section number to unify a convention is not worth the churn.
+
+**7. `THIRD_PARTY_LICENSES/` re-verified from scratch, not inherited from the v0.3.0 result.** The
+version table matches `docker/Dockerfile`'s args exactly — `TRIVY_VERSION=0.73.0`,
+`GRYPE_VERSION=0.116.1`, `SYFT_VERSION=1.50.0` — and each bundled file was re-fetched from
+`raw.githubusercontent.com` at that exact tag and `cmp`'d:
+
+| File | Upstream at the pinned tag | Result |
+|---|---|---|
+| `trivy/LICENSE` | `aquasecurity/trivy@v0.73.0` | **byte-identical**, 11 357 bytes |
+| `trivy/NOTICE` | `aquasecurity/trivy@v0.73.0` | **byte-identical**, 137 bytes |
+| `grype/LICENSE` | `anchore/grype@v0.116.1` | **byte-identical**, 11 357 bytes |
+| `grype/NOTICE` | `anchore/grype@v0.116.1` | HTTP **404** — no `NOTICE` upstream, none bundled, as documented |
+| `syft/LICENSE` | `anchore/syft@v1.50.0` | **byte-identical**, 11 357 bytes |
+| `syft/NOTICE` | `anchore/syft@v1.50.0` | HTTP **404** — same |
+
+Apache-2.0 §4(c)/(d) is satisfied: the real text travels with the distribution, unparaphrased.
+
+**8. `backend/requirements.lock`: no drift, and no regeneration needed.** `pyproject.toml`'s
+dependencies are untouched by this PR. Verified anyway with the pinned command from
+`CONTRIBUTING.md` § Backend dependency lock (`uv==0.8.17`, `--group build --generate-hashes
+--python-version 3.14`), run against a copy of `pyproject.toml` **and the existing lock** so uv
+could read it as a preference set: the output `diff`s empty against the committed file. Recorded
+because the first attempt wrote to a fresh path, removed that preference input, and produced a
+large spurious diff (`annotated-doc` 0.0.4→0.0.5, `certifi`, `cffi`, …) that looked like real
+drift and was not — **run the command with the existing lock present, or the check lies.**
+
+**9. Dependabot queue: empty.** `GET /repos/tyler-rich/Scrye/pulls?state=open` returns **zero open
+pull requests of any kind**, so there is nothing to land, close or defer, and no `baseRefName` to
+check. The last round was #159/#160 (2026-08-08) and #190/#192 (2026-08-09); everything since has
+been reapplied by hand on `dev`, which is why the queue is clear. The `[Unreleased]` § Changed
+entries covering `@types/node`, `globals`/`user-event`/`postcss` and the scanner bumps are those
+reapplications. **Nothing in this release was merged from a Dependabot branch as-built.**
+
+**10. Verification — and PR #195's open gap is now closed.** Backend: `ruff check .` clean,
+`black --check .` clean (178 files), `pytest` **729 passed, 11 skipped, 0 failed**. Frontend:
+`npm run lint` exit 0 at **0 errors / 13 warnings** (all `react-hooks/set-state-in-effect`, the
+count the #176 part-2 entry records), `npm run format:check` clean, `npm test` **96 tests across 26
+files**, `npm run build` (`tsc -b` + Vite) clean. The eleven skips are all environmental and
+unrelated to this change: three `test_spa.py` (frontend not built at that point), two
+`test_entrypoint_preflight.py` (root bypasses directory permission bits), six
+`test_scanner_symlink_containment.py` (the pinned `syft`/`grype` binaries are not on `PATH` here —
+CI's image job supplies them from the image it builds).
+
+**That `pytest` run is on a real CPython 3.14.7**, which the 2026-08-11 entry for PR #195 recorded
+as explicitly *not evidenced*: "the backend suite has **not** run on 3.14.7 anywhere — CI's
+`Set up Python 3.14` resolves the hosted tool cache to **3.14.6**", closing with "a future session
+with registry access should close that by running the suite on a real 3.14.7." **Consider it
+closed.** The interpreter came from `python-build-standalone` via `uv python install 3.14.7` —
+`python -V` reports `Python 3.14.7` — rather than from a container image, which is why it worked
+here where the image pull did not: that path uses GitHub release assets, which this sandbox's
+egress policy permits, while the registry blob hosts it denies. **Note the uv version matters and
+the repo's pin is the wrong tool for this job:** the pinned `uv==0.8.17` (correct, and used
+unchanged, for the lockfile in §8) offers only `cpython-3.14.0rc2` from its bundled index, and
+3.14.0rc2 is precisely the interpreter the 2026-08-02 triage entry records as breaking every
+pydantic model construction with a `TypeError` (`typing._eval_type()` gained `prefer_fwd_module`
+between rc2 and final). A current uv was installed **separately, for the interpreter download
+only**, and never used to touch `requirements.lock`. CI still resolves 3.14.6, so this remains a
+local result rather than a standing gate.
+
+**Plan section affected:** `CHANGELOG.md` (`[0.3.1]` cut, new `### Fixed`, `### Added` removed, two
+step-3 corrections); `backend/app/__init__.py`, `backend/pyproject.toml`, `frontend/package.json`,
+`frontend/package-lock.json`, `docker/docker-compose.yml`, `docker/Dockerfile`, `README.md`,
+`.github/dependabot.yml`, `frontend/src/components/settings/AboutPanel.test.tsx` (version strings);
+§14 (this log). No locked decision, schema, security model, API surface or configuration changed.
+
+---
+
+### 2026-08-11 — Post-v1 — #176 part 2: findings 4 and 6 replaced (keyed remount; reconcile-in-load), and `set-state-in-effect` enabled at `'warn'` rather than the preset `'error'`
+
+**What changed:** the two remaining genuine `react-hooks/set-state-in-effect` sites — the ones
+#176's "Do not fix 4 and 6 blind" section covers — are replaced behaviour-preservingly, and the
+rule's override in `frontend/eslint.config.js` moves from `'off'` to **`'warn'`**, a maintainer
+decision recorded below. The rule now takes effect for the first time. #176 stays open for the
+maintainer to close by hand.
+
+**Finding 4 (`ScanDetailPage`, `L17`/`P2-2`) — the reset effect became a keyed remount.** The
+per-`:scanId` reset effect (11 setStates plus 2 ref writes) is deleted. In its place `App.tsx`
+mounts the page through a new `ScanDetailRoute` wrapper in `ScanDetailPage.tsx` —
+`<ScanDetailPage key={scanId} />` — so React unmounts and remounts the component whenever the id
+changes, which is the compiler-idiomatic replacement #176 itself names. Behaviour is preserved
+because a remount resets strictly everything the effect reset: all state and both refs come back
+to their initial values, and the mount effects then run for the new id in the same order the reset
+path produced (`getScan`, then artifacts/findings once the new scan's own status allows).
+
+**The remount enumeration** — what could have depended on component instance identity across
+`/scans/:id` navigations, checked item by item:
+
+- **State.** The effect reset 11 of the component's stateful values; a remount resets those 11
+  plus the three the effect never covered — `savingTags`, `deleting`, and the delete-confirm
+  modal's `confirmOpened`. That is the one observable delta, and it is fully characterised: a
+  delete-confirm modal open at the moment of navigation previously *stayed open and re-targeted
+  the new scan* (its text and its `remove()` closure both read the post-navigation id), where it
+  now closes; an in-flight `saveTags` previously left its button loading and, on settling, wrote
+  the **old** scan's server response into the view now showing the new id. Both deltas are in the
+  safe direction — the lingering modal could delete a scan the operator never confirmed.
+- **Refs.** `findingsGuard` and `lastSyncedTags` are recreated fresh, equivalent to the effect's
+  `begin()` / `[]` resets.
+- **In-flight requests of the old scan.** Their resolutions now land on the unmounted instance as
+  no-ops. Under the effect version, a late `getScan(oldId)` resolution could repaint the old
+  scan's header and tags *over* the new id's loading view — `loadScan` has no latest-wins guard,
+  and the reset effect could not cancel an already-started promise. The remount closes that
+  window outright.
+- **The status poll.** Its effect cleanup (`cancelled = true`, `clearTimeout`) runs on unmount
+  exactly as it ran on dependency change; no timer survives.
+- **Scroll and focus.** Identical under both versions: navigation collapses the subtree to the
+  "Loading scan" state either way, and the app has no scroll restoration.
+- **Nothing outside the component consumes its instance** — it provides no context, registers no
+  external listeners, and no parent holds a ref into it. Other routes are untouched.
+- **The key granularity.** The key is the raw `:scanId` param string where the effect keyed on
+  `Number(scanId)`; the two differ only for aliasing spellings of one id (`/scans/01` vs
+  `/scans/1`), which no in-app link produces — and there the keyed version remounts where the
+  effect would not have reset, the safe direction.
+
+**The test-harness consequence, stated because a regression-test file changed:**
+`ScanDetailPage.scanIdReset.test.tsx` mounted `<ScanDetailPage />` bare inside its own `<Routes>`,
+bypassing `App.tsx` — with the protection now living on the route element, that harness would have
+exercised nothing and failed. Its route element is now `<ScanDetailRoute />`, the exact
+arrangement the app ships; every assertion in the test is unchanged.
+(`ScanDetailPage.findingsSpinner.test.tsx` still mounts the page bare — it never navigates, so no
+id changes under it.)
+
+**Finding 6 (`ScansPage`, `P3-2`) — the reconcile effect moved into `load()`.** `load()` is the
+only place `data` — the visible rows — is ever set, so the effect that reconciled the compare
+selection "whenever the rows change" fires on exactly the renders that follow a `load()`
+resolution and no others. The same reconciliation (drop any selected id not in the incoming
+rows, keep the array identity when nothing was dropped) now runs inside `load()` immediately
+after `setData`, behind the same latest-wins guard. Behaviour is preserved — same trigger set,
+same reconciliation — minus one frame: the effect version committed a render in which the new
+rows and the stale selection coexisted (the phantom "1/2 selected") before correcting itself;
+the two setStates now batch into a single commit.
+
+**Fail-first verification, per regression test.** Naive version = the effect deleted with no
+replacement (for finding 4, the wrapper rendering `<ScanDetailPage />` without the key; for
+finding 6, `load()` without the reconcile block):
+
+- `ScanDetailPage.scanIdReset.test.tsx` — against naive: **FAILED on its first in-flight
+  assertion**, exactly as #176 predicted (`findByText('Loading scan')` times out with scan 1's
+  target still rendered). Against the replacement: passes.
+- `ScansPage.compare.test.tsx`, "drops a selection that filters/pages out" — against naive:
+  **FAILED** (the phantom "Compare scans" button survives the reload). Against the replacement:
+  passes.
+- `ScansPage.compare.test.tsx`, "drops a selected scan that was deleted" — against naive:
+  **passed; it failed to fail.** All three of its assertions held vacuously: the deleted row's
+  checkbox leaves the DOM because the row itself left the table, the surviving scan's checkbox
+  reads checked from the stale snapshot too, and the Compare button is present under both
+  versions. The observable that actually discriminates — the bar reads "Comparing 1/2 selected"
+  with Compare disabled, versus a stale "2/2" with Compare *enabled against the deleted scan* —
+  was never asserted. With maintainer approval the test was strengthened by exactly those two
+  assertions, then re-proven: against naive it now **FAILS** (`Comparing 1/2 selected` not
+  found), against the replacement it passes. The gap predates this change — the test was added
+  by #178 for an effect that already worked, so its fail-first property was never established
+  the way the scanIdReset test's was.
+
+**How the rule-flip tension resolved, and on what evidence.** Part 1 flagged that #176's
+definition of done — override removed *and* `npm run lint` clean *and* the fetch-on-mount
+findings not suppressed — cannot all hold. Measured on the refactored tree: the installed
+`eslint-plugin-react-hooks@7.1.1`'s `configs.recommended` assigns `set-state-in-effect` severity
+**`error`** (read from the plugin's config object directly); with the override removed,
+`npm run lint` (bare `eslint .`, no `--max-warnings` anywhere, including CI's identical
+invocation) reports **13 problems (13 errors, 0 warnings)** and exits 1. Findings 4 and 6 no
+longer report; the 13 are the fetch-on-mount population — the 12 loaders plus
+`ScanDetailPage`'s `void loadFindings()`, the migrated finding-5 line part 1 documented. Every
+path to a clean lint therefore suppresses them in some form, which is the decision #176 did not
+contain. The maintainer chose **`'warn'`** (2026-08-11) over the alternatives — 13 per-site
+`eslint-disable`s (honest but heavy against the disables-are-last-resort rule), keeping the rule
+`'off'` (the rule never takes effect), or the data-fetching refactor (out of scope, its own
+decision). Result: the rule is live and visible, lint and CI pass at 0 errors / 13 warnings, and
+the accepted cost is that a **new, genuine** synchronous-setState site also arrives as a warning
+rather than an error — the config comment tells reviewers to read any change in this rule's
+report count rather than scroll past it.
+
+**The 12 fetch-on-mount findings are deliberately untouched:** no `eslint-disable`, no call-site
+wrapping, no loaders-behind-a-hook refactor. Per #176 there is no fix for them that is an actual
+improvement — the report tracks what the compiler can see, not a behavioural difference — so they
+now warn, undisguised.
+
+**Verification:** `npm run lint` exit 0 — **0 errors, 13 warnings**, all
+`react-hooks/set-state-in-effect` · `npm run format:check` clean · `npm test` **26 files / 96
+tests** passing (unchanged from part 1) · `npm run build` (`tsc -b` + Vite) clean.
+
+**Plan section affected:** §14 (this log); `docs/upgrades/frontend-toolchain-86.md` Step 3, whose
+held-back rule is now enabled at `'warn'`. No locked decision, schema, security-model, routing
+behaviour beyond the one route element, or data-fetching layer was touched.
+
+---
+
+### 2026-08-11 — Docs/Process — `.claude/settings.json` deleted outright after three failed settings-layer attempts; the strip-`PATCH` rule reinstated with a one-attempt cap
+
+**What changed:** the committed `.claude/settings.json` is **deleted from the repository in full**,
+and the strip-`PATCH` instruction it was supposed to make unnecessary is **reinstated in CLAUDE.md
+and CONTRIBUTING.md, capped at one attempt per body**. The two halves are one decision: the settings
+file was the entire reason the strip rule was removed, so removing the file puts the burden back
+where it was.
+
+**1. The settings file is gone — every key, not a subset.** `.claude/settings.json` held the
+`attribution` block added by **#197** (`commit: ""`, `pr: ""`, `sessionUrl: false`) and the
+`includeGitInstructions: false` key added by **#200**. Nothing from it survives; there is no
+partial preservation of either key set, and no replacement file. The `.gitignore` comment block
+that explained why the file was tracked is rewritten to say the opposite — the file is deliberately
+absent — while still ignoring `.claude/settings.local.json` and still barring a blanket `.claude/`
+rule, so a future committed setting is an explicit choice rather than something silently ignored.
+
+**Why: three sequential attempts at the settings layer, none of which stopped the footer.**
+
+1. **#197** added the `attribution` block on the reasoning that the footer is a harness feature
+   configured in settings, and that project scope is the only scope reaching a Cloud session.
+2. **#199** opened after that block was live and its PR body still carried a "Generated by Claude
+   Code" footer with a session URL. **#200** read that as the block not reaching the PR-creation
+   path specifically, and added `includeGitInstructions: false` as a second, independent lever —
+   explicitly recording that its real test would be the first PR opened by a session running with
+   the merged file.
+3. **#201** was that test. It ran with both #197's and #200's keys merged and live, and **still got
+   a footer on its PR body**, which that session attributed to **"the harness"** rather than to
+   anything Claude Code settings govern.
+
+That is three attempts, each addressing the previous one's diagnosed gap, with the observable
+outcome unchanged. **The settings-file approach is judged not to have worked, and is fully
+abandoned — not paused, not deferred pending a better key.** Do not reintroduce a
+`.claude/settings.json` to suppress the footer; a future session that finds this entry and thinks
+"they just needed one more key" is repeating a loop that has already run three times. (What "the
+harness" actually is remains undiagnosed and was deliberately not investigated here.)
+
+**2. The strip is reinstated, with a hard cap of one attempt per body.** CLAUDE.md § Attribution
+and CONTRIBUTING.md § Pull request process step 4 now both say: after opening a PR or posting an
+issue comment, re-read the live body via the API; if a footer is present, issue **one** `PATCH` to
+remove it and re-read once to confirm; if the footer is re-appended, **stop** and report it in the
+session summary as *"strip attempted, did not hold."* Never a second attempt on the same body.
+
+**The cap's reason is stated inline in both files, not just here**, because the cost it bounds is
+real and was the entire basis for #197's prohibition: each `PATCH` executes under a **bot identity**
+and leaves a permanent, publicly visible **"claude (Bot)"** entry in GitHub's edit history. **#196**
+recorded exactly two such entries from two attempts, with the footer surviving both. One attempt
+still tries to produce a clean body; the second has never once changed the outcome and only doubles
+the visible bot attribution. So this is not a straight revert of #197 — it accepts #197's evidence
+in full and prices it, rather than disputing it.
+
+**CLAUDE.md now states plainly that this strip is the *only* mechanism suppressing the footer**,
+since no settings-level backstop exists any more. The commit-authorship half is untouched: the
+`git log --format="%an <%ae>%n%B"` verification and the repo-local git-identity commands stay exactly
+as they were, and the section says so explicitly — that part has always worked and is independent of
+the strip. The § Git & PR conventions git-identity bullet and § Definition of done item 8, both of
+which described the old state, are corrected to match.
+
+**This is the fourth reversal of this policy. Read the chain before changing it a fifth time:**
+
+| # | When | State |
+|---|------|-------|
+| — | 2026-07-20 | Strip rule first written: re-read the PR body after opening and strip the footer. |
+| 1 | 2026-08-09 (settings audit) | Stripping **banned**. |
+| 2 | 2026-08-09 (**#169**) | Ban **reversed** hours later, back to strip-and-reverify — with no §14 entry, which is why the same-PR-entry requirement exists. |
+| 3 | 2026-08-11 (**#197**) | Stripping **prohibited** again, on the #196 bot-attribution evidence, with the settings file as the replacement fix. |
+| 4 | 2026-08-11 (**this entry**) | Strip **reinstated**, capped at one attempt, because the replacement fix demonstrably did not work. |
+
+Stated plainly so the pattern is visible rather than rediscovered: this policy has flipped four
+times in three weeks, twice on the same day. Each flip was locally reasonable on the evidence in
+front of it. What is *new* here is not another argument about bot identity versus footer visibility
+— #197 already settled that trade in the abstract — it is the empirical result that the alternative
+#197 traded *for* does not exist. If a fifth change is proposed, the thing to check first is whether
+it brings new evidence or merely re-weighs the same two costs.
+
+**First outcome, recorded immediately: the strip held on this PR's own body.** #202 was opened, its
+live body re-read, a footer found (`_Generated by [Claude Code](…/session_…)_`), **one** `PATCH`
+issued per the reinstated rule, and the confirming re-read came back clean. That is the first time
+a strip has succeeded in this project. Two things bound how much that result proves:
+
+- **It says nothing about the append, only possibly about the re-append.** The footer *appeared on
+  creation* in the session that wrote this entry, with #197's `attribution` keys and #200's
+  `includeGitInstructions` still live and merged — the same outcome #201 got. So the settings keys
+  demonstrably did **not** suppress the append itself. The only step where they could have
+  contributed is the **re-append after the `PATCH`** — whether `attribution.pr` suppresses the
+  server's rewrite on a body edit. That remains an **open question, and it is now unfalsifiable**
+  from inside this repo: the file is deleted, so the configuration under which this success
+  happened cannot be reproduced here. Do not read this outcome as evidence that the keys were
+  worthless, and do not read it as evidence they helped — neither claim is supported.
+- **The next PR is a harder test than this one was.** The deletion does not take effect until this
+  PR merges, so the session that opened #202 still ran with both key sets loaded. Every session
+  after the merge runs with no settings file at all. The first PR opened by such a session is the
+  real test of the reinstated rule, against a strictly weaker starting position than the one that
+  just succeeded. If the strip fails there, that is not a contradiction of this entry — it is the
+  harder case finally being run.
+
+Also note the surface difference from the failures that motivated #197: **#196's two failed strips
+were on an issue comment; this success was on a PR body.** A single success on a different surface
+does not refute #196, and the one-attempt cap is calibrated for the case where it fails, not the
+case where it holds.
+
+**Addendum (2026-08-11, after #203): the harder test ran, and the strip held again.** #203 — the
+first PR opened by a session running with **no `.claude/settings.json` at all**, the strictly
+weaker starting position the paragraph above predicted — got a footer appended on creation, one
+`PATCH` per the rule, and a clean confirming re-read. That is **two strip successes in a row on PR
+bodies since the reinstatement**: #202's under both key sets still live, #203's with nothing at the
+settings layer — no `attribution` keys, no `includeGitInstructions`. Two-for-two post-reversal is a
+real trend, not one lucky data point. It also narrows the open question above in the only direction
+available: whatever role the settings keys played in #202's hold, #203 held **without them**, so
+they are not *needed* for a strip to hold (whether they ever *contributed* remains unfalsifiable
+here, as stated). **Still no signal either way on issue comments** — none has been posted since the
+reinstatement, so #196's failed surface remains untested against the capped rule.
+
+**Known drift, outside this repo:** the synced `scrye` skill
+(`~/.claude/skills/synced/scrye/SKILL.md`) carries its own copy of the prohibition in its
+§ "Git identity and attribution", including the #196 reasoning and a paragraph asserting the footer
+"is addressed at its source by the committed `.claude/settings.json`". After this change the skill
+is stale on **both** points — it forbids what CLAUDE.md now requires, and it points at a file that
+no longer exists. It lives outside the repository and could not be changed in this PR; per the
+2026-08-11 precedence entry (#198), repo files win over the synced skill where they disagree, so a
+session reading both should follow CLAUDE.md. Flagged here so the skill's source gets re-synced.
+
+**Deliberately not done:** no retroactive cleanup of footers on existing PRs, issues, or comments;
+no investigation into what "the harness" is; nothing touched on #201's branch; no replacement
+settings key of any kind.
+
+**Plan section affected:** CLAUDE.md § Attribution (rewritten), § Git & PR conventions
+(git-identity bullet), § Definition of done (item 8); CONTRIBUTING.md § Pull request process step 4;
+`.gitignore` § Claude Code comment block; `.claude/settings.json` (deleted). Docs/settings only — no
+application code, schema, API contract, security-model, job-model, auth, gate threshold, or
+waiver-membership change.
+
+---
+
+### 2026-08-11 — Post-v1 — #176 part 1: findings 1, 2, 3 and 5 refactored off synchronous setState-in-effect; findings 4 and 6 and the rule flip deferred to a follow-up
+
+**What changed:** four of the six genuine `react-hooks/set-state-in-effect` sites #176 enumerates
+were refactored so they no longer call setState synchronously from an effect body. Behaviour is
+preserved at every site. **`frontend/eslint.config.js` is untouched** — the rule stays `'off'`, its
+override and comment exactly as they were.
+
+**Why the issue is being done in two sittings.** #176's own "Do not fix 4 and 6 blind" section is
+the reason: findings 4 (`ScanDetailPage`'s per-`:scanId` reset, `L17`/`P2-2`) and 6 (`ScansPage`'s
+compare-selection reconciliation, `P3-2`) are deliberate effects that each closed a real bug, and
+each has a regression test standing over it. Replacing them needs its own reasoning — finding 4's
+compiler-idiomatic replacement is a `key` prop on the route element, i.e. a change in a *different*
+file with its own check that nothing depends on instance identity across navigations. That work,
+and the removal of the override, are a follow-up. Neither effect was touched here beyond the single
+substitution recorded below, and neither regression test was edited.
+
+**The sites, re-located rather than trusted.** #176's line numbers predate #177 and have shifted, so
+the rule was temporarily enabled against a throwaway config that extends the real one, and the
+sites read out of its output. It reported **18**, and the 6-vs-12 split matched the issue exactly —
+including that `NewScanPage.tsx:124` (`if (canLaunch) void loadTargets()`) is the twelfth
+fetch-on-mount site, not finding 3.
+
+**What replaced each of the four:**
+
+1. **`LoginPage.tsx` — `oidc_error` banner.** The mount effect that called `setError(...)` and then
+   `history.replaceState` is split. The message is now seeded by a lazy `useState` initializer via a
+   module-level `oidcErrorCode()` helper — the value is knowable from the URL before anything
+   renders, so nothing about it needs an effect. The effect that remains does only the
+   `replaceState`, which is the part that genuinely touches something outside React.
+2. **`components/settings/OidcLinkCard.tsx` — `oidc_link` / `oidc_link_error` banners.** Same shape,
+   same treatment: both banners are seeded by lazy initializers over a shared `linkParams()` helper,
+   and the effect keeps only the `replaceState`. Both parameters are still honoured independently,
+   including the unknown-code fallbacks.
+3. **`NewScanPage.tsx` — scanner clamped to the target type.** The effect maintaining derived state
+   (`if (!allowed.includes(scanner)) setScanner(allowed[0])`) is gone; the clamp moved into a
+   `chooseTargetType` handler wired to the target-type control. That control is the only thing that
+   can invalidate the pairing — the scanner picker only ever offers the current type's own scanners
+   — so the invariant is unchanged and now holds at every commit rather than from the second one.
+   **Deliberately not** a derive-during-render (`allowed.includes(scanner) ? scanner : allowed[0]`):
+   that would *shadow* the displaced choice instead of overwriting it, so leaving a target type and
+   returning would resurrect a scanner the user is no longer on. The clamp stays destructive, as it
+   was. A test pins that specific difference.
+4. **`ScanDetailPage.tsx` — findings loading state.** `findingsLoading` existed only to be flipped
+   `true` synchronously at the top of `loadFindings`, which *was* the report. It is replaced by
+   `findingsSettledKey` plus a derived
+   `findingsLoading = scan?.status === 'succeeded' && findingsSettledKey !== findingsKey`, where
+   `findingsKey` is `${id}|${severityFilter}|${classFilter}`. The settle now happens in both
+   post-`await` branches of `loadFindings` rather than in a `finally`. Superseded requests still
+   leave the spinner up, because the latest-wins guard makes them return before settling the key.
+   **This fixes a real flash:** the commit in which the scan became `succeeded` previously rendered
+   an empty findings list with the loader already down, i.e. "No findings match the current filters"
+   over a request that had not answered yet.
+
+**The one touch to finding 4, and the maintainer decision behind it.** Removing `findingsLoading`
+leaves `setFindingsLoading(false)` inside the per-`:scanId` reset effect uncompilable. The
+maintainer was asked and chose **substitution over deletion**: the line is now
+`setFindingsSettledKey(null)`. The effect keeps its structure, its comment and its intent — reset
+every piece of per-scan state — and `ScanDetailPage.scanIdReset.test.tsx` is unaffected and still
+passes. (Deletion would also have been correct: `findingsKey` embeds the scan id, so a settled key
+from the previous scan can never match the new one. Substitution was preferred as the smaller
+touch.)
+
+**Fail-first verification, per site.** Each site got a test that fails against the pre-refactor
+version of *that file* and passes against the new one, checked by reverting the single file with
+`git checkout HEAD --` and re-running. Because these are behaviour-preserving refactors, the
+biting assertion in each case is about *which commit* the correct value appears in — which is
+exactly what the rule is about — while the surrounding assertions pin the behaviour and pass
+against both versions:
+
+| Site | New test file | The assertion that bites | Pre-refactor result |
+|---|---|---|---|
+| 1 | `pages/LoginPage.oidcError.test.tsx` | the banner is present in the **first** commit | `expected false to be true` |
+| 2 | `components/settings/OidcLinkCard.callback.test.tsx` | exactly **1** commit before the status fetch lands | `expected 2 to be 1` |
+| 3 | `pages/NewScanPage.scannerClamp.test.tsx` | **no** commit has zero scanner options selected | `[1,1,…] to not include +0` |
+| 5 | `pages/ScanDetailPage.findingsSpinner.test.tsx` | **no** commit says "no findings match" while the first request is in flight | `[Array(11)] to not include true` |
+
+Per-commit observation is done with React's `<Profiler onRender>`, which fires once per commit with
+that commit's DOM already in place. Testing Library's `render` flushes passive effects inside
+`act`, so a plain post-render assertion cannot see the intermediate state at all and would have
+passed against both versions.
+
+**The measurement afterwards, and where it does not match #176's expectations.** With the rule
+temporarily re-enabled the count is **15**, not the 14 a clean removal of four sites would predict.
+Sites 1, 2 and 3 are gone outright. **`ScanDetailPage.tsx`'s `void loadFindings()` still reports** —
+and the reason matters for whoever takes the follow-up:
+
+- **The genuine defect #176 named for finding 5 is fixed.** The issue's own words are that it is
+  "reported because `loadFindings` opens with a synchronous `setFindingsLoading(true)` before its
+  first `await`". There is no longer any setState before the first `await`.
+- **What remains is the analyser artifact #176 documents for the other 12.** Probed against the
+  installed 7.1.1 with four-shape variants: `void load()` reports even when `load`'s *only* setState
+  follows an `await` and there is no `try`/`catch` at all; adding a `try`/`catch` reports even when
+  the `catch` calls no setState whatsoever. The only shapes that went silent were ones where the
+  compiler evidently bails on the function (a ref read guarding an early return after the `await`) —
+  a bailout, not a fix. So there is no honest shape that clears this line, which is precisely
+  #176's own finding about the fetch-on-mount population.
+- **Therefore finding 5 has migrated into that population.** The line is now reported on exactly the
+  same footing as the 12 the issue puts out of scope, and #176's attribution of the report to the
+  synchronous flip was, on this evidence, imprecise — the report would have stood without it.
+
+**A consequence the follow-up has to confront, recorded here so it is not rediscovered late.**
+#176's definition of done pairs "remove the override" with "`npm run lint` is clean". Those cannot
+both hold: the 12 fetch-on-mount findings are reported at `error`, they are explicitly out of scope,
+and the issue says there is no fix for them that is an improvement. Enabling the rule therefore
+needs a decision the issue does not currently contain — a per-site disable, a `'warn'` severity, the
+data-fetching-layer refactor, or leaving the rule off. Not resolved here; flagged for the session
+that does findings 4 and 6.
+
+**Verification:** `npm run lint` clean · `npm run format:check` clean · `npm test` **26 files / 96
+tests** passing (was 22/80 at #178; +4 files, +16 tests) · `npm run build` clean · `tsc -b` clean.
+
+**Plan section affected:** §14 (this log); `docs/upgrades/frontend-toolchain-86.md` Step 3, which
+now records that its held-back rule closes out in two parts. No locked decision, schema, security
+model, routing configuration or data-fetching layer was touched. #176 stays **open**.
+
+---
+
+### 2026-08-11 — Docs/Process — `includeGitInstructions: false` added to `.claude/settings.json`; a standing PR-body content rule added to CLAUDE.md
+
+**What changed:** two related fixes for the same underlying problem — a session's PR bodies
+carrying attribution/process boilerplate — landed together because CLAUDE.md § Attribution
+requires an attribution-policy change to carry its §14 entry in the same PR.
+
+**1. `.claude/settings.json` gained `"includeGitInstructions": false`.** Nothing else in the file
+changed; the `attribution` block (added by PR #197) stays exactly as it was. `includeGitInstructions`
+is a real, released settings key (Claude Code changelog v2.1.64) that removes the built-in
+commit/PR workflow instructions from the system prompt — the counterpart env var is
+`CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS`. It is undocumented in the settings reference table as of
+this writing but present in the published JSON schema
+(`https://json.schemastore.org/claude-code-settings.json`) as a top-level boolean, default `true`,
+with no scope restriction; the settings file was validated against that schema before this landed
+(strict validation, since project-scope settings reject the whole file on a schema failure).
+
+**Why this and not just the attribution block.** #199 ran after PR #197's attribution block was
+already live, in the same session that later did a clean, footer-free direct API edit to issue
+#52's body. That pairing is the evidence: #199's PR body still came back with a
+"Generated by Claude Code" footer carrying a session URL, while the same session's issue-body edit
+came back clean. So the attribution keys are not inert — the footer append is specific to the
+PR-creation path, a different mechanism than `attribution.pr` governs, and `includeGitInstructions`
+is what actually controls the built-in PR-workflow instructions that path runs on.
+
+**This is a second attempt at the same problem, not a replacement for the first.** The attribution
+block stays untouched and is still the intended fix for the footer itself; this is an additional,
+independent lever aimed at the mechanism #199 showed the block alone didn't reach on the
+PR-creation path. Whether it actually suppresses the footer is untested as of this entry — the test
+is the first PR opened by a session after this change merges to `dev`, not this PR's own body
+(`includeGitInstructions` only takes effect for sessions that load the merged settings file).
+
+**Known tradeoff, accepted:** sessions running with `includeGitInstructions: false` lose the
+built-in git/PR workflow guidance from the system prompt, so `CLAUDE.md` becomes the sole source of
+git conventions for this repo. `CLAUDE.md` § Git & PR conventions already documents branching, the
+squash-vs-merge-commit distinction, the promotion procedure, and git identity setup in enough
+detail that this is judged an acceptable cost, not a gap — but it is a real cost, taken
+deliberately, not a side effect that went unnoticed.
+
+**2. CLAUDE.md gained a standing PR-body content rule**, in § Git & PR conventions, immediately
+after the deviations-logging bullet: a PR body describes the change, for a reader of the
+repository, not a session report. It bars four categories from ever appearing in a PR body, issue
+body, or issue comment — git-identity/authorship self-verification, attribution-footer status
+narration, statements about the session's own merge permissions or what CLAUDE.md allows it to do,
+and meta-commentary about task scope or which stop conditions fired — and says where that content
+belongs instead (the session's chat summary to the maintainer). The rule states its own reason
+inline (this content reads as process boilerplate to anyone outside the session, on a public repo)
+so a future session encountering it doesn't reinstate the pattern as a helpful addition.
+
+**This entry's own PR is the first test of the CLAUDE.md rule, immediately.** Its body covers only
+the settings change and the CLAUDE.md rule with their evidence — no authorship-check narration,
+footer-status commentary, merge-permission statements, or scope/stop-condition meta-commentary. If
+a footer appears on that PR body regardless (plausible, since `includeGitInstructions` isn't live
+until this PR merges), it is left in place per the unchanged never-PATCH rule and reported in the
+session's chat summary, not folded into the PR body itself.
+
+**Not changed, deliberately:** the never-PATCH rule in CLAUDE.md and CONTRIBUTING.md, both left
+exactly as PR #197 wrote them — this is the settings fix being tested in isolation first, and if it
+works there is nothing to strip and the never-PATCH rule is harmless dead text; the `attribution`
+block; anything on #199's branch; any footer already posted on an existing PR, issue, or comment
+(no retroactive cleanup); `CONTRIBUTING.md`, which does not get the PR-body rule for now.
+
+**Plan section affected:** CLAUDE.md § Git & PR conventions, § Attribution (cross-reference only —
+its own text is unchanged). Docs/settings only — no application code, schema, API contract,
+security-model, job-model, auth, gate threshold, or waiver-membership change.
+
+---
+
+### 2026-08-11 — Security/Process — Issue #52 (CVE-2025-15367, poplib) re-verified against the now-pinned v3.14.7 tag; cross-references to the closed #98/#116 retargeted to their new tracking location
+
+**What changed:** #52's issue body and `ci/grype.yaml`'s Group B comment block, both re-verified
+and re-dated — **not** a change of decision. The acceptance stands unchanged: CVE-2025-15367
+remains waived on any interpreter below 3.15.
+
+**Why this was needed.** #52's source-verification table was dated 2026-07-26 and named
+`v3.14.6` as "the pinned runtime." PR #195 moved the runtime to 3.14.7 that same day (2026-08-11,
+see the two entries above). Per this repo's issue convention (§ Issue conventions), a body's
+verification section must cover exactly the state it claims to cover — a stale "the pinned
+runtime" row naming a version the project no longer runs is precisely the failure mode that
+convention exists to prevent. Separately, #52 cross-referenced #98 as a live Group A tracker;
+#98 (and #116, though #52 never named #116 directly) were closed the same day, with their
+tracking moved into `ci/grype.yaml` plus this log (see the entry above). A body pointing at a
+closed issue as a live tracker is stale in the same way.
+
+**Re-verification method.** Per CLAUDE.md § Dependency hygiene, verified independently at the
+source rather than trusting #52's existing table, PR #195's archive entry, or Grype's `FIXED IN`
+column: `Lib/poplib.py` fetched directly from the `v3.14.7` tag and from `main` (shallow clone,
+`git show v3.14.7:Lib/poplib.py` / `git show origin/main:Lib/poplib.py`). Result — unchanged from
+2026-07-26:
+
+| ref | `POP3._putcmd()` guard |
+| --- | --- |
+| `main` | present — `if re.search(b'[\x00-\x1F\x7F]', line): raise ValueError('Control characters not allowed in commands')` |
+| `v3.14.7` (the pinned runtime) | **absent** — `_putcmd()` hands the line straight to `_putline()` |
+
+Also re-checked gh-143923 for any backport PR that has appeared since 2026-07-26: none has. PR
+#143924 (the `main` fix, merged 2026-01-20) carried backport labels for 3.10–3.14 before merge;
+all were removed prior to merging over a stated backward-compatibility concern (control characters
+such as tab/backspace are RFC-violating but in current use, and a backport would break that). No
+open backport PR exists against any maintenance branch as of 2026-08-11.
+
+**Reachability re-confirmed.** `grep -r poplib backend/` returns no matches — this covers Scrye's
+own code only, and is not a claim that no bundled third-party dependency ever imports `poplib`
+(the same scope #52's original verification stated).
+
+**#52's body changes:**
+- The source-verification table's heading moved from `(2026-07-26)` to
+  `(2026-07-26; re-verified 2026-08-11)`; its `v3.14.6 (the pinned runtime)` row was replaced with
+  `v3.14.7 (the pinned runtime)`, still absent, plus a sentence recording the backport-label
+  removal detail above and the 2026-08-11 re-check of gh-143923.
+- The "Group A tracker" section's `tracked in **#98**` line was rewritten: #98 was closed
+  2026-08-11 once its resolution trigger fired (all three fixes verified present in 3.14.7), and
+  its tracking now lives in `ci/grype.yaml`'s Group A-1 block plus this file's §14, not a numbered
+  issue. #98 is kept as a historical link.
+- The "Closing this issue" section's `Ref:` line gained `2026-08-11` and a parenthetical on #98's
+  closure and where its tracking moved.
+- The argument itself — why this is a standing acceptance, not a deferral; why no 3.15 upgrade
+  should be scoped off it — is unchanged, per the explicit scope of this re-verification.
+
+**`ci/grype.yaml`'s Group B block changes:** the source-verification paragraph now cites
+`v3.14.7` rather than `v3.14.6` as the pinned runtime and records the 2026-08-11 re-check
+(including the gh-143923/PR #143924 backport-label detail); the block-index row at the top of the
+interpreter section gained `, 2026-08-11` alongside its existing `verified 2026-07-26`; the
+`REVIEW ANNUALLY` paragraph gained a clause noting the annual cadence (next 2027-07-25) is
+unchanged by this re-verification, and its `#52` reference now explicitly contrasts with Group
+A's #98/#116 — #52 stays open because its fix is `main`-only with no point-release trigger,
+unlike the two closed issues.
+
+**Not changed, deliberately, per explicit task scope:** the CVE-2025-15367 waiver itself; #52's
+review date or its annual cadence (still 2027-07-25); the Group A-1/A-2 waiver blocks and their
+2026-11-01 review date (settled in the #196 work, only described here where #52 references them);
+any argument for or scoping of a 3.15 upgrade; #52 remains open.
+
+**Plan section affected:** CLAUDE.md § Dependency hygiene (interpreter-CVE source verification),
+`ci/` triage allowlists, § Issue conventions. Docs/process only — no application code, schema,
+API contract, security-model, job-model, auth, gate threshold, or waiver membership change.
+
+---
+
+### 2026-08-11 — Docs/Process — Attribution moved to the settings layer via a committed `.claude/settings.json`; the strip-PATCH instruction removed from CLAUDE.md and CONTRIBUTING.md
+
+**What changed:** two separate problems, two separate fixes, landed together because they are the
+same subject and this document's own rule requires an attribution-policy change to carry its §14
+entry in the same PR.
+
+**1. The footer itself is now disabled at the settings layer, in project scope.** A new committed
+`.claude/settings.json` sets `attribution.commit: ""`, `attribution.pr: ""`, and
+`attribution.sessionUrl: false` — the documented combination for hiding all attribution. The
+footer that has appeared on PR bodies and issue comments throughout this project's history is a
+**Claude Code harness feature configured through settings**, not text any session composed, which
+is why five prior rounds of instructing sessions harder never moved it.
+
+**Why project scope specifically, and not the maintainer's own config.** The maintainer's
+user-scope `~/.claude/settings.json` already carried this configuration. It has never applied to a
+single session here: **each Cloud session is a fresh VM with no home-directory provisioning**, so
+that file does not exist in the environment where the work actually happens — confirmed by a
+diagnostic session, and re-confirmed in this one (`$HOME/.claude/` exists and holds hook scripts
+and synced skills, but no `settings.json` of any kind). Project scope is the fix because the repo
+*is* cloned into every VM, so a committed settings file travels with it, and project scope also
+outranks user scope in the precedence order. **The generalisation is the durable part and is now
+in `CLAUDE.md` § Attribution:** any Claude Code setting that must apply to this repo has to live in
+the committed `.claude/settings.json`; user-scope config is inert here.
+
+**Verified rather than assumed.** User and project settings files are validated **strictly** — a
+malformed key rejects the file as a whole and would silently disable the entire fix — so the file
+was checked, not eyeballed: it parses as JSON, and it validates with **zero errors** against the
+published `https://json.schemastore.org/claude-code-settings.json`, whose `attribution` block
+declares exactly `commit: string`, `pr: string`, `sessionUrl: boolean` with
+`additionalProperties: false`. Nothing about the fix's *effect* is claimed here — that is verified
+empirically on the next real session, deliberately not by opening a throwaway PR to test it.
+
+**DECLINED — `includeGitInstructions` / `CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS`.** Not deferred,
+not overlooked. That key strips all built-in git/PR guidance out of the session's system prompt,
+which is a real capability cost, and it is **not needed** once the three `attribution` keys are
+set — they target the footer directly. Do not add it as a belt-and-braces measure.
+
+**2. The strip-`PATCH` instruction is removed from both files that carried it.** `CLAUDE.md`
+§ Attribution's "read the posted body back from the API … edit it out and re-read to confirm the
+edit held" is replaced with a flat prohibition: **never issue a follow-up `PATCH` to a PR body or
+an issue comment for the purpose of removing an attribution footer**; if a footer appears, report
+it in the session summary and leave it alone.
+
+**The reason is stated inline in `CLAUDE.md`, not just the rule, and that is load-bearing.**
+Without a reason a future session reads "don't strip the footer" as an oversight and helpfully
+restores the old instruction — which is precisely how this policy already flip-flopped once, via
+**#169** (see the 2026-08-09 entry below). The reason: **a strip `PATCH` executes under a bot
+identity.** On **PR #196** the edit-history dropdown shows the comment created by `tyler-rich`,
+then **two** edits attributed to **"claude (Bot)"** — those two edits are exactly the two strip
+attempts recorded in the 2026-08-11 entry below — and the footer was re-appended anyway. Every
+other write in this project's workflow (posting the comment, opening the PR, editing a body as
+ordinary work) lands correctly as `tyler-rich`. So the strip instruction is the **sole** cause of
+bot-attributed writes in this repository, it has **never once succeeded**, and its net effect is a
+permanent, public, more-visible attribution leak in GitHub's edit history in exchange for a footer
+that stays put regardless.
+
+**This is the third state of this policy, and it is not a re-run of the flip-flop.** The
+2026-08-09 audit entry below banned stripping; **#169** reinstated it hours later with no §14
+entry; the 2026-08-09 correction entry below recorded that reversal and left #169's
+strip-and-reverify text standing as policy. This entry ends that cycle on **new evidence the
+earlier rounds did not have** — the #196 edit-history attribution, which reframes stripping from
+"unreliable" to "actively harmful" — and, more importantly, **removes the reason anyone was
+stripping in the first place** by fixing the footer at its actual source. The two prior entries
+stand as written; this one supersedes both on the operative instruction.
+
+**The full attribution-instruction surface was audited, not just `CLAUDE.md`.** `CONTRIBUTING.md`
+§ Opening a PR, step 4 carried the same instruction in one line ("If your tooling appends one,
+re-read the PR body after opening and strip it") and is rewritten to match — no-footer requirement
+and the `git log --format="%an <%ae>%n%B"` authorship check kept, the strip clause replaced with
+the prohibition and a pointer to `CLAUDE.md` § Attribution. A full grep of `CONTRIBUTING.md` for
+`strip|footer|attribution|co-author|generated by|session link|re-read|patch|by hand` confirms
+line 480 was its **only** stripping reference; the other hits are unrelated (`.gitattributes`
+line-ending stripping, hand-editing lockfiles, hand-merging Dependabot bumps). Two files
+contradicting each other on the same action is the #169 failure mode this PR exists to end, so
+both moved together.
+
+**One surface is outside this repository and could not be fixed here:** the synced `scrye` skill
+(`~/.claude/skills/synced/scrye/SKILL.md`) still says to "edit the PR body in place" and "re-read
+the live body after every edit". It is not a repo file, so **no commit from any session can reach
+it** — the maintainer updates it by hand, out of band.
+
+**Precedence, stated explicitly so it is not rediscovered:** where the synced skill and the repo
+files disagree on attribution, **`CLAUDE.md` and `CONTRIBUTING.md` win**, and the skill is to be
+treated as **known-stale on this subject pending a manual sync**. This is not a judgement call for
+a future session to make on the evidence in front of it — a session that reads a strip instruction
+in the skill and follows it is reproducing the **#169** failure mode exactly: two sources
+disagreeing on the same action, the wrong one followed, and nothing written down saying which
+governed. It is written down here. The skill carries one further staleness of the same class — it
+asserts the merging account's profile display name "must read `tyler-rich`", which the 2026-08-09
+display-name decision (below, and `CLAUDE.md` § Git & PR conventions) **declined** — so the skill
+is stale on both attribution points, not just the strip one.
+
+**3. `CLAUDE.md`'s git-identity step is restated as a hard gate.** Unchanged in substance, but it
+was reading as a suggestion and it is the single point of failure for commit authorship. The Cloud
+VM image ships with **both** the repo-local *and* the global identity preset to
+`Claude <noreply@anthropic.com>` — verified directly in this session before anything was staged —
+so wrong authorship is the **default state of every session**, not an edge case. There is **no
+settings-level backstop**: `.claude/settings.json` has no git-identity key, so
+`git config user.name "tyler-rich"` / `git config user.email
+"170156756+tyler-rich@users.noreply.github.com"` (repo-local, never `--global`) are the *only*
+thing producing correctly-authored commits. The consequence of skipping them is now stated
+explicitly in the rule.
+
+**4. Ignore files.**
+
+- **`.gitignore` — `.claude/settings.local.json` added, with the specific path and not a blanket
+  `.claude/` rule**, which would have excluded the very file this change adds. Claude Code writes
+  permission approvals and personal overrides into `settings.local.json` automatically, and the
+  documented auto-ignore mechanism for it writes to the **global** git excludes file, which does
+  not exist in an ephemeral Cloud VM — so the repo has to cover it explicitly. Both outcomes were
+  verified after the edit rather than assumed: `git check-ignore -v .claude/settings.json` exits 1
+  (not ignored — the file is trackable, and it is present in the pushed tree), and
+  `git check-ignore -v .claude/settings.local.json` exits 0, matching `.gitignore:143`. Nothing in
+  `.gitignore` previously mentioned `.claude` in any form — the directory was not deliberately
+  excluded, it simply had never existed.
+- **`.dockerignore` is denylist-style** (an ordered list of exclusions; no leading `*` with `!`
+  re-includes), which means an **unlisted directory is sent to the build context by default**.
+  `.claude/` was therefore reachable in principle and is now listed alongside `.git/`, `.github/`,
+  and `docs/`. In practice no build context has ever carried it — the directory did not exist in
+  this repository until this commit — so this is a pre-emptive exclusion, not the discovery of
+  something that shipped. It matters here specifically because this project **dogfoods a Trivy +
+  Grype scan of its own image**, and session tooling config has no business in the context that
+  scan is computed over. **No other `.dockerignore` line was touched and no `docker/Dockerfile`
+  change was made**, so the build context is altered in exactly one way: `.claude/` is excluded.
+
+**Deliberately not done:** no retroactive cleanup of footers on existing PRs, issues, or comments;
+no change to how sessions authenticate to GitHub or to the MCP tooling; no `docker/Dockerfile`
+change; no empirical test of the settings fix (the maintainer verifies it on the next real
+session). The footer on **this** PR's own body, if one appears, is left in place — this is the PR
+that makes that the rule.
+
+**Plan section affected:** new file `.claude/settings.json`; `CLAUDE.md` § Attribution (rewritten
+— Cloud-scope note added, strip-and-reverify replaced with the prohibition plus its reason) and
+§ Git & PR conventions (git-identity bullet strengthened); `CONTRIBUTING.md` § Opening a PR step 4;
+`.gitignore`; `.dockerignore`. No application code, schema, API contract, security model, job
+model, auth, CI behaviour, gate threshold, or dependency version changed; no locked decision
+re-opened.
+
+---
+
+### 2026-08-11 — Process — Issues #98 and #116 closed on source-verification evidence rather than Grype-DB agreement; Group A tracking moves into `ci/grype.yaml` plus this log
+
+**What changed:** **#98** (Group A-1 — `html.parser` / `getpath.py` / `imaplib`) and **#116**
+(Group A-2 — the three `tarfile` CVEs) were **closed**, each with a comment recording why. In
+`ci/grype.yaml`, both Group A comment blocks were rewritten so they stand alone as the tracking
+record now that the issues they cited are closed:
+
+- the forward-looking *"Tracked in issue #98 (…)"* pointer and A-2's equivalent are replaced with
+  a statement that the CVEs are **verified fixed in the pinned interpreter** — cited to **PR #195**,
+  which read CPython at the released `v3.14.7` tag — and are **waived only pending a Grype-DB
+  refresh**, tracked by **this file plus `docs/ARCHIVE.md` §14** rather than a numbered issue;
+- the *"WHICH BLOCK IS TRACKED WHERE"* index at the top of the interpreter section is re-pointed
+  the same way, with `(was issue #98, closed 2026-08-11)` / `(was issue #116, closed 2026-08-11)`
+  kept as the historical link. Group B's row still reads `issue #52 (still open)`;
+- the shared review date moves **2026-10-25 → 2026-11-01**, quarterly thereafter if extended past
+  that, and is now labelled explicitly as advisory (see below);
+- the file-header NOTE stops saying interpreter waivers are for CVEs "unfixable on the current
+  3.14.x line", since half of them are now the opposite.
+
+One stale pointer of the same class lived **outside** `ci/grype.yaml` and was caught by reading the
+dogfood job's own log rather than by grepping the file under edit: `.github/workflows/ci.yml`'s
+*"Waived by ci/grype.yaml (informational)"* step hardcodes a header line, which printed
+`Blocks: A-1 (issue #98) · A-2 (issue #116) · B (issue #52)` on **every** run. It now reads
+`A-1 · A-2 (no open issue — tracked in ci/grype.yaml + docs/ARCHIVE.md §14) · B (issue #52)`. It is
+a bare `echo` string — no `jq` filter, gate threshold, `--exclude`, `--fail-on`, step condition, or
+job structure changed, and the waiver listing it heads is computed from the report exactly as
+before.
+
+**Membership, waiver format, and gate behaviour are unchanged.** The `ignore:` list still parses
+to the same ten entries — three `package.location` excludes for the bundled scanner binaries, and
+the same seven `vulnerability` IDs. Every fact already in the blocks is kept verbatim: the CVE
+lists, both per-CVE source-evidence tables, the observed dogfood scan output, the `FIXED IN`
+mechanism, and the "DELETE both blocks outright when the DB catches up" instruction. This was a
+reference-target and review-date change, not a rewrite of the evidence. Group B (#52, poplib) is
+untouched in both the file and its issue.
+
+**Why close instead of waiting for the scanner to agree.** #98 and #116 were opened as *deferrals
+with a stated resolution trigger*: a released 3.14.x carrying the backports. That trigger **fired**
+— 3.14.7 shipped on 2026-08-05, the digest moved to it, and PR #195 verified all six fixes present
+by reading `Lib/html/parser.py`, `Modules/getpath.py`, `Lib/imaplib.py` and `Lib/tarfile.py` at the
+`v3.14.7` tag and diffing against `v3.14.6` (the entry below has the per-file table). What is left
+behind the waivers is **only** that Grype's DB records these as fixed in 3.15.x and has no entry
+for the 3.14 maintenance-branch backports, so it compares `3.14.7 < 3.15.0b4` and matches anyway.
+
+Scanner data-lag is a materially weaker reason to hold a tracking issue open than an active risk
+acceptance. Both issues themselves predicted it in as many words ("expect the waivers to outlive
+3.14.7 by a Grype-DB refresh cycle"), so the lag is the *expected* state, not a new finding needing
+a tracker. Keeping them open would have left two issues whose entire remaining content was "waiting
+for a third party's database to refresh", while the substantive record — what was verified, how,
+and what to do about it — lives in `ci/grype.yaml` and here regardless. The evidence sections in
+both issues are also now superseded: they compared the **`3.14` branch** against `v3.14.6` and
+could only show a fix was *queued*, whereas #195 read the released tag and showed it *shipped*.
+
+**This does not change the convention for future waivers.** A new CVE waiver still gets its own
+tracking issue, exactly as before. This is a one-off for a pair whose resolution trigger had
+already fired, and `ci/grype.yaml` says so in the same paragraph that records the closure, so a
+reader of the file cannot mistake it for a general policy. It also does not touch the review-date
+convention for any **other** open waiver issue — **#52** (Group B, poplib) keeps its standing
+annual re-confirmation, next 2027-07-25, and remains an open issue because its fix is `main`-only
+and no 3.14.x will ever clear it.
+
+**The 2026-11-01 re-check date is advisory, and nothing in this repo enforces it.** There is no
+scheduled workflow, no webhook, and no bot watching for a Grype-DB refresh, and none was built —
+that was explicitly out of scope. When the DB does catch up, the waivers simply **go inert**: they
+stop matching anything, the gate stays green either way, and no signal is emitted. The only ways
+anyone finds out are (a) reading `ci/grype.yaml` for some other reason and noticing the blocks no
+longer match, or (b) checking deliberately. The date is therefore a documented **intention** for a
+human to act on. It is stated in exactly that form in all three places it appears — the two close
+comments and the file's `REVIEW BY` note — rather than left to look like a mechanism.
+
+**When the trigger does fire, the action is deletion, not re-dating.** Both Group A blocks come out
+of `ci/grype.yaml` **outright** — that instruction predates this change and is kept unedited. Until
+then, removing them turns the gate red over three HIGHs whose fixes are already in the image.
+
+**Attribution note.** The two close comments were posted through the GitHub API, which appended a
+"Generated with Claude Code" footer server-side. A direct `PATCH` to each comment stripping the
+footer was attempted and did **not** hold: the API re-appends it on write, so the re-read after the
+patch still shows it. Recorded here as a property of this posting path, since CLAUDE.md
+§ Attribution requires the strip to be attempted and its outcome reported — nothing was composed
+with a footer, and no other surface (commits, PR body, files) carries one.
+
+**Not changed:** which CVEs are waived; the waiver/gate logic (`--only-fixed --fail-on high`, the
+`--exclude` list, `check-for-app-update`); `CLAUDE.md` § Locked decisions #2, whose "Group A-1 (#98)
+/ Group A-2 (#116)" wording is a historical identification of the two sets and still resolves to
+the closed issues; #52's review-date convention; the pinned base-image digest; the historical `#98`
+/ `#116` references in past §14 entries, in PR #195's own record, and in the "the Grype-DB lag both
+#98 and #116 predicted" line inside the file — all describe what happened and stay as written.
+
+**Plan section affected:** §9.1 (dogfood self-scan triage), §12 (Phase 6 self-scan), CLAUDE.md
+§ Dependency hygiene (interpreter-CVE source verification), `ci/` triage allowlists. Process and
+comments only — no application code, schema, API contract, security-model, job-model, auth, gate
+threshold, or waiver membership change.
+
+### 2026-08-11 — Security/Infra — Runtime base image moved to Python 3.14.7; all six Group A interpreter fixes verified at the source, and the waivers kept anyway because Grype's DB has not caught up
+
+**What changed:** `docker/Dockerfile`'s two `FROM python:3.14-slim-bookworm@…` lines — the
+`backend-builder` stage and the `runtime` stage, which must always move together — went from
+`sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30` (**3.14.6**) to
+`sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52` (**3.14.7**, released
+**2026-08-05**). `ci/grype.yaml`'s Group A-1 (#98) and Group A-2 (#116) blocks keep all six
+waivers but are rewritten to rest on a different reason, and the runtime stage now deletes `pip`
+(see "The bump's own side effect" below). CONTRIBUTING's Python prerequisite moves to
+3.14.7-or-later. The locked floor moves in the entry below, deliberately separate.
+
+**The one number this was for.** 3.14.7 was the resolution trigger both #98 and #116 name.
+Baseline first, per the fail-first rule: with the six `- vulnerability:` entries lifted and the
+digest **still 3.14.6**, the Grype gate reported exactly those six and exited 2
+(CI run 31456533896) — proof the waivers were suppressing what they claimed, no more and no
+fewer. After the digest bump, with the waivers still lifted, the same gate reported **the same
+six, unchanged, against `python 3.14.7`** and exited 2 again (CI run 31457878086):
+
+```
+NAME    INSTALLED  FIXED IN  TYPE    VULNERABILITY   SEVERITY
+python  3.14.7     3.15.0b4  binary  CVE-2026-11940  High
+python  3.14.7     3.15.0    binary  CVE-2026-15308  High
+python  3.14.7     3.15.0b4  binary  CVE-2026-11972  High
+python  3.14.7     3.15.0a6  binary  CVE-2025-15366  Medium
+python  3.14.7     3.15.0b3  binary  CVE-2026-12003  Medium
+python  3.14.7     3.15.0b4  binary  CVE-2026-0864   Medium
+```
+
+So **no waiver was retired.** That is the Grype-DB lag #98 and #116 each predicted verbatim
+("expect the waivers to outlive 3.14.7 by a Grype-DB refresh cycle"), and the `FIXED IN` column
+is the mechanism: Grype's DB knows these only as fixed in 3.15.x, has no record of the 3.14
+backports, compares 3.14.7 < 3.15.0b4, and matches. The gate was **not** forced green and the
+findings were **not** re-labelled as fixed.
+
+**Source verification — the thing that actually establishes the fix, per CLAUDE.md § Dependency
+hygiene.** Each file was read at the `v3.14.7` tag and diffed against `v3.14.6`. This is the
+second verification for every one of the six; the earlier ones (2026-07-26, 2026-07-30) compared
+the **`3.14` branch** against `v3.14.6` and could therefore only show a fix was *queued*. Reading
+the released tag is what shows it *shipped* — the distinction the 2026-07-26 imaplib entry was
+written to teach.
+
+| CVE | File | In `v3.14.7` | In `v3.14.6` |
+| --- | --- | --- | --- |
+| CVE-2026-15308 | `Lib/html/parser.py` | `feed()` accumulates into `_pending`/`_pending_len` and only joins+parses past `_parse_threshold` (which doubles when nothing parsed); `close()` flushes the pending list | `self.rawdata = self.rawdata + data; self.goahead(0)`, unguarded |
+| CVE-2026-12003 | `Modules/getpath.py` | no `BUILD_LANDMARK` constants, no `isfile(joinpath(real_executable_dir, BUILD_LANDMARK))` fallback; an inline `gh-151544; CVE-2026-12003` comment sits where they were | both constants (posix + nt) and the fallback |
+| CVE-2025-15366 | `Lib/imaplib.py` | `_control_chars = re.compile(b'[\x00\r\n]')` and `raise ValueError("NUL, CR and LF not allowed in commands")` inside `IMAP4._command()`'s argument loop, before each arg is appended | neither the constant nor the guard |
+| CVE-2026-11972 | `Lib/tarfile.py` | `_Stream.seek()`: `data = self.read(self.bufsize)` then `if not data: break` | `self.read(self.bufsize)`, result discarded (CWE-252) |
+| CVE-2026-11940 | `Lib/tarfile.py` | `makelink_with_filter()` calls `filter_function(unfiltered.replace(name=tarinfo.name, deep=False), extraction_root)` before the fallback, and `_extract()` passes `filter_function=filter_function` into `_extract_one()` | neither |
+| CVE-2026-0864 | `Lib/tarfile.py` | `_EXTHEADER_READ_CHUNK = 1024 * 1024` + `_safe_read()`, used by both `_proc_gnulong()` and `_proc_pax()` | `tarfile.fileobj.read(self._block(self.size))` directly in both |
+
+`Include/patchlevel.h` reads `PY_VERSION "3.14.7"` / `PY_MICRO_VERSION 7` at the tag, and
+`Misc/NEWS.d/3.14.7.rst` carries all seven upstream issues behind the six CVEs — gh-153030,
+gh-151544, gh-143921, gh-151981, gh-151558, gh-151987, gh-151497 — with
+`.. release date: 2026-08-05`.
+
+**What the waiver blocks now say.** Their membership is unchanged (seven entries, same as
+before); their *reason* is inverted, which is the whole point of rewriting rather than re-dating
+them:
+
+| | before 2026-08-11 | now |
+| --- | --- | --- |
+| why waived | unfixable at the pinned version; waiting on a 3.14.x release carrying the backports | **fixed** in the pinned interpreter, verified at the source; waived only because the scanner's data lags |
+| trigger | 3.14.7 ships and the digest moves to it | a Grype-DB refresh that records the 3.14 backports — then **delete** both blocks outright |
+| review | 2026-10-25 | 2026-10-25, kept rather than pushed out: the pending event is a daily-cadence DB refresh, not a release months away |
+
+A file-level note above both blocks carries that table's substance plus the observed scan output,
+so the next reader does not have to reconstruct why a waiver survived its own trigger.
+
+**Group B (#52, poplib) is untouched, and was re-checked to earn that.** `Lib/poplib.py` is
+**byte-identical** between `v3.14.6` and `v3.14.7`, so 3.14.7 clears nothing there and the
+standing acceptance is unaffected. Its block is byte-identical to `dev`'s. Two sentences inside it
+point at "Group A above" as where CVE-2025-15366 went in 2026-07-26; that reference still
+resolves, since Group A still exists.
+
+**The bump's own side effect, and why it is a fix rather than a waiver.** The 3.14.7 image turned
+the **Trivy** gate red with two fixable HIGHs that had never appeared before — `msgpack` 1.1.2
+(GHSA-6v7p-g79w-8964, fixed 1.2.1) and `setuptools` 70.3.0 (CVE-2025-47273, fixed 78.1.1). Both
+versions are exactly pip's vendored pins (`pip/_vendor/vendor.txt`), and neither is a Scrye
+dependency: `requirements.lock` pins setuptools **83.0.0** and carries no msgpack at all. 3.14.6
+bundles pip **26.1.2** and 3.14.7 bundles **26.2.1** (`Lib/ensurepip/__init__.py: _PIP_VERSION`),
+which is what surfaced them — though note both pip versions vendor those *same two pins* and both
+ship `vendor.txt` in the wheel, so the pins themselves did not change and a Trivy-DB refresh
+between the two runs (four minutes apart, each downloading fresh from `mirror.gcr.io`) cannot be
+excluded as a contributing cause. Either way they are not ours to bump, and the fix chosen was
+**not** a `ci/trivyignore` entry: the runtime stage now deletes pip from both prefixes that carry
+one — `/opt/venv` (seeded by `python -m venv`) and `/usr/local` (the base image's
+`--with-ensurepip` build) — plus `ensurepip`, whose entire payload is that same pip wheel.
+`backend-builder` keeps pip, since it installs the hash-pinned lock with it (SC-1). Nothing in the
+runtime needs pip: the entrypoint runs `alembic upgrade head` then `exec uvicorn`, and no
+application code imports pip, ensurepip or pkg_resources. The step asserts pip is off `PATH` and
+that the venv still imports alembic/fastapi/sqlalchemy/uvicorn, so a version glob that stops
+matching after a future base bump fails the build instead of silently shipping pip again. It is
+guarded by a new static test in `backend/tests/test_dockerfile_supply_chain.py`, verified to fail
+against the pre-strip Dockerfile. **Trivy went green on the next run**; no stage boundary, layer
+ordering, or cache scope changed (§ Build performance § Invariants).
+
+**How the digest was established, without trusting a rendered page.** `HEAD
+/v2/library/python/manifests/3.14-slim-bookworm` on `registry-1.docker.io` returns
+`docker-content-digest: sha256:23c59390…`, and the same request for `3.14.7-slim-bookworm` returns
+the **identical** digest (`3.14.8-slim-bookworm` 404s, so 3.14.7 is current). The index is an OCI
+image index carrying **linux/amd64 and linux/arm64** children — both legs `publish.yml` builds.
+Its per-arch annotations name the build source
+`docker-library/python@228f71e70a42ba9f9a092321b971031603bb88ff:3.14/slim-bookworm`, created
+2026-08-05, whose Dockerfile declares `ENV PYTHON_VERSION 3.14.7`; the same lookup on the outgoing
+digest resolves to rev `7914d06` with `ENV PYTHON_VERSION 3.14.6`, and the two recipes differ
+**only** in `PYTHON_VERSION`/`PYTHON_SHA256`.
+
+**Environment limitation — a property of where this ran, not a skipped check.** The authoring
+sandbox's egress policy denies the registry blob hosts (`production.cloudfront.docker.com`,
+`pkg-containers.githubusercontent.com`) and `www.python.org`, so **no image could be pulled or
+built locally and no 3.14.x interpreter could be obtained there**. Consequently: the image build,
+the dogfood Trivy/Grype scans, and the interpreter version all come from **CI**, which does pull
+and build the real image — the `INSTALLED 3.14.7` column in the scan output above is the built
+image reporting its own interpreter, and the Trivy report independently shows the image's pip
+moving 26.1.2 → 26.2.1. The 3.14.7-vs-3.14.6 source diffs come from `raw.githubusercontent.com` at
+the two tags, and the digest facts from the registry API. What is genuinely **not** evidenced:
+`python -V` was never executed against the pinned digest locally, and the backend suite has
+**not** run on 3.14.7 anywhere — CI's `Set up Python 3.14` resolves the hosted tool cache to
+**3.14.6**, so the green `pytest` on this branch is 3.14.6 (`7 passed` for the symlink-containment
+guard in the image job; the full backend job green). A future session with registry access should
+close that by running the suite on a real 3.14.7.
+
+**Issues #98 and #116 stay open.** Closing keywords are inert here regardless — GitHub only
+auto-closes on a merge into the default branch, and this targeted `dev` — but more importantly
+they should not be closed yet: each tracks a waiver that still exists. Their resolution trigger
+(3.14.7 in the pinned image) is satisfied and their evidence sections are now superseded by the
+released-tag verification above, but the correct close is by hand, after the Grype-DB refresh lets
+both blocks be deleted.
+
+**Index count corrected in passing.** The §14 index header read "157" while the index block and
+the entry list both held **158** — a stale count, off by one, predating this change. With the two
+entries added here it now reads **160**, which matches both the index lines and the dated `###`
+headings (checked programmatically, not by eye).
+
+**Plan section affected:** §0 (#7), §2 (tech stack), §9.1 (base image / dogfood self-scan),
+§12 (Phase 6 self-scan), CLAUDE.md § Dependency hygiene (interpreter-CVE source verification),
+`ci/` triage allowlists. No application code, schema, API-contract, security-model, job-model, or
+auth change.
+
+### 2026-08-11 — Process — Locked runtime floor raised 3.14.6 → 3.14.7 (locked decision §2), on a second independent reason rather than a replacement one
+
+**What changed:** `CLAUDE.md` § Locked decisions #2 now states the runtime floor as **3.14.7**,
+was 3.14.6. The existing incremental-GC rationale is kept verbatim in substance — never
+3.14.0–3.14.4, whose GC work-estimate bug let a long-running server's cyclic-garbage backlog grow
+resident memory several-fold, reverted in 3.14.5 — and the interpreter-CVE rationale is added
+**alongside** it: 3.14.7 is the first release carrying the six Group A-1 (#98) / Group A-2 (#116)
+fixes, so dropping below it reinstates all six. `CONTRIBUTING.md`'s prerequisite moves with it
+(`3.14.6 or later` → `3.14.7 or later`).
+
+**Why this is its own entry.** Two reasons. First, it is a **locked-decision edit** — the class of
+change CLAUDE.md § When to ask vs. decide says to stop and ask about — and it was made on explicit
+maintainer instruction, not folded in as a side effect of a dependency bump. Recording it
+separately means the authorisation is legible next to the change instead of buried in the middle
+of a CVE entry. Second, the two documents move for **different reasons on different evidence**:
+the entry above is about six CVEs and what a scanner does or does not know about them; this is
+about what interpreter Scrye is permitted to run on at all. Merging them would make the floor look
+like a consequence of the scan result — and the scan result was that all six *still report*, which
+would then read as an argument against the very floor being raised.
+
+**The two reasons are independent and both load-bearing, which is why neither replaced the other.**
+The GC reason bounds the floor from below at **3.14.5** and is about availability under long
+uptime — exactly Scrye's workload. The CVE reason raises it to **3.14.7** and is about six fixes
+present in the interpreter. Had the CVE reason been written as a replacement, a future reader
+resolving the CVEs (once Grype's DB catches up and the waivers are deleted) could reasonably
+conclude the floor could return to 3.14.5/3.14.6 — reintroducing the GC leak. The floor text
+therefore states both and says explicitly that each binds separately.
+
+**Not changed:** the `3.14` **minor**-version pins in `.github/workflows/ci.yml`
+(`python-version: "3.14"`) and `backend/pyproject.toml` (`requires-python = ">=3.14"`), which
+track the minor line deliberately and are not micro-version floors; `CLAUDE.md` § Dependency
+hygiene's mention of 3.14.6, which is a historical statement about what the 3.13 → 3.14 bump did
+and must stay as written; the released CHANGELOG sections naming 3.14.6, for the same reason; and
+`frontend/src/components/settings/AboutPanel.test.tsx`'s `python_version: '3.14.6'`, which is a
+mock API payload asserting the About tab renders whatever the backend reports, not a floor.
+
+**Plan section affected:** CLAUDE.md § Locked decisions #2, §0 (#7), §2 (tech stack);
+`CONTRIBUTING.md` § Prerequisites. Process/docs only — no code, schema, security-model, or
+job-model change.
+
+### 2026-08-09 — Docs/Process — `dependabot.yml`'s "Deliberately NOT ignored" rationale rewritten: the instruction outlived the reason it was written on
+
+**What changed:** `.github/dependabot.yml` — the *"Deliberately NOT ignored"* comment paragraph in the
+npm `/frontend` entry, rewritten — plus this entry. **Comment-only.** No `ignore` rule, `group`,
+`schedule`, `target-branch`, `directory`, `commit-message` or any other key was added, removed, or
+modified; no dependency, lockfile, source, test, or workflow file was touched; `main` was not
+touched. The entry below flagged this paragraph as stale and left it as a maintainer call; this is
+that call being made.
+
+**The lapse, stated precisely, because it is the general pattern worth keeping.** The paragraph's
+*instruction* — leave the frontend tooling majors unignored so Dependabot keeps surfacing them — is
+still exactly right. Its *stated reason* was not: it described those majors as *"the deferred #86
+sweep tracked in docs/ROADMAP.md"* and told the reader Dependabot *"should keep surfacing them until
+that PR is done."* The sweep **is** done. So the comment, read literally on 2026-08-09, terminated
+its own instruction: a future reader who checked the roadmap would find the work complete and
+reasonably conclude the exemption had expired — and the obvious next move from there is to add the
+`typescript` ignore, which is the one thing that must not happen. **A comment whose stated condition
+has been met argues against its own instruction.** That is a sharper failure than mere staleness,
+and it is why this was worth a PR rather than a cleanup-later note.
+
+**The gate was checked before writing, not assumed.** The claim "the sweep is done" is the whole
+premise of the rewrite, so it was read at the source rather than carried from this session's own
+earlier entries: `docs/ROADMAP.md` § Track A carries the item **struck through** and marked **"Done
+2026-08-09"**, enumerating all eight step PRs — **#171, #174, #177, #179, #180, #183, #185, #187** —
+which matches the step entries below one-for-one.
+
+**Before:**
+
+```
+    # Deliberately NOT ignored: the frontend tooling majors (typescript, eslint,
+    # typescript-eslint, vite, vitest, jsdom and friends). Those are *wanted* —
+    # they are the deferred #86 sweep tracked in docs/ROADMAP.md — so Dependabot
+    # should keep surfacing them until that PR is done. An ignore rule says "a
+    # bot may not make this decision"; it is not a parking space for work we
+    # intend to do.
+```
+
+**After** — the instruction now rests on two current reasons instead of one spent one, and the
+closing maxim is kept verbatim because it never depended on the sweep:
+
+```
+    # Deliberately NOT ignored: the frontend tooling majors (typescript, eslint,
+    # typescript-eslint, vite, vitest, jsdom and friends). Those are *wanted* —
+    # we want to see them, evaluate them, and land them, which is exactly what
+    # the #86 sweep did (see docs/upgrades/frontend-toolchain-86.md).
+    #
+    # `typescript` is the one to leave unignored most deliberately. TypeScript 7
+    # is wanted, and the only thing blocking it is upstream: typescript-eslint's
+    # `typescript` peer range has never admitted 7 in any published version. So
+    # the regenerating Dependabot PR proposing typescript 7.x is not noise — it
+    # IS the notification that tells us when upstream ships support. Ignoring it
+    # would suppress that signal while changing nothing about the blocker.
+    # Re-check the range in one command:
+    #
+    #     npm view typescript-eslint@latest peerDependencies.typescript
+    #
+    # Support is expected to arrive as a new typescript-eslint MAJOR built
+    # against TS 7's ./unstable/* API, not as a point-release range widen.
+    #
+    # An ignore rule says "a bot may not make this decision"; it is not a
+    # parking space for work we intend to do.
+```
+
+**Three deliberate choices in the wording.** (1) The sweep is referenced in the **past tense as an
+example of the policy working**, not as pending work — so completing it can never again read as
+expiring the exemption; the pointer is to `docs/upgrades/frontend-toolchain-86.md` rather than to
+`docs/ROADMAP.md`, because the sequence document explains *how* such a batch gets evaluated while
+the roadmap item is now a struck-through history entry. (2) **The re-check command is inlined** so
+the next reader can test the blocker in one command without opening a session — the same one-liner
+§3.1 of the sequence document carries, kept in both places on purpose, since whoever is looking at
+an ignore list is not necessarily reading the upgrade docs. (3) The expected **shape** of upstream
+support (a new typescript-eslint major, not a range widen) is stated so a point-release bump is not
+misread as the all-clear. What the comment deliberately does **not** contain is the sweep's history,
+the packument evidence, or the per-step record — the archive holds those, and a config comment that
+grows into a changelog stops being read.
+
+**Verified after editing, by parsing rather than by reading.** Both versions of the file were loaded
+with `yaml.safe_load` and serialised to canonical JSON: the two structures are **byte-identical**,
+SHA-256 `07e71c6c…` on each side. Independently, every changed line in the raw diff was confirmed to
+be a comment line (`+18/−4`, all matching `^[+-]\s*#`). So the effective configuration — six
+ecosystems, every `target-branch: dev`, every schedule and group, and all five surviving npm ignores
+(`@mantine/*`, `react`, `react-dom`, `@types/react`, `@types/react-dom`) plus the `docker` /
+`docker-compose` ones — is provably untouched. Worth doing at the parser rather than by eye: a
+comment-only claim about a YAML file is exactly the kind that a stray indentation change would
+falsify silently.
+
+**Inert on `main` until the next promotion, like every prior change to this file.** Dependabot reads
+its configuration from the **default branch**, so nothing here takes effect until a `dev` → `main`
+promotion carries it. That has no practical consequence in this case — the paragraph is a comment,
+and comments never had runtime effect on either branch — but it is stated because the same sentence
+is true and load-bearing for every other edit to this file, and an exception that goes unstated is
+how a future reader concludes the rule has exceptions.
+
+**What was deliberately not done.** No `ignore` entry was added for `typescript` — the whole point
+of the rewrite is to make that harder to do by accident, not to do it. No key of any kind changed.
+**The currently-open Dependabot `typescript` PR was not touched** — not merged, not closed, not
+commented on; its predecessor #191 was already closed with the full reasoning earlier today, and
+re-litigating that on a successor was outside this brief. `docs/ROADMAP.md` was read but **not**
+edited, `docs/upgrades/frontend-toolchain-86.md` was not edited, and no dependency, lockfile, or
+other config file was touched. `main` was not touched.
+
+**Plan section affected:** `.github/dependabot.yml` (one comment paragraph) and this entry. No code
+behaviour, schema, API contract, security model, job model, auth, dependency version, or CI
+configuration changed; no locked decision re-opened — the ignores enforcing locked decision §2 are
+untouched, and this change cannot alter Dependabot's behaviour at all.
+
+---
+
+### 2026-08-09 — Infra/Process — The `@types/node` majors-ignore removed now that 26.2.0 has landed; no `typescript` ignore added, deliberately, because that regenerating PR is the TS7 signal
+
+**What changed:** `.github/dependabot.yml` — one `ignore` entry and its nine-line explanatory comment removed — plus this entry. **No dependency, lockfile, source, test, or other config file was touched**, and **no other key in `dependabot.yml` moved**: the file's six ecosystems, every `target-branch: dev`, every `schedule`, every `commit-message` prefix, both `groups` blocks and the five remaining npm ignores are byte-identical. `main` was not touched.
+
+**The gate was checked before the edit, not after.** Removing a majors-ignore for a version that has not landed would leave Dependabot free to propose a major nobody has evaluated. So `dev` was read directly: **#190 merged at 2026-08-09T18:41:00Z** as squash commit **`5948b73`**, and `git show origin/dev:frontend/package.json` reads `"@types/node": "26.2.0"`. Only then was the ignore removed.
+
+**The exact diff — two removals, no additions:**
+
+```diff
+-    # @types/node is majors-locked for the SAME reason, against a different
+-    # runtime: its major tracks Node's, and this repo builds and runs on Node 24
+-    # (docker/Dockerfile's builder stage, ci.yml's `node-version`), with Node
+-    # majors already declined on a support-lifecycle argument in the `docker`
+-    # entry below. tsconfig.node.json sets `"types": ["node"]`, so a @types/node
+-    # ahead of the pinned runtime describes APIs the build does not have and
+-    # feeds them straight into the type-aware ESLint gate. #145 proposed
+-    # @types/node 26 against Node 24; 24.x was applied instead. Lifting this line
+-    # is part of moving the Node major, not a bump to take on its own.
+-    #
+...
+-      - dependency-name: "@types/node"
+-        update-types: ["version-update:semver-major"]
+```
+
+**Why the comment goes with the rule rather than being rewritten.** Its central claim — *"tsconfig.node.json sets `"types": ["node"]`, so a @types/node ahead of the pinned runtime describes APIs the build does not have and feeds them straight into the type-aware ESLint gate"* — was true of the tree it was written against and is no longer true of this one. Step 4 (#179) wrote an explicit empty `types` array into `tsconfig.app.json`, and the #190 entry below measures the consequence: the app project loads **1,063 files and zero of them are `@types/node`**, against 82 for the node project. The reach is one file, `vite.config.ts`. A comment whose premise has been retired is worse than no comment, because it reads as a live argument. Its factual content is not lost — it is preserved in the entry below alongside the measurement that superseded it.
+
+**DELIBERATE NON-ACTION — no `ignore` rule was added for `typescript`, and none should be.** This is the half of this change most likely to be "fixed" by a future session, so it is recorded as a decision rather than an omission. TypeScript 7 is **wanted**; what blocks it is entirely upstream (`typescript-eslint`'s `typescript` peer range, whose upper bound has never exceeded `<6.1.0` across all 1,510 published versions — re-verified from the full packument today, not from `latest` alone). The regenerating Dependabot PR proposing `typescript@7.x` **is the notification mechanism** that tells us when upstream ships support: an ignore rule would silence exactly the signal we are relying on, while changing nothing about the blocker. This also stays consistent with the standing rule in the file's own surviving comment — an ignore says *"a bot may not make this decision"*, and it is not a parking space for work we intend to do.
+
+**Dependabot itself suggested the opposite, on the PR closed today, which is worth recording.** Its automated reply to the closure reads: *"This pull request was built based on a group rule. Closing it will not ignore any of these versions in future pull requests. To ignore these dependencies, configure ignore rules in dependabot.yml."* Correct as a statement of mechanics and **wrong as advice here** — the PR reappearing is the desired behaviour, not a nuisance to suppress. A reply was posted on the PR saying so, so the reasoning is visible to anyone triaging the queue without reading this file.
+
+**The reminder-surface chain moved twice more today, and the second move is the one that mattered.** The chain recorded in the step-8 entry below — #153 → #170 → #172 → #175 → #181 → #184 → #186 — continued to **#188** and then, minutes after #190 merged, to **#191**. #188 carried two updates (`@types/node` 24.13.3 → **26.1.2** and `typescript` 6.0.3 → 7.0.2) and was **auto-closed by Dependabot at 18:43:33**, not by hand; **#191** was opened four seconds later carrying **`typescript` alone**, its `frontend/package.json` diff a single line. Two observations worth keeping: the group really does collapse to exactly the declined item once everything else lands, as §8 anticipated; and #188's `@types/node` target had by then become a **downgrade** (26.1.2 against the 26.2.0 on `dev`), which is what a Dependabot PR held open across a merge looks like. **#191 was closed with a comment** recording the packument-wide check and stating that the PR should keep reappearing and be evaluated fresh each time rather than assumed permanently unsatisfiable.
+
+**This file's edits are inert on `main` until the next promotion, exactly like every prior one.** Dependabot reads its configuration — `ignore` list included — from the repository's **default branch**, so a `dev`-only change to `.github/dependabot.yml` has no effect until a `dev` → `main` promotion carries it. That is the finding recorded in the queue-audit entry below, and the maintainer **declined** promoting this file to `main` on its own to close the lag (settings-audit entry below, 2026-08-09 — declined, not deferred). Two practical consequences of that, stated so neither is re-diagnosed: `main`'s copy has **never** carried the `@types/node` stanza (added on `dev` by #147, never promoted), so this removal deletes a rule that was **never live** — the file and the effective configuration are now *more* aligned, not less; and until the next release, Dependabot will keep offering `@types/node` majors regardless, because it always has been.
+
+**What was deliberately not done.** No `ignore` entry was added for `typescript` or anything else. No other key in `dependabot.yml` was changed — not a `target-branch`, `schedule`, `directory`, `groups`, `commit-message`, nor any of the five surviving npm ignores (`@mantine/*`, `react`, `react-dom`, `@types/react`, `@types/react-dom`) or the `docker`/`docker-compose` ones. **One stale sentence in the file was left in place and is flagged rather than fixed:** the surviving *"Deliberately NOT ignored"* paragraph still describes the frontend tooling majors as *"the deferred #86 sweep tracked in docs/ROADMAP.md"* and says Dependabot should surface them *"until that PR is done"* — the sweep completed on 2026-08-09, so the paragraph's stated reason has lapsed even though its instruction must persist, now for the TS7-signal reason above. Rewriting it was outside this change's brief and is a maintainer call. No dependency, lockfile, source, test, or workflow file was touched; `docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were not edited; `main` was not touched.
+
+**Plan section affected:** `.github/dependabot.yml` (one npm `ignore` entry and its comment removed) and this entry. PR #191 (closed, not merged); #188 auto-closed by Dependabot. No code behaviour, schema, API contract, security model, job model, auth, or CI configuration changed; no locked decision re-opened — the `@mantine/*`, `react`, `react-dom` and `@types/react*` majors-ignores that enforce locked decision §2 are untouched.
+
+---
+
+### 2026-08-09 — Infra — `@types/node` 24.13.3 → 26.2.0: the sweep's one declined package taken deliberately, after step 4 had already shrunk its blast radius to one file
+
+**What changed:** `frontend/package.json` (one line), `frontend/package-lock.json` (two entries),
+plus `CHANGELOG.md` and this entry. **`@types/node` is the only package bumped.** No source, test,
+or config file changed — `frontend/eslint.config.js`, both tsconfigs, `vite.config.ts` and
+`postcss.config.cjs` are byte-identical to `dev`. `typescript` stays at **6.0.3** and no
+`typescript-eslint` version moved; `main` was not touched.
+
+**This is a deviation, and it is the maintainer's, made explicitly.** `docs/upgrades/frontend-toolchain-86.md`
+§5 is titled *"The sweep does not need it. Keep it on the 24 line."*, the step-8 entry below records
+`@types/node` as one of the sweep's **two deliberate exclusions**, and `.github/dependabot.yml`
+carries a major-ignore for it whose comment says *"lifting this line is part of moving the Node
+major, not a bump to take on its own."* All three still describe a decision that was correct when it
+was made. The maintainer instructed this session to take 26.x anyway, on **currency** grounds rather
+than on any claim that the sweep or a security finding requires it — and it does not: the only
+`@types/node` constraints anywhere in the resolved tree are the **optional** peers of `vite@8.2.1`
+(`^20.19.0 || >=22.12.0`) and `vitest@4.1.10` (`^20.0.0 || ^22.0.0 || >=24.0.0`), read from the
+installed manifests, and the pinned 24.13.3 satisfied both. Nothing failed on it, before or after.
+
+**The target was read live rather than from the sweep document.** `@types/node`'s
+`dist-tags.latest` is **26.2.0**, not the 26.1.2 the reminder-surface PR proposes and not the 26.1.2
+the document's §2 inventory lists — the same staleness §2 warns about, arriving again. Separately,
+`dist-tags` carries a **`ts6.0` tag, and it also points at 26.2.0**, which is DefinitelyTyped's own
+statement that this release is the one intended for the TypeScript 6.0 this repo pins. Both
+packages declare `typeScriptVersion: "5.6"` and identical `typesVersions` redirects for `<=5.7`, so
+TypeScript 6.0.3 reads the modern types on either side.
+
+---
+
+**Why §5's argument no longer applies, which is the finding that made the bump cheap.** §5's case —
+inherited from #145's narrowing on 2026-08-03 — is that `tsconfig.node.json` sets
+`"types": ["node"]`, so types ahead of the pinned Node 24 runtime *"describe APIs the build does not
+have and feed them straight into the type-aware ESLint gate."* That was written while
+`tsconfig.app.json` still **inherited** TypeScript's enumerate-everything `types` default and was
+therefore ambiently pulling `@types/node` into all 80 files of `src/`. **Step 4 (#179) changed
+that**, writing `"types": []` into `tsconfig.app.json` explicitly. Measured now rather than
+reasoned about, with `tsc --listFiles`:
+
+| Project | Files loaded | Of those, from `@types/node` |
+|---|---:|---:|
+| `tsconfig.app.json` (all of `src/`) | 1,063 | **0** |
+| `tsconfig.node.json` (`vite.config.ts`) | — | **82** |
+
+**The entire surface of this bump is one file, `vite.config.ts`**, whose only Node API use is
+`process.env` at line 7 (grepped: `src/` contains zero references to `process`, `Buffer`,
+`__dirname`, `__filename` or the `NodeJS.` namespace). And the declaration it consumes is
+unchanged — `interface ProcessEnv extends Dict<string> {}` is character-identical in 24.13.3 and
+26.2.0. Recorded because it means the §5 decision and this reversal are **not in conflict**: §5 was
+right about a tree that no longer exists, and step 4 is what retired its premise.
+
+---
+
+**Node 24 compatibility was measured, not inferred from the major number — and the answer is
+"yes, with an enumerated exception list."** `@types/node` majors track Node majors loosely, so
+"26 types on a 24 runtime" is a claim that has to be checked in **both** directions. A first attempt
+by grepping declaration text produced a 400-entry "removed" list that included `fs.readFileSync`,
+which is obviously false: 26.2.0 declares its module members **without the `export` keyword** where
+24.13.3 used it, so a text-shaped diff measures the formatting, not the API. That was caught by
+spot-checking one implausible entry before believing the list — the same
+noise-floor-before-measurement discipline the step 6 and step 7 entries below record, arrived at a
+third time by a third route.
+
+The real measurement enumerates every exported symbol of every `node:` module from both packages
+using **the installed TypeScript 6.0.3 compiler API** (`createProgram` + `checker.getExportsOfModule`
+over a synthetic file importing all 44/46 modules), classifies each by `SymbolFlags.Value`, and
+diffs the two sets:
+
+| | |
+|---|---|
+| Symbol rows | 1,235 (24.13.3) → 1,426 (26.2.0) |
+| Modules | 44 → 46 — `node:ffi` and `node:quic` added, **none removed** |
+| Added | 263 names — 65 value exports, 198 type-only |
+| Dropped | 72 names — **31 value exports**, 41 type-only |
+
+Both directions were then checked against a **real Node 24.19.0** — the head of the 24 line, which
+is what `ci.yml`'s `node-version: "24"` resolves to — downloaded from `nodejs.org/dist` and run
+directly, because this sandbox is on Node 22:
+
+- **26 of the 31 dropped value exports still exist on Node 24.19.0**: 24 top-level `zlib.Z_*`
+  constants (the aliases superseded by `zlib.constants.*`), plus `assert.CallTracker` and
+  `buffer.SlowBuffer`. So **the new types really do stop describing a handful of APIs the pinned
+  runtime still has** — the claim "26.x describes Node 24 correctly" is true in the aggregate and
+  false in the particulars, and the particulars are these. The other 5 (`Z_ASCII`, `Z_BINARY`,
+  `Z_DEFLATED`, `Z_TEXT`, `Z_UNKNOWN`) are absent from Node 24 too, so dropping them is a
+  correction.
+- **44 of the 65 added value exports do not exist on Node 24.19.0**, `node:ffi` and `node:quic`
+  entirely (both `require()` throw), plus scattered additions such as
+  `diagnostics_channel.boundedChannel`. This is precisely the hazard §5 named, now quantified: the
+  types describe 44 runtime APIs the build's Node does not have.
+
+**Neither list is referenced anywhere in this repository**, and neither is reachable from `src/` at
+all, per the `--listFiles` result above. The residual is therefore real, bounded, and confined to
+`vite.config.ts`: a future edit to that one file could type-check against a Node 26 API and fail at
+build time under Node 24. It is written down rather than argued away.
+
+---
+
+**The `print-config` diff, run per §0.3's method note — on four files, not three.** App `.tsx`
+(`src/pages/Dashboard.tsx`), library `.ts` (`src/lib/polling.ts`) and the test override
+(`src/lib/polling.test.ts`) are the three classes the note prescribes; **`vite.config.ts` was added
+as a fourth**, because it is the only file whose ambient type space this bump changes and the three
+standard classes would have been structurally incapable of showing a difference. All four resolved
+configs are **byte-identical before and after, 135 rules each** — nothing added, removed, or
+re-severitied, and no parser or plugin identity string moved. That is the expected result for a step
+that touches no linting package, and it is recorded as a measured result for the reason §0.3 exists:
+the expected result is exactly the one that does not get checked.
+
+**What moved in the lockfile: 306 → 306 packages, +8/−8.** Both lockfiles were parsed and compared
+key by key: **zero added, zero removed, two bumped** — `@types/node` 24.13.3 → 26.2.0 and its sole
+dependency `undici-types` **7.18.2 → 8.3.0**, a major, pulled by 26.2.0's `~8.3.0` requirement where
+24.13.3 required `~7.18.0`. `undici-types` has no other requirer in either tree, and it contributes
+`fetch`/`Response`/`Headers` typings into the **node** project's global space only, which `src/`
+cannot see. `lockfileVersion` stays 3. The lockfile was written with **npm 11.19.0** installed into
+a scratch prefix to match CI's Node 24 rather than the sandbox's Node 22 / npm 10.9.7 — the **ninth**
+consecutive lockfile touch to use this method and the ninth clean diff — and `npm ci` was run
+through the same npm 11 with the file's SHA-256 re-verified unchanged afterwards.
+
+**Suites, measured on both sides, each from a fresh `rm -rf node_modules && npm ci`.** Baseline on
+24.13.3: lint clean (13.2 s), `format:check` clean, **80 tests across 22 files**, build
+**630.29 kB JS (`index-C771VE3z.js`) / 196.79 kB CSS (`index-BG7b_ejj.css`)**, `npm audit` **0**.
+After the bump: lint clean (12.6 s), `format:check` clean, **80 tests across 22 files**, build
+identical, audit **0**. `tsc -b --force` was run separately so the type check could not be served
+from an incremental build info file. **The test comparison was made per test, not per total** — both
+runs captured with `--reporter=json` and reduced to sorted `file :: full test name :: status`
+triples, which **diff empty**. All three emitted assets are **byte-identical by SHA-256** to the
+baseline, which is the right signal here: a types-only devDependency cannot reach the bundle.
+**No lint finding was autofixed, in bulk or individually — there were none.**
+
+**One stale record this bump creates, flagged rather than fixed.** `.github/dependabot.yml`'s
+`@types/node` stanza is a **major**-ignore, and its comment now argues against a change that has
+landed. Two reasons it was left alone: it was outside this session's explicit scope (`@types/node`
+was to move, nothing else), and it is **inert on `dev` regardless** — Dependabot reads its `ignore`
+list from the default branch, and `origin/main`'s copy of the file has no `@types/node` stanza at
+all (the finding in the queue-audit entry below, re-confirmed here). Whether to drop the stanza,
+keep it as a 27-major guard, or rewrite its rationale is a maintainer call, and the same is true of
+§5 of the sweep document, which now describes a decision that has been reversed.
+
+**What was deliberately not done.** No package other than `@types/node` moved, in `package.json` or
+in the lockfile — **`typescript` stays at 6.0.3**, and no `typescript-eslint`, `eslint`, `vite`,
+`vitest` or `jsdom` version was touched. **No lint rule was disabled, downgraded, or suppressed**,
+and no pre-release or canary package was installed. No source, test, or config file changed.
+`.github/dependabot.yml`, `docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were
+**not** edited. The separate TypeScript 7 investigation this session also ran was **investigation
+only** — no install, no config edit, no PR — and its findings are the maintainer's to act on.
+`main` was not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`, `CHANGELOG.md`
+§ Unreleased/Changed, and this entry. No code behaviour, schema, API contract, security model, job
+model, auth, or CI configuration changed; no locked decision re-opened — React stays on 18 and
+Mantine on v7, and `@types/node` declares no `react`, `react-dom`, `@types/react*` or `@mantine/*`
+peer (it declares no peers at all).
+
+---
+
+### 2026-08-09 — Docs/Process — Roadmap updated for the completed #86 sweep, the re-cut react-router advisory, and the React-19-blocked router major
+
+**What changed:** `docs/ROADMAP.md` only — three Track A items — plus this entry. **No
+dependency version, lockfile, config file, workflow, or source file was touched**, no issue or
+PR was actioned, and `main` was not touched. Each of the three edits was gated on a live check
+made in this session rather than on a prior session's claim about it; all three premises held,
+and what was checked is recorded per item below so the checks are not re-run from scratch.
+
+**1 — The #86 frontend toolchain sweep item is struck as Done 2026-08-09.** The eight sweep
+PRs were re-confirmed present on `dev` before the bullet was written, by reading `dev`'s own
+history rather than by trusting the step entries below: **#171** (`typescript-eslint`
+8.19.0 → 8.66.0, `a99815a`), **#174** (the ESLint 10 family, `4ad34c9`), **#177** (React
+Compiler rules adopted with `set-state-in-effect` held off, `6902036`), **#179** (TypeScript
+5.7.2 → 6.0.3, `9aa2dc2`), **#180** (Vitest 3.2.7 → 4.1.10, `306556d`), **#183** (jsdom
+26.1.0 → 30.0.1, `265bf59`), **#185** (Vite 6.4.3 → 8.2.1 + `@vitejs/plugin-react`
+4.3.4 → 6.0.5, `167b1c6`), **#187** (`globals`, `@testing-library/user-event`, `postcss`,
+`7283801`). All eight are squash commits on `origin/dev`.
+
+The replacement bullet names all eight and **both deliberately-excluded packages**, which is
+the half most likely to be misread as an omission: **TypeScript 7** (no published
+`typescript-eslint` accepts it — peer `>=4.8.4 <6.1.0` at `latest` and at canary — so the
+ceiling is 6.0.3) and **`@types/node` 26** (nothing in the toolchain requires it; the pinned
+24.x satisfies every peer in play). The bullet also states plainly that both will keep
+appearing in Dependabot's grouped frontend PR until they are taken or ignored **on the default
+branch**, which is the `ignore`-list-read-from-`main` finding recorded in the 2026-08-09
+queue-audit entry below, restated in public-doc terms rather than cross-referenced.
+
+**2 — The GHSA-qwww-vcr4-c8h2 re-cut request is struck, and the premise was verified live
+rather than inherited.** The 2026-08-09 scoping entry below already reported the advisory as
+re-cut; that report was treated as a hypothesis, not as grounds to strike the item. Two
+independent live reads on 2026-08-09:
+
+| Source | Result |
+|---|---|
+| The advisory record in `github/advisory-database` (`advisories/github-reviewed/2026/07/GHSA-qwww-vcr4-c8h2/…json`, via `raw.githubusercontent.com`) | **two** `affected` entries for `react-router`: `introduced 7.12.0 / fixed 7.18.2` and `introduced 8.0.0 / fixed 8.3.0`; `published` and `github_reviewed_at` both **2026-07-24T16:44:43Z**, `modified` **2026-08-07T18:14:58Z** |
+| The npm registry's bulk advisory endpoint (`/-/npm/v1/security/advisories/bulk`) | the same advisory returned as two HIGH ranges, `>=7.12.0 <7.18.2` and `>=8.0.0 <8.3.0`; querying **7.18.2 alone returns `{}`** |
+
+So the range really was re-cut to what the roadmap item asked for — `>= 7.12.0, < 7.18.2`,
+with the 8.x range untouched — and the pinned 7.18.2 no longer matches. `api.osv.dev` was
+attempted as a third source and is still unreachable from this environment (curl exit 56),
+which is why the npm endpoint stands in as the independent corroboration; the two sources that
+did answer agree exactly. The struck bullet keeps the *reason* the item existed (a standing
+false HIGH in a vulnerability scanner's own pipeline teaches everyone to dismiss that
+package's alerts) and the backport evidence, so the record survives the strike.
+
+**3 — The `react-router` 7 → 8 item is reworded and moved out of the tooling-majors grouping.**
+The old wording said it *"belongs with the tooling majors above"* and shared *"the same risk
+the bumps above share."* That grouping is now doubly wrong: the tooling majors are done, and
+the real blocker was never lint churn. Verified live at the published package on 2026-08-09 —
+`react-router@8.3.0` is `dist-tags.latest` and declares `peerDependencies` of
+`react: ">=19.2.7"` and `react-dom: ">=19.2.7"` — against `frontend/package.json`, which pins
+`react` and `react-dom` at **18.3.1**. Both legs hold, so the item now says plainly that it is
+blocked on a **React 19 decision, not a tooling bump**, and it moved from **Near-term** to
+**Longer-term / speculative**, whose stated criterion is work *"gated on a scale threshold or
+an explicit decision"* — the only section in the file whose framing fits a locked-decision
+blocker. The migration's own cost (v8 folds `react-router-dom` back into `react-router`, so
+all twelve import sites in `frontend/src/` move) is kept, now stated as what happens *after*
+the decision rather than as a reason to batch it with the toolchain work.
+
+**What was deliberately not done.** No dependency, lockfile, or config file was touched.
+**#176 and its six deferred findings were not acted on** — the roadmap bullet links the issue
+and says nothing more about it. **The currently-open Dependabot frontend-dependencies group PR
+was not touched** — not merged, not closed, not commented on; the new bullet describes why the
+two declined packages will keep being proposed, in general terms, without actioning the PR.
+No advisory-improvement request was filed with GitHub: the re-cut had already happened, so
+there was nothing to ask for. `docs/upgrades/frontend-toolchain-86.md` was **not** edited —
+correcting the sequence document remains a maintainer call, and the sweep's completion is
+recorded in the step-8 entry below and now in the roadmap. `CHANGELOG.md` was not touched:
+nothing shipped. `main` was not touched.
+
+**Plan section affected:** `docs/ROADMAP.md` § Track A (Near-term: the #86 sweep item and the
+GHSA re-cut item both struck; the `react-router` item removed from Near-term) and § Track A
+(Longer-term / speculative: the `react-router` item added, reworded), plus this entry. No code
+behaviour, schema, API contract, security model, job model, auth, or CI configuration changed;
+no locked decision re-opened — React stays on 18 and Mantine on v7, and the `react-router`
+edit records that lock as the blocker rather than proposing to lift it.
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 8 landed: `globals` 17.9.0, `@testing-library/user-event` 14.6.3, `postcss` 8.5.26 — the sweep is complete, and its reminder-surface PR had already closed itself
+
+**What changed:** `frontend/package.json` (three lines), `frontend/package-lock.json`, plus
+`CHANGELOG.md` and this entry. This is **step 8 — the final step** of the eight-step sequence in
+`docs/upgrades/frontend-toolchain-86.md`. **Those three packages are the only ones bumped.** No
+source, test, or config file changed; `frontend/eslint.config.js`, both tsconfigs,
+`vite.config.ts` and `postcss.config.cjs` are byte-identical to `dev`. `main` was not touched.
+
+**Step 8's membership was read from the row rather than from the session brief, and the brief was
+wrong.** The brief predicted step 8 was `@testing-library/user-event`, `globals`, `postcss` **and
+`eslint-plugin-react-refresh` 0.4.16 → 0.5.3**, with the react-refresh bump described as the
+non-trivial member needing a config migration. It is not in step 8. §6's Step 8 row names exactly
+three packages, and **`eslint-plugin-react-refresh` belongs to Step 2**, where §6's Step 2 "Moves"
+row places it and where it landed on 2026-08-09 as **#174** — `frontend/package.json` has read
+`"eslint-plugin-react-refresh": "0.5.3"` since. Reported to the maintainer before anything moved,
+per the standing instruction to follow the row and say so when the brief diverges.
+
+**The three 0.5.x migration hazards were nevertheless re-verified against the *installed* 0.5.3**,
+because the brief raised them and because step 2's entry recorded them as re-checked once, at
+install time, rather than as permanently settled. All three are no-ops here, confirmed at the
+artifact rather than from the changelog:
+
+| 0.5.0 change | Checked against | Verdict |
+|---|---|---|
+| ESM-only, flat config required | installed `package.json`: `"type": "module"`, peer `eslint: "^9 \|\| ^10"` | no-op — this repo has been flat-config and ESM since Phase 0; there is no `.eslintrc*` anywhere |
+| preferred export moved to a named `reactRefresh` exposing `plugin`/`configs` | `import()`ed the installed package: named exports are `default` and `reactRefresh`; `default` still carries `{rules, configs}` | no-op — `eslint.config.js` imports the **default** export and registers it as `plugins: {'react-refresh': reactRefresh}`, which still resolves `rules`, and `--print-config` lists the rule at the expected severity |
+| `customHOCs` renamed to `extraHOCs`; HOC-call validation tightened | the rule's shipped `meta.schema`: `{extraHOCs, allowExportNames, allowConstantExport, checkJS}`, `additionalProperties: false` | no-op — the repo's single `react-refresh/only-export-components` usage passes `allowConstantExport` only, and sets no HOC option at all. Worth noting the failure mode it avoids: `additionalProperties: false` means a surviving `customHOCs` key would be a hard **config** error, not a silently-ignored option. |
+
+**All three targets were re-checked at the registry before the bump; none had moved.**
+`globals` 17.9.0, `@testing-library/user-event` 14.6.3 and `postcss` 8.5.26 are each still
+`dist-tags.latest`, so no deviation from the document's targets was needed or proposed — the first
+step in the sweep for which that is true of every member.
+
+---
+
+**The `globals` caution is the only judgement in this step, and it was answered by measurement.**
+§6's Step 8 row carries an inherited warning: a `globals` bump can silently *shrink* a set, leaving
+lint green while `eslint.config.js:20`'s `globals.browser` loses coverage — so inspect the set
+rather than trust a green run. Inspected, on both sides, from the installed package:
+
+| | 17.8.0 | 17.9.0 |
+|---|---|---|
+| `globals.browser` keys | 1,191 | **1,196** |
+| added | — | `PerformanceMarkConditional`, `PermissionsPolicy`, `RTCIceCandidatePair`, `WebTransportDatagramsWritable`, `WebTransportSendGroup` (all `false`, i.e. read-only) |
+| removed | — | **none** |
+
+**Nothing shrank.** (For the record, since it costs nothing: `serviceworker` 324 → 326,
+`sharedWorker` 292 → 294 and `worker` 343 → 347 also grew, and no set in the package lost an entry.
+This repo consumes `browser` only.)
+
+**The `print-config` diff, run on one representative file per file class, per §0.3's method note.**
+App `.tsx` (`src/pages/Dashboard.tsx`), library `.ts` (`src/lib/polling.ts`) and the test override
+(`src/lib/polling.test.ts`) all hold at **135 rules, with zero added, zero removed, and zero
+severity or option changes**. The *only* difference in any of the three fully-resolved configs is
+those five `languageOptions.globals` entries — no rule, no plugin identity string, no parser
+setting moved. That is the expected result for a step that touches no linting package, and it is
+recorded as a measured result rather than an assumed one because §0.3's whole lesson is that the
+expected result is exactly what does not get checked.
+
+**The build output is byte-identical, and that check was strengthened deliberately.** Prior steps
+compared Vite's emitted **content hashes**; here all three artifacts were compared by **SHA-256 of
+the file contents** — `index-C771VE3z.js`, `index-BG7b_ejj.css` and the sourcemap all match the
+pre-bump baseline exactly. That is worth doing rather than inheriting the weaker check, because
+unlike `globals` and `user-event`, **`postcss` is genuinely in the build path**: it runs via
+`frontend/postcss.config.cjs` (`postcss-preset-mantine` + `postcss-simple-vars`) on every build. A
+postcss patch that changed CSS output would be invisible to lint and to the test suite, and this is
+the check that rules it out.
+
+**What moved in the lockfile: 306 → 306 packages, and every line is accounted for.** Both lockfiles
+were parsed and compared key by key rather than eyeballed: **zero added, zero removed, three
+bumped** — `globals` 17.8.0 → 17.9.0, `@testing-library/user-event` 14.6.1 → 14.6.3, `postcss`
+8.5.25 → 8.5.26 — plus the root manifest's three pins. `lockfileVersion` stays 3 and the file diff
+is **+13/−13**, the smallest of the sweep. The one transitive *requirement* that moved is
+`postcss`'s own `nanoid` range, `^3.3.16` → `^3.3.17`, which installs nothing: the tree already
+carries **`nanoid@3.3.18`** from the 2026-08-09 advisory refresh, so 8.5.26 raising its floor past
+GHSA-2v37-7h3g-55p8 is satisfied by a package that was already there. Nothing else in the resolved
+tree changed — `eslint` (10.8.1), `typescript` (6.0.3), `vite` (8.2.1), `vitest` (4.1.10), `jsdom`
+(30.0.1), `react`/`react-dom` (18.3.1) and `@mantine/*` (7.17.8) were read out of both lockfiles
+rather than trusted from the diff.
+
+The lockfile was written with **npm 11.19.0** installed into a scratch prefix to match CI's Node 24
+rather than the sandbox's Node 22 / npm 10.9.7 — the **eighth** consecutive lockfile touch to use
+this method and the eighth clean diff. `npm ci` was run through the same npm 11 and the lockfile's
+SHA-256 re-verified unchanged afterwards, so what `--package-lock-only` produced is byte-identical
+to what a real install writes.
+
+**Suites, measured on both sides, each from a clean install.** Baseline (`npm ci` from the committed
+lockfile): lint clean (14.0 s), `format:check` clean, **80 tests across 22 files**, build **630.29 kB
+JS / 196.79 kB CSS**, `npm audit` **0 vulnerabilities**. After the bump, from a fresh
+`rm -rf node_modules && npm ci`: lint clean (11.6 s), `format:check` clean, **80 tests across 22
+files**, build identical, audit **0**. The test comparison was made **per test, not per total** —
+both runs captured with `--reporter=json` and reduced to sorted `file :: full test name :: status`
+triples, which **diff empty**. **No lint finding was autofixed, in bulk or individually — there were
+none.**
+
+---
+
+**Sweep-completion assessment, made against #172's live diff rather than from memory.** Every one of
+the thirteen packages **#172** proposes is now either landed or deliberately excluded:
+
+| #172 proposes | Disposition |
+|---|---|
+| `typescript-eslint` 8.66.0 | landed, step 1 (#171) |
+| `eslint` 10.8.0 · `@eslint/js` 10.0.1 · `eslint-plugin-react-hooks` 7.1.1 · `eslint-plugin-react-refresh` 0.5.3 | landed, step 2 (#174) — `eslint` at **10.8.1**, one patch *ahead* of the proposal |
+| `typescript` 7.0.2 | **excluded** — §3.1's ceiling is 6.0.3; landed at **6.0.3** in step 4 (#179) |
+| `vitest` 4.1.10 | landed, step 5 (#180) |
+| `jsdom` 30.0.1 | landed, step 6 (#183) |
+| `vite` 8.2.0 · `@vitejs/plugin-react` 6.0.5 | landed, step 7 (#185) — `vite` at **8.2.1**, ahead of the proposal |
+| `@types/node` 26.1.2 | **excluded** — §5, "Action: none" |
+| `globals` 17.9.0 · `@testing-library/user-event` 14.6.3 | landed here, step 8 |
+
+Plus `postcss` 8.5.26, which #172 also carries and which the document assigns to step 0-or-8.
+
+**Two exclusions, not one — and the second is worth stating plainly because it is easy to misread
+as complete.** `@types/node` is the excluded member everyone remembers (§5). But **`typescript` is
+excluded too**, because #172 proposes **7.0.2** and the sweep deliberately stopped at **6.0.3**.
+Eleven of thirteen landed; two did not, and both non-landings are decisions rather than omissions.
+
+**The TypeScript ceiling was re-checked on the day, and it has not moved.**
+`typescript-eslint@latest` is still **8.66.0** peering `typescript: ">=4.8.4 <6.1.0"`, and its
+canary `8.66.1-alpha.10` declares the same. Two consequences that point in opposite directions and
+must not be conflated:
+
+- **The installed `typescript@6.0.3` sits inside that range**, so nothing in the shipped toolchain
+  is straining a peer bound — the sweep's end state is a satisfiable graph.
+- **#172's own `typescript` member is still outside it.** `7.0.2` against `<6.1.0` is the same
+  `ERESOLVE` that killed #153, #170 and every regeneration since. So #172 is *not* merely stale,
+  it is **still unsatisfiable as composed**, and completing the sweep did not make it mergeable.
+
+**#172 was already closed before this session, and not by a maintainer.** Read live: `state:
+closed`, `merged: false`, `closed_at: 2026-08-09T11:27:01Z`, carrying exactly one comment — from
+`dependabot[bot]`, *"Looks like these dependencies are updatable in another way, so this is no
+longer needed."* Dependabot superseded it automatically when step 2 (#174) landed, three minutes
+before. **No close action was taken here, and none was needed.**
+
+**The reminder surface has moved four times in one day, which is the finding that generalises.**
+The chain from the scoping document's #153 now reads **#153 → #170 → #172 → #175 → #181 → #184 →
+#186**, each opened against the then-current `dev` and each auto-closed by Dependabot within
+minutes of the next sweep step landing (#172 13 updates → #175 9 → #181 8 → #184 7 → **#186 5,
+open**). §8's advice — *"close it only when Step 7 lands"* — was written for a PR expected to sit
+still; in practice the group regenerates after **every** merge that touches `frontend/package.json`,
+so a specific PR number is a snapshot, not a handle. **#186** is the live one: opened
+2026-08-09T17:00:26Z from `167b1c6`, carrying five updates — this step's three (`globals` 17.9.0,
+`@testing-library/user-event` 14.6.3, `postcss` 8.5.26) plus the two declined ones (`@types/node`
+26.1.2, `typescript` 7.0.2). Once this step merges it should regenerate down to **exactly the two
+declined items**, which is the honest end state §8 anticipated. **#186 was deliberately not
+touched** — it was not in this step's scope, and closing or commenting on a PR the maintainer has
+not seen is not a call this session makes.
+
+**Which of the document's Step 8 predictions held.**
+
+- **"`globals` 17.8.0 → 17.9.0, `@testing-library/user-event` 14.6.1 → 14.6.3, and `postcss`
+  8.5.25 → 8.5.26 if not already taken in Step 0" — HELD, including the conditional.** Step 0 (the
+  2026-08-09 lockfile refresh) took `js-yaml` and `nanoid` only and left `package.json` untouched,
+  so `postcss` was still at 8.5.25 and belonged here.
+- **"Mechanical, no config change, no coupling" — HELD**, and the no-coupling half is now
+  measured rather than asserted: zero packages added or removed from the lockfile.
+- **The inherited `globals` caution — HELD as a caution and answered in the favourable
+  direction.** The set grew by five and lost nothing. The row prices this as *"a spot-check, not an
+  investigation"*, which was right.
+- **"Fold into whichever step is convenient, or take alone" — taken alone**, consistent with every
+  other step in the sweep having exactly one plausible cause of failure.
+- **Effort priced 15 min / very low — accurate for the bump**; essentially all the time went on the
+  baseline/after measurements (two clean installs, two `print-config` sweeps, the globals set diff,
+  the byte-level asset comparison), which is the sweep's standing exit criteria rather than this
+  step's cost.
+
+**What was deliberately not done.** No package other than the three step 8 names moved, in
+`package.json` or in the lockfile — in particular **`@types/node` stays at 24.13.3** and
+**`typescript` stays at 6.0.3**, both per the document's own decisions. No lint finding was
+autofixed, in bulk or individually. No source, test, or config file changed. **#172 was not closed
+(it already was, by Dependabot) and no comment was posted on it**; **#186 was not touched**;
+`docs/ROADMAP.md` was **not** edited — marking Track A's sweep item complete is a maintainer call,
+and one is proposed to the maintainer rather than made here.
+`docs/upgrades/frontend-toolchain-86.md` was **not** edited either, on the same standing basis as
+every prior step: correcting the sequence document is the maintainer's, and this entry is the
+record of what its Step 8 row got right in the meantime — which, uniquely in this sweep, is all of
+it. `main` was not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`, `CHANGELOG.md`
+§ Unreleased/Changed, and this entry. No code behaviour, schema, API contract, security model, job
+model, auth, or CI configuration changed; no locked decision re-opened — React stays on 18 and
+Mantine on v7, and none of `globals`, `@testing-library/user-event` or `postcss` declares a
+`react`, `react-dom`, `@types/react*` or `@mantine/*` peer.
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 7 landed: Vite 6.4.3 → 8.2.1 + `@vitejs/plugin-react` 4.3.4 → 6.0.5; the partial oracle was closed by a pixel diff, but only after its noise floor was calibrated
+
+**What changed:** `frontend/package.json` (two lines), `frontend/package-lock.json`, plus
+`CHANGELOG.md` and this entry. This is **step 7 of the eight-step sequence** in
+`docs/upgrades/frontend-toolchain-86.md` — the step §8 ranks as the highest-risk of those that must
+happen, on the grounds that it is *"the only step whose worst failure passes CI."* **`vite` and
+`@vitejs/plugin-react` are the only packages bumped.** `frontend/vite.config.ts`, both tsconfigs,
+`frontend/eslint.config.js`, `postcss.config.cjs`, and every production source and test file are
+byte-identical to `dev`. No step 8 work was started; `main` was not touched.
+
+**The targets were re-checked at the registry, and one had moved — escalated rather than assumed.**
+The session brief named **vite 8.2.0**. `vite`'s `dist-tags.latest` is **8.2.1** (published
+2026-08-06; 8.2.0 was 2026-07-30), which is inside the same constraints — same major, satisfies
+plugin-react 6.0.5's `vite: ^8.0.0` peer, same `engines.node` — and the scoping document's §2
+inventory already flags 8.2.0 as stale and prescribes *"Take 8.2.1"*. Per the maintainer's standing
+instruction to ask when a newer version exists inside the same constraints, **this was put to the
+maintainer rather than decided**; 8.2.1 was authorised. `@vitejs/plugin-react@6.0.5` is still
+`latest` and needed no deviation. 8.2.1 over 8.2.0 moves `rolldown ~1.2.0 → ~1.2.1` and
+`postcss ^8.5.23 → ^8.5.25` — the former mattering here precisely because Rolldown is the thing
+whose output this step exists to compare.
+
+**§3.3 is half wrong, and the correction was put to the maintainer because it could have changed
+the step's shape.** The document states there is *"no version of the plugin that spans the
+boundary"* and that plugin-react 5.x supports only Vite 6 and 7. Read from the published manifests:
+
+| plugin-react | `peerDependencies.vite` | Babel deps |
+|---|---|---|
+| 4.3.4 *(pinned)* | `^4.2.0 \|\| ^5.0.0 \|\| ^6.0.0` | 4 |
+| 5.0.0 | `… \|\| ^7.0.0` | 4 |
+| **5.2.0** | **`… \|\| ^7.0.0 \|\| ^8.0.0`** | 4 |
+| 6.0.0 / 6.0.5 | **`^8.0.0` only** | **0** |
+
+So **5.2.0 does span Vite 6→8**, and "Vite 8 alone, holding the plugin on 5.x" is a resolvable
+graph that would have separated the bundler major from the plugin major. The maintainer was offered
+that split and **declined it**, keeping step 7 as one step: the plugin's 4→5→6 span is where Babel
+was dropped, and splitting would land a plugin version nobody intends to keep and then immediately
+replace it. **The other half of §3.3 holds and was verified**: plugin-react 6 peers `^8.0.0` alone,
+non-optional, so it genuinely *requires* Vite 8 rather than tolerating it.
+
+**Vitest 4 does not constrain the Vite major — re-verified at the manifest, not inherited.**
+`vitest@4.1.10` declares `vite: "^6.0.0 || ^7.0.0 || ^8.0.0"` as a required peer (`optional: false`)
+*and* as a real `dependencies` entry at the same range. Vite 8.2.1 satisfies it, so step 5's landing
+neither blocks nor is broken by this step. `engines.node` on both new packages is
+`^20.19.0 || >=22.12.0`; CI's Node 24, the pinned `node:24-bookworm-slim` (24.18.1) and this
+sandbox's 22.22.2 all satisfy it, and **jsdom 30's floor from step 6 still dominates**, so
+`README.md`, `CONTRIBUTING.md`, `ci.yml` and `docker/Dockerfile` needed no edit.
+
+---
+
+**The Babel question, answered before anything was changed: nothing to move, nothing to drop.**
+plugin-react 6.0.0 removed every Babel-related feature, and the migration path for a repo that
+passes a `babel` option is to move that config to `@rolldown/plugin-babel` or drop it. **This repo
+passes no such option.** `frontend/vite.config.ts` is `plugins: [react()]` with no arguments; there
+is no `.babelrc*`, no `babel.config.*`, and no occurrence of the string `babel` in any `.ts`,
+`.tsx`, `.js`, `.cjs`, `.mjs` or `.json` file under `frontend/` outside the lockfile. So the hazard
+is a **no-op here**, and no babel configuration was relocated or removed — there was none to touch.
+
+**React Fast Refresh was smoke-tested rather than assumed, because the mechanism genuinely
+changed.** plugin-react 4 implemented Refresh through Babel plus the `react-refresh` npm package,
+both of which leave the tree in this step; Vite 8 implements it through Oxc. The dev server was
+started on the new toolchain and confirmed to (a) boot (`VITE v8.2.1 ready in 305 ms`), (b) serve
+the runtime at `/@react-refresh`, and (c) inject `$RefreshReg$` / `RefreshRuntime` into the
+transform of `src/App.tsx`. Worth doing by hand: nothing in the test suite or the production build
+exercises Refresh, so its loss would have been silent until a contributor noticed HMR stopped
+working.
+
+---
+
+**Build-output comparison, which is the substance of this step.** Measured from a clean
+`rm -rf node_modules && npm ci` on each side, both installs and both lockfile writes performed with
+**npm 11.19.0** in a scratch prefix to match CI's Node 24 rather than the sandbox's npm 10.9.7 —
+the **seventh** consecutive lockfile touch to use this method.
+
+| | Vite 6.4.3 | Vite 8.2.1 | Δ |
+|---|---|---|---|
+| modules transformed | 7,035 | 7,018 | −17 |
+| JS | 645.14 kB / `index-Vvdzytcz.js` | 630.29 kB / `index-C771VE3z.js` | **−14,845 B (−2.30%)** |
+| JS gzip | 193.61 kB | 187.36 kB | −6.25 kB |
+| CSS | 201.38 kB / `index-D2wHtcHV.css` | 196.79 kB / `index-BG7b_ejj.css` | **−4,586 B (−2.28%)** |
+| CSS gzip | 29.30 kB | 28.63 kB | −0.67 kB |
+| sourcemap | 2,959,362 B | 2,734,561 B | −224,801 B |
+| build time | 7.30 s | 1.28 s | −5.7× |
+| lint / `format:check` / audit | clean / clean / 0 | clean / clean / 0 | — |
+| tests | 80 across 22 files | 80 across 22 files | diffed per test name, empty |
+
+**Asset content hashes changed on both files, and that is the correct signal here** — unlike steps
+1, 2, 4, 5 and 6, where an unchanged hash was the proof the step could not reach the bundle. A
+bundler and a CSS minifier both changed engine; identical output would have meant the bump had not
+taken effect.
+
+**The module delta was attributed by census, not explained by plausible story.** A throwaway
+`vite.modules.config.ts` spread the real config and added a plugin recording `this.getModuleIds()`
+at `buildEnd`; it was run under both toolchains and the two lists diffed, then the probe was
+deleted. **19 ids exist only under Vite 6** — `commonjsHelpers.js` plus the `?commonjs-es-import` /
+`?commonjs-exports` / `?commonjs-module` proxy modules that `@rollup/plugin-commonjs` mints when
+converting `react`, `react-dom`, `scheduler`, `cookie`, `fast-deep-equal` and `set-cookie-parser`
+from CJS to ESM. Rolldown handles CommonJS in the bundler core and mints none. **1 id is new**:
+`vite/preload-helper.js`, a Vite-internal helper. 7,035 − 19 + 1 = 7,017 census ids against the
+reporter's 7,018, a one-module accounting difference in the reporter. **No application or library
+module was added or removed** — the delta is interop scaffolding only.
+
+**The CSS was diffed declaration by declaration, because §8's whole argument for ranking this step
+above jsdom is that a Lightning CSS regression fails nothing.** Eyeballing a minified diff is not a
+check: both minifiers reformat everything. So both stylesheets were parsed into
+(at-rule context, selector, declarations); every comma-joined selector list was **split into
+individual selectors** so that rule merging on one side and rule splitting on the other cancel out;
+colours were canonicalised to a common `rgba` form; and the shorthands Lightning CSS introduced
+(`inset`, `padding-inline`, …) were expanded back to longhands.
+
+| | |
+|---|---|
+| individual (context, selector) keys | **1,171 on each side** |
+| keys only in baseline / only after | **0 / 0** |
+| declarations lost / added | **0 / 0** |
+| declarations differing | 46, all semantics-preserving rewrites |
+
+The 46 break down as **29 vendor prefixes dropped where the unprefixed property is present**
+(`-moz-appearance` ×14, `-webkit-appearance` ×14, `-webkit-transform` ×1) and 17 value rewrites, of
+which 13 are `.15s ease` → `.15s` (`ease` is the initial `transition-timing-function`, so the
+elision is exact) and the remaining four are `transparent` → `#00000000`,
+`background-position: center` → `50%`, a whitespace trim inside a custom-property value, and
+`linear-gradient(… C 25%, C 50% …)` → `… C 25% 50%` (multi-position colour stops, CSS Images 4).
+Structural rewrites that the per-selector normalisation absorbed, each checked by hand:
+`:nth-of-type(1)` → `:first-of-type`, `*:before` → `:before`, `:where(*:not(style))` →
+`:where(:not(style))`, `-.24s` → `-240ms`, `0rem` → `0`, `top/right/bottom/left: 0` → `inset: 0`,
+adjacent rules with identical declaration blocks merged, and **the six `::-webkit-*`
+spin/search-button selectors split out of one comma list into six separate rules** — which is a
+correctness *improvement*, since a browser that cannot parse one selector in a comma list discards
+the entire rule.
+
+**The browser target rose, and that is the one genuine behaviour change in this step.** Vite 8
+defaults `build.target` to `baseline-widely-available`, which resolves — read out of the installed
+`vite/dist/node/` rather than from the guide — to **chrome111 / edge111 / firefox114 / safari16.4**,
+against esbuild's `modules` default of roughly Chrome 87 / Firefox 78 / Safari 14. §6's Step 7 row
+predicted exactly this. Every syntax Lightning CSS newly emitted was checked against that floor:
+Media Queries Level 4 range syntax (`@media screen and (device-width<=31.25em)`, replacing
+`max-device-width`) needs Safari 16.4 — *exactly* the floor, with no margin; multi-position colour
+stops need Safari 12.1; unprefixed `appearance` needs Safari 15.4. All inside the target. **No
+project document states a browser-support floor**, so nothing needed correcting — recorded here
+because the change is real and invisible, and a future decision to support an older browser would
+have to set `build.target` explicitly rather than inherit it.
+
+---
+
+**The render check, and the methodological finding worth keeping.** §6's Step 7 row asks for
+*"actually run the app — `docker compose up` and click through the SPA in both light and dark
+mode."* No Docker daemon is available in this sandbox (the CLI is present, as the 2026-08-09
+scoping entry records), so the equivalent was built from the pre-installed Chromium: serve each
+`dist/` over a static server, stub `/api/**` with fixtures so the SPA settles deterministically,
+and screenshot **six routes** (dashboard, scans list, new scan, scan detail, settings, account) in
+**both colour schemes** — twelve views per build — then diff the PNGs pixel by pixel. This is
+strictly stronger than a human click-through, which cannot detect a two-pixel shift.
+
+**The first pass diffed non-empty, and taking it at face value would have been wrong.** One view
+(`scans-light`) differed by 171 pixels. Before interpreting that as a Lightning CSS regression, the
+same build was rendered **twice** and the two runs diffed: **three views differed from themselves,
+by 133–138 pixels** — the same order of magnitude. In-flight Mantine animations (the fixture set
+includes a `running` scan, hence a live `Loader`) were being caught at different frames. **A
+measurement whose noise floor is unknown is not a measurement** — the identical lesson step 6's
+entry recorded about the selector-drift shim, arrived at independently by a different route, which
+is the reason to write it down twice.
+
+The fix was to freeze animations at their final state via Playwright's
+`screenshot({ animations: 'disabled', caret: 'hide' })` rather than to suppress them with injected
+CSS, which would have masked the very animation declarations the CSS diff had just examined.
+Re-calibrated: **two runs of the same build are now identical across all twelve views — a noise
+floor of exactly zero.** Against that floor:
+
+**All twelve views are pixel-identical between Vite 6.4.3 and Vite 8.2.1, in both light and dark
+mode.** That is the result this step needed, and it closes §9's still-open question 6 (*"whether
+Vite 8's Lightning CSS minification changes Mantine's rendered output"*) by measurement.
+
+**What the pixel diff does not cover, stated so it is not over-read.** Screenshots reach only
+rendered, settled states: the `@media (hover: hover)` and `:active` blocks (a large share of the
+merged rules), the `::-webkit-*` spin-button rules, and modal/popover/accordion-open states are not
+in the twelve views. Those were covered textually instead, by the declaration-level diff above,
+which is exhaustive over the stylesheet in a way the screenshots are not. The two checks are
+complementary, and neither alone would have been enough.
+
+---
+
+**What moved in the lockfile: 339 → 305 packages, every movement attributed to a requirer.** Both
+lockfiles were parsed and each added/removed/bumped package's requirers resolved in both trees:
+
+- **30 added.** `rolldown@1.2.3` (required by `vite`) plus its 15 `@rolldown/binding-*` platform
+  packages and `@oxc-project/types@0.143.0`; `lightningcss@1.33.0` (required by `vite`) plus its 12
+  `lightningcss-*` platform packages and `detect-libc`; and `@rolldown/pluginutils@1.0.1`, the sole
+  runtime dependency of `@vitejs/plugin-react@6.0.5`.
+- **61 removed**, each checked to have no surviving requirer: `esbuild@0.25.12` and its 25
+  `@esbuild/*` platform packages; `rollup@4.62.2` and its 25 `@rollup/rollup-*` platform packages;
+  plugin-react 4's Babel subtree (`@babel/plugin-transform-react-jsx-self`,
+  `…-jsx-source`, `@babel/helper-plugin-utils`, and the four `@types/babel__*`); and
+  `react-refresh@0.14.2`. `esbuild` retains one *optional peer* reference from `vite@8.2.1`
+  (`^0.27.0 || ^0.28.0`) and is therefore not installed.
+- **3 bumped.** The two targets, plus `picomatch` — a nested `4.0.4` copy deduping into the single
+  top-level `4.0.5`.
+
+**The one entry that could plausibly have been shared was checked specifically.** `@babel/core` and
+`@babel/parser` **survive at 7.29.7** and are *not* in the removed list: their only requirer is now
+`eslint-plugin-react-hooks@7.1.1`. This is the exact inverse of what step 2's entry recorded — there,
+plugin-react 4 already supplied them so react-hooks 7 cost zero new packages; here plugin-react 6
+drops them and react-hooks is the sole reason they remain. Had the two steps landed in the other
+order, this step would have shown four Babel packages leaving rather than three plus four types.
+`react`, `react-dom` (18.3.1), `@mantine/*` (7.17.8), `typescript` (6.0.3), `eslint` (10.8.1),
+`vitest` (4.1.10), `jsdom` (30.0.1) and `postcss` (8.5.25) are unchanged in the resolved tree, read
+out of both lockfiles rather than trusted from the diff.
+
+`lockfileVersion` stays 3 and the file diff is **+556/−978** — proportionate to 61 removals against
+30 additions, with no whole-file re-normalisation. `npm ci` was run through the same npm 11 and the
+lockfile's SHA-256 re-verified unchanged afterwards, so what `--package-lock-only` produced is
+byte-identical to what a real install writes. The build was additionally re-run from a second clean
+install and produced **identical content hashes**, so the output is reproducible rather than
+incidentally equal.
+
+**Which of the document's Step 7 predictions held.**
+
+- **"Moves both, in lockstep — peer-forced" — HELD for the destination, but its stated reason is
+  wrong.** plugin-react 6 does require Vite 8. But *"no version of the plugin spans the boundary"*
+  is false as of 5.2.0 (§3.3 correction above). The step stayed whole by the maintainer's decision,
+  not by the constraint the document claims.
+- **"Config changes: none required in `vite.config.ts`" — HELD**, and each supporting clause
+  re-verified against the file: no `build.rollupOptions`, no `esbuild`/`optimizeDeps`/`manualChunks`
+  keys, `plugins: [react()]` with no options, and `server.proxy` / `build.outDir` /
+  `build.sourcemap` all still honoured (the sourcemap is emitted).
+- **"plugin-react 6's Babel removal is a no-op because the repo passes no `babel` option" — HELD**,
+  verified by search across the whole `frontend/` tree rather than by reading the config alone.
+- **"This is the only step that can change what ships" — HELD.** JS −2.30%, CSS −2.28%, both asset
+  hashes new, and the browser target raised.
+- **"The default browser target rises to Chrome/Edge 111, Firefox 114, Safari 16.4" — HELD
+  exactly**, resolved from the installed package.
+- **"CSS minification moves to Lightning CSS — which matters here because Mantine emits 201 kB of
+  CSS" — HELD as to mechanism, and the feared outcome did not occur.** Lightning CSS rewrote
+  pervasively; it changed nothing semantically and nothing observable.
+- **"Verifies it: compare the emitted bundle against the baseline, then actually run the app… a CSS
+  minifier change does not fail a build; it fails a render" — HELD, and it is the row's most
+  valuable sentence.** It is the reason a pixel diff was built at all. The row's *"run it and click
+  through"* prescription is weaker than what it motivates, though — see the noise-floor finding
+  above, and note that a human click-through has no noise floor to calibrate and no way to detect a
+  sub-perceptual shift.
+- **"Effort L / half a day, risk medium–high" — came in mid-band on effort**, essentially all of it
+  spent on the two comparison harnesses (module census, pixel diff) rather than on the bump, which
+  was a two-line edit that was green first run. **Risk, in hindsight, was priced correctly**: the
+  step really did change the shipped bytes, and nothing but a purpose-built comparison would have
+  told the difference between "changed and fine" and "changed and broken."
+
+**What was deliberately not done.** No package other than `vite` and `@vitejs/plugin-react` moved,
+in `package.json` or in the lockfile — in particular **step 8's `globals`, `@testing-library/user-event`
+and `postcss` were not touched**, and no lint finding was autofixed, in bulk or individually
+(there were none). No source, test, or config file changed. **Both measurement probes were deleted
+before the PR** — `vite.modules.config.ts` removed and the working tree confirmed to carry only
+`package.json` and `package-lock.json` under `frontend/`; the Playwright harness lived entirely in
+the scratch directory and never entered the repository, and `playwright` was installed into a
+scratch prefix rather than into `frontend/`, so it appears in neither `package.json` nor the
+lockfile. `build.target` was **not** pinned to preserve the old browser floor — the raised target is
+Vite 8's documented default and no project document contradicts it; pinning it would be a product
+decision, not a bump. `docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were **not**
+edited — correcting the sequence document is a maintainer call, and this entry is the record of what
+its Step 7 row and §3.3 got right and wrong in the meantime. No step 8 work was started; `main` was
+not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`, `CHANGELOG.md`
+§ Unreleased/Changed, and this entry. No code behaviour, schema, API contract, security model, job
+model, auth, or CI configuration changed; no locked decision re-opened — React stays on 18 and
+Mantine on v7, and neither `vite@8.2.1` nor `@vitejs/plugin-react@6.0.5` declares a `react`,
+`react-dom`, `@types/react*` or `@mantine/*` peer.
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 6 landed: jsdom 26.1.0 → 30.0.1; the selector-drift shim diffed empty, but only after the shim itself had to be fixed
+
+**What changed:** `frontend/package.json` (one line), `frontend/package-lock.json`, `README.md`
+(one line) and `CONTRIBUTING.md` (one bullet) for the raised Node floor, plus `CHANGELOG.md` and
+this entry. This is **step 6 of the eight-step sequence** in
+`docs/upgrades/frontend-toolchain-86.md`. **`jsdom` is the only package bumped.** `vite` stays at
+**6.4.3** (step 7); `frontend/vite.config.ts`, both tsconfigs, `frontend/eslint.config.js`,
+`src/test/setup.ts` and every production source and test file are untouched. No step 7 work was
+started; `main` was not touched.
+
+**The target was re-checked at the registry before anything moved.** `jsdom`'s `dist-tags.latest`
+is still **30.0.1**, and the 30 line contains exactly two releases — 30.0.0 and 30.0.1 — so there
+is no newer 30.x and no deviation from the document's target was needed or proposed.
+
+**The Node floor was verified across all three runtimes, because this is the one step whose
+`engines` constraint reaches outside the test run.** `jsdom@30.0.1` declares
+`engines.node: "^22.22.2 || ^24.15.0 || >=26.0.0"`, read from the published manifest:
+
+| Runtime | Version | Satisfies `^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0`? |
+|---|---|---|
+| CI — `ci.yml` `node-version: "24"` | resolves to **24.19.0** (current head of the 24 line, `nodejs.org/dist/index.json`) | yes, `^24.15.0` |
+| Image — `docker/Dockerfile:27` `node:24-bookworm-slim@sha256:235600a8…` | **24.18.1** | yes, `^24.15.0` |
+| This sandbox | **22.22.2** | yes — and it is *exactly* the `^22.22.2` floor, with no margin |
+
+**The Dockerfile's digest is unchanged from the one §9 resolved, and was re-resolved rather than
+inherited**, by the two independent methods that entry records, which agree: Docker Hub's tag index
+maps `sha256:235600a8…` to exactly `24.18.1-bookworm-slim` and `24.18-bookworm-slim` (both last
+updated 2026-07-30), and the image's `linux/amd64` config blob — fetched through `mirror.gcr.io`,
+since Docker Hub 307-redirects blobs to the egress-blocked `production.cloudfront.docker.com` —
+carries `NODE_VERSION=24.18.1`, `created: 2026-07-30T19:05:08Z`. **So `ci.yml` and the Dockerfile
+need no edit**, exactly as §7.5 predicts. Worth doing by hand rather than trusting a green CI run:
+there is no `.npmrc`, so `engine-strict` is off and a violation would be a non-fatal `EBADENGINE`
+warning, not a failure.
+
+**The sandbox sitting exactly on the floor is a coincidence worth flagging, not a comfort.** Node
+22.22.2 satisfies `^22.22.2` by one patch. Any local run on a 22.x below that — or on a 24.x below
+24.15.0 — would silently execute the suite on a runtime jsdom does not support. That is precisely
+the contributor-facing hazard §7.4 names, and it is why the two docs edits are in this PR.
+
+**`README.md` and `CONTRIBUTING.md` raised from "Node 22+" to "Node 22.22.2+ or 24.15+".** Both
+previously stated a floor a contributor on Node 22.13 would satisfy — that runtime installs
+cleanly (npm does not enforce `engines` here) and then runs `npm test` under an unsupported jsdom.
+`CONTRIBUTING.md` additionally names the constraint's source inline, because "22.22.2" is
+otherwise an arbitrary-looking number that a future edit would round back down to "22".
+
+---
+
+**The step 6 checklist measurement — the selector-drift shim.** jsdom 27.0.0 swapped the CSS
+selector engine (`nwsapi` → `@asamuzakjp/dom-selector`). §8's audit establishes that a green suite
+catches a query finding *nothing* or *too much*, but not a query resolving to a **different**
+element while every downstream assertion still passes — and it explicitly declines to argue that
+residual away, handing it to this step as a two-run measurement instead. That is what was done, and
+it is the substantive content of this step.
+
+**What the shim did.** A throwaway `frontend/src/test/drift-shim.ts`, added as a second entry in
+the jsdom project's `setupFiles`, wrapped every own function property of `screen` matching
+`/^(get|query|find)(All)?By[A-Z]/` and appended one line per resolved element to a log file named
+by a `DRIFT_LOG` env var. Each line is keyed
+`<test file> :: <full test name> :: #<nth query in that test> :: <method>(<args>)` and carries the
+resolved element's description. Async `find*By*` results are logged on settle, and a throw or
+rejection is logged as such rather than dropped, so a "found nothing" outcome is part of the
+diffed record rather than a hole in it. Set-valued results (`getAllBy*`) log every element.
+
+**The shim as the document prescribes it does not work, and this is the transferable finding.**
+§8 and Step 6's checklist specify logging `element.outerHTML.slice(0, 120)` keyed by test name and
+call index. Written exactly that way, **two runs on the *same* jsdom version diff non-empty** —
+verified before touching the version, which is the only reason it was caught. Two independent
+causes:
+
+- **Mantine's `useId` mints a fresh random id per run.** 20-odd lines differed only in
+  `id="mantine-2hy2ovekj"` versus `id="mantine-0z1njuojt"`. Pure noise, but it is *inside* the
+  first 120 characters of most Mantine elements, so it dominates the diff.
+- **One line differed in real content**, not just ids: `BackupsPanel.test.tsx`'s
+  `getByRole('button', {name: 'Save schedule'})` at call #005 logged `len=760` in one run and
+  `len=314` in the other — the same button, caught with and without its transient loading state,
+  a timing-dependent DOM state rather than a different element.
+
+**A measurement whose noise floor is unknown is not a measurement.** Had the shim been written to
+spec, run once per version, and diffed, it would have produced ~20 differing lines on a bump that
+in fact changed nothing — and the honest reading of that output is indistinguishable from real
+drift without doing this calibration anyway. The fix was to log an element **identity** rather than
+its rendered bytes: the element's DOM index path from the document root
+(`html>body>div[0]>…>button[1]`) alongside a normalised `outerHTML` slice with
+`mantine-[a-z0-9]{6,}` collapsed to `mantine-ID`. The index path is what "resolved to a different
+element" actually means, and unlike `outerHTML` it does not move when the element's own contents
+are mid-transition. **The normalisation is the only edit made to what gets logged**, and it was
+validated the only way it can be: by re-running the unmodified suite twice on jsdom 26.1.0 and
+confirming the two logs are byte-identical. They are.
+
+> **Standing note — the shim specification in `docs/upgrades/frontend-toolchain-86.md` §8 is
+> methodologically broken, and not only for this step. Use the shape below instead, in any future
+> drift check.**
+>
+> This is a defect in the *technique*, not a one-off miss in one step's execution, and it recurs
+> anywhere the app under test mints identifiers per render. §8 prescribes logging
+> `element.outerHTML.slice(0, 120)` keyed by test name and call index. Any React app on Mantine
+> hits `useId` on essentially every labelled control, input, alert and popover — and React's own
+> `useId`, Emotion, Radix, Headless UI, Chakra and MUI all do the same thing — so a fresh random
+> id appears *inside the first 120 characters* of most elements, on every run. The log is then
+> re-randomised per run and a diff of two logs measures the id generator, not the DOM. A second,
+> subtler source is the same: `outerHTML` captures the element's **contents**, so any element
+> caught mid-transition (a button with and without its loading spinner, a list mid-fetch) differs
+> between runs while being the same element. Both were live here.
+>
+> **Why it is worse than merely noisy.** The failure is silent and points the wrong way. A
+> spec-conformant shim run once per version produces a large non-empty diff on a bump that changed
+> nothing, and "non-empty diff" is exactly the signal the check exists to raise. Reading that
+> output honestly means investigating ~20 phantom drifts, or — the likelier outcome under time
+> pressure — concluding the whole measurement is unreliable and waving it through on the green
+> suite, which is the state §8 built the checklist item to escape. A check that cries wolf is worse
+> than no check, because it discredits itself.
+>
+> **The template.** Two properties, both required:
+>
+> 1. **Log element *identity*, not rendered bytes.** The element's **DOM index path** from the
+>    document root (`html>body>div[0]>…>button[1]`) is what "the query resolved to a different
+>    element" actually means. It is stable against the element's own contents changing, and it
+>    moves precisely when the resolved node moves. Keep a normalised `outerHTML` slice alongside it
+>    as a human-readable label for reading a non-empty diff — not as the identity.
+> 2. **Normalise the generated ids** — here `mantine-[a-z0-9]{6,}` → `mantine-ID`. Adapt the
+>    pattern to whatever the app mints (`:r0:`-style for bare React `useId`, `css-…` for Emotion,
+>    `radix-…` for Radix). Normalisation is the only edit permitted to what gets logged; anything
+>    further starts hiding the thing being measured.
+>
+> **And the step that makes it a measurement rather than a hope: calibrate the noise floor first.**
+> Run the shim **twice on the unchanged version** and confirm the two logs are byte-identical
+> *before* touching the dependency. That costs one extra test run — ~20 s here — and it is the only
+> thing that distinguishes "the diff is empty because nothing drifted" from "the diff is empty
+> because I got lucky with the ordering." It is also what caught this defect: the non-determinism
+> was found on jsdom 26.1.0, with the version still untouched, so there was never a moment where a
+> phantom diff had to be told apart from a real one.
+>
+> Recorded here rather than in the sweep document, which is the maintainer's to correct.
+
+**The result, which is the point of the exercise:**
+
+| | |
+|---|---|
+| Logged query resolutions | **176**, across **46 tests** in **17 of the 18 jsdom test files** (`src/api/client.test.tsx` makes no `screen` query) |
+| By method | 46 `getByRole`, 36 `getByText`, 28 `getByLabelText`, 19 `queryByText`, 19 `getByTestId`, 16 `findByText`, 5 `findByLabelText`, 2 `queryByLabelText`, 2 `getAllByText`, 2 `findByRole`, 1 `queryByRole` |
+| Determinism, jsdom 26.1.0 | two runs, logs **identical** |
+| Determinism, jsdom 30.0.1 | two runs, logs **identical** |
+| **26.1.0 vs 30.0.1** | **176 lines either side, `diff` is EMPTY** |
+
+**Every query in the suite resolved to the same element before and after the engine swap.** That
+is the result this step needed, and stating it is the point — a green suite alone does not prove
+it, and §8 was right that it could not be settled by argument. The shim was deleted and
+`vite.config.ts` restored with `git checkout --` before the PR; `git status` shows only
+`package.json` and `package-lock.json` modified in `frontend/`.
+
+**Why the empty diff is credible rather than vacuous.** The measurement covers `getAllByText` —
+the suite's one set-valued query, at `NewScanPage.prefill.test.tsx:54`, which §8 names as the
+natural home for silent drift — at both of its runtime invocations, and it covers all 46
+`getByRole` resolutions, the query type §6's channel table identifies as the only one where the
+engine has real discriminating power. The ~17 interaction targets §8 could not argue away are
+inside the 176, because the shim logs at the query, not at the assertion.
+
+---
+
+**The other four channels were re-verified inert against the installed tree, not inherited.**
+§0.3's method note is binding, and the "already established" facts in the session brief were
+treated as hypotheses:
+
+| Channel | Re-verified how | Verdict |
+|---|---|---|
+| CSSOM rewrite (29.0.0) | `vite.config.ts`'s `test` block has **no `css` key**, so Vitest's default `css: false` applies and Mantine's stylesheets never enter jsdom | inert — no author CSS to re-parse |
+| `element.click()` → `PointerEvent` (27.0.0) | `grep -rn "\.click()" src/` → **zero hits**; all **26** interactions are `userEvent.click`/`fireEvent.click`, which construct and dispatch their own events | unreachable |
+| Passive-by-default events (27.0.0) | `grep -rn "preventDefault" src/` → **zero hits** | cannot bite |
+| `matchMedia` / `ResizeObserver` / `scrollIntoView` | grepped the **installed** `node_modules/jsdom/lib/` on **both** sides: **0 files** in 26.1.0, **0 files** in 30.0.1 | `src/test/setup.ts`'s `if (!…)` guards behave identically across the span |
+
+**jsdom 30.0.0's release notes are still unreachable, and were not guessed at.** Re-probed at the
+correct ref: `Changelog.md` and `CHANGELOG.md` both 404 at `refs/tags/v30.0.0` and
+`refs/tags/v30.0.1`, while `README.md` returns **200** at those same refs and `Changelog.md`
+returns 200 at `v29.0.0`. That is the document's own ref-versus-file discipline applied: the 404 is
+about the file, not the ref. The gap stands as §9 item 2b describes it. **The response was to
+measure behaviour rather than infer it** — the shim diff and the four channel checks above are
+what stands in for the notes, and they are stronger evidence about *this* suite than a changelog
+would have been.
+
+---
+
+**What moved in the lockfile: 338 → 340 packages, every movement attributed to a requirer.** Both
+lockfiles were parsed and each added/removed/bumped package's requirers resolved in both trees,
+rather than eyeballing the diff:
+
+- **12 added.** The new selector engine and CSSOM stack: `@asamuzakjp/dom-selector@8.3.2`,
+  `css-tree@3.2.1` → `mdn-data@2.27.1`, `@bramus/specificity@2.4.2`,
+  `@csstools/css-syntax-patches-for-csstree@1.1.7`, `bidi-js@1.0.3` → `require-from-string@2.0.2`;
+  `undici@8.10.0` and `@exodus/bytes@1.15.1`, both direct dependencies of `jsdom@30.0.1`; plus
+  three nested copies (`lru-cache@11.5.2` under jsdom and under `@asamuzakjp/dom-selector`,
+  `whatwg-url@16.0.1` under `data-urls`).
+- **10 removed**, each checked to have **no surviving requirer**: `nwsapi` (the replaced selector
+  engine), `cssstyle` → `rrweb-cssom` (the replaced CSSOM), `whatwg-encoding` → `iconv-lite` →
+  `safer-buffer`, and `ws` / `http-proxy-agent` / `https-proxy-agent` / `agent-base`, the
+  networking stack `undici` supersedes.
+- **19 version bumps**, all inside jsdom's closure: `whatwg-url` 14.2.0 → 17.1.0, `tough-cookie`
+  5.1.2 → 6.0.2 (with `tldts`/`tldts-core` 6.1.86 → 7.4.10), `parse5` 7.3.0 → 8.0.1 (with
+  `entities` 6.0.1 → 8.0.0), `data-urls` 5.0.0 → 7.0.0, `@asamuzakjp/css-color` 3.2.0 → 6.0.7 and
+  its four `@csstools/*` dependencies, `tr46` 5.1.1 → 6.0.0, `webidl-conversions` 7.0.0 → 8.0.1,
+  `html-encoding-sniffer` 4.0.0 → 6.0.0, `whatwg-mimetype` 4.0.0 → 5.0.0.
+
+**Nothing moved that is not jsdom or required by it, and the two entries that could plausibly have
+been shared were checked specifically.** `entities` crossing 6 → 8 would matter if anything outside
+jsdom's subtree required it; its **only** requirer in either tree is `parse5`, whose only requirer
+is `jsdom`. And the top-level `lru-cache@5.1.1` that `@babel/helper-compilation-targets` depends on
+is **untouched** — all three `11.5.2` copies are nested under jsdom's subtree. `vite` (6.4.3),
+`vitest` (4.1.10), `typescript` (6.0.3), `eslint` (10.8.1), `postcss` (8.5.25), `react` and
+`react-dom` (18.3.1) are unchanged in the resolved tree, read out of both lockfiles rather than
+trusted from the diff.
+
+`lockfileVersion` stays 3 and the file diff is **+275/−231** — proportionate to 12 additions
+against 10 removals and 19 bumps, with no whole-file re-normalisation, because the lockfile was
+written with **npm 11.19.0** installed into a scratch prefix to match CI's Node 24 rather than the
+sandbox's Node 22 / npm 10.9.7. That is the **sixth** consecutive lockfile touch to use this method
+and the sixth clean diff. `npm ci` was additionally run through the same npm 11 and the lockfile's
+SHA-256 re-verified unchanged afterwards, so the file a `--package-lock-only` resolution produced is
+byte-identical to what a real install writes.
+
+**Suites, measured on both sides, each from a clean install.** Baseline on 26.1.0 (`npm ci` from
+the committed lockfile): lint clean (18.1 s), `format:check` clean, **80 tests across 22 files**,
+build **7,035 modules → 645.14 kB JS (`index-Vvdzytcz.js`) / 201.38 kB CSS (`index-D2wHtcHV.css`)**,
+`npm audit` **0 vulnerabilities**. After the bump, from a fresh `rm -rf node_modules && npm ci`:
+lint clean (15.3 s), `format:check` clean, **80 tests across 22 files**, build **7,035 modules →
+645.14 kB / 201.38 kB**, audit **0**. The emitted assets carry the **same content hashes** on both
+sides — the right signal here, since jsdom is a devDependency the bundle never sees.
+
+**The count comparison was made per test, not per total**, as step 5 established. Both runs were
+captured with `--reporter=json` and reduced to sorted `file :: full test name :: status` triples,
+and the two lists **diff empty** — the same 22 files, the same 80 test names, all `passed`. The
+baseline half of that comparison was taken by reinstalling 26.1.0 from the committed lockfile
+after the bump, not quoted from an earlier note.
+
+**Which of the document's Step 6 predictions held.**
+
+- **"Moves `jsdom` only" — HELD.** Nothing else in `package.json`; nothing outside its closure in
+  the lockfile.
+- **"No config changes in `vite.config.ts`" — HELD.** The file is byte-identical to `dev`.
+- **"Two docs edits are required (§7.4)" — HELD**, and the floor is worth stating precisely:
+  §7.4 offers "Node 22.22.2+ / 24.15+ **or simply Node 24**". The first was taken. Native
+  development on Node 22 is still viable and this repo has no reason to forbid it; a bare "Node 24"
+  would have over-tightened a doc statement to match a build image.
+- **"Prerequisite check ✅ resolved — the pinned digest ships 24.18.1" — HELD**, re-resolved by
+  both of §9's methods rather than inherited.
+- **"Verifies it: `npm test` — expect 21 files / 79 tests" — the mechanism HELD, the numbers are
+  stale.** 22 files / 80 tests is the current figure, corrected in the step 4 and step 5 entries.
+  This is the third and last place in the document quoting 79/21; a step comparing against it would
+  read a genuine regression as a match.
+- **"Effort S–L, risk medium" — came in at the bottom of the effort band**, and essentially all of
+  it went on the shim: writing it, discovering it was non-deterministic, and re-basing it on DOM
+  identity. The bump itself was a one-line edit whose suite was green first run.
+- **§6's channel-table counts are stale in this tree, and the direction matters.** The table is
+  written against "12 `.tsx` test files, 17 of the 79 tests, 116 query call sites". Today it is
+  **18 `.tsx` files, 59 jsdom tests, 135 static `screen.*` call sites** (136 counting the
+  line-wrapped `getAllByText`), resolving to 176 runtime queries. Step 5's entry already flagged
+  the "17 jsdom tests" figure as a stale `.tsx` **file** count quoted as a test count, and warned
+  that a step budgeting 17 jsdom tests would under-price its own oracle. It would have: the oracle
+  is roughly 3.5× the size the table implies, in the favourable direction.
+- **§8's "~17 interaction targets" residual — CLOSED by measurement, as §8 intended.** They are
+  inside the 176 logged resolutions and none of them drifted.
+
+**What was deliberately not done.** No package other than `jsdom` moved, in `package.json` or in
+the lockfile — in particular **`vite` and `@vitejs/plugin-react` were not touched**, which is the
+whole point of the step 6/7 boundary. No source, test, or config file changed. No lint finding was
+autofixed, in bulk or individually — there were none. **The shim was not committed**: it was
+deleted and `vite.config.ts` restored before the PR, and the working tree confirmed to carry only
+the two dependency files under `frontend/`. jsdom 30.0.0's changelog contents were **not guessed
+at** — the gap was re-probed, confirmed still open, and answered by measurement instead. No step 7
+work was started. `docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were **not**
+edited — correcting the sequence document is a maintainer call, and this entry is the record of
+what its Step 6 row got right and wrong in the meantime, including the shim's specification.
+`main` was not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`, `README.md`,
+`CONTRIBUTING.md`, `CHANGELOG.md` § Unreleased/Changed, and this entry. No code behaviour, schema,
+API contract, security model, job model, auth, or CI configuration changed; no locked decision
+re-opened — React stays on 18 and Mantine on v7, and `jsdom` declares no `react`, `react-dom`,
+`@types/react*` or `@mantine/*` peer.
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 5 landed: Vitest 3.2.7 → 4.1.10 on the pinned Vite 6; the "no config changes" prediction held, the "low breakage" one did not
+
+**What changed:** `frontend/package.json` (one line), `frontend/package-lock.json`,
+`frontend/src/components/settings/OidcLinkCard.test.tsx` (an import, two lines, and a comment
+explaining them), plus `CHANGELOG.md` and this entry. This is **step 5 of the eight-step sequence**
+in `docs/upgrades/frontend-toolchain-86.md`. **`vitest` is the only package bumped.** `jsdom` stays
+at **26.1.0** (step 6) and `vite` at **6.4.3** (step 7); `frontend/vite.config.ts`, both tsconfigs,
+`frontend/eslint.config.js` and every production source file are untouched. No step 6 or later work
+was started; `main` was not touched.
+
+**Step 5's row was confirmed to name `vitest` alone before anything moved.** The maintainer's
+instruction was to stop if it also named jsdom, because the 5-Vitest/6-jsdom/7-Vite order exists to
+spend the cheap total oracle before the expensive partial one. It does not: the "Moves" cell reads
+*"`vitest` only (stays on the pinned `vite@6.4.3`)"*, and jsdom is step 6's sole member. No
+divergence, nothing to escalate.
+
+**The target and the peer range were re-checked at the registry, not taken from the document.**
+`vitest`'s `dist-tags.latest` is still **4.1.10**; the only published version beyond it is
+`5.0.0-beta.7` on the `beta` tag, which is a prerelease and out of scope. So the document's target
+is current and no deviation was needed. The ordering question — whether Vitest 4 forces the Vite
+major that is not due until step 7 — was answered at the published manifest:
+
+| Field on `vitest@4.1.10` | Value |
+|---|---|
+| `peerDependencies.vite` | `^6.0.0 \|\| ^7.0.0 \|\| ^8.0.0` |
+| `peerDependenciesMeta.vite.optional` | `false` (a **required** peer) |
+| `dependencies.vite` | `^6.0.0 \|\| ^7.0.0 \|\| ^8.0.0` (same range) |
+| `engines.node` | `^20.0.0 \|\| ^22.0.0 \|\| >=24.0.0` |
+
+The pinned **`vite@6.4.3` satisfies it**, so §3.4's finding holds and the sequence order is sound.
+CI's Node 24 and the pinned `node:24-bookworm-slim` (Node 24.18.1) both satisfy the engine floor;
+no `ci.yml` or Dockerfile change is needed.
+
+**Config claims re-verified against the shipped 4.1.10 tarball, per §0.3's method note.** All three
+legs the Step 5 row asserts held, checked in the artifact rather than in the migration guide:
+
+| Claim | Where it was checked | Verdict |
+|---|---|---|
+| `declare module "vite"` still augments `UserConfig` with `test` | `dist/config.d.ts:33` | **holds** — `/// <reference types="vitest/config" />` + `defineConfig` from `'vite'` still types the `test` key |
+| project configs still accept `extends?: string \| true` | `dist/chunks/reporters.d.*.d.ts:3614` | **holds** — `vite.config.ts:32,40` are fine |
+| `projects` is the current spelling | `…:2859` `projects?: TestProjectConfiguration[]` | **holds** — the `workspace` → `projects` rename is a no-op |
+
+The rest of Vitest 4's breaking surface was checked against the repo rather than assumed inert:
+`vite.config.ts` carries no `coverage`, `poolOptions`, `maxThreads`/`maxForks`, `minWorkers`,
+`reporters`, `deps.*`, `environmentMatchGlobs`/`poolMatchGlobs`, `css` or `restoreMocks` key; there
+are **zero** snapshot files and no `toMatchSnapshot`/`toMatchInlineSnapshot` call sites, so the
+custom-element shadow-root printing change has nothing to act on; and no `test`/`describe` call
+passes an options object as a third argument. The **narrowed default `exclude`** was measured on
+both sides rather than reasoned about — v3 resolves to five patterns
+(`node_modules`, `dist`, `cypress`, the dot-dirs, and the `*.config.*` union), v4 to two
+(`node_modules`, `.git`) — and it collects nothing new here because both projects' `include` globs
+are confined to `src/**`, which contains no `dist`, no `cypress` and no config file matching a test
+glob. `jsdom` remains a builtin environment in 4.1.10 (`dist/environments.d.ts`).
+
+**Net: `frontend/vite.config.ts` needed no edit, exactly as the row predicts.**
+
+**The row's *"Expected breakage: Low"* did not hold, and the miss is a type error rather than a test
+failure.** `npm run build` failed at its `tsc -b` half:
+
+```
+src/components/settings/OidcLinkCard.test.tsx(65,65): error TS2345:
+  Argument of type 'Mock<Procedure | Constructable>' is not assignable to parameter of type
+  '(data: any, unused: string, url?: string | URL | null | undefined) => void'.
+```
+
+**The mechanism, read from the installed `@vitest/spy@4.1.10` declarations rather than inferred.**
+`fn` is declared `fn<T extends Procedure | Constructable = Procedure>(…): Mock<T>`; under 3.2.7 the
+constraint was `Procedure` alone. The widening is the *"`spyOn` and `fn` Support Constructors"*
+change the migration guide leads with — but its cost here arrives through a route the guide does not
+mention. `ReturnType<T>` instantiates a generic signature at its **constraint**, not its default, so
+the alias `ReturnType<typeof vi.fn>` silently moved from `Mock<Procedure>` to
+`Mock<Procedure | Constructable>`, whose call signature is
+`NormalizedProcedure<Procedure | Constructable>` — a union with a construct-only branch that no
+longer matches a plain call signature. `OidcLinkCard.test.tsx` used that alias for a mock passed to
+`.mockImplementation()` on a `History.replaceState` spy, which is the one position in the suite that
+demands an exact signature.
+
+**Fixed at that one site, by making the type more accurate rather than looser.** The mock is now
+declared `Mock<typeof window.history.replaceState>` and created with
+`vi.fn<typeof window.history.replaceState>()` — the real method signature, which is what the alias
+was always standing in for. No `as`, no `any`, no `@ts-expect-error`, and **no autofix, in bulk or
+individually**. `Mock` is exported from `vitest` itself, so the import is type-only and nothing at
+runtime changed: `vi.fn<T>()` erases to `vi.fn()`.
+
+**The sibling occurrence was found and deliberately left alone.** `stubLocation()` at line 49 also
+returns `{ assign: ReturnType<typeof vi.fn> }`. It still compiles, because `assign` is only ever
+passed to `expect(...)` and stored as an object property — never into a position requiring an exact
+signature. It is a latent instance of the same loose idiom, not a defect, and editing non-erroring
+code is outside this step's scope. Recorded so it is not rediscovered as a mystery: **if a future
+step ever passes `assign` to a typed callback parameter, this is the same error waiting.** A grep
+confirms these two are the only `ReturnType<typeof vi.fn>` uses in `frontend/src/`.
+
+**One semantic change reaches the suite, and it was measured on both versions rather than argued.**
+Vitest 4's `vi.restoreAllMocks()` restores only spies created with `vi.spyOn`; Vitest 3's also reset
+plain `vi.fn()` implementations. A standalone probe — two scratch projects, one per version, running
+the identical file — settles it:
+
+| | `vi.fn()` implementation survives `restoreAllMocks()` | `vi.spyOn` spy restored |
+|---|---|---|
+| `vitest@3.2.7` | **no** | yes |
+| `vitest@4.1.10` | **yes** | yes |
+
+Two files call `vi.restoreAllMocks()`. **`api/client.test.tsx` is structurally inert** — it has no
+`vi.spyOn`, no `vi.mock` factory and no module-level `vi.fn()`; its only mocks are per-test
+`vi.fn()`s handed to `vi.stubGlobal('fetch', …)` and removed by `vi.unstubAllGlobals()` in
+`afterEach`, so nothing exists for the call to act on under either version.
+**`OidcLinkCard.test.tsx` is the one file that combines a `vi.mock` factory's `vi.fn()`s with
+`restoreAllMocks()` in `afterEach`**, so its three mocks now carry implementations across tests
+where they previously did not.
+
+**Whether that changes any test's behaviour was measured, not reasoned.** The real file was
+temporarily instrumented to print, per test, each mock's call count and whether it still held an
+implementation; the instrumentation was then removed and the file re-verified as carrying only the
+type fix. The carryover is **real and provably inert**: `startOidcLink` holds an implementation from
+the *"navigates to the provider URL"* test onward and `unlinkOidcIdentity` from *"sends fresh
+credentials when unlinking"* onward — under Vitest 3 both would have been wiped after each test —
+yet both record **zero calls** in every subsequent test, and all ten tests set
+`getOidcLinkStatus`'s own resolved value before rendering, so its carryover is always overwritten
+before it can be read. **No test passes for a different reason than it did on 3.2.7.**
+
+**What moved in the lockfile: 346 → 338 packages, every movement attributed to a requirer.** Both
+lockfiles were parsed and each added/removed/bumped package's requirers resolved, rather than
+eyeballing the diff:
+
+- **2 added** — `obug@2.1.4` (a direct dependency of `vitest@4.1.10`) and
+  `@standard-schema/spec@1.1.0` (required by `@vitest/expect@4.1.10`).
+- **10 removed** — `vite-node` and its private `cac`, replaced by Vite's Module Runner; `tinypool`,
+  which v4 removes outright when it rewrote the pool architecture; `tinyspy`, dropped by
+  `@vitest/spy@4`; `strip-literal` and its nested `js-tokens`, dropped by `@vitest/runner@4`; and
+  `check-error`, `deep-eql`, `loupe`, `pathval`, the chai-5 subtree orphaned by the move to chai 6.
+  Each was checked to have **no surviving requirer**.
+- **13 version bumps** — the seven `@vitest/*` packages to 4.1.10, plus `vitest` itself and its
+  closure moving in step: `chai` 5.3.3 → 6.2.2, `es-module-lexer` 1.7.0 → 2.3.1, `std-env` 3.10.0 →
+  4.2.0, `tinyexec` 0.3.2 → 1.3.0, `tinyrainbow` 2.0.0 → 3.1.1.
+
+**Nothing moved that is not `vitest` or required by it, and the one case that looked like it could
+have been was checked specifically.** `es-module-lexer` crossing a major (1 → 2) is the entry that
+would matter if `vite@6.4.3` also required it, since a single hoisted copy serves both. It does not:
+before the bump its **only** requirer was `vite-node@3.2.4` at `^1.7.0`, and after it is `vitest` at
+`^2.0.0` — Vite bundles its own copy and declares no dependency on the package. `vite` stays 6.4.3
+and `jsdom` 26.1.0 in the resolved tree, verified by reading both entries out of the lockfile rather
+than trusting the diff.
+
+`lockfileVersion` stays 3 and the file diff is **+131/−209** — proportionate to 10 removals against
+2 additions, with no whole-file re-normalisation, because the lockfile was written with **npm
+11.19.0** installed into a scratch prefix to match CI's Node 24 rather than the sandbox's Node 22 /
+npm 10.9.7. That is the **fifth** consecutive lockfile touch to use this method and the fifth clean
+diff. `npm ci` was additionally run *through the same npm 11* and the lockfile's SHA-256 re-verified
+unchanged afterwards, so the file a `--package-lock-only` resolution produced is byte-identical to
+what a real install writes.
+
+**Suites, measured on both sides, each from a clean install.** Baseline on 3.2.7 (`npm ci` from the
+committed lockfile): lint clean (11.6 s), `format:check` clean, **80 tests across 22 files**, build
+**7,035 modules → 645.14 kB JS (`index-Vvdzytcz.js`) / 201.38 kB CSS (`index-D2wHtcHV.css`)**,
+`npm audit` **0 vulnerabilities**. After the bump, from a fresh `rm -rf node_modules && npm ci`:
+lint clean (9.5 s), `format:check` clean, **80 tests across 22 files**, build **7,035 modules →
+645.14 kB / 201.38 kB**, audit **0**. The emitted assets carry the **same content hashes** on both
+sides — the same signal steps 1, 2 and 4 produced, and the right one here, since a test-runner
+devDependency and a type-only test edit cannot reach the bundle.
+
+**The count comparison was made per test, not per total.** A matching 80/22 pair proves less than it
+looks like: the same totals could hide a renamed, moved or re-parented test. Both runs were captured
+with `--reporter=json` and reduced to a sorted `file :: full test name :: status` triple, and the two
+lists **diff empty** — the same 22 files, the same 80 test names, the same statuses.
+
+**Baseline note: 80/22 is the current figure; the document's Step 5 row says 79/21.** The row's
+*"expect 21 files / 79 tests"* was written before `ScanDetailPage.scanIdReset.test.tsx` landed on
+`dev`. The step-4 entry above already records the correction; it is repeated here because Step 5's
+row is one of the two places in the document that still quotes the stale pair, and a future step
+comparing against it would read a genuine regression as a match.
+
+**Which of the document's Step 5 predictions held.**
+
+- **"Moves `vitest` only, stays on `vite@6.4.3`" — HELD**, and the peer range was re-verified at the
+  published manifest rather than inherited: `^6.0.0 || ^7.0.0 || ^8.0.0`, required, satisfied by the
+  pin.
+- **"Config changes: none required" — HELD**, and all three of its supporting artifact claims
+  re-checked in the 4.1.10 tarball. This is the first Step-5-style prediction in the sweep to
+  survive verification unamended.
+- **"The narrowed default `exclude` collects nothing new" — HELD**, and upgraded from an argument to
+  a measurement by resolving `defaultExclude` under both versions.
+- **"Residual risk is the `vite-node` → ModuleRunner swap changing module resolution under the 17
+  jsdom tests" — DID NOT MATERIALISE.** All jsdom-project tests pass unchanged, by name and status.
+  (The count in that phrasing is doubly wrong and is worth correcting once, since §6's jsdom channel
+  analysis reuses it: the jsdom project today is **18 `.test.tsx` files carrying 59 tests**, against
+  4 `.test.ts` files carrying 21 under Node. "17" appears to be a stale `.tsx` **file** count quoted
+  as a test count — a step 6 that budgets 17 jsdom tests will badly under-price its own oracle.)
+- **"Expected breakage: Low… `npm test` is what verifies it" — DID NOT HOLD, and the framing is the
+  reason it was nearly missed.** The row names `npm test` as the oracle, and `npm test` was green on
+  the first run. The failure was in `npm run build`'s `tsc -b` half, which the row does not mention
+  at all — it is caught only because the sweep's standing exit criteria run all five commands. The
+  transferable point is the same one step 4 recorded from the other direction: **a step's named
+  oracle is not necessarily the oracle that fails.** A runner bump was priced as a runtime-only
+  change, and Vitest ships types that the type-checked build consumes.
+- **Effort priced S / under 1 h, risk low — came in at the top of the S band**, the extra time spent
+  entirely on diagnosing one `TS2345` and measuring the `restoreAllMocks` change.
+
+**What was deliberately not done.** No package other than `vitest` moved, in `package.json` or in
+the lockfile — in particular **`jsdom` and `vite` were not touched**, which is the whole point of
+the step boundary. No lint finding was autofixed, in bulk or individually — there were none; the one
+type error was fixed by hand at a single site. No production source file changed. The
+`ReturnType<typeof vi.fn>` at `OidcLinkCard.test.tsx:49` was left as it stands. The temporary
+instrumentation used to measure mock carryover was removed before the PR, and the file confirmed to
+carry only the type fix. `docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were **not**
+edited — correcting the sequence document is a maintainer call, and this entry is the record of what
+its Step 5 row got right and wrong in the meantime. No step 6 or later work was started; `main` was
+not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`,
+`frontend/src/components/settings/OidcLinkCard.test.tsx`, `CHANGELOG.md` § Unreleased/Changed, and
+this entry. No code behaviour, schema, API contract, security model, job model, auth, or CI
+configuration changed; no locked decision re-opened — React stays on 18 and Mantine on v7, and
+`vitest` declares no `react`, `react-dom`, `@types/react*` or `@mantine/*` peer.
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 4 landed: TypeScript 5.7.2 → 6.0.3 with the ceiling re-checked; the `this`-less inference change surfaced, silently and benignly
+
+**What changed:** `frontend/package.json` (one line), `frontend/package-lock.json` (one entry),
+`frontend/tsconfig.app.json` (an explicit `"types": []` plus the comment explaining why an
+apparently-inert line is there), plus `CHANGELOG.md` and this entry. This is **step 4 of the
+eight-step sequence** in `docs/upgrades/frontend-toolchain-86.md`, executed exactly as its
+checklist specifies. **No source file changed.** `eslint.config.js` was not touched, no other
+package moved, no step 5 or later work was started, and `main` was not touched.
+
+**The ceiling was re-checked before anything was edited, because the document says it has a shelf
+life.** §3.1's one-liner, plus two checks it does not ask for:
+
+| Package | `peerDependencies.typescript` |
+|---|---|
+| `typescript-eslint@8.66.0` (`latest`) | `>=4.8.4 <6.1.0` |
+| `typescript-eslint@8.66.1-alpha.10` (`canary`) | `>=4.8.4 <6.1.0` |
+| `@typescript-eslint/parser@8.66.0` | `>=4.8.4 <6.1.0` |
+| `@typescript-eslint/typescript-estree@8.66.0` | `>=4.8.4 <6.1.0` |
+
+**The ceiling holds unchanged.** `latest` is still 8.66.0 — no new typescript-eslint major has
+appeared, which §3.1 names as the shape TS 7 support would arrive in. The umbrella and both
+underlying packages agree, so the "checking the umbrella is sufficient" claim was verified rather
+than inherited. Separately, **6.0.3 is still the head of the 6.x line**: `typescript`'s published
+versions inside `<6.1.0` are `6.0.0-beta`, a long run of `6.0.0-dev.*`, `6.0.1-rc`, **6.0.2**
+(2026-03-23) and **6.0.3** (2026-04-16). There is no newer 6.x patch and no 6.1.x at all, so no
+deviation from the document's target was needed and none was proposed. `dist-tags.latest` is
+`7.0.2` and `next` is `7.1.0-dev.*` — the offers will keep coming and stay declined.
+
+**One engine fact worth recording so it is not re-derived:** `typescript@6.0.3` declares
+`engines.node: ">=14.17"`, identical to 5.7.2's, and still ships **both** `tsc` and `tsserver`
+bins — the second is the cheap artifact-level confirmation that 6.0.3 really is the last JS-based
+TypeScript, since 7.0.2 drops `tsserver` entirely.
+
+**The `types` edit was verified as a no-op twice, and the second method is the one that carries
+the weight.** The document's §7.2 audit was re-run against `src/` rather than trusted, and every
+leg held: **zero** references to `process`, `Buffer`, `__dirname` or `__filename`; **zero**
+`NodeJS.` namespace uses; all **22** test files import their globals from `'vitest'`, with
+`vite.config.ts` setting no `globals: true` (so nothing *could* be relying on ambient test
+globals); and all five timer call sites go through `window.setTimeout`/`window.clearTimeout`
+(`ScansPage.tsx:198-199`, `ScanDetailPage.tsx:338-343`) — DOM lib, not `@types/node`. The one
+`process` use in the repo is `vite.config.ts:7`, which belongs to `tsconfig.node.json` and its
+existing `"types": ["node"]`.
+
+That is a grep audit, and a grep audit cannot see an ambient dependency that has no identifier of
+its own. So the edit was **applied first under TypeScript 5.7.2**, where the old
+enumerate-everything default was still live and the app project was ambiently pulling in all
+fourteen installed `@types` packages (`aria-query`, `babel__*`, `chai`, `deep-eql`, `esrecurse`,
+`estree`, `json-schema`, **`node`**, `prop-types`, `react`, `react-dom`): `tsc -b --force` and
+`npm run lint` both stayed clean. Withdrawing the enumeration is therefore proven inert
+*independently of the compiler move*, which is the whole reason to sequence it that way — had it
+broken something, the failure would have had one cause instead of two.
+
+**The residual risk the document names did surface, and `tsc -b` would never have shown it.**
+§7.2 flags *"less context-sensitivity on `this`-less functions"* as the one change no config audit
+can pre-empt, and prices it as *"can produce genuinely new errors in generic callback positions."*
+Against this tree it produced **no error and no `TS6xxx` deprecation diagnostic** — `tsc -b
+--force` is clean on both projects. Stopping there would have been the §0.3 mistake in a new
+costume: a green oracle reported as if it bounded the change. So inference was measured directly,
+by emitting declarations under both compilers from a throwaway probe config (a copy of
+`tsconfig.app.json` with `emitDeclarationOnly`) and diffing the two trees. **79 `.d.ts` files
+either side; exactly one line differs**, in `src/pages/ScanDetailPage.tsx`:
+
+```
+- export declare const FindingsTable: import("react").NamedExoticComponent<FindingsTableProps>;
++ export declare const FindingsTable: import("react").MemoExoticComponent<({ findings, findingsTotal,
++     findingsLoading, findingsLoaded, }: FindingsTableProps) => import("react/jsx-runtime").JSX.Element>;
+```
+
+`React.memo` is overloaded. Under 5.7.2 the argument — a `this`-less **named function expression**
+(`ScanDetailPage.tsx:95`) — matched the `SFC<P>` overload, which needs the parameter contextually
+typed; under 6.0.3 it falls through to the `T extends ComponentType<any>` overload, which infers
+`T` as the function type itself. This is precisely the documented change, observed at the only
+`memo`/`forwardRef` site in `src/` (grepped — there is exactly one).
+
+**It is benign, established by probe rather than by reasoning about the two type aliases.** A
+scratch file asserted `ComponentProps<typeof FindingsTable>` three ways — the exact prop object
+accepted, an extra prop rejected, a missing prop rejected — and **both compilers agree on all
+three**. The probe was deleted. The repo also emits no declarations (`noEmit: true` in both
+tsconfigs; no library build), so the printed form has no consumer at all. **Reported, not
+"fixed":** no annotation was added to steer overload resolution back, because the contract did not
+move and an edit would be churn against a compiler default.
+
+**The `print-config` diff, run on one representative file per file class, per §0.3's method note.**
+App `.tsx` (`src/pages/Dashboard.tsx`), library `.ts` (`src/lib/polling.ts`) and the test override
+(`src/lib/polling.test.ts`) are **byte-identical before and after**, 135 rules each, nothing added,
+removed, or re-severitied, and — unlike step 1 — not even a parser identity string moved, since
+`typescript-eslint` did not. The three files differ from each other only in
+`react-refresh/only-export-components` (`1` in app/library, `0` under the test override), which is
+the override doing its job. This is the first step in the sweep whose resolved config diff is
+empty, and that is the expected result: a compiler bump changes what the type-aware rules *see*,
+not which rules run.
+
+**What moved in the lockfile: one package, and that is the whole diff.** Both lockfiles were
+parsed and compared key by key rather than eyeballed: **346 packages before, 346 after**, zero
+added, zero removed, and exactly one entry changed —
+`node_modules/typescript` 5.7.2 → 6.0.3, its `version`/`resolved`/`integrity` triple plus the root
+manifest's pin. `lockfileVersion` stays 3 and the file diff is **+5/−5** with no normalisation
+churn, because the lockfile was written with **npm 11.19.0** installed into a scratch prefix to
+match CI's Node 24 rather than the sandbox's Node 22 / npm 10.9.7. That is the **fourth**
+consecutive lockfile touch to use this method and the fourth clean diff; the standing-procedure
+note from step 2 stands.
+
+**Suites, measured on both sides, each from a clean install.** Baseline on 5.7.2 (`npm ci` from
+the committed lockfile): lint clean (12.4 s), `format:check` clean, **80 tests across 22 files**,
+build **7,035 modules → 645.14 kB JS (`index-Vvdzytcz.js`) / 201.38 kB CSS
+(`index-D2wHtcHV.css`)**, `npm audit` **0 vulnerabilities**. After the bump, from a fresh
+`rm -rf node_modules && npm ci`: lint clean (11.3 s), `format:check` clean, **80 tests across 22
+files**, build **7,035 modules → 645.14 kB / 201.38 kB**, audit **0**. The emitted assets carry the
+**same content hashes** on both sides, which is the proof that a type-only step changed nothing
+that ships — the same signal steps 1 and 2 produced, and the one step 3 correctly did not.
+
+**Baseline note: 80 tests, not 79.** Every prior sweep entry records 79/21. The
+`ScanDetailPage.scanIdReset` test landed on `dev` immediately before this step, so 80/22 is the
+current figure and the number future steps should compare against.
+
+**Which of the document's Step 4 predictions held.**
+
+- **The ceiling (6.0.3, not 7) — HELD**, re-verified at the registry on the day, across four
+  packages rather than the one §3.1 asks for.
+- **`types` defaulting to `[]` is a no-op here — HELD**, and upgraded from a grep audit to an
+  empirical one by applying the edit under the old compiler first.
+- **`rootDir` defaulting to `.` is a no-op here — HELD, and the guard was identified precisely.**
+  §7.2 attributes it to `noEmit: true`, and that is exactly right: the declaration probe above, by
+  turning emit on, made TypeScript 6.0 raise **`TS5011`** ("the `rootDir` setting must be
+  explicitly set…") on a config the real build compiles silently. The probe needed an explicit
+  `rootDir` to proceed. Recorded because it converts a prediction into a demonstrated mechanism —
+  and as a standing caveat: **if either tsconfig ever turns emit on, `rootDir` becomes a required
+  edit, not an inherited default.**
+- **The `this`-less inference change is the one thing no config audit can pre-empt — HELD, and
+  its failure mode is milder than priced.** The row expects *"genuinely new errors in generic
+  callback positions"*; what happened is a silent overload re-resolution with an unchanged public
+  contract. The transferable point is that **`tsc -b` is not a complete oracle for an inference
+  change** — only a diff of inferred output is — which is the same lesson §0.3 taught about
+  `--print-config` versus a plugin's own shipped config file.
+- **Effort priced M / 2–5 h, risk medium — came in at the bottom of the band**, because the
+  judgement-heavy part (per-type-error triage) had no input: there were no type errors.
+
+**What was deliberately not done.** No package other than `typescript` moved, in `package.json` or
+in the lockfile. `"ignoreDeprecations": "6.0"` was **not** set — the document is right that it
+would silence the free preview of what TypeScript 7 removes, and there was nothing to silence
+anyway. No lint finding was autofixed, in bulk or individually — there were none. No `.github/
+dependabot.yml` ignore rule was added for `typescript`, per §6's Step 4 note and the standing rule
+in that file that an ignore says *"a bot may not make this decision"* while TypeScript 7 is wanted.
+`tsconfig.node.json` was not edited. `docs/upgrades/frontend-toolchain-86.md` and
+`docs/ROADMAP.md` were **not** edited — correcting the sequence document is a maintainer call, and
+this entry is the record of what its Step 4 row got right in the meantime, which this time is all
+of it. No step 5 or later work was started; `main` was not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`,
+`frontend/tsconfig.app.json`, `CHANGELOG.md` § Unreleased/Changed, and this entry. No code
+behaviour, schema, API contract, security model, job model, auth, or CI configuration changed; no
+locked decision re-opened — React stays on 18 and Mantine on v7, and `typescript` declares no
+`react`, `react-dom`, `@types/react*` or `@mantine/*` peer.
+
+---
+
+### 2026-08-09 — Post-v1 — `L17`/`P2-2`'s reset effect finally has a regression test; the protection #176 relies on was never actually enforced
+
+**What changed:** one new file, `frontend/src/pages/ScanDetailPage.scanIdReset.test.tsx`, plus
+`CHANGELOG.md` and this entry. **No production code changed** —
+`frontend/src/pages/ScanDetailPage.tsx` is byte-identical to `dev`, verified with `git diff` after
+the verification step below rather than assumed.
+
+**The gap, and how it surfaced.** The `:scanId` reset effect has existed since the 2026-07-13
+Frontend-review wave 2 entry (`L16 / P2-1, L17 / P2-2`, originally issue #62): React Router reuses
+the `ScanDetailPage` instance across `/scans/:id` navigations, so without it the previous scan's
+header, findings, artifacts, tag draft and poll state linger, and the status-gated artifacts and
+findings effects fire for the new id against the old `scan.status`. It was never tested. The three
+existing suites — `ScanDetailPage.findingsTable.test.tsx` (a memo-boundary render-count test that
+never mounts the page), `.latestwins.test.tsx` and `.poller.test.tsx` (both of which mount the page
+at a single `/scans/7`) — contain no navigation between two `:scanId` values. The effect could have
+been deleted and all 79 tests would have stayed green.
+
+This was found while auditing **#176**, which lists that effect as one of six sites a future change
+to `react-hooks/set-state-in-effect` may touch, and warns against "fixing" it blind. That warning
+was leaning on a test that did not exist. #176's body now says so explicitly, and this entry
+records the fix.
+
+**Why a new file rather than one of the three.** Placement was a judgement call and is recorded so
+it is not re-litigated. `findingsTable` tests a child component in isolation with no router at all —
+structurally wrong. `latestwins` and `poller` both mount the full page in a router and were the
+plausible hosts, but each is deliberately scoped to one concern with minimal fixtures ("a finished
+scan — not polled, so the findings fetches are the only traffic"), and this test needs two distinct
+scans differing in id, target, tags, findings and artifacts. Folding those fixtures into either file
+would blur a suite whose narrowness is the point. The repo's own convention is one concern per file,
+named for it — `findingsTable`, `latestwins`, `poller`, and on `ScansPage` `compare`, `latestwins`,
+`urlstate` — so `scanIdReset` follows the existing scheme.
+
+**What the test asserts.** It renders `/scans/1`, waits for the header (`Scan #1`, `alpine:3.19`),
+a finding (`CVE-SCAN-ONE`) and an artifact (`scan-one-raw.json`), then types `draft-only-tag` into
+the tag input so the draft diverges from the server value — state that `loadScan` deliberately
+preserves under `L16 / P2-1`, and which therefore only the reset can clear. It navigates to
+`/scans/2` with scan 2's `getScan` held open by a deferred promise, so the assertions land in the
+window the effect protects: after the id changes, before the new data arrives. In that window it
+requires `Loading scan` to be present and all four families of scan-1 state to be absent. It then
+resolves scan 2 and re-checks that the stale draft has not reappeared — a second, independent leg,
+because an unreset draft would survive the load as well as the navigation.
+
+**Verified to catch the regression, not merely to pass.** The reset effect was temporarily deleted
+(the 11 `setState` calls plus 2 ref writes, removed as one block by an anchored replacement), the
+test re-run, and it **failed** on the first in-flight assertion — `Loading scan` never appears
+because scan 1's page is still mounted, with `alpine:3.19` visible in the failure dump. The effect
+was then restored with `git checkout --` and the file confirmed byte-identical to `dev`. A test that
+is only ever observed passing proves nothing about what it guards; this one was observed failing for
+the right reason first.
+
+**Suites:** lint clean, `format:check` clean, **80 tests across 22 files** (was 79/21 — this one
+test), `npm run build` green, `npm audit` 0 vulnerabilities.
+
+**What was deliberately not done.** The reset effect was not refactored toward the
+`key`-prop-remount shape #176 names as the compiler-idiomatic replacement — this PR tests current
+behaviour, it does not change it. None of the other five findings #176 tracks was touched.
+`react-hooks/set-state-in-effect` stays `off`, and `frontend/eslint.config.js` was not edited.
+#176's own Definition of Done was left as it stands — closing out its test prerequisite is part of
+the work that issue tracks, not this PR. `main` was not touched.
+
+**Plan section affected:** new file `frontend/src/pages/ScanDetailPage.scanIdReset.test.tsx`,
+`CHANGELOG.md` § Unreleased/Added, and this entry. No code behaviour, schema, API contract, security
+model, job model, auth, or CI configuration changed; no locked decision re-opened.
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 3 landed: React Compiler rules adopted, `set-state-in-effect` held back over 12 findings with no honest fix (#176)
+
+**What changed:** `frontend/eslint.config.js` (the holding edit removed, one rule overridden off),
+`frontend/src/pages/ScansPage.tsx` (six lines), plus `CHANGELOG.md`, this entry, and new issue
+**#176**. This is **step 3 of the eight-step sequence** in
+`docs/upgrades/frontend-toolchain-86.md` — the step the document flags as *"a separate decision;
+may be declined"* and prices as *"unbounded until measured"*. **No dependency version moved:**
+`frontend/package.json` and `frontend/package-lock.json` are byte-identical, SHA-256 unchanged
+across the whole session. No step 4 or later work was started; `main` was not touched.
+
+**The cost was measured before the config was edited, which is the whole point of the step.** The
+maintainer asked for a finding count against the current tree before anything landed. It was
+obtained with a throwaway `eslint.probe.config.js` — a copy of `eslint.config.js` with the spread
+restored, run via `--config`, then deleted — so the tracked tree was never modified to take the
+measurement. Result: **24 findings, from 2 of the 14 rules.**
+
+| Count | Severity | Rule |
+|---:|---|---|
+| 18 | error | `react-hooks/set-state-in-effect` |
+| 6 | error | `react-hooks/refs` |
+| 0 | — | the other 12 |
+
+**Twelve of the fourteen rules report nothing** — including `immutability`, `purity` and
+`preserve-manual-memoization`, which the scoping document's Step 3 row named as *"the ones most
+likely to fire in volume"* on a codebase with 23 `useEffect` and 15 `useMemo`/`useCallback` files.
+That prediction did not hold, in the favourable direction. `set-state-in-effect` — which the row
+also names — is the one that did.
+
+**The rule population split, and this is the finding that decided the step.** `set-state-in-effect`
+reports two populations that its own message does not distinguish, established by reading every one
+of the 18 sites rather than trusting the count:
+
+- **6 are genuine** — a synchronous `setState` reachable from the effect body, i.e. the cascading
+  render during commit that the rule's rationale describes: `LoginPage.tsx:57`,
+  `OidcLinkCard.tsx:90`, `NewScanPage.tsx:130`, `ScanDetailPage.tsx:293`, `ScanDetailPage.tsx:366`
+  (reported because `loadFindings` opens with a synchronous `setFindingsLoading(true)` before its
+  first `await`), and `ScansPage.tsx:225`.
+- **12 are the fetch-on-mount idiom** — `void load()` in an effect where `load` is a local
+  `useCallback` whose every `setState` runs *after* an `await`. Each of the twelve loaders was read
+  to confirm no synchronous `setState` precedes the first `await`: `AuthContext:124`,
+  `ApiTokensPanel:54`, `BackupsPanel:75`, `DockerEnvironmentsPanel:55`, `GitCredentialsPanel:52`,
+  `ScheduledScansPanel:84`, `TrivyPolicyPanel:74`, `UsersPanel:44`, `AccountPage:276`,
+  `NewScanPage:124`, `ScanDetailPage:309`, `ScansPage:214`.
+
+**The second population was proven an artifact of analysis scope, not a behavioural claim — by
+probe, not by argument.** A scratch file was linted under the probe config with three shapes of the
+same fetch-on-mount code, `load` defined in the component body each time:
+
+| Shape | Reported? |
+|---|---|
+| `void load()` | **yes** |
+| `void (async () => { await load(); })()` | no |
+| `load().catch(() => {})` | **yes** |
+
+The first two are semantically identical. Separately, moving the identical `load` behind a custom
+hook silences **all three**. And `ScanDetailPage:353`'s `listArtifacts(id).then(setArtifacts)` is
+silent for the same reason — the callee is a module import, not a local callback the compiler can
+trace into. So the report tracks what the compiler can see through, and the available "fixes" are
+an async-IIFE wrapper that changes nothing, or hoisting twelve loaders behind hooks — which
+silences the rule by hiding from it. **Neither is an improvement**, which is why the maintainer
+scoped these twelve out of #176 entirely rather than deferring them: if a data-fetching refactor is
+ever worth doing it is its own decision, not a rider on a lint step. This is the § Interpreter CVEs
+rule — *check it against the artifact before believing the metadata* — applied to a lint report:
+the message asserted "synchronously", the code said otherwise, and the probe settled it.
+
+**What was done, per the maintainer's option 2.** All 14 rules enabled via the restored
+`...reactHooks.configs.recommended.rules` spread; `react-hooks/set-state-in-effect: 'off'`
+immediately after it, carrying the reason inline and a pointer to **#176**; the six `refs` findings
+fixed by hand.
+
+**The `refs` fix, and why it is a real improvement rather than a silencing.** All six were one
+idiom in `ScansPage.tsx:132-139` — `const initialView = useRef(viewFromParams(searchParams))`
+whose `.current` was read during render to seed six `useState` initializers. Reading a ref during
+render is what the rule forbids and what the rules of React forbid. Replaced with
+`const [initialView] = useState(() => viewFromParams(searchParams))`: a lazy initializer runs
+`viewFromParams` exactly once on first render, which is precisely what the ref was there to do, so
+the "read the URL once, then sync one-directionally" contract in the surrounding comment is
+preserved rather than reinterpreted. `initialView` had no other use in the file (checked), and
+`useRef` stays imported for `historyGuard` at line 175. The History deep-linking tests (`P3-1`)
+still pass.
+
+**#176 names the two archive-cited effects explicitly, at the maintainer's instruction, so nobody
+"fixes" them blind.** Two of the six genuine findings are effects that each closed a real bug and
+would be re-opened by deletion: `ScanDetailPage.tsx:293` is **`L17` / `P2-2`** (React Router reuses
+the component instance across `/scans/:id`, so without the reset the previous scan's header,
+findings, artifacts, tag draft and poll state linger and the status-gated effects fire against a
+stale `scan.status` — §14, 2026-07-24 Priority-1/2 batch, originally issue #62), and
+`ScansPage.tsx:225` is **`P3-2`** (the compare selection held row snapshots outliving a
+filter/page change or a delete, showing a phantom "1/2 selected" and diffing a since-deleted scan —
+§14, 2026-07-24 Priority-3 batch, with two jsdom regression tests). #176 records both, names the
+compiler-idiomatic replacement for `L17`/`P2-2` (a `key` prop on the route element, which is a
+change in a different file), and states that the tests must still pass.
+
+**The before/after `print-config` diff, run on one representative file per file class.** This is
+the check §0.3's method note prescribes, run against the installed tree both sides. App `.tsx`
+(`src/pages/Dashboard.tsx`), library `.ts` (`src/lib/polling.ts`) and the test override
+(`src/lib/polling.test.ts`) **all moved identically, 121 → 135 rules**, with 14 entries differing
+and **nothing else changed at any severity**:
+
+| Severity | Rules added |
+|---|---|
+| `error` (11) | `config`, `error-boundaries`, `gating`, `globals`, `immutability`, `preserve-manual-memoization`, `purity`, `refs`, `set-state-in-render`, `static-components`, `use-memo` |
+| `warn` (2) | `incompatible-library`, `unsupported-syntax` |
+| `off` (1) | `set-state-in-effect` |
+
+**Nothing in the diff was surprising, and the counts reconcile against step 2's record.** The
+installed `configs.recommended` is 16 rules; `rules-of-hooks` and `exhaustive-deps` were already
+present at `[2]` and `[1]` from step 2's written-out pair and are unchanged, so the delta is exactly
++14. The scoping doc's §3.5 enumerates 12 at `error` and 2 at `warn`; here 11 sit at `error` and the
+12th, `set-state-in-effect`, is the one overridden to `off` — the same 12, differently disposed.
+`component-hook-factories` does not appear, consistent with step 2's finding that 7.1.1 registers it
+as a deprecated no-op outside `configs.recommended`. No core rule, no `@typescript-eslint/*` rule,
+and no plugin identity string moved.
+
+**Suites, run from a fresh `rm -rf node_modules && npm ci`.** Lint clean, `format:check` clean,
+**79 tests across 21 files**, `npm audit` **0 vulnerabilities**. **The build output moved, and that
+is expected here where it was not in steps 1 and 2:** 7,035 modules → **645.14 kB** JS
+(`index-Vvdzytcz.js`) / 201.38 kB CSS, against the baseline's 645.18 kB `index-BNB6IweX.js`. Steps
+1 and 2 were provably lint-only and their asset hashes were identical; this step changes runtime
+code in `ScansPage.tsx`, so a −0.04 kB shift and a new JS hash are the honest signal that it did.
+The CSS is untouched and keeps its hash (`index-D2wHtcHV.css`). The lockfile SHA-256 was captured
+before the baseline install and re-verified after the final one, unchanged.
+
+**What was deliberately not done.** No dependency version, `package.json`, or lockfile touched — the
+maintainer's out-of-scope line for this step, and it held. No `--fix`, in bulk or individually: the
+six `refs` findings were edited by hand at one site. No rule disabled beyond the single override the
+maintainer authorised, and the 12 fetch-on-mount findings were **reported rather than worked
+around** — no async-IIFE wrapper, no hook extraction. No step 4 or later work.
+`docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were **not** edited — correcting the
+sequence document is a maintainer call, and this entry is the record of what its Step 3 row got
+right and wrong in the meantime (its "unbounded, possibly a multi-day refactor" pricing was
+correct as a range; the actual answer is 24 findings, 6 fixed, 12 declined, 12 rules free).
+
+**Plan section affected:** `frontend/eslint.config.js`, `frontend/src/pages/ScansPage.tsx`,
+`CHANGELOG.md` § Unreleased/Changed, this entry, and new issue #176.
+`frontend/package.json`, `frontend/package-lock.json`,
+`docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were deliberately **not** edited. No
+schema, API contract, security model, job model, auth, or CI configuration changed; no locked
+decision re-opened — React stays on 18 and Mantine on v7, and the React Compiler rules are static
+analysis with no React runtime dependency, so enabling them pressures neither.
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 2 landed: the ESLint 10 family, with the React Compiler rule set held inert; three of the doc's four predictions held
+
+**What changed:** `frontend/package.json` (four lines), `frontend/package-lock.json`,
+`frontend/eslint.config.js` (the one required holding edit), plus `CHANGELOG.md` and this entry.
+This is **step 2 of the eight-step sequence** in `docs/upgrades/frontend-toolchain-86.md`, executed
+exactly as scoped: `eslint` 9.39.4 → **10.8.1**, `@eslint/js` 9.39.4 → **10.0.1**,
+`eslint-plugin-react-hooks` 5.1.0 → **7.1.1**, `eslint-plugin-react-refresh` 0.4.16 → **0.5.3**.
+**No source file changed.** `typescript` stays at 5.7.2 (step 4), no tsconfig was touched, the React
+Compiler rules were not adopted (step 3), and `#153`/`#170`'s successors were left alone.
+
+**Versions re-checked at the registry before the bump, not taken from the document.** `eslint`'s
+`dist-tags.latest` is **10.8.1** — the document's Step 2 row already specifies 10.8.1 and flags
+#153's 10.8.0 as stale, and 10.8.1 is still current, so no deviation was needed. `@eslint/js`
+10.0.1, `eslint-plugin-react-hooks` 7.1.1 and `eslint-plugin-react-refresh` 0.5.3 are all still
+`latest`. The §3.1 ceiling one-liner was re-run in passing: `typescript-eslint@latest` is still
+8.66.0 peering `typescript: >=4.8.4 <6.1.0`, so **the TypeScript 6.0.3 ceiling holds as of this
+date** and step 4's target is unchanged.
+
+**Package membership: four, not three.** The session brief named three packages; the document's
+Step 2 "Moves" row names four. The fourth — `eslint-plugin-react-refresh` — was confirmed with the
+maintainer before being included, on the evidence that it is **not** peer-forced: 0.4.16 peers
+`eslint: ">=8.40"`, an unbounded range that ESLint 10 satisfies, so it would have kept resolving.
+It is in the step because the document puts it there, not because the bump required it.
+
+**Every peer claim re-verified at the published manifest, per the method note.** `react-hooks`
+5.1.0/6.0.0/7.0.0/7.0.1 all stop at `eslint ^9.0.0`; the `^10.0.0` clause first appears in **7.1.0**
+and is present in 7.1.1 — so the plugin genuinely is peer-forced and taking ESLint 10 with the old
+pin would have been the same `ERESOLVE` class that killed #153. `@eslint/js@10.0.1` peers
+`eslint ^10.0.0` but marks it **optional**, confirming §3.6's "convention, not a hard peer";
+`eslint@10.8.1` no longer lists `@eslint/js` in its own `dependencies` (9.39.4 pinned it exactly),
+so it is fully external now. `eslint-plugin-react-refresh@0.5.3` peers `eslint: "^9 || ^10"` and is
+`"type": "module"` where 0.4.16 was `"commonjs"` — the ESM-only change is real and, as predicted, a
+no-op for a repo that has been flat-config and ESM since Phase 0.
+
+**`component-hook-factories`, confirmed at the artifact.** 7.1.0's shipped bundle contains **zero**
+occurrences of the string — the rule really was removed. 7.1.1 restores it as
+`makeDeprecatedRule('7.1.0')`: `meta.deprecated: true`, `create() { return {}; }`. A registered
+no-op. **We are on 7.1.1**, so nothing referencing that rule name can error out on an unknown rule.
+
+**The holding edit, and proof that it is both necessary and behaviour-preserving.**
+`frontend/eslint.config.js` spread `...reactHooks.configs.recommended.rules`. Resolved from the
+**installed** 7.1.1, that object is **16 rules — 13 at `error`, 3 at `warn`** — where 5.1.0's,
+resolved from its tarball, is exactly **2**: `react-hooks/rules-of-hooks: 'error'` and
+`react-hooks/exhaustive-deps: 'warn'`. So the bump alone would have enabled 14 React Compiler rules
+(12 new at `error`, 2 at `warn`) inside the ESLint-10 PR. The spread was replaced by those two rules
+written out, which is byte-equivalent to what 5.1.0 contributed. **The document's §3.5 enumeration
+held exactly** — all 12 `error` names and both `warn` names match the installed bundle, and the
+counts reconcile: 16 total = 2 basic + 14 added, or equivalently 13 `error` + 3 `warn`.
+
+**The gate the maintainer set — "the React Compiler rules must be absent or off" — passes at the
+resolved config.** `eslint --print-config` on all three file classes reports exactly **two**
+`react-hooks/*` rules, at `[2]` and `[1]`, identical to the pre-bump baseline. Zero compiler rules
+present at any severity.
+
+**The before/after `print-config` diff, run on one representative file per file class.** This is the
+check §0.3's method note prescribes, and it was run against the installed tree both sides. App
+`.tsx` (`src/pages/Dashboard.tsx`), library `.ts` (`src/lib/polling.ts`) and the test override
+(`src/lib/polling.test.ts`) **all moved identically, 118 → 121 rules**, six entries differing:
+
+| Rule | Before | After | Nature |
+|---|---|---|---|
+| `no-unassigned-vars` | absent | `[2]` | **new in `eslint:recommended`** |
+| `no-useless-assignment` | absent | `[2]` | **new in `eslint:recommended`** |
+| `preserve-caught-error` | absent | `[2]` | **new in `eslint:recommended`** |
+| `no-shadow-restricted-names` | `[2, {reportGlobalThis: false}]` | `[2, {reportGlobalThis: true}]` | **real default change** |
+| `no-constant-binary-expression` | `[2]` | `[2, {checkRelationalComparisons: false}]` | new option, default off — inert |
+| `no-unused-vars` | `[0]` | `[0, {…7 options…}]` | new `defaultOptions`; rule is **off** here |
+
+(The only non-rule difference is the `plugins` identity string.)
+
+**The three added rules were attributed to `@eslint/js` by resolving its config object, not by
+reading release notes.** Both packages' `src/configs/eslint-recommended.js` were `require`d from
+unpacked tarballs and their `rules` maps diffed: **61 → 64 entries**, and the delta is exactly
+`no-unassigned-vars`, `no-useless-assignment`, `preserve-caught-error`, all at `"error"`. **Nothing
+removed, nothing re-severitied.** 10.0.1 additionally carries the `name: "@eslint/js/recommended"`
+property that 9.39.4's lacks, confirming §3.6's second leg at the artifact.
+
+**The last two rows are not behaviour changes, and the distinction was established rather than
+asserted.** Both are ESLint 10 adding or revising `meta.defaultOptions`, which `--print-config` then
+materialises. The tempting reading — "v10 expands defaults for everything, so these are formatting
+noise" — is wrong and was tested: **25 of the 72 core rules in this config carry
+`meta.defaultOptions` under ESLint 10, yet only these two moved**, so the diff is confined to rules
+whose defaults are new or changed, not a blanket format shift. `no-constant-binary-expression`'s new
+option defaults to `false`, so it is opt-in. `no-unused-vars` sits at severity `0` here regardless —
+typescript-eslint's `eslint-recommended` layer disables it in favour of `@typescript-eslint/no-unused-vars`.
+
+**Which of the document's Step 2 predictions held, and which did not.**
+
+- **(a) three new `eslint:recommended` rules — HELD, exactly.** Named correctly and complete; the
+  artifact diff found no fourth and no removal.
+- **(c) `no-shadow-restricted-names` now reports `globalThis` — HELD.** Confirmed as a default flip
+  in the resolved config. It reports nothing in this codebase.
+- **(d) `eslint-plugin-react-refresh` 0.5.3 is not a routine bump — HELD, and its two no-op claims
+  re-checked against the installed package as the row asks.** ESM-only/flat-config-required: a
+  no-op, this repo has no `.eslintrc*` and `eslint.config.js` is ESM. `customHOCs` → `extraHOCs`:
+  a no-op, the repo's single `react-refresh/only-export-components` usage passes only
+  `allowConstantExport` and sets no HOC option at all.
+- **(b) JSX reference tracking changes `no-unused-vars` / `no-undef` results across 51 `.tsx` files
+  — DID NOT HOLD, and could not have.** Both rules are at severity **`0`** in this repo's resolved
+  config — `no-unused-vars: [0, …]` and `no-undef: [0, {typeof: false}]` — because typescript-eslint
+  disables them on the grounds that TypeScript already reports both. A reference-resolution change
+  cannot produce a report through a rule that is off. The prediction was written from the ESLint 10
+  migration guide without checking whether the affected rules were enabled here, which is the same
+  class of error §0.3 was corrected for: a claim about a mechanism, not verified against the
+  composite this repo actually resolves. It is the widest-blast-radius item in the row, and it is
+  structurally inert. **This does not generalise to a repo that enables those rules.**
+
+**Net lint result: zero problems.** Not one of the three new rules fired, `no-shadow-restricted-names`
+found no shadowed `globalThis`, and no report appeared from any implementation change across the
+ESLint 9 → 10 span. Unlike step 1, no source edit was needed — so nothing was autofixed, in bulk or
+otherwise, because there was nothing to fix.
+
+**`@eslint/eslintrc` and `js-yaml` are gone from the tree, which is §0.4 discharged.**
+`npm ls @eslint/eslintrc` and `npm ls js-yaml` both report empty. `eslint@9.39.4` depended on
+`@eslint/eslintrc: ^3.3.5`; `10.8.1` depends on neither, and eslintrc was this repo's only path to
+`js-yaml`. The lockfile refresh of 2026-08-09 had closed GHSA-5p4m-2wfm-xmqj by version; this
+removes the path.
+
+**None of ESLint 10's removals touch this repo, verified by search rather than by inheriting the
+document's "Doesn't apply here" row.** Zero `.eslintrc*` files anywhere in the repository; zero
+`eslint-env` comments (which v10 reports as errors); no `getSourceCode`/`context.getScope`/
+`context.getAncestors`/`context.getFilename` use, no `RuleTester`, no `new Linter`, no import of
+`eslint` from source — so the removed deprecated `SourceCode` and rule-context methods have no
+consumer; no `jiti` (v10's only peer, and optional); no `--flag v10_config_lookup_from_file`; no
+bracket expressions in any ignore glob. **The engine floor is satisfied everywhere it matters:**
+`eslint@10.8.1` and `@eslint/js@10.0.1` both declare `node: "^20.19.0 || ^22.13.0 || >=24"`, CI's
+`node-version: "24"` satisfies it, and the pinned `node:24-bookworm-slim@sha256:235600a8…` ships
+Node 24.18.1 (resolved in the scoping entry below). No `ci.yml` or `Dockerfile` change is needed.
+
+**What moved in the lockfile: 362 → 346 packages, every movement attributed to a target or its
+transitive closure.** Both lockfiles were parsed and each added/removed package's requirers
+resolved, rather than eyeballing the diff:
+
+- **5 added.** `hermes-parser` + its `hermes-estree`, `zod`, and `zod-validation-error` — all
+  required by `eslint-plugin-react-hooks@7.1.1`; and `@types/esrecurse`, required by
+  `eslint-scope@9.1.2`, which ESLint 10 pulls in.
+- **A prediction correction worth recording: `@babel/core` and `@babel/parser` were already in the
+  tree.** §3.5 lists them among the five "real runtime dependencies it did not have" that 7.1.1
+  gains. They are real dependencies of the plugin, but both were already present at **7.29.7** via
+  `@vitejs/plugin-react@4.3.4`, so they cost **zero** new packages. The plugin's dependency growth
+  against *this* tree is three packages plus one transitive, not five.
+- **21 removed.** The entire `@eslint/eslintrc` subtree — eslintrc itself, its nested
+  `globals@14.0.0`, `js-yaml` → `argparse`, `import-fresh` → `parent-module` → `resolve-from` →
+  `callsites`, `strip-json-comments`, `lodash.merge`, `concat-map`, and the `chalk` chain
+  (`ansi-styles`, `color-convert`, `color-name`, `has-flag`, `supports-color`). Plus **four nested
+  duplicates that step 1 itself created**: `@typescript-eslint/typescript-estree`'s private
+  `minimatch@10.2.6`, `brace-expansion@5.0.9`, `balanced-match@4.0.4` and
+  `@typescript-eslint/visitor-keys`'s `eslint-visitor-keys@5.0.1` existed only because the
+  top-level copies stayed pinned for ESLint 9. ESLint 10 requires those same versions at top level,
+  so they dedupe away — the step-1 entry's "nested copies" note is now discharged.
+- **16 version bumps.** The four targets, plus ESLint 10's own closure moving in step:
+  `@eslint/config-array`, `config-helpers`, `core`, `object-schema`, `plugin-kit`, `eslint-scope`,
+  `eslint-visitor-keys`, `espree` (and its `acorn`), and the hoisted `minimatch`/`brace-expansion`/
+  `balanced-match`. **Nothing moved that is not a target or required by one.**
+
+`lockfileVersion` stays 3 and the diff is **+158/−359** — proportionate to 21 removals against 5
+additions, with no whole-file re-normalisation, because the lockfile was written with **npm 11.19.0**
+installed into a scratch prefix to match CI's Node 24 rather than the sandbox's Node 22 / npm 10.9.7.
+That is the third consecutive lockfile touch to use this method and the third time it produced a
+clean diff; it should be treated as the standing procedure, not a per-session detour.
+
+**Suites, measured here rather than quoted, from a clean `npm ci` on both sides.** Baseline on
+9.39.4: lint clean (15.9 s), `format:check` clean, **79 tests across 21 files**, build **7,035
+modules → 645.18 kB JS / 201.38 kB CSS**, `npm audit` **0 vulnerabilities**. After the bump, from a
+fresh `rm -rf node_modules && npm ci`: lint clean (14.1 s), `format:check` clean, **79 tests across
+21 files**, build **7,035 modules → 645.18 kB JS / 201.38 kB CSS**, audit **0**. The build output is
+identical down to the **content hashes** (`index-BNB6IweX.js`, `index-D2wHtcHV.css`), which is the
+proof that this step cannot have changed what ships — it is lint-only, as the document prices it.
+
+**One cosmetic upstream defect, recorded so it is not re-derived.** `eslint-plugin-react-hooks@7.1.1`
+reports `meta.version === "7.0.0"` while its `package.json` says `7.1.1`, so `--print-config`'s
+`plugins` array prints `react-hooks:eslint-plugin-react-hooks@7.0.0`. **That string is not a
+reliable way to confirm the installed version** — read `package.json` or `npm ls`. Nothing in this
+repo depends on the value.
+
+**Standing consequence for steps 3 onward.** The method note is earning its keep: three of Step 2's
+four predictions held precisely, and the fourth failed for the same structural reason §0.3 failed —
+a mechanism was read from upstream documentation without checking whether this repo's *resolved*
+config exposes it. Steps 3 and 4 should keep resolving the composite, not the guide. Step 3's cost
+in particular is now measurable rather than estimated: the 16-rule `configs.recommended` is
+installed and one line of `eslint.config.js` away, so its report count can be obtained without any
+dependency change.
+
+**What was deliberately not done.** No package outside Step 2's four moved. No lint finding was
+autofixed, in bulk or individually — there were none. No React Compiler rule was activated. No step
+3 or later work was started. The sequence's membership and order were not edited.
+`docs/upgrades/frontend-toolchain-86.md` and `docs/ROADMAP.md` were **not** edited — correcting the
+sequence document is a maintainer call, and this entry is the record of what its Step 2 row got
+right and wrong in the meantime. `main` was not touched.
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`,
+`frontend/eslint.config.js`, `CHANGELOG.md` § Unreleased/Changed, and this entry. No code
+behaviour, schema, API contract, security model, job model, auth, or CI configuration changed; no
+locked decision re-opened — React stays on 18 and Mantine on v7, and no package in this step
+declares a `react`, `react-dom`, `@types/react*` or `@mantine/*` peer.
+
+---
+
+### 2026-08-09 — Docs/Process — Scoping doc corrected post-step-1; #170 (Dependabot's regenerated unsatisfiable frontend group) closed
+
+**What changed:** `docs/upgrades/frontend-toolchain-86.md` §0.3 and the Step 1 and Step 2 rows in
+§6, plus a note in the ranking discussion in §8 that cited §0.3's original claim. No dependency
+version, lockfile, or config file was touched; the sweep's sequence, its membership, and its
+ordering are unchanged. Separately, **#170** — Dependabot's regenerated frontend-dependencies
+group, opened after #168 merged and #153 stopped matching — was closed.
+
+**#170, verified before acting rather than assumed.** Its file diff was read directly: `typescript`
+5.7.2 → **7.0.2** is still proposed, alongside `typescript-eslint` 8.19.0 → 8.66.0, which peers
+`typescript: ">=4.8.4 <6.1.0"`. Same unsatisfiable graph #153 carried — `npm ci` fails at
+`ERESOLVE` before ESLint runs, for the reasons `docs/upgrades/frontend-toolchain-86.md` §3.1 and
+§0.2 already establish. Closed with a comment stating the group is unsatisfiable as composed, that
+the #86 sweep is running as the ordered sequence in that document, that step 1 landed as #171, and
+that the doc is the tracking surface rather than this PR. **Not merged, not cherry-picked from** —
+same reasoning as the doc's §8 recommendation for #153. Dependabot will regenerate an equivalent
+group weekly, at newer targets, with the same unsatisfiable pairing, until the `dev`-only ignore
+rules for the toolchain majors' individual members (none exist; the sweep is deliberately
+unignored) or the sequence completes — closing it changes nothing about that cadence, and this
+entry records that explicitly so a future close isn't read as having fixed it.
+
+**The scoping doc's methodological error, found by executing step 1 rather than by inspection.**
+The entry immediately below this one (`#86 sweep step 1 landed`) diffed the *fully-resolved* ESLint
+config before and after the bump and found `no-with` had moved from `error` to `off` — a change
+the doc's §0.3 said could not have happened, because §0.3 claimed the shipped `recommendedTypeChecked`
+config was "byte-for-byte identical… nothing added, removed, or re-severitied" between 8.19.0 and
+8.66.0. The claim was wrong, and the way it was wrong matters more than the specific miss:
+`tseslint.configs.recommendedTypeChecked` is a **three-layer composite** (`base` +
+`eslint-recommended` + `recommended-type-checked`), and the scoping session diffed only the third
+file — `dist/configs/recommended-type-checked.js`, 50 entries either side, genuinely identical —
+then generalised that result to the whole composite. The undiffed `eslint-recommended-raw.js` layer
+went 22 → 23 entries across the same span, adding `no-with: 'off'`, which changes the resolved
+config because `frontend/eslint.config.js` extends `js.configs.recommended` ahead of the tseslint
+layers.
+
+**This is scope, not sloppiness, and the correction says so.** Every claim in the document is
+cited to a published peer range, an upstream guide, or an unpacked tarball — eleven tarballs were
+pulled apart to check artifacts directly rather than trust documentation, which is real evidentiary
+discipline. The failure was narrower than that discipline: one file was diffed and the finding was
+stated about a three-file composite it was only one third of. Nothing about the method that
+produced the other headline findings (§0.1's TypeScript-7 package-export read, §0.4's
+`@eslint/eslintrc` dependency-graph check, §0.5's GHSA re-cut verified at the advisory database) is
+implicated — those each read the actual artifact the claim was about, completely. §0.3 read one
+artifact out of three and described all three.
+
+**What §0.3 now says, and what was added alongside it.** Rewritten to separate what was verified
+(the third layer, genuinely identical) from what was not (the other two layers, one of which
+changed) and from a second, independent point the original headline conflated with the first: an
+unchanged rule set does not imply an unchanged set of *findings*, because rule implementations get
+stricter across a 47-minor span regardless of which rules are selected — step 1's own two
+`no-unnecessary-type-assertion` reports are the proof, on code that was in the tree, unedited, the
+whole time. Step 1's own row had already priced this correctly ("only detection improves," S–M,
+"dominated by however many reports appear"); it was the headline in §0.3 that read as a stronger,
+outcome-level promise and got cited as one. A method note was added, binding on every step in §6
+that has not yet run: re-verify each step's config/rule-set claim against the **installed** tree
+when the step executes, checking **every layer** of any composite config, using
+`eslint --print-config <file>` on one representative file per file class (app `.tsx`, library
+`.ts`, test override) before and after — not a diff of the plugin's own shipped config file, which
+is exactly the check that would have caught this the first time.
+
+**Package-ownership check requested for six packages; five were already correctly scoped, one
+row was thin and was filled in.** Checked against the doc's actual step assignments in §6, not
+against memory of what the doc probably says:
+
+| Package | Owning step | Verdict |
+|---|---|---|
+| `@vitejs/plugin-react` 4.3.4 → 6.0.5 | Step 7, lockstep with Vite 8 | **Already correctly scoped.** §3.3 and Step 7's row already state the Babel-removal no-op and the Vite-8-only peer; no routine-bump treatment to correct. |
+| `@testing-library/user-event` → 14.6.3 | Step 8 | **Already correctly scoped** as a routine patch; no coupling exists to misstate. |
+| `globals` → 17.9.0 | Step 8 | **Already correctly scoped**, and already carries a non-routine caution (a minor can silently shrink the `globals.browser` set — inspect it, don't trust green). |
+| `postcss` → 8.5.26 | Step 0 and/or Step 8 (either) | **Already correctly scoped**, explicitly optional/either-step. |
+| `@types/node` → 26.1.2 | None — §5 explicitly declines it | **Correct as a non-member.** §5's "Action: none" is a decision the sweep doesn't need it, not an omission. |
+| `eslint-plugin-react-refresh` 0.4.16 → 0.5.3 | Step 2 | **Owned, but the row treated it as routine and it isn't quite.** Step 2's "Moves" line listed the version bump with no accompanying breakage note, unlike the other three packages in that step. 0.5.0 is ESM-only and requires flat config (a no-op here — this repo has been flat-config since Phase 0), renames `customHOCs` to `extraHOCs` (also a no-op here — the repo's one `react-refresh/only-export-components` usage sets no HOC option), and tightens HOC validation generally. Step 2's row now names all three; the ESM/flat-config and rename points are confirmed no-ops for this repo's current config, but — per the new method note — should be re-checked against the installed 0.5.3 package when Step 2 actually runs rather than trusted from this pass. |
+
+None of the six needed reordering or a new owning step; the sequence's membership and order are
+unchanged by this entry.
+
+**What was deliberately not done.** No dependency, lockfile, or config file was changed. No
+sweep step was executed. `main` was not touched. The sequence's membership and ordering were not
+altered — §6's steps 0–8 still name the same packages in the same order for the same peer-range
+reasons; only the claims describing what Step 1 and Step 2 will find, and the headline in §0.3,
+were corrected. `docs/ROADMAP.md` was not edited.
+
+**Plan section affected:** `docs/upgrades/frontend-toolchain-86.md` §0.3, the Step 1 and Step 2
+rows of §6, one clause in §8's risk-ranking discussion, and this entry. PR #170 (closed, not
+merged). No code, schema, API contract, security model, job model, auth, or CI behaviour changed;
+no locked decision re-opened.
+
+---
+
+### 2026-08-09 — Infra — #86 sweep step 1 landed: `typescript-eslint` 8.19.0 → 8.66.0; the scoping doc's rule-set claim was wrong in two independent ways
+
+**What changed:** `frontend/package.json` (one line), `frontend/package-lock.json`, two lines of
+`frontend/src/pages/NewScanPage.tsx`, plus `CHANGELOG.md` and this entry. This is **step 1 of the
+eight-step sequence** in `docs/upgrades/frontend-toolchain-86.md`, executed exactly as scoped: only
+`typescript-eslint` moved, no ESLint or TypeScript config was edited, and no later step was touched.
+`typescript` stays at 5.7.2, `eslint` at 9.39.4, and `#153` remains open and unactioned.
+
+**Why it goes first and alone** is unchanged from the scoping entry below and was re-confirmed from
+the installed lockfile rather than re-derived: the pinned 8.19.0 declared `typescript: >=4.8.4
+<5.8.0` and `eslint: ^8.57.0 || ^9.0.0`; 8.66.0 declares `>=4.8.4 <6.1.0` and `^8.57.0 || ^9.0.0
+|| ^10.0.0`. Those two range widenings are the whole reason this step exists — they are what
+unblocks steps 2 (ESLint 10) and 4 (TypeScript 6.0.3). The version was re-checked against the
+registry before the bump rather than taken from the document: `latest` is still **8.66.0**, with
+only `8.66.1-alpha.*` canaries beyond it, so the doc's target was still current. The same one-liner
+that §3.1 carries also still returns `typescript: >=4.8.4 <6.1.0`, so the TypeScript **6.0.3**
+ceiling holds as of this date.
+
+**The scoping document's headline prediction was checked against the installed configs rather than
+believed, and it failed in two independent ways.** Both are recorded here because the remaining
+steps' predictions were written with the same method and inherit the same weaknesses.
+
+**Divergence 1 — an existing rule's implementation got stricter. This is the one the document's
+framing actively obscures.** The prediction that the *rule set* is unchanged is **correct and was
+confirmed at the artifact**: diffing 8.19.0's `dist/configs/recommended-type-checked.js` against
+8.66.0's `dist/configs/flat/recommended-type-checked.js` yields **50 entries either side, identical**
+— 43 `@typescript-eslint/*` rules plus 7 core-rule disables, same severities, same options. But an
+unchanged rule set does not imply an unchanged set of *reports*. Across 47 minors,
+`@typescript-eslint/no-unnecessary-type-assertion` learned to detect a case it previously missed, and
+it fired twice on code that has been in the tree unchanged:
+
+```
+src/pages/NewScanPage.tsx  139:19  registryId: '' as string
+src/pages/NewScanPage.tsx  140:24  gitCredentialId: '' as string
+    error  This assertion is unnecessary since the receiver accepts
+           the original type of the expression
+```
+
+Both assertions were genuinely redundant — `''` already widens to `string` as a mutable object-literal
+property — and both were removed **by hand, at those two sites only**. No `--fix`, no bulk autofix.
+`tsc -b` passes afterwards, confirming `useForm`'s inferred `initialValues` type is unchanged, and
+the emitted bundle carries the **same content hashes** as the pre-bump baseline
+(`index-BNB6IweX.js`, `index-D2wHtcHV.css`), which is the proof that a type-only assertion erases to
+identical JavaScript.
+
+**The transferable rule, and it applies to every remaining step: "no new rules" does not mean "no
+new findings."** A rule set proven identical bounds *which* rules can report; it says nothing about
+how well they report. The document's Step 1 row does budget for this — it says *"only detection
+improves"* and prices the step **S–M / 1–3 h "dominated by however many reports appear"** — so the
+budget was right. What is misleading is §0.3's headline, *"The typescript-eslint bump does not
+change which rules run,"* which reads as a reassurance about outcomes and is repeatedly cited as
+one. Two reports is at the very low end of the range, but the mechanism is real and will recur:
+steps 2 and 4 both cross far more implementation change than config change.
+
+**Divergence 2 — the effective rule set *did* change. The document's claim here is wrong, not
+merely incomplete.** §0.3 states the shipped `recommendedTypeChecked` is *"byte-for-byte identical…
+the same 50 rules at the same severities, nothing added, removed, or re-severitied."* The cause of
+the error is a **scope mistake**: `tseslint.configs.recommendedTypeChecked` is a **three-layer
+composite** (`base` + `eslint-recommended` + `recommended-type-checked`), and the document diffed
+only the third file, then generalised the finding to the whole composite. The layer it did not
+diff has changed:
+
+| File | 8.19.0 | 8.66.0 | Verdict |
+|---|---|---|---|
+| `dist/configs/…/recommended-type-checked.js` *(diffed by the doc)* | 50 entries | 50 entries | **identical** |
+| `dist/configs/eslint-recommended-raw.js` *(not diffed by the doc)* | 22 entries | 23 entries | **`+ no-with: 'off'`** |
+
+Because `frontend/eslint.config.js` extends `js.configs.recommended` **before** the tseslint layers,
+the resolved config that actually runs changes: `eslint --print-config` reports `no-with` going from
+`error` (`[2]`) to `off` (`[0]`) for all three file classes — app `.tsx`, library `.ts`, and the
+test override. Verified by dumping and diffing the fully-resolved config before and after, not from
+package metadata. The only other resolved-config difference is the parser identity string
+(`typescript-eslint/parser@8.19.0` → `@8.66.0`), which is expected.
+
+**The relaxation was accepted rather than restored, and the premise was verified rather than
+argued.** The case for accepting it is that `with` is already a hard compile error here — but that
+argument only holds under strict mode, and a non-module `.ts` file is not strict by default. Both
+`tsconfig.app.json` and `tsconfig.node.json` set `"strict": true` and `"moduleDetection": "force"`,
+and rather than stop at reading the flags, a probe file containing a `with` statement was compiled:
+`tsc -b` returns **`TS1101: 'with' statements are not allowed in strict mode`** and **`TS2410`**. The
+probe was deleted. So the rule is genuinely redundant on this codebase and upstream's decision to
+move it into the "TypeScript handles this" disable layer is sound. `no-with` was **not** re-added to
+`eslint.config.js`; if that judgement is ever revisited, one line in the `rules` block restores it.
+
+**Standing consequence for the rest of the sweep: the remaining steps' predictions were produced by
+the same method and should be re-verified, not trusted.** The document's evidence discipline is
+genuinely good — every claim is cited to a published peer range or an upstream guide, and eleven
+tarballs were unpacked to check artifacts directly. The failure here was not sloppiness but
+**scope**: one file was diffed and the conclusion was stated about a composite of three. Steps 2, 3
+and 4 all rest on comparable single-artifact reads — the enumeration of the 14 React Compiler rules
+from `eslint-plugin-react-hooks@7.1.1`'s bundle, the three new `eslint:recommended` rules from
+`@eslint/js@10.0.1`, the option-by-option TypeScript 6.0 audit. Each should be re-checked against
+the installed tree at the time its step is executed, exactly as this one was. The document's
+§9 item 5 already says the report counts can only be learned by executing the sequence; this entry
+extends that to the config claims themselves.
+
+**What moved in the lockfile, and why 486 changed lines is not churn.** `frontend/package.json`
+changed one line. The lockfile went **374 → 362 packages**, and every movement is inside the
+`typescript-eslint` subtree or orphaned by it — attributed rather than assumed, by parsing both
+lockfiles and resolving each removed package's requirers:
+
+- **12 version bumps** — the ten `@typescript-eslint/*` packages 8.19.0 → 8.66.0, plus
+  `ts-api-utils` 1.4.3 → 2.5.0 and, nested under `typescript-estree`, `minimatch` 9.0.9 → 10.2.6 and
+  `brace-expansion` 2.1.4 → 5.0.9.
+- **5 added** — `@typescript-eslint/project-service` and `@typescript-eslint/tsconfig-utils`, new
+  first-party packages split out of `typescript-estree`; plus three *nested* copies that exist only
+  because the top-level ones stay pinned for ESLint 9 (`ignore@7.0.6`, `eslint-visitor-keys@5.0.1`,
+  `balanced-match@4.0.4`).
+- **17 removed** — `typescript-estree` replaced `fast-glob` with `tinyglobby`, which was **already
+  in the tree at 0.2.17** and satisfies its `^0.2.15`, so no new dependency landed. Dropping
+  `fast-glob` orphaned its entire subtree: `@nodelib/fs.{walk,scandir,stat}`, `fastq` → `reusify`,
+  `run-parallel` → `queue-microtask`, `merge2`, `micromatch` → `braces` → `fill-range` →
+  `to-regex-range` → `is-number`, the top-level `picomatch@2.3.2`, and the nested
+  `fast-glob/node_modules/glob-parent@5.1.2`. `graphemer` went with the `eslint-plugin`. **Each was
+  checked to have no surviving requirer**; in particular `eslint`'s own top-level
+  `glob-parent@6.0.2` and vite/vitest's nested `picomatch@4.x` are untouched.
+
+`lockfileVersion` stays 3 and there is no normalization churn, because the lockfile was written with
+**npm 11.19.0** installed into a scratch prefix — matching CI's Node 24 rather than the sandbox's
+Node 22 / npm 10.9.7 — which is the method the lockfile-refresh entry below recorded for reuse. It
+was worth repeating: a 486-line diff from a genuine dependency change is hard to audit if a whole-file
+re-normalization is mixed into it.
+
+**Suites, run from a clean install both before and after so the comparison is real.** The pre-bump
+baseline was re-measured on 8.19.0 rather than quoted from the document, and it reproduced §1
+exactly: lint clean, `format:check` clean, **79 tests across 21 files**, build **7,035 modules →
+645.18 kB JS / 201.38 kB CSS**. After the bump and the two-line fix, every one of those is
+unchanged, down to the emitted asset hashes, and `npm audit` reports **0 vulnerabilities** at every
+severity (the two HIGHs from the entry below stay closed).
+
+**Plan section affected:** `frontend/package.json`, `frontend/package-lock.json`,
+`frontend/src/pages/NewScanPage.tsx`, `CHANGELOG.md` § Unreleased/Changed, and this entry.
+`frontend/eslint.config.js`, both tsconfigs, `docs/upgrades/frontend-toolchain-86.md` and
+`docs/ROADMAP.md` were deliberately **not** edited — correcting the sequence document's §0.3 is a
+maintainer call, and this entry is the record of what it got wrong in the meantime. No code
+behaviour, schema, API contract, security model, job model, auth, or CI configuration changed; no
+locked decision re-opened.
+
+---
+
+### 2026-08-09 — Security — Frontend lockfile refreshed to clear two HIGH advisories in the build toolchain (js-yaml, nanoid); kept separate from the #86 sweep
+
+**What changed:** `frontend/package-lock.json` only — two entries, six lines each way — plus a
+`CHANGELOG.md` § Security entry and this one. `frontend/package.json` was **not** touched, no
+package moved a major, and no `npm audit fix` was run in any form.
+
+**The two advisories.** Both were already named in the entry below, which recorded them from the
+#86 scoping session's baseline install; this entry is the one that acts on them.
+
+- **`js-yaml` 4.3.0 → 4.3.1** — **GHSA-5p4m-2wfm-xmqj**, HIGH, CVSS 7.5, CWE-407: quadratic CPU
+  consumption resolving a `!!omap`, the CVE-2026-59870 fix not having been backported to the
+  3.x/4.x lines. Affected `>=4.0.0 <4.3.1`. One path in the tree: `eslint@9.39.4` →
+  `@eslint/eslintrc@3.3.5` → `js-yaml`.
+- **`nanoid` 3.3.16 → 3.3.18** — **GHSA-2v37-7h3g-55p8**, HIGH, CVSS 5.9, CWE-835: a custom
+  generator loops indefinitely when `size` is zero. Affected `<3.3.17`. One path in the tree:
+  `postcss@8.5.25` → `nanoid`.
+
+Each package appears exactly once in the lockfile, so "one path" is the whole exposure, not the
+shortest of several.
+
+**Why a lockfile refresh sufficed — and a precision correction to how that was framed.** The
+session brief said both fixed versions "fall inside the ranges `package.json` already declares."
+The conclusion is right and the mechanism is not: `frontend/package.json` pins every dependency
+to an **exact version** (`CLAUDE.md` § Dependency hygiene) and **names neither package** — both are
+transitive. The ranges that actually decide this are the ones the *requiring* packages declare,
+read from the published manifests rather than from `npm audit`'s `fixAvailable` summary:
+`@eslint/eslintrc@3.3.5` requires `js-yaml: ^4.1.1` (4.3.1 satisfies; 4.3.1 is also the highest
+4.x published), and `postcss@8.5.25` requires `nanoid: ^3.3.16` (3.3.17 satisfies). Both fixes are
+therefore reachable without moving `eslint` or `postcss` — which *are* pinned exactly in the
+manifest — so nothing in `package.json` had to change. Worth stating explicitly because the
+distinction is what makes the "manifest untouched" claim true: it does not follow from a range in
+`package.json`, because there is no range in `package.json`.
+
+**Deviation — `nanoid` landed on 3.3.18, not the advisory's 3.3.17.** `npm update` resolves to the
+highest version satisfying the declared range, and `^3.3.16` admits 3.3.18 (published 2026-08-07,
+four days after 3.3.17). Taken rather than pinned back, because diffing the two published tarballs
+shows 3.3.18 is a follow-up to the *same* defect: 3.3.17's zero-size guard did not cover the async
+native entry point, and 3.3.18 adds `if (size <= 0) return Promise.resolve('')` there. It is the
+more complete fix for the advisory, not an unrelated bump.
+
+**The `js-yaml` fix was verified at the artifact, not from the advisory text** — § Interpreter CVEs'
+rule applied to a dependency claim. Diffing the 4.3.0 and 4.3.1 tarballs, the sole functional change
+is in the `!!omap` duplicate-key check: an array plus a linear `indexOf` per key — the quadratic
+path the advisory describes — becomes an object plus an `Object.prototype.hasOwnProperty` lookup.
+The advisory's account and the shipped code agree.
+
+**Neither package ships in the image, and that was checked rather than assumed.** Both are `dev`
+in the lockfile; `grep` over the built bundle finds no `nanoid`/`urlAlphabet` and no
+`js-yaml`/`YAMLException` (`nanoid` runs inside PostCSS at build time, `js-yaml` only parses this
+repo's own ESLint config); and `docker/Dockerfile`'s runtime stage copies
+`--from=frontend-builder /build/frontend/dist` and no `node_modules`. So the exposure is the build
+and development toolchain, and a deployed Scrye was never reachable. The fix is still taken —
+fixable is what the dogfood gate keys on.
+
+**What actually moved, which is the point of doing it this way.** The refresh was the documented
+targeted command from `CONTRIBUTING.md` § Dependabot security updates target `main` (`npm update
+<pkg>`), scoped to the two packages, and the diff was read before anything else: **exactly two
+lockfile entries**, the `version`/`resolved`/`integrity` triple on each, no transitive requirement
+moved, no unrelated churn, `package.json` byte-identical. `npm audit` afterwards reports **0** at
+every severity — the two cleared, nothing new surfaced.
+
+**Method note: the lockfile was written by npm 11, matching CI.** The sandbox's Node is 22 (npm
+10.9.7) while `ci.yml` and the Dockerfile's `frontend-builder` both build on Node 24 (npm 11.x), so
+`npm i -g npm@11` was attempted, failed on self-replacement, and npm 11.19.0 was installed into a
+scratch prefix and invoked by path instead. This is cheap insurance against a whole-file
+normalization diff from a different npm major — and the resulting six-line diff is the evidence it
+was not needed here. Recorded so the next lockfile touch can skip the detour or repeat it knowingly.
+
+**Suites, run against a clean `npm ci` from the refreshed lock:** ESLint clean, Prettier clean,
+**79 tests across 21 files** passing, `npm run build` green at **7,035 modules → 645.18 kB JS /
+201.38 kB CSS**. Those are byte-for-byte the numbers the baseline in the entry below records, which
+is the useful signal: nothing observable moved.
+
+**Kept deliberately separate from the #86 sweep, and it is not a step in it.** The entry below
+turns `docs/ROADMAP.md` § Track A into eight ordered steps, each arranged so a failure has one
+plausible cause. This change is none of them — it takes no major, edits no config, and touches no
+package that sequence moves. Folding it into a sweep step would have given that step a second
+plausible cause of failure for no benefit, and holding it until the sweep starts would have left
+two HIGH advisories open across an unbounded number of releases for no benefit either. The sweep's
+own framing of these two findings — "a lockfile refresh alone clears them, no part of the sweep
+required" — is the same conclusion, and is now discharged. **#153 stays open and unactioned**, and
+nothing here changes its state, its diagnosis, or the sweep's step order. Nothing from #153 and no
+sweep step was touched.
+
+**Plan section affected:** `frontend/package-lock.json`, `CHANGELOG.md` § Unreleased/Security, and
+this entry. `frontend/package.json`, `docs/ROADMAP.md`, `docs/upgrades/frontend-toolchain-86.md`
+and the backend lockfile were deliberately **not** edited. No code, schema, API contract, security
+model, job model, auth, or CI behaviour changed; no locked decision re-opened.
+
+---
+
+### 2026-08-09 — Docs/Process — #86 frontend toolchain sweep scoped into an ordered sequence; TypeScript 7 ruled out at the source; #153's red check re-diagnosed
+
+**What changed:** one new file, `docs/upgrades/frontend-toolchain-86.md`, plus this entry. **No
+dependency version, lockfile, or config file was touched** — the session was scoping only, and
+`frontend/package-lock.json`'s SHA-256 was captured before the baseline install and re-verified
+after it. The deliverable turns `docs/ROADMAP.md` § Track A's *"Frontend tooling majors from
+Dependabot #86"* — currently one PR (**#153**) carrying eleven majors behind a single red check —
+into eight independently verifiable steps, each ordered so its failure has one plausible cause.
+
+**Method, because it is the point.** Every constraint in the document is cited to one of two kinds
+of source: a `peerDependencies` range in a **published package** read from the npm registry, or a
+**statement in upstream's migration guide/changelog** fetched as raw markdown from that project's
+own repository. Nothing was inferred from version-number proximity, and where a claim could be
+checked against the shipped artifact rather than the documentation, it was — eleven tarballs were
+downloaded and unpacked to compare config objects directly. The prior records' predictions about
+what would break were treated as hypotheses to test, not as findings to carry forward, and two of
+them did not survive.
+
+**Finding 1 — TypeScript 7 is not part of this sweep, as of 2026-08-09.** `typescript@7.0.2` is the
+Go-native compiler. Read from its published tarball: `"exports"."."` is `./lib/version.cjs`, so
+`import ts from 'typescript'` yields the version string and nothing else; `lib/` contains
+`getExePath.js`, `tsc.js`, `version.cjs` and **no `typescript.js`**; `bin` has dropped `tsserver`;
+the package carries 20 platform-specific native-binary optional dependencies; and `unpackedSize`
+falls from 24.3 MB (6.0.3) to 2.5 MB. The real API sits behind `./unstable/*` subpaths talking to
+the Go binary over `vendor/vscode-jsonrpc`. Against that, `@typescript-eslint/typescript-estree@8.66.0`
+calls `require("typescript")` in 11 places across `dist/*.js` and references **114 distinct `ts.*`
+symbols** including `ts.createProgram`. `typescript-eslint`'s peer range is `>=4.8.4 <6.1.0` at
+`latest` **and at its current canary** — no version published as of this date accepts TypeScript 7,
+and the shape of the change means widening it is a rewrite upstream, not a range edit. **The
+sweep's TypeScript ceiling is 6.0.3.** (Separately verified so it is not re-derived: `tsc -b` *does*
+survive — running the 7.0.2 native binary, `--build, -b` is still in `--help` — so `npm run build`
+is not what blocks TS 7. Only the linter is. This is § Interpreter CVEs' rule applied to a
+toolchain claim: check it against the artifact before believing the metadata, in either direction.)
+
+**This finding is written as a dated ceiling, not a permanent blocker**, and the document carries
+the re-check with it: `npm view typescript-eslint@latest peerDependencies.typescript`, watching the
+**stable** tag rather than a canary, with the note that support is expected to arrive as a new
+typescript-eslint **major** built against TS 7's `./unstable/*` API rather than as a point-release
+range widen. Corroborated from the TypeScript side by the 6.0 release notes, which call 6.0 a
+transition release *"API compatible with TypeScript 5.9"* whose deprecated options are *"removed
+entirely in TypeScript 7.0"* — which is precisely why step 4 (to 6.0.3) is safe and a step beyond
+it is not.
+
+**Finding 2 — #153's red check is not lint churn, and the prior records say it is.** The
+`Frontend — lint + build` job (check run `93006217895`) failed after **six seconds**, at `npm ci`,
+with `ERESOLVE`: `typescript-eslint@8.66.0` peer `typescript@">=4.8.4 <6.1.0"` against the proposed
+`typescript@7.0.2`. ESLint never ran. **`docs/ROADMAP.md` § Track A and the 2026-08-09
+Dependabot-queue-audit entry below both describe that failure as *"the type-aware-ESLint churn that
+roadmap item predicts, arriving on schedule."* That is incorrect** — it is an unsatisfiable
+dependency graph, and no amount of lint fixing would move it. The observation that #153 stays open
+as the sweep's reminder surface stands; only the diagnosis of its red check is corrected. Recorded
+here rather than fixed in `docs/ROADMAP.md`, which this session deliberately left unedited, and
+**posted on the PR itself** so the correction reaches anyone triaging the queue without reading
+this file:
+[#153 (comment)](https://github.com/tyler-rich/Scrye/pull/153#issuecomment-5230438598). The PR was
+**not** closed — closing it only makes Dependabot regenerate an equivalent grouped PR carrying the
+same unsatisfiable pairing.
+
+**Finding 3 — the `typescript-eslint` bump does not change which rules run.** The shipped
+`recommendedTypeChecked` config is **identical** between 8.19.0 and 8.66.0 — the same 50 rules at
+the same severities, nothing added, removed, or re-severitied (diffed from
+`dist/configs/recommended-type-checked.js` in both tarballs). Across 47 minors, any new reports
+come from rule *implementations* improving, not from the config growing. This materially lowers the
+expected cost of what the sequence makes step 1.
+
+**Finding 4 — the real ordering constraint, which no prior record states.** Read across every
+stable `typescript-eslint` release from the pin forward, the peer ranges move at exactly two
+points: **8.56.0** first admits `eslint ^10.0.0`, and **8.58.0** first raises the TypeScript cap to
+`<6.1.0`. The pinned **8.19.0 caps TypeScript at `<5.8.0`** — it will not accept even 5.8. So
+`typescript-eslint` is not merely "a minor that would need reviewing twice" (the 2026-08-03
+framing); it is the **only** unblocking move in the set, and both the ESLint and the TypeScript
+steps are gated behind it. It becomes step 1, alone.
+
+**Finding 5 — ESLint 10 forces `eslint-plugin-react-hooks` 7, which forces a decision.** The
+`^10.0.0` clause first appears in react-hooks **7.1.0**; 5.1.0/6.0.0/7.0.0/7.0.1 all stop at `^9`,
+so ESLint 10 with the current pin is the same ERESOLVE class that killed #153. And from the 7.1.1
+bundle, `configs.recommended.rules` is `basicRuleConfigs` **plus** every React Compiler rule at
+preset `Recommended` — `frontend/eslint.config.js:31` spreads exactly that object, so the bump
+silently takes it from 2 rules to 16 (12 new at `error`, 2 at `warn`, enumerated in the document).
+The sequence therefore splits them: the ESLint-10 step writes the two classic rules out explicitly
+(a behaviour-preserving edit, verified against 5.1.0's shipped config), and adopting the compiler
+set is its own step that **may legitimately be declined**.
+
+**Finding 6 — Vitest 4 does not require a Vite major**, contradicting an assumption worth naming.
+`vitest@4.1.10`'s peer is `vite: ^6.0.0 || ^7.0.0 || ^8.0.0` and its migration guide's Prerequisites
+callout says *"Vitest 4.0 requires Vite >= 6.0.0"*. It lands on the pinned `vite@6.4.3`.
+Conversely **`@vitejs/plugin-react` 6 does require Vite 8** — peer `vite: "^8.0.0"` only, and a
+changelog heading *"Drop Vite 7 and below support"* — so those two move in lockstep and Vitest does
+not have to wait for them.
+
+**Finding 7 — locked decisions are not at risk from anything in the sweep**, checked package by
+package: no member declares a `react`, `react-dom`, `@types/react*`, or `@mantine/*` peer at all.
+The React Compiler rules are static analysis with no React runtime dependency. **The one adjacent
+item that *is* a locked-decision blocker is `react-router` 7 → 8**, which `docs/ROADMAP.md` groups
+with the tooling majors: `react-router@8.3.0` declares `react: ">=19.2.7"` and
+`react-dom: ">=19.2.7"`, so it is a React 19 requirement against a React 18 lock — a separate
+decision, not a quiet inclusion. It is not in #153.
+
+**Baseline recorded, and it moved since the last record.** `npm ci` from the committed lockfile,
+then lint clean, `format:check` clean, **79 tests across 21 files** passing, and `npm run build`
+green (vite 6.4.3, 7035 modules, 645.18 kB JS / 201.38 kB CSS). `npm audit` reports **two HIGH** —
+`js-yaml` 4.3.0 via `eslint → @eslint/eslintrc`, and `nanoid` 3.3.16 via `postcss` — where §14
+(2026-08-03) recorded the `react-router` HIGH as the only finding. Both new ones are **inside
+existing semver ranges**, so a lockfile refresh alone clears them, no part of the sweep required;
+ESLint 10 additionally removes the `@eslint/eslintrc` path permanently (`eslint@10.8.1` no longer
+lists it as a dependency).
+
+**Unrelated finding, surfaced by the same baseline and then verified at source: GHSA-qwww-vcr4-c8h2
+was re-cut upstream — an amendment to the advisory itself, not a registry-side quirk.** The npm
+registry's bulk endpoint returning two ranges was only the trigger; the claim was confirmed against
+the **GitHub Advisory Database record**, read from the `github/advisory-database` repository via
+`raw.githubusercontent.com` (`advisories/github-reviewed/2026/07/GHSA-qwww-vcr4-c8h2/…json`) after
+`api.osv.dev` and `github.com/advisories/…` both proved unreachable from here. Three legs: the
+record now carries **two `affected` entries** for `react-router` (`introduced 7.12.0 / fixed 7.18.2`
+and `introduced 8.0.0 / fixed 8.3.0`); its `published` and `github_reviewed_at` are both
+**2026-07-24T16:44:43Z** while `modified` is **2026-08-07T18:14:58Z**, so the record was edited
+fourteen days after review; and §14 (2026-08-03) independently records `npm audit` reporting this
+advisory as one contiguous **`7.12.0 - 8.2.0`** during the v0.3.0 release prep, which dates the
+split to between 2026-08-03 and that `modified` stamp. What is **not** readable from here is the
+per-revision diff — GitHub renders advisory revision history only on the web page, and the
+advisory-database repo's git log is not exposed through raw content — so the `modified` timestamp
+is the amendment evidence, not a revision-by-revision account.
+
+**This is exactly what `docs/ROADMAP.md` § Track A asks for** under *"Ask GitHub to re-cut
+GHSA-qwww-vcr4-c8h2's affected range for the 7.18.2 backport"*, down to its "leave the 8.x range as
+it is" condition. Flagged rather than acted on, and `docs/ROADMAP.md` deliberately left unedited —
+striking a Track A item is a maintainer call.
+
+**Three of #153's targets are already stale**, which is the ordinary cost of holding a Dependabot
+PR open as a reminder: `eslint` 10.8.0 → **10.8.1**, `vite` 8.2.0 → **8.2.1**, `@types/node` 26.1.2
+→ **26.2.0**, all published 2026-08-06/07 after the PR was cut. Read targets from the registry when
+the work starts, not from the PR.
+
+**`@types/node` specifically: the sweep does not need it.** The only constraints in play are
+*optional* peers (`vite@8.2.1` wants `^20.19.0 || >=22.12.0`; `vitest@4.1.10` wants
+`^20.0.0 || ^22.0.0 || >=24.0.0`) and the pinned **24.13.3 satisfies both**. No step fails on it.
+#153 proposes 26.1.2 anyway for the reason the entry below already diagnosed — Dependabot reads its
+`ignore` list from `main`, and #147's `@types/node` stanza has not been promoted — and the
+maintainer declined promoting the config on its own, so the offer will keep arriving and keep being
+inert.
+
+**Four lookups first reported as blocked were retried against different sources and resolved.** In
+three of the four the block was not what it looked like, which is the transferable lesson:
+
+- **TypeScript 6.0's breaking changes — resolved.** `typescriptlang.org` and
+  `devblogs.microsoft.com` are genuinely egress-blocked, but the release notes are **source markdown
+  in `microsoft/TypeScript-Website`, on its `v2` branch** (`packages/documentation/copy/en/
+  release-notes/TypeScript 6.0.md`), which `raw.githubusercontent.com` serves. Fetch the docs
+  repository, not the rendered site. The full option-by-option audit against both tsconfigs is now
+  in the document's §7.2; the two changes upstream says *"will affect many projects"* — `types`
+  defaulting to `[]` and `rootDir` defaulting to `.` — are **no-ops for this repo**, verified rather
+  than assumed (`frontend/src/` has zero references to `process`/`Buffer`/`__dirname`/`__filename`,
+  no `NodeJS.` namespace use, every test imports its globals from `'vitest'`, and timers go through
+  `window.setTimeout`; `tsconfig.node.json` already sets `"types": ["node"]`). The residual risk is
+  the *"less context-sensitivity on `this`-less functions"* inference change, which no config audit
+  can pre-empt.
+- **jsdom 27/28/29 — resolved, and the original report was my error.** The changelog **does** exist
+  at `refs/tags/v29.0.0/Changelog.md`; it was deleted at `v30.0.0`. The first pass reported "all
+  candidate paths 404" after probing `refs/tags/26.1.0` and friends — **jsdom's tags carry a `v`
+  prefix**, so those refs simply do not exist, and a bad ref 404s identically to a missing file.
+  Recorded because the failure mode is general: a 404 from `raw.githubusercontent.com` is evidence
+  about the *path*, not about the file, until the ref is independently confirmed (fetching a known
+  file such as `README.md` at the same ref is the cheap check).
+- **The Node version behind the pinned digest — resolved: `node:24-bookworm-slim@sha256:235600a8…`
+  ships Node 24.18.1**, which satisfies jsdom 30's `^24.15.0` floor, so that prerequisite is closed
+  with no Dockerfile change. `docker run` was unavailable (CLI present, no daemon), so it was
+  resolved against the registry by **two independent methods that agree**: Docker Hub's tag index
+  maps that digest to exactly `24.18.1-bookworm-slim` and `24.18-bookworm-slim`, and the image's
+  config blob carries `NODE_VERSION=24.18.1`. Method note for reuse: Docker Hub serves manifests
+  directly but **307-redirects blobs to `production.cloudfront.docker.com`, which is egress-blocked
+  here**, so the blob was pulled through **`mirror.gcr.io`**, a pull-through cache that serves blobs
+  on its own domain.
+- **The GHSA verification** described above, via the `github/advisory-database` repository.
+
+**Still genuinely blocked**, with the stated method left in place in the document's §9: **jsdom
+30.0.0's own release notes** (the changelog file is gone as of that tag — eight candidate filenames
+probed at the correct `v30.0.0` ref, all 404 — and the notes live only in GitHub Releases, which
+403 through the proxy), and **whether an upstream `typescript-eslint` issue tracks TS 7 support**.
+The jsdom 30 gap is partly mitigated by artifact comparison rather than guesswork: `matchMedia`,
+`ResizeObserver`, and `scrollIntoView` appear in **zero** files of the shipped `lib/` in 26.1.0,
+29.1.1 *and* 30.0.1, so `src/test/setup.ts`'s `if (!…)` polyfill guards behave identically across
+the span — retiring the specific "the polyfill silently steps aside" risk the first pass flagged.
+The typescript-eslint gap does not block the decision at all, since §3.1's registry one-liner
+answers "can we take TS 7 yet" without the issue tracker.
+
+**Explicitly not done**, per the session's scope: no dependency version changed, no lockfile or
+config edited, no PR opened that changes code, no action taken on #153, and no speculative install
+run to "see what happens". `npm ci` was run only to establish the baseline against the **current**
+lockfile, and that lockfile's hash is unchanged.
+
+---
+
+**Third pass (same date, follow-up PR): the estimates were re-derived against the newly-readable
+changelogs, and two of them moved.** The first two passes wrote the per-step effort/risk table
+while jsdom 27/28/29 were still listed as unreachable. With those changelogs in hand the jsdom
+step was re-costed from the *actual test code* rather than from the changelog's tone, and the
+result is worth recording because it cuts both ways:
+
+- **Two channels are live.** The **selector-engine swap** (27.0.0, `nwsapi` →
+  `@asamuzakjp/dom-selector`) sits under **116 Testing Library query call sites** across the 12
+  `.tsx` test files — every query bottoms out in `querySelectorAll`. And the **re-derived UA
+  stylesheet** (27.0.0, plus its `display`-resolution fix) reaches the suite through exactly one
+  path, verified in the installed `@testing-library/dom@10.4.1`: `isSubtreeInaccessible()` reads
+  `getComputedStyle(element).display`, `isInaccessible()` reads `.visibility`, `config.js` sets
+  `defaultHidden: false`, and the repo never calls `configure()` — so all 34 `getByRole` sites run
+  that filter.
+- **Four channels are provably inert, including the two that sound worst.** The **CSSOM rewrite**
+  (29.0.0) has no author CSS to act on: `vite.config.ts`'s `test` block sets no `css` key, so
+  Vitest's default `css: false` applies and Mantine's stylesheets never enter jsdom. The
+  **`element.click()` → `PointerEvent`** change (27.0.0) is unreachable: there is **no `.click()`
+  anywhere in `frontend/src/`**, and all interaction goes through `userEvent.click` (8) or
+  `fireEvent.click` (6), which build and dispatch their own events. **Passive-by-default events**
+  cannot bite — no `preventDefault` anywhere in `src/`, no wheel/touch/scroll listeners. Resource
+  loading, MIME sniffing, and bad-port blocking have no subresource loads to affect.
+- **Net: effort widened S–M → S–L; risk held at medium.** The two directions roughly cancel. The
+  reason it did not rise is the property that separates this step from the Vite one: **detection is
+  complete and immediate** — 79 assertions in ~15 s, with no failure mode that survives a green
+  run.
+
+**The ordering changed as a result: jsdom and Vite 8 swapped, making jsdom step 6 and Vite step 7.**
+Membership is unchanged. Steps 4–7 carry no dependency on each other, so their order was always a
+judgement about verification cost rather than a constraint; the swap spends the cheap, total oracle
+(`npm test`) before the expensive, partial one (a build plus a human pass over the running SPA),
+keeps both test-harness steps adjacent, and stops the last test-harness change from landing on a
+just-swapped bundler — the one arrangement in which a test failure has two plausible causes. The
+original order is recorded as *not wrong*, since every step is verified green before the next
+begins.
+
+**The premise that prompted the re-check was half right, and the entry says so.** jsdom **is**
+riskier than the `typescript-eslint` step — but it already was in the first draft (Step 1 low–med
+versus jsdom medium), so the changelogs confirmed that relative order rather than overturning it;
+and `typescript-eslint` was **never** the top of the ranking. Step 3 (React Compiler, unbounded)
+and the Vite step have outranked it throughout. jsdom is now third, behind both. The document
+carries the full ranking explicitly in §8 so this is not re-litigated from the table alone. Every
+other row was re-checked and confirmed unchanged rather than left standing.
+
+**The `"types": []` recommendation moved from prose into the step that performs it.** §7.2's audit
+established that TypeScript 6.0's new `types` default is a no-op for this repo; that finding now
+also appears as a checklist item under §6, Step 4 ("Edits this step makes"), alongside the
+`package.json` bump and the PR-description note about the 6.0.3 ceiling. A verified no-op is
+precisely the edit that gets skipped and later rediscovered as a mystery, and the explicit array
+additionally pins the behaviour against TypeScript 7, where the old enumerate-everything default is
+gone. §7.2 now points at the step rather than standing alone.
+
+**Plan section affected (third pass):** `docs/upgrades/frontend-toolchain-86.md` only — §6 (step
+order, jsdom channel analysis, Step 4 checklist), §7.2/§7.3/§7.4 (cross-references renumbered),
+§8 (effort table plus a new explicit risk ranking). Still scoping only: no dependency version,
+lockfile, or config file changed, and `docs/ROADMAP.md` still deliberately unedited.
+
+---
+
+**Fourth pass (same date): the jsdom rating's supporting claim was challenged, tested, and
+narrowed — the rating survived, the wording did not.** The third pass justified jsdom's *medium*
+with *"detection is complete — no failure mode that survives a green run."* The maintainer
+challenged exactly the right seam: a green suite catches a query that finds **nothing** or **too
+much**, but not a query that resolves to a **different** element while downstream assertions still
+pass. That is silent drift, and the counts appeared to leave room for it (116 query call sites
+against 79 tests). The claim was **asserted, not argued**, and an unqualified "complete" could not
+be supported. It is replaced in §8 by a four-part audit against the suite itself:
+
+- **`getBy*` semantics make most drift loud.** It throws on zero matches *and* on more than one, so
+  silent one-to-one drift needs the engine to stop matching A *and* start matching exactly one B in
+  the same pass; any widening raises *"found multiple elements"* instead.
+- **62 of the 116 sites are discriminated by name, not by selector.** All 34 `getByRole(role,
+  {name})` and 28 `getByLabelText(text)` filter candidates by accessible name / label text computed
+  in JS; the engine only assembles the pool, so B would need an identical accessible name to A —
+  which is the ">1 match" throw condition.
+- **85 of the 116 are assertion subjects, categorised rather than estimated** — 74 directly inside
+  `expect(...)`, 11 assigned or line-wrapped and then asserted.
+- **The single set-valued query is pinned by exact equality.** There is exactly one `*AllBy*` call
+  in the suite (`NewScanPage.prefill.test.tsx:54`), and it feeds a helper asserted with `toEqual`
+  on the full ordered array — which also pins the suite's only raw selector use
+  (`el.closest('[role="option"]')`). No `within(...)` scoping anywhere.
+
+**What the audit could not argue away — ~17 interaction targets** (`user.click(getByRole(…))` and
+similar), where the resolved element is acted on rather than asserted on — is **handed to Step 6 as
+a checklist item** rather than reasoned about further: wrap `screen`'s query methods in a temporary
+`setupFiles` shim that logs each resolved element's `outerHTML`, run before and after the bump, and
+diff. That converts the residual from a judgement into a two-run measurement, and the shim is
+deleted before the PR opens.
+
+**Two corrections fell out of the same check.** (a) *"79 assertions"* was wrong in both prior
+passes: **79 is the test count**; the suite runs **151 `expect` calls**. Quoting the test count as
+an assertion count understated assertion density by roughly half, and it was the number the
+challenge reasoned from — so the error was this document's, not the challenge's. (b) The channel
+table's *"every query bottoms out in `querySelectorAll`"* was true but misleading about how much
+the engine can actually move: read from the installed `@testing-library/dom@10.4.1`, `getByText`'s
+candidate selector is `'*'` and `getByLabelText`'s are `'label'` / `'label,input'` / `'*'`, so the
+engine has no discriminating power there at all. The real exposure is `getByRole`'s
+`makeRoleSelector()` plus `node.matches()` against aria-query's element-role selectors — bare tag
+names and simple attribute selectors, **not** the complex-selector territory (`:has()`, `:is()`,
+`:scope`, nesting) where jsdom's "over 20 selector-related bugs" lived.
+
+**Rating unchanged: jsdom stays medium and stays third.** The audit made the oracle's strength
+specific rather than assumed, and every specific came back favourable. Step 7 (Vite 8) keeps the
+property that actually separates them — a Lightning CSS regression fails nothing and no checklist
+item can turn it into a test.
+
+**Plan section affected (fourth pass):** `docs/upgrades/frontend-toolchain-86.md` only — §6 (the
+selector channel row rewritten, the estimate paragraph's claim qualified, a drift-measurement
+checklist item added to Step 6) and §8 (the new *"Does a green run actually prove anything?"*
+subsection, plus a pointer in the revision note). No estimate, rating, ordering, or sequence
+membership changed. Still scoping only; `docs/ROADMAP.md` still deliberately unedited.
+
+---
+
+**Plan section affected:** new file `docs/upgrades/frontend-toolchain-86.md`; this §14 entry
+(including the correction to the 2026-08-09 queue-audit entry's characterisation of #153's red
+check). `docs/ROADMAP.md` was deliberately **not** edited — three items in it are affected (the #86
+sweep's framing, the `react-router` 7→8 grouping, and the GHSA re-cut request) and folding those in
+is a maintainer call. No code, schema, API contract, security model, job model, auth, CI behaviour,
+or dependency version changed; no locked decision re-opened — React stays on 18 and Mantine on v7,
+and the document's §4 is the evidence that nothing in the sweep pressures either.
+
+---
+
+### 2026-08-09 — Docs/Process — PR #169 reversed the attribution-stripping ban hours after it was recorded; the reversal itself went undocumented until now
+
+**What changed:** nothing in this entry — it is a correction to the record, written after the fact
+once the conflict it describes was noticed and flagged by the maintainer. The §14 entry below
+("Settings audit... attribution-stripping banned") rewrote `CLAUDE.md` § Attribution to ban
+instruction-based PR-body footer stripping outright: never write a footer, and if one appears after
+the fact, **leave it** — the maintainer removes it by hand at merge. **#169** ("docs: update
+Attribution section to require verify-and-strip workflow"), opened and merged the same day at
+09:30–09:35 UTC — a few hours after the ban was recorded — replaced that same section with the
+opposite instruction: check outgoing text before submitting, and **read the posted PR/comment body
+back from the API afterward, stripping and re-verifying if a footer appears.** That is the text
+`CLAUDE.md` § Attribution carries today. **#169 has no §14 entry of its own** — grepping the archive
+for "#169" or "verify-and-strip" turns up nothing before this entry — so the ban stood as the
+written record for the rest of this document's history while the actual policy in `CLAUDE.md` had
+already moved back to strip-and-reverify. Three later sessions (**#177**, **#180**) opened and
+merged PRs under the reinstated instruction; their current bodies carry no footer and no comment
+documents the check running, so nothing here confirms or disputes whether the ban's original
+"a PATCH re-appends the footer server-side" finding still reproduces — that empirical question is
+untouched by this entry.
+
+**This entry does not relitigate which policy is correct.** `CLAUDE.md` § Attribution's current
+text — strip-and-reverify, per #169 — is the standing policy, full stop. What this entry records is
+narrower: the ban entry below is **superseded** by #169, and the supersession went unrecorded for
+the length of time between #169 merging and this entry, in direct violation of `CLAUDE.md` § Git &
+PR conventions' own rule that a deviation is logged in `docs/ARCHIVE.md` "the moment you implement
+something differently than the plan specifies" — not as a later cleanup pass. A reader relying on
+the archive's §14 index alone, without cross-checking `CLAUDE.md`'s live text, would have gone on
+believing stripping was banned indefinitely.
+
+**The gap this closes: a policy PR is not done until its own §14 entry lands in the same PR.**
+`CLAUDE.md` § Attribution now says so directly, so a future attribution-policy change can't repeat
+this — see `CLAUDE.md` § Attribution for the added line.
+
+**Plan section affected:** `CLAUDE.md` § Attribution (one line added, see above). No code, schema,
+API contract, security model, job model, or locked decision affected. This entry does not change
+the ban entry's own text below — it stands as written, with this entry marking it superseded rather
+than editing it in place, so both the original finding and its reversal remain on the record.
+
+---
+
+### 2026-08-09 — Security/Process — Settings audit: four previously-unreachable toggles verified, Secret Protection enabled, SHA-pinning confirmed clean, attribution-stripping banned
+
+**What changed:** the maintainer manually verified, in the GitHub UI, four settings a code session
+cannot read at all — the API paths are blocked from this environment, and no prior §14 entry
+covers them. Recorded here as facts, per this document's own rule that a settings change leaves
+no artifact in the repository and this section is the only durable record it happened.
+
+**Actions secrets: none.** No repository or environment secrets, no variables. Every workflow —
+`ci.yml`, `codeql.yml`, `dev-nightly.yml`, `publish.yml`, `rescan.yml` — runs on the built-in
+`GITHUB_TOKEN` alone, matching what each workflow's header comments already claim (locked decision
+§6: no Docker Hub, no PAT, no long-lived registry secret anywhere). Worth recording precisely
+because it is invisible and can change silently — a secret added later would leave no diff for a
+future session to notice, so this is the baseline to compare against.
+
+**Dependabot: alerts on, malware alerts on, grouped security updates on, security updates on;
+dependency graph on, automatic dependency submission off.** This is the **confirmed** mechanism
+behind `#149` opening against `main` rather than `dev` — `CONTRIBUTING.md` § Dependabot security
+updates target `main` and `CLAUDE.md` § Dependency hygiene described the *behavior* from observed
+PRs; this is the first direct settings confirmation that the feature producing it is actually
+enabled, not merely inferred from one PR's base branch. It is also the same underlying pattern as
+the `ignore`-list finding in the entry below: both are repo-level Dependabot configuration that
+GitHub resolves from the **default branch**, regardless of what `target-branch` says. `#153` (the
+frontend #86-sweep PR) stays open and deliberately unactioned, unaffected by this entry.
+
+**Workflow permissions: "Read repository contents and packages permissions", and "Allow GitHub
+Actions to create and approve pull requests" unchecked.** Both hardened — no workflow can write
+back to the repository or open its own PRs. Consistent with `CONTRIBUTING.md` § What gets
+published, which already notes each publish workflow declares its own job-level `permissions:`
+rather than depending on this repo-wide default.
+
+**Code scanning: 0 open / 6 closed on both `branch:main` and `branch:dev`.** This closes the open
+disposition item `docs/ROADMAP.md` left after the 2026-08-02 CodeQL entry (six alerts, all
+assessed false positives, none formally dismissed pending a written reason). All six are now
+closed on both branches — **CLOSED**, no further disposition action needed. `docs/ROADMAP.md`'s
+CodeQL item is updated accordingly.
+
+**Actions permissions: "Allow all actions and reusable workflows"; "Require actions to be pinned
+to a full-length commit SHA" unchecked.** This was the open question this audit set out to answer:
+whether it is safe to check that box. It is. Every `uses:` line across all five workflow files and
+the composite `.github/actions/build-image/action.yml` — `actions/checkout`, `actions/setup-python`,
+`actions/setup-node`, `docker/setup-buildx-action`, `docker/build-push-action`,
+`docker/setup-qemu-action`, `docker/login-action`, `actions/attest-build-provenance`, and
+`github/codeql-action/init` + `/analyze` — is already pinned to a full-length commit SHA, each
+re-resolved against upstream via `git ls-remote --tags` this session rather than trusted from the
+comment. **Zero references need pinning; the setting can be enabled with no workflow changes.**
+The one place this bites is `github/codeql-action`, whose tags are annotated (§ The
+annotated-tag SHA-pin trap in the project skill / `docs/ARCHIVE.md` §14 2026-08-03): `dev`'s
+`codeql.yml` pins `5595ccaf912efad79be6eef63a5619ff05969be3`, which re-resolves to
+`refs/tags/v4.37.6^{}` — the correct dereferenced-commit form — while `main`'s copy still pins
+`v4.37.4` at `ea14db8afdef5d462e69d78c4ca45002d4522418`. **This is the normal promotion gap, not a
+defect** — `dev` moved to v4.37.6 via `#154`, `main` hasn't had a promotion since — and it is
+recorded here rather than fixed, per instruction: `main` is never edited outside a release
+promotion.
+
+**Secret Protection: disabled → enabled, 2026-08-09.** The maintainer turned this on directly in
+Settings on the date of this entry. No prior state is recorded because nothing in the repository
+reflects a Settings toggle; this entry is that record.
+
+**BANNED — instruction-based PR-body attribution stripping, closed so no future session
+re-attempts it.** `CLAUDE.md` and `CONTRIBUTING.md` previously instructed sessions to re-read a
+PR's live body after opening it and strip any auto-appended attribution footer by hand. The
+2026-08-09 audit entry below already documented, twice, that a `PATCH` stripping the footer gets
+it **re-appended server-side** — verified against the live API, including a payload that itself
+carried no footer — so the instruction was not merely unreliable, it was actively producing false
+"verified clean" reports from sessions that believed the check had passed. `CLAUDE.md` § Attribution
+now states the correct contract directly: never write a footer in the first place; if one appears
+after the fact, leave it — it is not yours to remove, and the maintainer removes it by hand at
+merge. This supersedes every prior instruction in `CLAUDE.md`/`CONTRIBUTING.md` telling a session
+to re-check and strip a live PR body. **Closed, not open** — this is a settled fact about the
+environment, not a standing task.
+
+**DECLINED — promoting `.github/dependabot.yml` to `main` outside a release, to close the
+ignore-list lag immediately.** The entry below identifies that a `dev`-only `ignore` rule (e.g.
+`#147`'s `@types/node` major-ignore) has no effect until a promotion carries the file to `main`,
+and names two options: accept the lag, or promote the file to `main` on its own. **The maintainer
+declines the second option** — not defers it — on the standing rule that `main` is never edited
+outside a deliberate release promotion (`CLAUDE.md` § Git & PR conventions). The lag is an accepted
+cost of that rule, not a gap to close with a special-case exception. No review date; do not
+re-propose a standalone `main` edit to fix this.
+
+**Plan section affected:** `CLAUDE.md` § Attribution (rewritten), § Definition of done item 8
+(rewritten), `.gitignore` (`.pr-body.md` added), `CONTRIBUTING.md` § Releasing (new subsection on
+the `ignore`-list promotion lag), `docs/ROADMAP.md` (CodeQL disposition item closed). No SHA
+changed on any action reference — the audit found nothing to fix. No schema, API contract, security
+model, job model, or locked decision affected.
+
+---
+
+### 2026-08-09 — Infra/Process — Dependabot round closed out: queue merged and closed, bundled scanners bumped, the display-name option declined, prior claims corrected
+
+**What changed:** the round the 2026-08-09 queue-audit entry below opened was finished. Merged
+into `dev`, in order, each squash-merged with the base re-confirmed as `dev` and the required
+checks (`Backend — lint + tests`, `Frontend — lint + build`, `Image — build + dogfood self-scan`,
+plus the three CodeQL contexts) verified green **on the current head after its branch was updated
+from `dev`** — never on a run predating a push or base move:
+
+1. **#159** — the audit PR itself (uvicorn 0.52.1, alembic 1.19.1, the audit's §14 entry).
+2. **#151** — `debian:bookworm-slim` digest refresh in `docker/Dockerfile`.
+3. **#154** — `github/codeql-action` v4.37.6, its SHA re-resolved against upstream before merging:
+   `5595ccaf…` is `refs/tags/v4.37.6^{}`, the dereferenced commit — the correct pin form for this
+   repo's annotated tags, so Dependabot got the #146 lesson right this time.
+4. **#160** — bundled scanners **Trivy 0.72.0 → 0.73.0, Grype 0.115.0 → 0.116.1, Syft 1.46.0 →
+   1.50.0** (details below).
+5. **#150** — the optional `trivy-server` sidecar 0.72.0 → 0.73.0, taken only after #160 so the
+   sidecar never ran ahead of the bundled binary; its proposed digest was verified independently
+   against the Docker Hub registry before merging.
+
+**Closed without merging:** **#149** (cryptography 49.0.0 → 50.0.0, the one security update on
+`main`) — closed after verifying in `dev`'s diff, not any summary, that #156 (`719f11b`) moved
+both `pyproject.toml` and `requirements.lock` to 50.0.0; `main`'s open Dependabot alert (#7)
+persists by design until a promotion carries the fix. **#157** — superseded by #159's merge.
+**#158** — replaced by #159, below. **#153** stays open, deliberately unactioned: it is the #86
+toolchain sweep's reminder surface (`docs/ROADMAP.md` § Track A now says so explicitly).
+
+**#158 → #159: the audit PR was re-opened from a renamed branch.** #158's head branch carried a
+tooling-generated `claude/` prefix. Two mechanics corrections for the future: **(a)** GitHub's
+squash-commit title is the PR title plus number — a head-branch name never enters the target
+branch's history, so the rename was about the PR page's permanent head-ref label, not the squash
+title; **(b)** the branch-rename REST endpoint (which updates open PRs' head refs in place) is not
+reachable from this execution environment, and neither `git push :ref` nor the git-refs DELETE API
+is permitted, so the achievable equivalent was: push the same commit (`8c6815b`) under
+`dependabot-queue-audit`, open #159 with an identical body, verify identical diff/base
+(4 files, +193/−11, base `dev`), close #158. The stale refs
+`claude/dependabot-main-branch-audit-fa8614` and `claude/v0.3.0-release-prep-8w9w4j` could not be
+deleted from the session and await manual deletion.
+
+**DECLINED — GitHub profile display name (not deferred; no review date, no resolution trigger).**
+The option on the table since the 2026-07-13 squash-merge-authorship entry, asserted done in the
+2026-08-02 governance entry, and re-raised as a violation by the audit entry below, was to set the
+GitHub profile display name to `tyler-rich` so that web-UI/API merge commits match
+session-authored commits. **The maintainer has declined it: the display name stays their real
+name.** The authorship invariant that matters is that **no Claude/Anthropic identity appears in
+commits or PRs**, and the maintainer's real name satisfies it. The accepted cost is two author
+strings for the same person in history — `tyler-rich` on branch commits (repo-local git config,
+unchanged and still enforced), the real name on web-UI/API merges, including the v0.3.0 promotion
+merge commit — which is cosmetic. Those merge commits are **correct as they stand**: not drift,
+not a violation, not something to fix. Consequences for prior records: the 2026-08-02 governance
+entry's item 1 ("display name set to `tyler-rich`") does not describe the current state and its
+implied obligation is void; the audit entry's "every web-UI merge violates § Git & PR
+conventions" framing is superseded (its factual observations stand); `CLAUDE.md` § Git & PR
+conventions and `docs/ROADMAP.md` were rewritten this round to record the decision so no future
+session re-raises it.
+
+**#160 — the bundled-scanner bump, and what "in lockstep" turned out to include.** Each target
+version was confirmed current by resolving upstream tags (`git ls-remote`); release notes for
+every release crossed document no breaking, deprecation, or CLI change, and Syft's JSON schema
+moves only at patch level (`internal/constants.go`: 16.1.5 → 16.1.10 between the two tags), so
+JSON parsing and persisted SBOMs are unaffected. Beyond the three `ARG`s: the `ci.yml` and
+`rescan.yml` `aquasec/trivy` / `anchore/grype` scan-image pins are documented in-file as "pinned
+to the version Scrye bundles" and moved with fresh registry-resolved digests (the old tags were
+re-resolved first and matched the committed pins — methodology check); `THIRD_PARTY_LICENSES/`
+was re-verified **fresh** per Apache-2.0 §4 — every `LICENSE` (and Trivy's `NOTICE`) fetched at
+the new tags and `cmp`'d byte-identical, Grype/Syft still 404 on `NOTICE` — so only its version
+table moved; README's Integrations versions and a CHANGELOG entry. The #135 symlink-containment
+guard was re-run locally against the real downloaded syft 1.50.0 / grype 0.116.1 on CPython
+3.14.6 (7 passed) before CI repeated it against the binaries the image ships.
+
+**Verified and found already correct — no change made (recorded so the verification itself is on
+the record):**
+
+- **The alembic timing claim in #159's CHANGELOG entry.** Checked against PyPI's release index:
+  1.19.0 published 2026-08-04T18:57Z, 1.19.1 published 2026-08-08T16:32Z, #157 opened
+  2026-08-08T09:15Z — so "1.19.1 was published after #157 opened", about seven hours after, is
+  accurate as written. A review reading had conflated 1.19.0's date with 1.19.1's ("four days
+  apart" describes the two *releases*, not 1.19.1 versus #157). Nothing corrected.
+- **The `ignore`-list-read-from-`main` finding in the audit entry below.** Re-verified on all
+  three legs: `origin/dev:.github/dependabot.yml` carries the `@types/node` major-ignore (#147),
+  `origin/main`'s copy does not, and #153 proposes `@types/node` 26.1.2 regardless. Accurate. The
+  available fixes both touch `main` — wait for the next promotion to carry `dev`'s config (cost:
+  ignored majors keep resurfacing in grouped PRs until then), or promote `.github/dependabot.yml`
+  on its own outside a release (cost: a commit on `main` outside the release discipline, plus the
+  back-merge). **Deliberately left as is** — both options are maintainer calls on `main`.
+
+**Governance re-verification against the live API (2026-08-09).** GHCR package public (anonymous
+manifest pull of `:latest` succeeds); private vulnerability reporting `{"enabled": true}`; all
+three rulesets `active`. Two changes were found done that no §14 entry records being made — the
+CodeQL migration's two settings edits: default setup is off (the committed workflow's checks run
+and pass on `dev` PRs, impossible while it is enabled) and the three CodeQL contexts are in
+`required_status_checks` on **both** `protect-dev` and `protect-main` (live ruleset read:
+`protect-dev` requires Backend/Frontend/Image-dogfood + CodeQL×3 with strict up-to-date;
+`protect-main` requires Backend/Frontend + CodeQL×3). When they were made is not recorded
+anywhere — the same invisible-settings-change failure mode this checklist exists for, this time in
+the happy direction. `docs/ROADMAP.md`'s CodeQL item was rewritten accordingly (open work is
+alert disposition only). Not re-verifiable at this session's API permission level: the Actions
+secrets, Dependabot alert toggles, workflow permissions (proxy-blocked paths), and CodeQL alert
+states — their prior Settings verifications stand as the record.
+
+**The sandbox-interpreter question, settled by installation rather than inference.** This
+sandbox's system interpreters are 3.10–3.13 (default 3.11.15), and its preinstalled `uv 0.8.17`
+resolves `3.14` to 3.14.0rc2 only — matching the 2026-08-03 and audit-entry reports. But a
+**current uv (0.12.3) installs `cpython-3.14.6` from python-build-standalone in seconds**, so "no
+3.14 here" is a statement about the tooling version, not the sandbox. On the real 3.14.6 the full
+backend suite runs **728 passed / 11 skipped / 0 failed**. `test_undeterminable_presence_fails_startup`
+was then re-reproduced on 3.13.12 and fails exactly as the 2026-08-03 entry records — the
+monkeypatched `crypto.os.stat` intercepts the test's own `assert not autogen.exists()` via
+`pathlib/_local.py`'s `os.stat()` call and raises the planted `PermissionError` — confirming the
+diagnosis by reproduction rather than by matching the failure to the entry by name. Local runs on
+an installed 3.14.6 are therefore valid evidence in this environment; upgrade uv first.
+
+**Environment caveat, extending the 2026-08-02 issue-body observation: this environment's GitHub
+ingress appends an attribution footer to every issue-comment and PR-body write, and a PATCH that
+strips it gets the footer re-appended to the PATCHed body server-side** — verified twice against
+the live API, including a direct authenticated PATCH whose payload contained no footer. Strips do
+not stick; the footer (without session link — a PATCH does at least downgrade the session-link
+variant to the generic one) remains on #149's and #150's closure/decision comments and #159's and
+#160's bodies, and needs hand-cleanup in the web UI, as #135–#137 did. Merge-API squash commit
+messages are **not** affected — every squash commit landed this round was re-read from `dev` and
+carries no footer.
+
+**Plan section affected:** `docker/Dockerfile`, `.github/workflows/ci.yml` + `rescan.yml`,
+`THIRD_PARTY_LICENSES/README.md`, `README.md`, `CHANGELOG.md` (#160); `docker/docker-compose.yml`
+(#150); `backend/pyproject.toml` + `requirements.lock` (#159); `CLAUDE.md` § Git & PR conventions
+and `docs/ROADMAP.md` (display-name decision, CodeQL item, governance list, #86/#153 note). No
+schema, API contract, security model, job model, or auth change; no locked decision re-opened.
+
+---
+
+### 2026-08-09 — Infra/Process — Open-Dependabot-queue audit: only #149 was on `main`, and it was already superseded; `.github/dependabot.yml`'s `ignore` list is read from `main`, so `dev`-only edits to it are inert
+
+**What changed:** the whole open Dependabot queue (**#149, #150, #151, #153, #154, #157**) was
+audited against the base-branch rules in `CLAUDE.md` § Dependency hygiene and `CONTRIBUTING.md`
+§ Dependabot security updates target `main`. One PR's content — the mergeable half of **#157** —
+was reapplied by hand (`uvicorn` 0.52.0 → **0.52.1**, `alembic` 1.18.5 → **1.19.1**, with
+`backend/requirements.lock` regenerated by the pinned `uv 0.8.17`). Everything else was left in
+place with a recorded decision; no PR was merged or closed in this pass. This entry is the durable
+record of the four decisions that leave no diff.
+
+**`main` is an ancestor of `dev`, and the branches have not diverged.**
+`git merge-base --is-ancestor origin/main origin/dev` succeeds and
+`git rev-list --left-right --count origin/main...origin/dev` returns **0 4** — nothing is on `main`
+and absent from `dev`. `main` is at `a43b2eb` (the v0.3.0 promotion merge); `dev` carries four
+commits on top of it (#147, #156, #148, #155). So the reconciliation debt that made **#110/#119**
+painful on 2026-07-31 is not present, and the pre-promotion check in `CONTRIBUTING.md`
+§ Promoting `dev` to `main` would pass today.
+
+**The queue's base branches are correct — only #149 sits on `main`, and by design.** The premise
+this audit started from (that the whole queue had been opened against `main`) did not hold:
+**#150, #151, #153, #154 and #157 are all based on `dev`**, and every one of their head branches
+carries the `/dev/` `target-branch` segment, which is the first signal in `CONTRIBUTING.md`'s
+two-signal table. **#149** is the single exception, and it is a **security** update
+(`dependabot/pip/backend/pip-18c674f953` — no `/dev/` segment; its body carries the
+*"disable automated security fix PRs"* line only security PRs get), so `main` is where GitHub is
+documented to put it. Nothing was retargeted: retargeting is explicitly not an option for a
+security PR, and the five `dev`-based PRs had nothing to retarget.
+
+**#149 — cryptography 49.0.0 → 50.0.0. Already superseded; recommended for closure, held pending
+the maintainer.** The bump it carries landed on `dev` on 2026-08-08 as **#156** (`719f11b`) — the
+documented response **(b)**, close-and-reapply-on-`dev`. `dev`'s `pyproject.toml` and
+`requirements.lock` both read `cryptography==50.0.0` today, so merging #149 into `main` would add
+nothing `dev` lacks while putting a commit on `main` outside a release. Its CI is red for the
+reason every Dependabot pip PR is red here: it edits `pyproject.toml` only and leaves the lock
+stale, so `Backend — lint + tests` fails the drift gate. **Not closed in this session** — a
+cryptography bump is on the crypto/secrets code path, and that is a maintainer decision.
+
+**#157 — uvicorn + alembic. Content reapplied here; the PR itself is superseded.** Dependabot
+cannot produce a mergeable pip PR in this repo (`Backend — lint + tests` fails on lock drift;
+everything else on #157 is green, including the dogfood gate, because #157 is the one queue member
+based on `719f11b` and therefore already carries the cryptography fix). Two things were checked
+rather than taken from the PR:
+- **uvicorn 0.52.1** (2026-08-01) is four WebSocket-only fixes. `grep` over `backend/app/` and
+  `frontend/src/` finds no WebSocket route and no `new WebSocket` — none of it is reachable in
+  Scrye. Pure currency.
+- **alembic 1.19.1 was taken instead of the 1.19.0 the PR proposes.** 1.19.0 (2026-08-04) added
+  named-CHECK-constraint autogenerate detection; **1.19.1 (2026-08-08) fixes a defect in exactly
+  that new feature**, and was published *after* #157 opened at 09:15 UTC that morning, so the PR
+  was one patch stale before it was read. Verified against the PyPI release index and upstream's
+  changelog, not the PR description. Both changes are confined to migration *authoring*; no shipped
+  migration or runtime path moves. The lock diff is those two packages and their hashes — no
+  transitive churn, `uv`'s preference set holding as in #147.
+
+**#151 (debian digest) and #154 (codeql-action v4.37.4 → v4.37.6) are clean, and their red CI is
+their base, not their content.** Both are based on `004d2b5`, which predates #156, so
+`Image — build + dogfood self-scan` fails on `cryptography 49.0.0 / CVE-2026-69247 / HIGH / fixed`
+— confirmed by reading #150's gate log, which prints that exact row. Updating each branch from
+`dev` clears it and re-triggers CI as a `synchronize`, which is also what § Git & PR conventions
+requires before a check may be treated as current. #154's pin was re-resolved upstream rather than
+trusted: `git ls-remote --tags https://github.com/github/codeql-action` gives
+`9e3211c9…  refs/tags/v4.37.6` and `5595ccaf…  refs/tags/v4.37.6^{}`, and **5595ccaf is what the PR
+pins** — the dereferenced commit, i.e. the shape #146 corrected on 2026-08-03, held this time. This
+is a real version bump (4.37.4 → 4.37.6), unlike #146.
+
+**#150 — trivy sidecar 0.72.0 → 0.73.0. Deferred: it would desync the sidecar from the bundled
+binary.** `docker/docker-compose.yml`'s optional `trivy-server` image is the *only* Trivy version
+Dependabot can see. The Trivy that actually performs every scan is pinned as
+`ARG TRIVY_VERSION=0.72.0` in `docker/Dockerfile` — a build arg, not a `FROM`, so **no Dependabot
+ecosystem tracks it**, and the same is true of `GRYPE_VERSION` and `SYFT_VERSION`. Merging #150
+alone would ship a 0.73.0 server against a 0.72.0 client. Whether Trivy hard-fails or merely warns
+on a client/server version mismatch **could not be verified from this sandbox** (`trivy.dev` is
+egress-blocked and the docs path in the repo 404s), so the recommendation rests on consistency
+rather than a proven break — but the conservative move is to bump both in one PR either way.
+0.73.0 itself is feature/bugfix only, **no CVE fixes**, read from upstream's `CHANGELOG.md`.
+
+**The bundled scanner binaries are stale and nothing is watching them.** Resolved against upstream
+tags during this audit: **trivy 0.72.0 → 0.73.0**, **grype 0.115.0 → 0.116.1**, **syft 1.46.0 →
+1.50.0**. #150's own gate log makes the first one self-evident — Trivy prints
+*"Version 0.73.0 of Trivy is now available, current version is 0.72.0"* from inside the image CI
+just built. `docs/ROADMAP.md` § Known limitations already states that keeping these pins current is
+how CVEs in the scanners' own Go modules get addressed; what was not written down is that the
+mechanism for noticing is **entirely manual**. Worth its own PR.
+
+**#153 — the frontend group. Reported, not actioned: it is the #86 sweep.** Its thirteen updates
+are the same set §14 (2026-08-03) held back from **#145**, at the same targets — `typescript`
+5.7.2 → **7.0.2**, `eslint` 9.39.4 → 10.8.0, `@eslint/js` → 10.0.1, `typescript-eslint` → 8.66.0,
+`vite` 6.4.3 → **8.2.0**, `@vitejs/plugin-react` → 6.0.5, `vitest` 3.2.7 → **4.1.10**, `jsdom`
+26.1.0 → **30.0.1**, `eslint-plugin-react-hooks` 5.1.0 → **7.1.1**,
+`eslint-plugin-react-refresh` → 0.5.3 — plus `@types/node` 24.13.3 → 26.1.2 and two innocuous
+bumps (`@testing-library/user-event` 14.6.3, `globals` 17.9.0). `docs/ROADMAP.md` § Track A tracks
+this as **"Frontend tooling majors from Dependabot #86"** and says it wants a single deliberate PR.
+`Frontend — lint + build` is **red** on the PR, which is the type-aware-ESLint churn that roadmap
+item predicts, arriving on schedule. The two innocuous bumps cannot be split out without rewriting
+the branch, so the group stays whole. Nothing locked by decision §2 is in it: no `@mantine/*`,
+`react`, `react-dom` or `@types/react*` major appears — those ignores are on `main` and working.
+
+**The finding worth keeping: `dependabot.yml`'s `ignore` list is read from the *default* branch.**
+#153 proposes `@types/node` **26.1.2** even though `.github/dependabot.yml` on `dev` carries
+`- dependency-name: "@types/node"` / `update-types: ["version-update:semver-major"]`, added by
+**#147** on 2026-08-03 — and #153 was cut on 2026-08-07 from `004d2b5`, which *is* #147, so the
+rule was in the tree the PR branched from. It still had no effect, because
+**Dependabot reads its configuration from the repository's default branch (`main`), not from
+`target-branch`**. `git show origin/main:.github/dependabot.yml` has no `@types/node` stanza at
+all: #147 never reached `main`, and will not until the next promotion.
+
+This generalises, and it is the sharp edge. **Every `ignore` rule added on `dev` is inert until a
+promotion carries it to `main`**, while the `target-branch: dev` keys around it keep working
+normally — because those are read from the same `main` copy, where they have been since before the
+gap opened. So the config *looks* effective and partly is. The Mantine/React ignores work only
+because they predate `main`'s last promotion. Practical consequences:
+- A newly added `ignore` will be **silently ignored** for as long as it takes to cut a release.
+  Do not read a re-proposed bump as Dependabot misbehaving; check `main`'s copy of the file first.
+- This is a **third** distinct cause of surprising Dependabot behaviour in this repo, alongside
+  security-updates-target-`main` (2026-07-31) and retarget-on-branch-deletion (2026-08-02). It is
+  a *config-visibility* lag, not a base-branch problem, and none of the existing signals detect it.
+- It is not fixable by configuration. The options are to accept the lag, or to promote
+  `.github/dependabot.yml` changes to `main` on their own when a rule needs to bite immediately.
+  No change is made here — this is a maintainer decision, recorded so the next re-proposal is not
+  re-diagnosed from scratch.
+
+**Unrelated finding, surfaced by the same verification pass: the GitHub profile display name is
+still `Tyler Richardson`, so every web-UI merge violates § Git & PR conventions.** Updating #151's
+and #154's branches from `dev` produced merge commits authored `Tyler Richardson
+<170156756+tyler-rich@users.noreply.github.com>`, which prompted checking the rest of the history.
+**Every** commit created through the GitHub web UI carries that name — `a43b2eb` (the v0.3.0
+promotion merge), `004d2b5` (#147), `719f11b` (#156), `e5aa6ea` (#148), `984bfa5` (#155),
+`0463ce7` (#142), `fb6864c` (#141) — while every commit pushed from a session over local `git`
+correctly carries `tyler-rich` (`1b1f24a`, `f3fc929`, `cb3c350`). The split is exactly the one
+§ Git & PR conventions predicts: *"GitHub authors a squash-merge commit — and the merge commit a
+promotion produces — as the merging account's profile display name, which the repo-local
+`git config user.name` cannot override."*
+
+This is **not** something a code session can fix, and it is not new — `a43b2eb` predates this
+audit by six days. It is noted because `docs/ROADMAP.md` § Finish the public-repo governance setup
+lists the profile display name among the five items *"verified in GitHub Settings on 2026-08-02"*,
+and the commits above show it was not actually changed (or was changed back). The fix is a
+one-field edit at <https://github.com/settings/profile> — set **Name** to `tyler-rich` — after
+which future merges comply; commits already written keep the old name and are not worth rewriting.
+Flagged rather than resolved, and `docs/ROADMAP.md` deliberately left unedited.
+
+**Verification notes.** Every version claim above was checked at its source rather than taken from
+a PR description, per § Dependency hygiene's rule about scanner and advisory metadata being
+evidence rather than proof: PyPI's release index for `alembic`/`uvicorn` (which also disproved a
+first-pass reading that 1.19.0 did not exist — it does, published 2026-08-04), upstream changelogs
+for uvicorn 0.52.1, alembic 1.19.0/1.19.1 and trivy 0.73.0, `git ls-remote` for the
+`codeql-action`, `grype`, `syft` and `trivy` tags, and the PR check-run logs for every red gate
+rather than inferring the cause from the job name.
+
+**Plan section affected:** `backend/pyproject.toml`, `backend/requirements.lock`, `CHANGELOG.md`
+(`[Unreleased]` § Changed). No locked decision changed; no code, schema, API contract, security
+model, job model, auth, or CI-behaviour change. `docs/ROADMAP.md` was deliberately **not** edited —
+the #86 match above is reported for the maintainer to fold in.
+
+---
+
+### 2026-08-08 — Docs/Process — `docs/ROADMAP.md` replaced wholesale with an externally-drafted two-track revision (Track A carried forward verbatim, Track B added)
+
+**What changed:** `docs/ROADMAP.md` was **replaced in full** with a revision the maintainer drafted
+outside this session and approved. The document is now split into two tracks. **Track A —
+Engineering & hardening** is the entire previous roadmap (Near-term / Medium-term / Longer-term ·
+speculative), carried across **verbatim**. **Track B — Features** is new: six phases (prioritization
+& enrichment, triage & decisions, reporting & visibility, AI assist & MCP, continuous scanning &
+supply chain, ecosystem & team workflow), followed by a **Deferred** list of candidate engines, an
+**Out of scope (policy)** list, a **Licensing & bundling policy** table, and five **Guiding
+principles**. A short *"Where Scrye is heading"* preamble (Decide / Watch / Corroborate /
+Interoperate) and a rewritten front-matter blockquote frame the two tracks. **Known limitations &
+accepted trade-offs** is carried across unchanged and still closes the document. No code, schema,
+API contract, security model, job model, auth, or CI behavior is affected, and no locked decision
+changed.
+
+**The only edits to Track A's substance are three `†` prerequisite markers**, added where a Track A
+item now gates a Track B feature: *Content-addressed SBOM target identity* (Phase 2 fix-watch),
+*Cancel a running scan* (heavier engines and any future endpoint-scanning target class, i.e. the
+deferred Nuclei entry), and *Generated API client* (the Phase 4 MCP server). Each `†` is matched by
+a reciprocal pointer on the Track B side, so the dependency reads in both directions.
+
+**Verified before replacing, not after.** Track A and Known limitations were diffed against the
+outgoing file line by line under whitespace/line-wrap normalization; every open item, every
+struck-through Done/Declined entry, every §14 pointer, and every standing warning — *"do not
+re-argue it as a security fix"*, *"the evidence is already gathered; do not re-derive it"*, *"do not
+re-scope from the original wording"*, the admin-bypass caveat, and the CodeQL disable-order and
+required-context hazards — survives with its wording intact. Each §14 pointer was then checked
+against the entry it names rather than against its presence in the old file: the `react-router`
+tarball comparison (2026-08-03 v0.3.0 release prep), the `protect-dev` ruleset readout and
+`bypass_actors: null` note (2026-08-02), the five-of-eight governance verification (2026-08-02), the
+#136/#137/signed-commit entries (2026-08-03), and the two CodeQL entries (2026-08-02) all match.
+`#123`, `#136` and `#137` were confirmed **closed** via the API; `./ARCHIVE.md` and `../README.md`
+still resolve from `docs/`, and nothing outside this file links into a ROADMAP section anchor.
+
+**One regression was caught and corrected rather than absorbed.** The draft's *Frontend tooling
+majors from Dependabot #86* paragraph was the **pre-#147** version of that item — the draft was
+written against `docs/ROADMAP.md` at `cb3c350`, and `004d2b5` (#147, 2026-08-03) rewrote the
+paragraph afterwards. Taking the draft as written would have reverted the #145 shopping-list
+refresh, dropped four toolchain members (`@eslint/js`, `@vitejs/plugin-react`,
+`eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`), reverted **jsdom 26 → 30** to the stale
+`26 → 29`, and removed the closing sentence recording that these are **deliberately not** in
+`.github/dependabot.yml`'s `ignore` list. That sentence is one half of a two-way reference —
+`.github/dependabot.yml` carries the matching *"Deliberately NOT ignored … tracked in
+docs/ROADMAP.md"* comment — so dropping it would have left the config pointing at a claim the
+roadmap no longer made. The current paragraph was spliced in verbatim (re-wrapped to the new file's
+column width, wording untouched) after the maintainer was asked; nothing else in the draft was
+altered.
+
+**One deletion is recorded rather than restored.** The outgoing preamble's sentence *"Scrye's
+repository is now **public**, so items that were previously blocked on that (free CI runners,
+fork-based contribution safety) are unblocked"* is not in the new front matter, which was
+deliberately rewritten for the two-track structure. Its load-bearing half survives in place — the
+*Native arm64 CI runners* item still states that public-repo arm64 runners are free and that the
+cost concern is gone.
+
+**Track B was checked against the locked decisions rather than assumed compatible.** Phase 5's
+running-fleet drift goes *"via the existing read-only Docker socket proxy"* (locked decision §4 —
+the app still never mounts `/var/run/docker.sock`); arq/Redis and SQLCipher stay where they are, in
+Track A's longer-term section, so §3 and §5 are untouched; the licensing table's
+subprocess-boundary rule is the same one CLAUDE.md § Scanner faithfulness and § Third-party license
+attribution already state; and the MCP server is specified as authenticated, read-only at launch,
+audit-logged, and disabled by default, reusing the existing API-token/RBAC model. One factual claim
+was spot-checked at the source: Phase 3 offers ntfy and Gotify *"alongside the existing webhook,
+Discord, SMTP, and Matrix channels"*, and `backend/app/db/models/notification.py:27-30` defines
+exactly those four.
+
+**Why:** the roadmap had accumulated a full engineering backlog and no statement of product
+direction, so a reader could see every open chore and still not know what Scrye is trying to
+become. The two-track split keeps the backlog exactly as it was — it is the part with dated
+evidence behind it and the part sessions actually work from — while giving the feature direction
+somewhere to live that is explicitly labelled as direction, not commitment. Replacing wholesale
+rather than editing in place is what made the fidelity check tractable: a superset claim can be
+verified by diff, whereas an incremental rewrite of the same size could not.
+
+**Plan section affected:** `docs/ROADMAP.md` in full (Track A/Track B restructure; Track A and
+Known limitations carried forward verbatim apart from the three `†` markers). §14 (this record).
+No locked decision changed; no other file touched. Landed via
+[#155](https://github.com/tyler-rich/Scrye/pull/155).
+
+---
+
+### 2026-08-08 — Security/Infra — `cryptography` bumped 49.0.0 → 50.0.0 for CVE-2026-69247; the dogfood gate caught it on an unrelated PR
+
+**What changed:** `cryptography` moved **49.0.0 → 50.0.0** in `backend/pyproject.toml`, with
+`backend/requirements.lock` regenerated by the pinned `uv 0.8.17` command from `CONTRIBUTING.md`
+§ Backend dependency lock. The lock diff is that single package and its hashes — no transitive
+churn, which is `uv`'s documented preference-set behaviour holding. No code change: nothing in
+`backend/app/` needed touching. Recorded in `CHANGELOG.md` under `[Unreleased]` § Security.
+
+**Why:** **CVE-2026-69247** (HIGH) — a Bleichenbacher-style oracle in the PKCS7 decryption
+helpers. `pkcs7_decrypt_der` and its variants exposed distinguishable errors and timing while
+unwrapping an encrypted key; upstream's fix substitutes a random key on failure, per RFC 3218.
+
+**Verified at the source, not from the scanner's `FIXED IN` column.** This is the rule
+`CLAUDE.md` § Interpreter CVEs earned the hard way on the 3.13 → 3.14 bump, and it applies to a
+library bump argued on security grounds just as much as to an interpreter one. pyca/cryptography's
+own `CHANGELOG.rst` records the PKCS7 fix under **50.0.0 (2026-07-31)** and names CVE-2026-69247
+there; **49.0.0 (2026-06-12)** predates it. So the bump does clear the finding, and the claim rests
+on upstream's changelog rather than on Trivy's metadata agreeing with itself.
+
+**Scrye was never exposed, and that is not the reason to take the bump.** The library is used for
+exactly four symbols, all in `backend/app/core/crypto.py` — `AESGCM`, `HKDF`, `hashes` and
+`InvalidTag` — and PKCS7 is never called, so the vulnerable path is unreachable. The bump is taken
+because the finding is **fixable**, which is what the dogfood gate keys on per `CLAUDE.md`
+§ Dependency hygiene ("gates on fixable HIGH/CRITICAL findings … only genuinely unfixable
+upstream/OS-level items may remain"). Unreachability is a reason not to panic, not a reason to
+waive: a waiver is for findings with no fix, and this one has a fix one patch away. Contrast the
+`react-router` GHSA-qwww-vcr4-c8h2 case (§14, 2026-08-02), which was *also* unreachable but where
+the only offered fix was a major — there the reachability assessment carried the decision, because
+the cost side was real.
+
+**A major, and the breaking changes miss Scrye's surface.** 50.0.0 deprecates finite-field
+Diffie-Hellman, stabilises the X.509 verification APIs, and tightens SCT-list and X.509 structure
+validation — none of which Scrye touches. The ChaCha20 block-counter change that would have been
+the sharp edge landed in **49.0.0** and was absorbed then. The four APIs in use were exercised
+directly against 50.0.0 before the bump was proposed, including an AES-GCM round trip under a
+row-bound AAD and the `InvalidTag` raise on an AAD mismatch — the behaviour `secret_store.py`'s
+`row_aad()` binding depends on (L1/SEC-7, #64). Both held.
+
+**How it surfaced, which is the part worth keeping.** Nothing proposed this bump — no Dependabot
+PR, no release check. `Image — build + dogfood self-scan` went red on a **docs-only** pull request
+(the ROADMAP replacement, #155) whose diff touched two files under `docs/`. The gate downloads a
+fresh Trivy DB on every run, so a newly-published advisory against a pinned dependency reddens the
+next PR to run regardless of what that PR changed; `dev`'s own last green run simply predated the
+advisory. Two things follow. First, this is the dogfood gate doing exactly the job
+`CLAUDE.md` § Dependency hygiene describes, and the second time it has caught a real finding
+nobody went looking for (after CVE-2026-5773, §14 2026-07-13) — which is the concrete argument
+behind making it a required check in #136. Second, since #136 landed it *is* required on
+`protect-dev`, so an advisory published against any pinned dependency now blocks **every** open PR
+until it is cleared. That is the intended behaviour, but it means an unrelated PR can be held by a
+dependency finding, and the fix belongs in its own PR rather than folded into whatever change
+happened to run first.
+
+**Plan section affected:** `backend/pyproject.toml`, `backend/requirements.lock`, `CHANGELOG.md`
+(`[Unreleased]` § Security). No locked decision changed; no code, schema, API contract, security
+model, job model, auth, or CI-behaviour change.
+
+---
+
+### 2026-08-03 — Infra/Process — Post-v0.3.0 Dependabot triage: three grouped PRs reapplied on `dev`, an annotated-tag SHA-pin corrected, eight toolchain majors held back
+
+**What changed:** the three Dependabot group PRs opened against `dev` after the v0.3.0 release —
+**#144** (pip), **#145** (npm), **#146** (github-actions) — were triaged and their content
+reapplied by hand in one PR rather than merged as-built. None was merged directly.
+
+**Base branches checked first, and all three were correct.** Per § Dependency hygiene's two-signal
+test: every head branch carries the `/dev/` `target-branch` segment
+(`dependabot/pip/backend/dev/…`, `dependabot/npm_and_yarn/frontend/dev/…`,
+`dependabot/github_actions/dev/…`) and no timeline carries `automatic_base_change_succeeded`. So
+these are **version** updates routed as configured — neither the security-update-on-`main` case
+(#120) nor the auto-retarget case (#126/#127/#128) applies. Nothing needed to be closed for
+routing reasons.
+
+---
+
+**#144 — backend (pip). Applied in full, with the lockfile regenerated.**
+
+Three bumps: `fastapi` 0.140.13 → **0.141.1**, `uvicorn[standard]` 0.51.0 → **0.52.0** (both
+runtime), and `ruff` 0.16.0 → **0.16.1** (dev extra). Changelogs were read for both runtime deps,
+since both move more than a patch:
+
+- **FastAPI 0.141.x** adds `app.frontend(check_dir="auto")`, a `fastapi dev` convenience, plus a
+  0.141.1 fix for background tasks/headers in that same new code path. No breaking changes and
+  nothing touching routing, dependency injection, or response-model handling. Scrye does not call
+  `app.frontend()` — the SPA is served by the existing static-files mount — so the added surface
+  is unused.
+- **uvicorn 0.52.0** adds an **experimental, opt-in** HTTP/1.1 parser (`--http zttp`, a sans-IO
+  parser with Zig bindings) that upstream explicitly marks not-for-production, and fixes non-ASCII
+  WebSocket request headers under websockets 17.0. Default parser selection is unchanged, and
+  `docker/entrypoint.sh` passes no `--http` flag — verified, not assumed — so the default
+  (`auto` → httptools) is what the image keeps running. No behavior change for Scrye.
+
+`backend/requirements.lock` was regenerated with the pinned command from `CONTRIBUTING.md`
+§ Backend dependency lock (`uv pip compile pyproject.toml --group build --generate-hashes
+--python-version 3.14`, uv **0.8.17** — the same pin `ci.yml` installs). The resulting diff is
+exactly two packages and their hashes; `starlette` held at **1.3.1**, which independently confirms
+FastAPI 0.141.1 still accepts the pin carried for CVE-2025-62727 / CVE-2026-48818 /
+CVE-2026-54283. **This is the step Dependabot cannot do** — it edits `pyproject.toml` only, so its
+branch would have failed CI's lock-drift gate.
+
+One thing Dependabot left stale and was fixed by hand: the comment above the `uvicorn` pin still
+read *"0.51.0 is the current release."* Dependabot rewrites version strings, not the prose that
+justifies them.
+
+---
+
+**#146 — github-actions. Not a version bump at all: it corrects an annotated-tag SHA-pin.**
+
+The PR moves `github/codeql-action/init` and `.../analyze` from
+`ea14db8afdef5d462e69d78c4ca45002d4522418` to `f205ea1c3313d32999d8d6a48b4f6530d4437b38` while
+leaving the trailing comment at `# v4.37.4` — which reads like a bot error and is not. Resolving
+the tag against upstream rather than trusting the bump description
+(`git ls-remote --tags https://github.com/github/codeql-action`) shows both SHAs belong to the
+**same release**:
+
+```
+ea14db8afdef5d462e69d78c4ca45002d4522418  refs/tags/v4.37.4
+f205ea1c3313d32999d8d6a48b4f6530d4437b38  refs/tags/v4.37.4^{}
+```
+
+`codeql-action` publishes **annotated** tags, so `refs/tags/v4.37.4` is a *tag object* and
+`refs/tags/v4.37.4^{}` is the commit it dereferences to. The advanced-setup migration
+(#141, 2026-08-02) pinned the tag object; Dependabot is re-pinning to the commit. The two refs
+name the same tree, so the content delta is **empty** — Dependabot's own "compare view" link spans
+no commits.
+
+**Consequences, stated precisely so this is not over- or under-sold:**
+- **It did not fix an outage.** Actions dereferences a tag object fine, and the CodeQL workflow
+  has been green on the old pin since #141 landed. This is pin *hygiene* — a SHA-pin is supposed
+  to name an immutable commit, which is what the convention in § Git & PR conventions means and
+  what every other pin in this repo does.
+- **It changes nothing about code scanning.** Same release ⇒ same CodeQL bundle (2.26.2) and the
+  same `queries: security-extended` suite. No query-suite or bundle-resolution change, despite
+  `codeql-action` having joined this group only with the advanced-setup migration.
+- **`codeql.yml` is not on the tag-gated publish path**, and nothing on that path moved. It runs
+  on `push`/`pull_request` for `main` and `dev`, so this PR's own CI exercises the corrected pin
+  directly. The publish-path actions (`checkout`, `login-action`, `attest-build-provenance`, and
+  the `build-image` composite's `setup-qemu`/`setup-buildx`/`build-push`) were untouched by #146,
+  so there is no CI-unexercisable change to reason about this round.
+
+**Why only this one action was affected:** every other action pinned here — `actions/checkout`,
+`actions/setup-python`, `actions/setup-node`, `actions/attest-build-provenance`,
+`docker/login-action`, `docker/setup-buildx-action`, `docker/setup-qemu-action`,
+`docker/build-push-action` — publishes **lightweight** tags, where `refs/tags/vX` *is* the commit
+and there is no `^{}` to get wrong. All eight were re-resolved against their upstreams during this
+triage and all eight already name commits. So this was a single-repo trap, not a systemic
+mis-pinning, and it is not detectable by eyeballing the pins — only by dereferencing them.
+
+---
+
+**#145 — frontend (npm). 20 proposals: 8 applied, 1 narrowed, 11 held back.**
+
+The Mantine/React ignores added 2026-07-26 did their job — the PR proposed **no** `@mantine/*`,
+`react`, `react-dom`, or `@types/react*` major, so nothing in it was blocked by locked
+decision §2. `@mantine/*` moved 7.15.2 → **7.17.8**, a minor *inside* v7, which is exactly what
+those ignores were scoped to allow.
+
+**Applied (8):** `@mantine/core`/`form`/`hooks` 7.17.8, `@tabler/icons-react` 3.46.0,
+`@testing-library/react` 16.3.2, `postcss-preset-mantine` 1.18.0, `prettier` 3.9.6,
+`globals` 17.8.0, `@testing-library/jest-dom` 7.0.0.
+
+Two of those are majors and were checked rather than waved through:
+- **`@testing-library/jest-dom` 6 → 7** breaks in exactly two ways: `@testing-library/dom` becomes
+  a required *peer* (already a direct devDependency here at 10.4.1, so satisfied), and the Node
+  floor moves to 22 (the builder and `ci.yml` are on 24). No matchers were removed — 7.0.0 only
+  *adds* `toContainAnyBy*`/`toContainOneBy*`. All 79 tests pass.
+- **`globals` 15 → 17** feeds `eslint.config.js`'s `globals.browser`. A globals major can silently
+  *shrink* a set, which would leave lint passing while losing coverage, so the set was inspected
+  rather than inferred from a green run: 1191 browser globals, `window`/`document`/`fetch` all
+  present.
+
+**`prettier` 3.4.2 → 3.9.6 reformats three source files** — `src/api/scans.ts`,
+`src/api/targets.ts`, `src/pages/Dashboard.tsx`. Prettier 3.9 collapses short union types onto one
+line instead of the leading-`|` multiline form. It is mechanical whitespace, 17 lines, no semantic
+change, and it is simply what taking the bump means; the files are reformatted in this PR so
+`format:check` stays the gate rather than being pinned to a stale formatter.
+
+**Narrowed (1): `@types/node` 22.20.0 → proposed 26.1.2, applied 24.13.3.** `@types/node`'s major
+tracks Node's, and this repo builds and runs on **Node 24** — the Dockerfile builder stage and
+`ci.yml`'s `node-version` — with Node majors already declined for the `docker` ecosystem on a
+support-lifecycle argument (24 is Active LTS to 2028-04-30; 26 does not enter LTS until
+2026-10-28). `tsconfig.node.json` sets `"types": ["node"]`, so types ahead of the pinned runtime
+describe APIs the build does not have and feed them straight into the type-aware ESLint gate
+turned on 2026-07-24 — the same failure mode that put `@types/react*` in the ignore list. 24.13.3
+is the current 24 line, aligns the types *with* the runtime (22 was behind it), and lints and
+builds clean.
+
+**Held back (11) — the deferred #86 toolchain sweep, unchanged in character since 2026-07-26:**
+`typescript` 5.7.2 → 7.0.2, `eslint` 9.39.4 → 10.8.0, `@eslint/js` 9.39.4 → 10.0.1,
+`typescript-eslint` 8.19.0 → 8.65.0, `vite` 6.4.3 → 8.2.0, `@vitejs/plugin-react` 4.3.4 → 6.0.5,
+`vitest` 3.2.7 → 4.1.10, `jsdom` 26.1.0 → 30.0.1, `eslint-plugin-react-hooks` 5.1.0 → 7.1.1,
+`eslint-plugin-react-refresh` 0.4.16 → 0.5.3, and `@types/node` 26 (narrowed above).
+
+These are **not** blocked by any ignore rule and are not unwanted — they are tracked work in
+`docs/ROADMAP.md`. They are held because they share one risk: every one lands on the type-aware
+ESLint gate, and several cannot move alone. `@eslint/js` is ESLint's own package and must move
+with `eslint`; `@vitejs/plugin-react` 6 is a Vite-major companion; `eslint-plugin-react-hooks` 7
+pulls the React Compiler rules into its recommended set. `typescript-eslint` 8.19 → 8.65 is a
+*minor* and would look routine in isolation — it is held anyway, because its support matrix pairs
+with the TypeScript version the sweep is about to move, so taking it now means bumping it twice
+and reviewing the lint churn twice. Picking off the members that happen to be minors is what makes
+a sweep like this never happen.
+
+---
+
+**Two config/doc changes made alongside the bumps.**
+
+1. **`.github/dependabot.yml` gains an `@types/node` major ignore**, beside the existing
+   `@types/react*` ones and for the identical reason — a types major tracking a runtime major this
+   repo has deliberately pinned. Without it, #145's `@types/node` 26 returns every week inside the
+   grouped PR. The comment also records what is deliberately **not** ignored: the toolchain
+   majors, which should keep being surfaced until the sweep lands. An ignore rule states that a
+   bot may not make a decision; it is not a parking space for work we intend to do.
+2. **`docs/ROADMAP.md`'s #86 sweep entry** is refreshed to the versions #145 actually surfaced
+   (jsdom's target moved 29 → 30 since #86) and gains the four members that were not on the
+   original list: `@eslint/js`, `@vitejs/plugin-react`, `eslint-plugin-react-hooks`, and
+   `eslint-plugin-react-refresh`.
+
+---
+
+**Verification.** Backend: `ruff` and `black --check` clean, `.env.example` in sync,
+`requirements.lock` regenerated with the pinned uv and byte-identical to what CI recomputes, and
+**728 passed / 11 skipped** on **CPython 3.14.6** — the pinned runtime floor, obtained as a
+python-build-standalone build because the sandbox's package sources offer no 3.14 at or above it.
+Worth recording for the next person: the suite **cannot** run on **3.14.0rc2** (what `uv python
+install 3.14` resolves to here). `typing._eval_type()` gained its `prefer_fwd_module` keyword
+between rc2 and final, and pydantic 2.13.4 passes it unconditionally, so every model construction
+raises `TypeError` at import. That failure was confirmed to be interpreter-caused, not
+bump-caused, by reproducing it with the *pre-bump* `fastapi`/`uvicorn` pins in the same venv
+before concluding anything — the rule from § Interpreter CVEs applied to a test failure rather
+than an advisory: check it against the interpreter before blaming the diff.
+Frontend: ESLint, Prettier, **79 tests across 21 files**, and `npm run build` all pass.
+`npm audit`'s only finding is the pre-existing `react-router` HIGH (GHSA-qwww-vcr4-c8h2, #123),
+unchanged by this PR and still fixable only by a downgrade.
+
+**Version numbers held at 0.3.0** — confirmed after the regenerations in all five places that
+carry one: `backend/pyproject.toml`, `backend/app/__init__.py`, `frontend/package.json`,
+`frontend/package-lock.json`, and `docker/docker-compose.yml`'s `image: scrye:0.3.0`. A lockfile
+regen must not move the app version, and neither `uv pip compile` nor `npm install` did.
+
+**Why:** Dependabot's proposals are evidence about what is available, not decisions about what
+this repo should take. Three specific gaps make merging them as-built wrong here: it does not
+regenerate `backend/requirements.lock` (CI's drift gate rejects the branch), it cannot tell a
+locked or deferred version policy from a stale pin, and — as #146 shows — its own description of a
+bump ("from `ea14db8…` to `f205ea1c…`") can be true and still describe something entirely
+different from what it looks like. Resolving the tag against upstream, reading the changelog for
+anything moving more than a patch, and regenerating lockfiles with the real package manager is the
+work; the version strings are the easy part.
+
+**Plan section affected:** `CLAUDE.md` § Dependency hygiene (Dependabot triage, backend lockfile
+regeneration); `.github/dependabot.yml` (npm `@types/node` major ignore);
+`.github/workflows/codeql.yml` (SHA-pin corrected to the commit behind `v4.37.4`);
+`backend/pyproject.toml` + `backend/requirements.lock`; `frontend/package.json` +
+`frontend/package-lock.json`; `docs/ROADMAP.md` (#86 sweep list refreshed). No schema, API
+contract, security model, job model, or auth change, and no locked decision re-opened — Mantine
+stays on v7 and React on 18.
 
 ---
 

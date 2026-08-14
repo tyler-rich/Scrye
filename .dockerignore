@@ -53,6 +53,11 @@ frontend/dist/
 .git/
 .github/
 docs/
+# Claude Code project settings — session tooling config, never a build input.
+# This file is denylist-style, so an unlisted directory *is* sent to the daemon;
+# .claude/ is listed here so it never reaches the build context of an image we
+# dogfood a scan against.
+.claude/
 
 # IDE / OS
 .vscode/

@@ -139,8 +139,8 @@ and one normalized findings model.
 
 ## Integrations
 
-- **Trivy**, **Grype**, **Syft** — official binaries (currently Trivy `0.72.0`,
-  Grype `0.115.0`, Syft `1.46.0`), orchestrated and parsed from their JSON output
+- **Trivy**, **Grype**, **Syft** — official binaries (currently Trivy `0.73.0`,
+  Grype `0.116.1`, Syft `1.50.0`), orchestrated and parsed from their JSON output
   (Scrye never reimplements scanner logic). All three are Apache-2.0; their
   `LICENSE`/`NOTICE` files are bundled unmodified in the image at
   `/THIRD_PARTY_LICENSES` (see
@@ -226,8 +226,8 @@ and one normalized findings model.
 - Optional sidecars: a **Trivy server** (shared vuln-DB cache) and a read-only
   **docker-socket-proxy** (to scan running images). Both off by default — see
   [Optional sidecars](#optional-sidecars).
-- For native (non-container) development: **Python 3.14**, **Node 22+** (the
-  image and CI build with **Node 24**, the Active LTS), and the
+- For native (non-container) development: **Python 3.14.7+**, **Node 22.22.2+ or
+  24.15+** (the image and CI build with **Node 24**, the Active LTS), and the
   `trivy`/`grype`/`syft` binaries on `PATH`. See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
@@ -358,7 +358,7 @@ docker compose up -d
 
 # Verify health
 curl -fsS http://127.0.0.1:8089/healthz
-# {"status":"healthy","version":"0.3.0","database":"ok"}
+# {"status":"healthy","version":"0.3.1","database":"ok"}
 ```
 
 On startup the container applies database migrations (`alembic upgrade head`) and
@@ -468,7 +468,7 @@ Everything publishes to GHCR (`ghcr.io/tyler-rich/scrye`):
 | Tag | What it is | Use it for |
 | --- | ---------- | ---------- |
 | `:latest` | The most recent tagged release (built from `main`). | **Production.** Tracks the newest release. |
-| `:<version>` (e.g. `:0.3.0`) | A specific tagged release. | **Production, pinned** — reproducible, no surprise upgrades. |
+| `:<version>` (e.g. `:0.3.1`) | A specific tagged release. | **Production, pinned** — reproducible, no surprise upgrades. |
 | `:dev` | A **moving** tag rebuilt nightly from the `dev` branch. | **Testing HEAD-of-dev only.** Not a release; may be unstable. Do not run in production. |
 
 Pin `:<version>` for anything you care about; use `:latest` if you want to track
@@ -477,7 +477,7 @@ releases and re-`pull` on your own cadence. All tags are multi-arch
 
 ```bash
 docker pull ghcr.io/tyler-rich/scrye:latest
-# docker pull ghcr.io/tyler-rich/scrye:0.3.0   # pin a release
+# docker pull ghcr.io/tyler-rich/scrye:0.3.1   # pin a release
 # docker pull ghcr.io/tyler-rich/scrye:dev     # test the dev branch
 ```
 
@@ -1444,7 +1444,7 @@ The published image lives on GHCR as **`ghcr.io/tyler-rich/scrye`** (`:latest` a
 instead — single-arch for the host you're on:
 
 ```bash
-docker build -f docker/Dockerfile -t scrye:0.3.0 .
+docker build -f docker/Dockerfile -t scrye:0.3.1 .
 ```
 
 For a **multi-arch** image (`linux/amd64` + `linux/arm64`), use Buildx; the
@@ -1455,7 +1455,7 @@ target platform:
 docker buildx create --use --name scrye-builder   # once
 docker buildx build -f docker/Dockerfile \
   --platform linux/amd64,linux/arm64 \
-  -t scrye:0.3.0 .
+  -t scrye:0.3.1 .
 ```
 
 CI builds both architectures and **dogfoods** the result: it scans Scrye's own

@@ -14,9 +14,11 @@
 # and JS dependencies, and the app itself.
 #
 # NOTE: the base-image CPython interpreter binary is NOT blanket-excluded — it is
-# scanned and gated like everything else. Specific interpreter CVEs that are
-# unfixable on the current 3.14.x line are waived individually below, each with a
-# review date and a tracking issue, rather than by excluding the binary wholesale.
+# scanned and gated like everything else. Specific interpreter CVEs the gate
+# cannot clear on its own — whether unfixable at the pinned version, or fixed
+# there and still reported — are waived individually below, each with a review
+# date and a stated tracking record, rather than by excluding the binary
+# wholesale.
 #
 # To triage a genuinely-fixable finding that cannot be resolved immediately, add
 # a `vulnerability:` entry with a dated justification comment.
@@ -34,86 +36,168 @@ ignore:
       location: "**/usr/local/bin/syft"
 
   # ── CPython interpreter-binary CVEs on Python 3.14 — accepted risk ──────────────
-  # The interpreter binary in python:3.14-slim-bookworm (3.14.6, current latest
+  # The interpreter binary in python:3.14-slim-bookworm (3.14.7, current latest
   # 3.14.x) carries these. Background: docs/ARCHIVE.md §14 (2026-07-25, the
   # 3.13 → 3.14 runtime bump; 2026-07-26, the Group A re-verification and the
-  # CVE-2025-15366 regrouping; 2026-07-30, the tarfile set). Each block cites its own
-  # tracking issue below — they have different triggers and are not one decision.
+  # CVE-2025-15366 regrouping; 2026-07-30, the tarfile set; and three entries on
+  # 2026-08-11 — the 3.14.7 bump, the locked-floor raise, and the closure of
+  # #98/#116, of which the bump and the closure both bear on Group A and should be
+  # read before touching it). Each block states its own tracking record below —
+  # they have different triggers and are not one decision.
   #
   # WHICH BLOCK IS TRACKED WHERE (read this before adding or removing an entry —
   # a single shared "tracked in #NN" header is what previously made two unrelated
   # decisions look like one; see docs/ARCHIVE.md §14, 2026-07-26 and 2026-07-30):
   #
-  #   Group A-1 → issue #98   html.parser / getpath.py / imaplib   verified 2026-07-26
-  #   Group A-2 → issue #116  tarfile (three CVEs)                 verified 2026-07-30
-  #   Group B   → issue #52   poplib                               verified 2026-07-26
+  #   Group A-1 → THIS FILE + docs/ARCHIVE.md §14   html.parser / getpath.py / imaplib
+  #               (was issue #98, closed 2026-08-11)   verified 2026-07-26, 2026-08-11
+  #   Group A-2 → THIS FILE + docs/ARCHIVE.md §14   tarfile (three CVEs)
+  #               (was issue #116, closed 2026-08-11)  verified 2026-07-30, 2026-08-11
+  #   Group B   → issue #52 (still open)            poplib          verified 2026-07-26, 2026-08-11
   #
-  # A-1 and A-2 are both Group A and share the 3.14.7 trigger and the 2026-10-25
-  # review date; they are separate issues because each carries its own dated
-  # source-verification evidence, and folding them together would leave either
-  # issue's evidence section not covering all of its own CVEs. Group B is a
-  # different decision entirely — a standing acceptance, not a deferral.
+  # GROUP A HAS NO OPEN TRACKING ISSUE, deliberately. #98 and #116 were closed on
+  # 2026-08-11 because their resolution trigger had already fired — all six fixes
+  # are in the pinned interpreter, verified at the source — leaving nothing behind
+  # them but scanner data-lag, which is a weaker reason to hold an issue open than
+  # an active risk acceptance. **These two blocks plus the docs/ARCHIVE.md §14
+  # entry ARE the record now**, so do not delete a block on the assumption an issue
+  # still carries its context, and do not re-open #98/#116 to "restore" tracking.
+  # This is a one-off for that pair: a NEW waiver still gets its own issue, per the
+  # repo's existing convention. Group B (#52) is unaffected and still tracked there.
   #
-  # Group A-1 (issue #98) — fix merged to both the 3.13 and 3.14 maintenance branches but not yet
-  # in any released point version, so it closes on the next 3.14.x point release
-  # (3.14.7 — 3.14.6 released 2026-06-10, every backport below merged after it).
-  # CVE-2026-15308 (HIGH) is the only one of the four that trips --fail-on high; the
-  # rest are reported-but-non-gating Mediums, waived here for a clean report.
+  # ┌─ GROUP A: THE FIX IS IN THE INTERPRETER. THE SCANNER HAS NOT NOTICED YET. ─┐
   #
-  # Verified at the source on 2026-07-26, per CLAUDE.md § Dependency hygiene — not
-  # taken from Grype's FIXED IN column, which still reports 3.15.x for all three.
-  # Each file was diffed between the `3.14` branch and the `v3.14.6` tag; the branch
-  # has each fix and 3.14.6 has none of them:
-  #   - Lib/html/parser.py      buffered `feed()`/`_parse_threshold` rewrite
+  # READ THIS BEFORE "CLEANING UP" EITHER GROUP A BLOCK. Both A-1 and A-2 were
+  # deferrals with one trigger: a released 3.14.x carrying backports that landed
+  # after v3.14.6 was cut. **3.14.7 (released 2026-08-05) is that release and the
+  # digest above now pins it** — all six fixes were confirmed present in it by
+  # reading CPython at the `v3.14.7` tag (see the per-file evidence in each block
+  # and in docs/ARCHIVE.md §14, 2026-08-11).
+  #
+  # The waivers nevertheless STAY, because Grype still reports all six against the
+  # 3.14.7 image. From the dogfood run on the bump itself (CI run 31457878086,
+  # 2026-08-11), gate exit code 2:
+  #
+  #   NAME    INSTALLED  FIXED IN  TYPE    VULNERABILITY   SEVERITY
+  #   python  3.14.7     3.15.0b4  binary  CVE-2026-11940  High
+  #   python  3.14.7     3.15.0    binary  CVE-2026-15308  High
+  #   python  3.14.7     3.15.0b4  binary  CVE-2026-11972  High
+  #   python  3.14.7     3.15.0a6  binary  CVE-2025-15366  Medium
+  #   python  3.14.7     3.15.0b3  binary  CVE-2026-12003  Medium
+  #   python  3.14.7     3.15.0b4  binary  CVE-2026-0864   Medium
+  #
+  # That is the Grype-DB lag both #98 and #116 predicted in as many words
+  # ("expect the waivers to outlive 3.14.7 by a Grype-DB refresh cycle"), and the
+  # `FIXED IN` column is why: Grype's DB records these as fixed only in 3.15.x and
+  # has no entry for the 3.14 backports, so it compares 3.14.7 < 3.15.0b4 and
+  # matches. **The source diff, not the scanner, is what establishes the fix is
+  # real** (CLAUDE.md § Dependency hygiene) — so what changed here is the reason
+  # the waivers exist, not their membership:
+  #
+  #   BEFORE 2026-08-11: unfixable at the pinned version; waiting on a 3.14.x
+  #                      release that carries the backports.
+  #   NOW:               FIXED in the pinned interpreter, verified at the source;
+  #                      waived only because the scanner's data has not caught up.
+  #
+  # NEW TRIGGER: a Grype vulnerability-DB refresh that records the 3.14 backports
+  # (i.e. `FIXED IN` moves off 3.15.x for these IDs, or the findings simply stop
+  # appearing). At that point DELETE both Group A blocks outright — do not re-date
+  # them. Until then, removing them just turns the gate red over three HIGHs whose
+  # fixes are already in the image, which is a worse outcome than a documented
+  # waiver. Do NOT scope a 3.15 upgrade off the `FIXED IN` column; that is the
+  # exact error CLAUDE.md § Dependency hygiene exists to prevent, and this file has
+  # now recorded it four times (2026-07-25, both 2026-07-26 entries, 2026-07-30).
+  # REVIEW BY 2026-11-01 for both blocks; quarterly thereafter if it is extended
+  # past that date. **The date is ADVISORY, not enforced.** Nothing in this repo
+  # will ever notice when Grype's DB catches up — there is no scheduled check, no
+  # webhook, no bot watching for it. A waiver simply goes inert (stops matching
+  # anything) the moment the DB updates, and the gate stays green either way, so
+  # the only way anyone finds out is by reading this file for some other reason and
+  # noticing the block no longer matches, or by checking on purpose. Treat the date
+  # as a note to whoever next opens the file, not as a mechanism.
+  # └────────────────────────────────────────────────────────────────────────────┘
+  #
+  # Group A-1 — html.parser / getpath.py / imaplib. CVE-2026-15308 (HIGH) is the
+  # only one of the three that trips --fail-on high; the rest are
+  # reported-but-non-gating Mediums, waived here for a clean report.
+  #
+  # Verified at the source twice, per CLAUDE.md § Dependency hygiene — never from
+  # Grype's FIXED IN column. On 2026-07-26 the `3.14` branch was diffed against the
+  # `v3.14.6` tag (fix on the branch, absent from the release); on 2026-08-11 the
+  # released `v3.14.7` tag was diffed against `v3.14.6`, confirming the backports
+  # actually shipped rather than merely being queued:
+  #   - Lib/html/parser.py      v3.14.7 buffers feed() in `_pending`/`_pending_len`
+  #                             behind `_parse_threshold`, close() flushes it;
+  #                             v3.14.6 has `rawdata = rawdata + data` unguarded.
   #                             (python/cpython#153039, 2026-07-04)
-  #   - Modules/getpath.py      BUILD_LANDMARK fallback removed
+  #   - Modules/getpath.py      v3.14.7 has no BUILD_LANDMARK constants and no
+  #                             isfile(joinpath(real_executable_dir, ...)) fallback
+  #                             — an inline `gh-151544; CVE-2026-12003` comment sits
+  #                             where they were; v3.14.6 carries both.
   #                             (python/cpython#151682, 2026-06-22)
-  #   - Lib/imaplib.py          `_control_chars` guard in `IMAP4._command()`
-  #                             (python/cpython#153137, 2026-07-07)
-  # Expect the waivers to outlive 3.14.7 by a Grype-DB refresh cycle.
+  #   - Lib/imaplib.py          v3.14.7 defines `_control_chars` and raises
+  #                             ValueError in IMAP4._command()'s argument loop;
+  #                             v3.14.6 has neither. (python/cpython#153137,
+  #                             2026-07-07)
+  # Misc/NEWS.d/3.14.7.rst carries gh-153030, gh-151544 and gh-143921 with
+  # `.. release date: 2026-08-05`.
   #
-  # Tracked in issue #98 (https://github.com/tyler-rich/Scrye/issues/98), which is
-  # Group A only. Note CVE-2025-15366 was a Group B entry until 2026-07-26 — the
-  # imaplib backport landed on 3.14 once the check was narrowed to NUL/CR/LF, so it
-  # is no longer a below-3.15 acceptance. See docs/ARCHIVE.md §14 (2026-07-26).
-  # REVIEW BY 2026-10-25 (covers the next 1-2 CPython point releases at their
-  # ~2-month cadence, plus Grype-DB refresh lag on the backport).
+  # All three are FIXED in the pinned interpreter — verified at the source against
+  # the released `v3.14.7` tag in PR #195
+  # (https://github.com/tyler-rich/Scrye/pull/195) — and are waived here ONLY
+  # pending a Grype-DB refresh. Tracking is this block plus docs/ARCHIVE.md §14
+  # (2026-08-11), NOT a numbered issue: #98, which carried Group A-1 until then,
+  # was closed on 2026-08-11 once its trigger had fired. See the index note above
+  # for why that is a one-off rather than a change of convention.
+  #
+  # Note CVE-2025-15366 was a Group B entry until 2026-07-26 — the imaplib backport
+  # landed on 3.14 once the check was narrowed to NUL/CR/LF, so it is no longer a
+  # below-3.15 acceptance. See docs/ARCHIVE.md §14 (2026-07-26).
   - vulnerability: CVE-2026-15308   # html.parser quadratic-complexity CPU DoS (HIGH)
   - vulnerability: CVE-2026-12003   # getpath.py in-tree search-path fallback (MEDIUM)
   - vulnerability: CVE-2025-15366   # imaplib command injection (MEDIUM)
   #
-  # Group A-2 (issue #116) — the `tarfile` set. Same shape and same trigger as A-1:
-  # each fix is merged to the `3.14` maintenance branch and absent from released
-  # v3.14.6, so all three close on 3.14.7. Tracked separately from #98 because the
-  # verification below was done on a different date against different files; see the
-  # "WHICH BLOCK IS TRACKED WHERE" note above.
+  # Group A-2 — the `tarfile` set. Same shape and same history as A-1: merged to
+  # the `3.14` branch after v3.14.6, shipped in v3.14.7, still reported.
   #
-  # These two HIGHs are what turned CI red on 2026-07-30 — they are new advisories,
+  # All three are FIXED in the pinned interpreter — verified at the source against
+  # the released `v3.14.7` tag in PR #195
+  # (https://github.com/tyler-rich/Scrye/pull/195) — and are waived here ONLY
+  # pending a Grype-DB refresh. Tracking is this block plus docs/ARCHIVE.md §14
+  # (2026-08-11), NOT a numbered issue: #116, which carried Group A-2 until then,
+  # was closed on 2026-08-11 once its trigger had fired. The block nevertheless
+  # stays separate from A-1, because its verification was done on a different date
+  # against a different file; see the index note above.
+  #
+  # These two HIGHs are what turned CI red on 2026-07-30 — they were new advisories,
   # not a regression in Scrye. CVE-2026-0864 is a reported-but-non-gating Medium,
   # waived alongside them for a clean report.
   #
-  # Verified at the source on 2026-07-30, per CLAUDE.md § Dependency hygiene — NOT
-  # from Grype's FIXED IN column, which reports 3.15.0b4 for all three and does not
-  # record the 3.14 backports. Method: `git log -- Lib/tarfile.py` on the `3.14`
-  # branch for the commits, `git merge-base --is-ancestor <commit> v3.14.6` for
-  # release membership (all four: NOT an ancestor), plus a direct file diff.
-  # v3.14.6 = commit c63aec6, released 2026-06-10:
-  #   - CVE-2026-11972  _Stream.seek() now checks read()'s result (`if not data:
-  #                     break`); 3.14.6 discards it → infinite loop at EOF (CWE-252).
+  # Verified at the source on 2026-07-30 (`3.14` branch vs `v3.14.6`: `git log --
+  # Lib/tarfile.py` for the commits, `git merge-base --is-ancestor <commit>
+  # v3.14.6` for release membership — all four NOT an ancestor) and again on
+  # 2026-08-11 (`v3.14.7` vs `v3.14.6`, direct file diff). v3.14.6 = c63aec6,
+  # released 2026-06-10; v3.14.7 released 2026-08-05:
+  #   - CVE-2026-11972  v3.14.7's _Stream.seek() is `data = self.read(self.bufsize)`
+  #                     + `if not data: break`; v3.14.6 discards the result →
+  #                     infinite loop at EOF (CWE-252).
   #                     e86666c, gh-151981/#151992, merged 2026-06-23 (+13d).
-  #   - CVE-2026-11940  makelink_with_filter() re-filters against the hardlink's own
-  #                     name before the symlink fallback; _extract() now passes
-  #                     filter_function into _extract_one().
+  #   - CVE-2026-11940  v3.14.7's makelink_with_filter() calls filter_function on
+  #                     `unfiltered.replace(name=tarinfo.name, deep=False)` before
+  #                     the symlink fallback, and _extract() passes filter_function
+  #                     into _extract_one(); v3.14.6 has neither.
   #                     79c06bd, gh-151558/GH-151559, merged 2026-06-23 (+13d), and
   #                     5e0ef3f, gh-151987/#152609, merged 2026-06-29 (+19d).
-  #   - CVE-2026-0864   _safe_read() + _EXTHEADER_READ_CHUNK bound the extended-header
-  #                     read; 3.14.6 pre-allocates from the untrusted size field.
+  #   - CVE-2026-0864   v3.14.7 has _EXTHEADER_READ_CHUNK + _safe_read(), used by
+  #                     both _proc_gnulong() and _proc_pax(); v3.14.6 calls
+  #                     `fileobj.read(self._block(self.size))` directly in both.
   #                     2cf26d0, gh-151497/GH-151979, merged 2026-06-24 (+14d).
+  # Misc/NEWS.d/3.14.7.rst carries gh-151981, gh-151558, gh-151987 and gh-151497.
   #
   # Scrye does not use tarfile: the string appears nowhere in the repo (backup
-  # bundles are a JSON envelope, not tar), so the residual risk is unreachable
-  # stdlib code in the image — the same rationale the poplib acceptance rests on.
-  # REVIEW BY 2026-10-25 (aligned with #98 — same trigger, one review covers both).
+  # bundles are a JSON envelope, not tar), so even before 3.14.7 the residual risk
+  # was unreachable stdlib code in the image — the same rationale the poplib
+  # acceptance rests on.
   - vulnerability: CVE-2026-11940   # tarfile hardlink→symlink extraction escape (HIGH)
   - vulnerability: CVE-2026-11972   # tarfile streaming-mode EOF infinite loop (HIGH)
   - vulnerability: CVE-2026-0864    # tarfile oversized extended-header memory exhaustion (MEDIUM)
@@ -123,10 +207,17 @@ ignore:
   # any maintenance branch, and no 3.14.x point release will clear it. This is a
   # standing acceptance, not a deferral with a pending action behind it.
   #
-  # Verified at the source on 2026-07-26: `POP3._putcmd()` in Lib/poplib.py raises on
-  # `re.search(b'[\x00-\x1F\x7F]', line)` on `main` only — the `3.14` branch, the
-  # `3.13` branch and the `v3.14.6` tag all still hand the line straight to
-  # `_putline()` with no validation.
+  # Verified at the source on 2026-07-26 (`main` vs the `3.14` branch, the `3.13`
+  # branch and the `v3.14.6` tag) and re-verified on 2026-08-11 against the now-pinned
+  # `v3.14.7` tag: `POP3._putcmd()` in Lib/poplib.py raises on
+  # `re.search(b'[\x00-\x1F\x7F]', line)` on `main` only — v3.14.7, like v3.14.6
+  # before it, still hands the line straight to `_putline()` with no validation. The
+  # 3.14.6 → 3.14.7 runtime bump (docs/ARCHIVE.md §14, 2026-08-11) changed which
+  # interpreter Scrye runs; it did not change this finding. gh-143923 still lists no
+  # backport PR as of 2026-08-11 — PR #143924 carried backport labels for 3.10–3.14
+  # before merge, all removed prior to merging into `main` on 2026-01-20 over
+  # backward-compatibility concerns (control characters like tab/backspace are
+  # RFC-violating but in current use).
   #
   # This waiver covered imaplib as well until 2026-07-26. It no longer does: that
   # fix WAS backported and moved to Group A above. The two diverged because imaplib's
@@ -134,12 +225,14 @@ ignore:
   # regression concern behind the original decline; poplib's still rejects the whole
   # [\x00-\x1F\x7F] range and has had no such narrowing.
   #
-  # REVIEW ANNUALLY — next 2027-07-25. The review is a re-confirmation that the
-  # acceptance still holds (severity unchanged, no backport appeared on the branch in
-  # use, Scrye still doesn't use poplib), NOT a prompt to schedule a 3.15 move. A
-  # 3.15 upgrade should be justified on support-lifecycle grounds if and when it
-  # happens; per CLAUDE.md § Dependency hygiene, do not scope an interpreter bump as
-  # a reaction to this one. Tracked in issue #52
-  # (https://github.com/tyler-rich/Scrye/issues/52); see docs/ARCHIVE.md §14
-  # (2026-07-25, 2026-07-26).
+  # REVIEW ANNUALLY — next 2027-07-25, unchanged by the 2026-08-11 re-verification.
+  # The review is a re-confirmation that the acceptance still holds (severity
+  # unchanged, no backport appeared on the branch in use, Scrye still doesn't use
+  # poplib), NOT a prompt to schedule a 3.15 move. A 3.15 upgrade should be justified
+  # on support-lifecycle grounds if and when it happens; per CLAUDE.md § Dependency
+  # hygiene, do not scope an interpreter bump as a reaction to this one. Tracked in
+  # issue #52 (https://github.com/tyler-rich/Scrye/issues/52) — unlike Group A's #98
+  # and #116, #52 stays open: its fix is `main`-only with no resolution trigger on
+  # the 3.14 line, so there is nothing for a point release to fire. See
+  # docs/ARCHIVE.md §14 (2026-07-25, 2026-07-26, 2026-08-11).
   - vulnerability: CVE-2025-15367   # poplib command injection (MEDIUM)

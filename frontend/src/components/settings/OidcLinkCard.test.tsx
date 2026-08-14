@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { OidcLinkCard } from './OidcLinkCard';
 import { renderWithProviders, screen, waitFor } from '../../test/render';
@@ -56,12 +56,17 @@ function stubLocation(search = ''): { assign: ReturnType<typeof vi.fn> } {
 }
 
 describe('OidcLinkCard', () => {
-  let replaceState: ReturnType<typeof vi.fn>;
+  // Typed against the real `History.replaceState` signature rather than
+  // `ReturnType<typeof vi.fn>`: Vitest 4 widened `vi.fn`'s type-parameter
+  // constraint to `Procedure | Constructable`, so that alias now resolves to
+  // `Mock<Procedure | Constructable>`, which no longer satisfies the plain call
+  // signature `mockImplementation` expects.
+  let replaceState: Mock<typeof window.history.replaceState>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     stubLocation();
-    replaceState = vi.fn();
+    replaceState = vi.fn<typeof window.history.replaceState>();
     vi.spyOn(window.history, 'replaceState').mockImplementation(replaceState);
   });
 

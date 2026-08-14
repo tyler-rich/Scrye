@@ -126,3 +126,20 @@ logs/
 ehthumbs.db
 Thumbs.db
 desktop.ini
+
+# === Session scratch files ===
+# A prior-session artifact from drafting a PR body locally; not something the
+# repo should ever track. See CLAUDE.md § Attribution.
+.pr-body.md
+
+# === Claude Code ===
+# The repo tracks no `.claude/settings.json` — it was deleted on 2026-08-11 after
+# three attempts to suppress the attribution footer through it failed (see
+# CLAUDE.md § Attribution). Do NOT add a blanket `.claude/` rule here regardless:
+# that would silently ignore any future committed setting rather than making its
+# absence a deliberate choice. Only the local override file is ignored — Claude
+# Code writes permission approvals and personal overrides into it automatically,
+# and the documented auto-ignore for it writes to the *global* git excludes file,
+# which does not exist in an ephemeral Cloud VM, so the repo has to cover it
+# explicitly.
+.claude/settings.local.json

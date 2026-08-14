@@ -65,7 +65,7 @@ const TARGET_TYPES: { value: TargetType; label: string }[] = [
  * Scanners permitted per target type (mirrors the backend matrix). Typed as a
  * non-empty tuple so `SCANNERS_FOR[t][0]` is a `Scanner`, not `Scanner | undefined`:
  * every target type has at least one scanner, and that is the invariant the
- * "reset to the first allowed scanner" effect below depends on.
+ * "reset to the first allowed scanner" clamp below depends on.
  */
 const SCANNERS_FOR: Record<TargetType, readonly [Scanner, ...Scanner[]]> = {
   image: ['trivy', 'grype'],
@@ -124,11 +124,19 @@ export function NewScanPage() {
     if (canLaunch) void loadTargets();
   }, [canLaunch, loadTargets]);
 
-  // Keep the scanner valid for the chosen target type.
-  useEffect(() => {
-    const allowed = SCANNERS_FOR[targetType];
+  // Keep the scanner valid for the chosen target type, clamping in the one
+  // handler that can invalidate it. The scanner picker below only ever offers
+  // the current target type's own scanners, so this is the sole way `scanner`
+  // can fall out of `SCANNERS_FOR[targetType]` — and clamping here means the
+  // invalid pairing is never committed, where an effect would render it once
+  // (with no scanner selected at all) before correcting it. Clamping is
+  // destructive, as it was before: switching away from a target type discards
+  // the scanner choice rather than restoring it on the way back.
+  const chooseTargetType = (value: TargetType) => {
+    setTargetType(value);
+    const allowed = SCANNERS_FOR[value];
     if (!allowed.includes(scanner)) setScanner(allowed[0]);
-  }, [targetType, scanner]);
+  };
 
   const form = useForm({
     initialValues: {
@@ -136,8 +144,8 @@ export function NewScanPage() {
       trivyScanners: ['vuln', 'misconfig', 'secret', 'license'] as TrivyScannerName[],
       trivySeverity: [...TRIVY_SEVERITIES] as TrivySeverity[],
       ignoreUnfixed: false,
-      registryId: '' as string,
-      gitCredentialId: '' as string,
+      registryId: '',
+      gitCredentialId: '',
       branch: '',
       commit: '',
       tag: '',
@@ -257,7 +265,7 @@ export function NewScanPage() {
               <SegmentedControl
                 aria-label="Target type"
                 value={targetType}
-                onChange={(v) => setTargetType(v as TargetType)}
+                onChange={(v) => chooseTargetType(v as TargetType)}
                 data={TARGET_TYPES}
                 disabled={!canLaunch}
               />

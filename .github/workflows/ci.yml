@@ -242,7 +242,7 @@ jobs:
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
-            aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --input /image.tar \
+            aquasec/trivy:0.73.0@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c image --input /image.tar \
             --scanners vuln --severity LOW,MEDIUM,HIGH,CRITICAL --no-progress || true
 
       # The gate scans Scrye's own attack surface (OS packages incl. git, Python
@@ -256,7 +256,7 @@ jobs:
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
             -v "${{ github.workspace }}/ci/trivyignore:/.trivyignore:ro" \
-            aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --input /image.tar \
+            aquasec/trivy:0.73.0@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c image --input /image.tar \
             --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL \
             --skip-files usr/local/bin/trivy \
             --skip-files usr/local/bin/grype \
@@ -271,7 +271,7 @@ jobs:
         run: |
           docker run --rm \
             -v /tmp/scrye-image.tar:/image.tar:ro \
-            anchore/grype:v0.115.0@sha256:decd87500a90c1e4faa1706f77b0b2cbc1d2f9364e976f1898ce9037de09cc3a docker-archive:/image.tar -o table || true
+            anchore/grype:v0.116.1@sha256:1e71065c0a4cff3e6bd3b8add525ffac4343eb4971694eb90a31cf6d4d3e85db docker-archive:/image.tar -o table || true
 
       # Grype gate. Excludes only the bundled trivy/grype/syft binaries (see the
       # Trivy gate note above); the base-image CPython interpreter is scanned and
@@ -294,7 +294,7 @@ jobs:
             -v /tmp/scrye-image.tar:/image.tar:ro \
             -v "${{ github.workspace }}/ci/grype.yaml:/.grype.yaml:ro" \
             -v /tmp/grype-out:/out \
-            anchore/grype:v0.115.0@sha256:decd87500a90c1e4faa1706f77b0b2cbc1d2f9364e976f1898ce9037de09cc3a docker-archive:/image.tar \
+            anchore/grype:v0.116.1@sha256:1e71065c0a4cff3e6bd3b8add525ffac4343eb4971694eb90a31cf6d4d3e85db docker-archive:/image.tar \
             --only-fixed --fail-on high -c /.grype.yaml \
             -o table -o json=/out/grype-gate.json \
             --exclude '/usr/local/bin/trivy' \
@@ -325,7 +325,7 @@ jobs:
             exit 0
           fi
           echo "Waived by ci/grype.yaml — deliberate exceptions, NOT findings."
-          echo "Blocks: A-1 (issue #98) · A-2 (issue #116) · B (issue #52)"
+          echo "Blocks: A-1 · A-2 (no open issue — tracked in ci/grype.yaml + docs/ARCHIVE.md §14) · B (issue #52)"
           echo
           jq -r '
             .ignoredMatches[]

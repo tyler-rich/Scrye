@@ -7,9 +7,9 @@ at the version pinned in `docker/Dockerfile`.
 
 | Project | Version pinned  | Source                                     |
 |---------|-----------------|---------------------------------------------|
-| Trivy   | v0.72.0         | https://github.com/aquasecurity/trivy       |
-| Grype   | v0.115.0        | https://github.com/anchore/grype            |
-| Syft    | v1.46.0         | https://github.com/anchore/syft             |
+| Trivy   | v0.73.0         | https://github.com/aquasecurity/trivy       |
+| Grype   | v0.116.1        | https://github.com/anchore/grype            |
+| Syft    | v1.50.0         | https://github.com/anchore/syft             |
 
 Grype and Syft do not ship a `NOTICE` file upstream at these versions, so
 only `LICENSE` is included for them.

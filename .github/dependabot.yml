@@ -76,6 +76,27 @@ updates:
     # Minor/patch updates within v7 / React 18 are NOT ignored and still flow.
     # @types/react* are majors-locked too because their major tracks React's:
     # @types/react 19 against react 18 breaks the type-aware ESLint gate.
+    #
+    # Deliberately NOT ignored: the frontend tooling majors (typescript, eslint,
+    # typescript-eslint, vite, vitest, jsdom and friends). Those are *wanted* —
+    # we want to see them, evaluate them, and land them, which is exactly what
+    # the #86 sweep did (see docs/upgrades/frontend-toolchain-86.md).
+    #
+    # `typescript` is the one to leave unignored most deliberately. TypeScript 7
+    # is wanted, and the only thing blocking it is upstream: typescript-eslint's
+    # `typescript` peer range has never admitted 7 in any published version. So
+    # the regenerating Dependabot PR proposing typescript 7.x is not noise — it
+    # IS the notification that tells us when upstream ships support. Ignoring it
+    # would suppress that signal while changing nothing about the blocker.
+    # Re-check the range in one command:
+    #
+    #     npm view typescript-eslint@latest peerDependencies.typescript
+    #
+    # Support is expected to arrive as a new typescript-eslint MAJOR built
+    # against TS 7's ./unstable/* API, not as a point-release range widen.
+    #
+    # An ignore rule says "a bot may not make this decision"; it is not a
+    # parking space for work we intend to do.
     ignore:
       - dependency-name: "@mantine/*"
         update-types: ["version-update:semver-major"]
@@ -144,7 +165,7 @@ updates:
     commit-message:
       prefix: "docker"
     ignore:
-      # docker/docker-compose.yml pins `image: scrye:0.3.0` — Scrye's own image,
+      # docker/docker-compose.yml pins `image: scrye:0.3.1` — Scrye's own image,
       # BUILT LOCALLY from docker/Dockerfile by whoever runs the stack. It is not
       # a registry dependency: released images publish to
       # ghcr.io/tyler-rich/scrye (locked decision §6). Dependabot cannot know
@@ -153,7 +174,7 @@ updates:
       # `private_source_authentication_failure`.
       #
       # Ignoring the name is the fix. The alternatives were rejected: qualifying
-      # the tag as ghcr.io/tyler-rich/scrye:0.3.0 would make the compose file
+      # the tag as ghcr.io/tyler-rich/scrye:0.3.1 would make the compose file
       # PULL a published image instead of building locally, changing what the
       # documented quick start does, and dropping the tag loses the version pin.
       # See docs/ARCHIVE.md §14, 2026-08-02.

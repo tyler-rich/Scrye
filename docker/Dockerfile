@@ -10,7 +10,7 @@
 #   - Final image runs as a non-root user, COPY (never ADD), no secrets baked in.
 #   - HEALTHCHECK probes /healthz.
 # Build context is the repository root:
-#   docker build -f docker/Dockerfile -t scrye:0.3.0 .
+#   docker build -f docker/Dockerfile -t scrye:0.3.1 .
 # ─────────────────────────────────────────────────────────────────────────────
 
 # --- Stage 1: build the React/Vite SPA ---------------------------------------
@@ -40,12 +40,12 @@ RUN npm run build
 
 
 # --- Stage 2: download + checksum-verify the scanner binaries ----------------
-FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818 AS scanners
+FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS scanners
 ARG TARGETARCH
 # Pinned, current scanner versions (CLAUDE.md § Dependency hygiene).
-ARG TRIVY_VERSION=0.72.0
-ARG GRYPE_VERSION=0.115.0
-ARG SYFT_VERSION=1.46.0
+ARG TRIVY_VERSION=0.73.0
+ARG GRYPE_VERSION=0.116.1
+ARG SYFT_VERSION=1.50.0
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl tar \
@@ -146,13 +146,19 @@ RUN set -eux; \
 
 
 # --- Stage 3: build the Python virtualenv ------------------------------------
-# Python 3.14.6+ only — NEVER 3.14.0 through 3.14.4. Those releases shipped an
+# Python 3.14.7+ only — NEVER 3.14.0 through 3.14.4. Those releases shipped an
 # incremental GC whose work estimate could go negative, so a long-running server
 # never cleared its cyclic-garbage backlog and resident memory grew several-fold.
-# It was reverted in 3.14.5, restoring 3.13's generational GC; 3.14.6 is the first
-# fully-safe release after the revert. The digest below is 3.14.6-slim-bookworm —
-# when bumping it, re-check that the new tag is 3.14.6 or later.
-FROM python:3.14-slim-bookworm@sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30 AS backend-builder
+# It was reverted in 3.14.5, restoring 3.13's generational GC; 3.14.6 was the
+# first fully-safe release after the revert. The floor is 3.14.7 rather than
+# 3.14.6 because 3.14.7 (released 2026-08-05) is the first release carrying the
+# six interpreter-CVE fixes that ci/grype.yaml waived as Group A-1 (#98) and
+# Group A-2 (#116) — dropping back to 3.14.6 reinstates all six.
+# The digest below is 3.14.7-slim-bookworm — when bumping it, re-check that the
+# new tag is 3.14.7 or later. Resolve the replacement against the registry (the
+# `3.14-slim-bookworm` tag moves with each 3.14.x patch); don't copy a digest
+# from a rendered page. See docs/ARCHIVE.md §14 (2026-08-11).
+FROM python:3.14-slim-bookworm@sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52 AS backend-builder
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build/backend
 
@@ -190,8 +196,9 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
 
 
 # --- Final stage: minimal runtime image --------------------------------------
-# Same 3.14.6+ digest as the builder stage above — see the GC note there.
-FROM python:3.14-slim-bookworm@sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30 AS runtime
+# Same 3.14.7+ digest as the builder stage above — see the GC / interpreter-CVE
+# note there. Both FROM lines must move together.
+FROM python:3.14-slim-bookworm@sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52 AS runtime
 
 # ca-certificates: scanner DB downloads + TLS. curl: container HEALTHCHECK.
 # git: authenticated clone of generic-host private repos into tmpfs, so the
@@ -230,6 +237,43 @@ COPY --chown=1000:1000 THIRD_PARTY_LICENSES/ /THIRD_PARTY_LICENSES/
 # for `/bin/sh\r` and the container dies with `no such file or directory`.
 RUN sed -i 's/\r$//' /app/entrypoint.sh \
     && chmod 0755 /app/entrypoint.sh
+
+# Remove pip from the RUNTIME image only — `backend-builder` above still needs it
+# and keeps it (it installs the hash-pinned lock with `pip --require-hashes`).
+# Nothing in the runtime needs pip: the entrypoint runs `alembic upgrade head`
+# then `exec uvicorn`, and no application code imports pip, ensurepip, or
+# pkg_resources.
+#
+# Why it is deleted rather than waived: pip ships *vendored* copies of other
+# projects (`pip/_vendor/vendor.txt` pins `msgpack==1.1.2` and
+# `setuptools==70.3.0`), and the dogfood Trivy gate reports two fixable HIGHs
+# against them — GHSA-6v7p-g79w-8964 (msgpack, fixed 1.2.1) and CVE-2025-47273
+# (setuptools, fixed 78.1.1). Neither is a Scrye dependency: `requirements.lock`
+# pins setuptools 83.0.0 and no msgpack at all. They are whatever the
+# digest-pinned base image's bundled pip happens to vendor, so we cannot bump
+# them — but we can decline to ship pip, which removes the finding at the source
+# instead of excusing it in ci/trivyignore. (Surfaced by the 3.14.7 base-image
+# bump: 3.14.6 bundled pip 26.1.2, 3.14.7 bundles 26.2.1. See docs/ARCHIVE.md
+# §14, 2026-08-11.)
+#
+# Both prefixes carry a copy: /opt/venv (seeded by `python -m venv` in
+# backend-builder) and /usr/local (the base image's `--with-ensurepip` build).
+# `ensurepip` goes with them — its entire payload is that same pip wheel, so
+# leaving it would keep the vulnerable vendored code in the image and let
+# `python -m ensurepip` put pip back. The globs are version-agnostic on purpose,
+# so a future 3.x base bump cannot silently stop matching.
+RUN set -eux; \
+    rm -rf /opt/venv/lib/python3.*/site-packages/pip \
+           /opt/venv/lib/python3.*/site-packages/pip-*.dist-info \
+           /opt/venv/lib/python3.*/ensurepip \
+           /usr/local/lib/python3.*/site-packages/pip \
+           /usr/local/lib/python3.*/site-packages/pip-*.dist-info \
+           /usr/local/lib/python3.*/ensurepip; \
+    rm -f /opt/venv/bin/pip* /usr/local/bin/pip*; \
+    if command -v pip >/dev/null 2>&1; then \
+      echo "pip is still on PATH in the runtime image" >&2; exit 1; \
+    fi; \
+    python -c "import alembic, fastapi, sqlalchemy, uvicorn"
 
 WORKDIR /app/backend
 USER 1000:1000

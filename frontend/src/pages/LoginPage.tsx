@@ -41,20 +41,31 @@ const OIDC_ERRORS: Record<string, string> = {
     'Sign-in requires HTTPS: this server marks its session cookie Secure, so a browser will not keep it on an http:// page. See the banner above.',
 };
 
+/** The failure code the OIDC callback redirects back with, if this is one. */
+function oidcErrorCode(): string | null {
+  return new URLSearchParams(window.location.search).get('oidc_error');
+}
+
 /** Local-account login form, with optional OIDC sign-in and MFA challenge. */
 export function LoginPage() {
   const { login, verifyMfa, refresh, oidc, insecureTransport } = useAuth();
-  const [error, setError] = useState<string | null>(null);
+  // Seed the banner from the query string during the initial render rather than
+  // from an effect: the value is knowable before the first paint, so an effect
+  // would only buy a second, cascading render that flashes the form without its
+  // error. Stripping the parameter is a genuine side effect and stays below.
+  const [error, setError] = useState<string | null>(() => {
+    const code = oidcErrorCode();
+    return code ? (OIDC_ERRORS[code] ?? 'OIDC sign-in failed.') : null;
+  });
   const [submitting, setSubmitting] = useState(false);
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [enroll, setEnroll] = useState<{ secret: string; uri: string | null } | null>(null);
   const [code, setCode] = useState('');
 
+  // The code has been read into `error` above; drop it from the URL so a reload
+  // doesn't replay a stale banner.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const oidcError = params.get('oidc_error');
-    if (oidcError) {
-      setError(OIDC_ERRORS[oidcError] ?? 'OIDC sign-in failed.');
+    if (oidcErrorCode()) {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);

@@ -7,6 +7,719 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-11
+
+### Fixed
+
+- **Five state-carryover and rendering defects on the scans pages**, surfaced by
+  working through the six `react-hooks/set-state-in-effect` sites
+  [#176](https://github.com/tyler-rich/Scrye/issues/176) enumerates. Every
+  replacement was made to preserve behaviour; these are the places where the old
+  behaviour turned out to be wrong. No API, schema or configuration changed.
+
+  - **The findings list no longer flashes "No findings match the current
+    filters" over a request that has not answered yet.** The loading flag was
+    raised synchronously inside `loadFindings`, so the render in which a scan
+    first became `succeeded` showed an empty list with the loader already down.
+    It is now derived from whether the settled request matches the current
+    `scan | severity | class` key, so a superseded request leaves the spinner up
+    instead of briefly declaring the list empty.
+
+  - **A delete-confirm dialog left open while you navigate to another scan now
+    closes, instead of re-arming itself against the scan you just opened.**
+    Both the dialog's text and the deletion it performs read the *current* route
+    id, so a dialog opened for one scan survived the navigation and would delete
+    a different one — a scan the operator had never been asked to confirm.
+
+  - **A slow response for a scan you have navigated away from can no longer
+    repaint over the scan you are now looking at.** `loadScan` has no
+    latest-wins guard and the previous reset could not cancel an already-started
+    request, so a late reply could redraw the old scan's header and tags on top
+    of the new one's loading view.
+
+  - **An in-flight tag save no longer writes the previous scan's tags into the
+    view you moved to**, and no longer leaves its button stuck in the loading
+    state across the navigation.
+
+  - **The scans list no longer renders a frame in which new rows and a
+    not-yet-reconciled compare selection coexist** — the momentary wrong
+    "selected" count after a filter change, page change or deletion. The
+    reconciliation used to run in an effect one commit behind the rows; it now
+    batches into the same commit as the rows it reconciles against.
+
+  The first is a change inside `ScanDetailPage`; the next three all follow from
+  replacing its per-`:scanId` reset effect with a keyed remount of the route
+  element, which resets everything the effect reset plus the three values it had
+  always missed; the last is `ScansPage`. See `docs/ARCHIVE.md` §14 (2026-08-11,
+  the two `#176` entries) for the site-by-site enumeration of what could have
+  depended on the old behaviour.
+
+### Security
+
+- **Runtime base image moved to Python 3.14.7** (`python:3.14-slim-bookworm`,
+  digest-pinned; 3.14.6 before), and the locked runtime floor raised to **3.14.7**
+  to match. 3.14.7 (released 2026-08-05) is the first release carrying the fixes
+  for the six CPython interpreter CVEs Scrye's own dogfood scan has been waiving:
+  **CVE-2026-15308** (`html.parser` quadratic-complexity DoS), **CVE-2026-12003**
+  (`getpath.py` in-tree search-path fallback), **CVE-2025-15366** (`imaplib`
+  command injection), and the `tarfile` set **CVE-2026-11940** (hardlink→symlink
+  extraction escape), **CVE-2026-11972** (streaming-mode EOF infinite loop) and
+  **CVE-2026-0864** (oversized extended-header memory exhaustion). All six fixes
+  were confirmed present by reading CPython at the `v3.14.7` tag and diffing
+  against `v3.14.6`, per-file and per-CVE.
+
+  **The waivers remain in place even so, and this is not a contradiction.** Grype
+  still reports all six against the 3.14.7 image, because its vulnerability data
+  records them as fixed only in 3.15.x and has no entry for the 3.14 backports.
+  The fixes are in the interpreter Scrye ships; the scanner has not caught up.
+  The waivers will be removed — not re-dated — once a Grype-DB refresh reflects
+  the backports. `CVE-2025-15367` (`poplib`) is unaffected either way: its fix is
+  still `main`-only, and `Lib/poplib.py` is byte-identical between 3.14.6 and
+  3.14.7.
+
+- **`pip` no longer ships in the runtime image**, closing two fixable HIGH
+  findings that were not Scrye dependencies at all: **GHSA-6v7p-g79w-8964**
+  (`msgpack` 1.1.2) and **CVE-2025-47273** (`setuptools` 70.3.0), both of which
+  are versions *vendored inside pip* by the base image and therefore not ours to
+  bump. Nothing in the runtime used pip — the container applies migrations with
+  Alembic and serves with uvicorn — so it is deleted rather than excused with a
+  scanner exception. Image builds are unaffected: the build stage still installs
+  the hash-pinned lock with pip.
+
+- **Frontend lockfile refreshed, closing two HIGH advisories in the build/dev
+  toolchain: GHSA-5p4m-2wfm-xmqj (`js-yaml`) and GHSA-2v37-7h3g-55p8
+  (`nanoid`).** Both are transitive devDependencies, and both fixed versions
+  already sat inside the ranges their requiring packages declare, so this is a
+  `package-lock.json` change only — `package.json` is untouched and no package
+  moved a major.
+
+  - **`js-yaml` 4.3.0 → 4.3.1** — GHSA-5p4m-2wfm-xmqj, HIGH (CVSS 7.5,
+    CWE-407): quadratic CPU consumption resolving a `!!omap`, the
+    CVE-2026-59870 fix not having been backported to the 3.x/4.x lines.
+    Affected range `>=4.0.0 <4.3.1`. Reached by one path only —
+    `eslint@9.39.4` → `@eslint/eslintrc@3.3.5` → `js-yaml` — whose declared
+    range is `^4.1.1`. Verified at source rather than from the advisory's
+    metadata: diffing the two published tarballs, 4.3.1's sole functional
+    change is in the `!!omap` duplicate-key check, which replaces an array
+    plus a linear `indexOf` scan per key (the quadratic path) with an object
+    and an `Object.prototype.hasOwnProperty` lookup.
+  - **`nanoid` 3.3.16 → 3.3.18** — GHSA-2v37-7h3g-55p8, HIGH (CVSS 5.9,
+    CWE-835): a custom generator can loop indefinitely when `size` is zero.
+    Affected range `<3.3.17`. Reached by one path only — `postcss@8.5.25` →
+    `nanoid` — whose declared range is `^3.3.16`. The advisory's fixed version
+    is 3.3.17; the refresh resolves to **3.3.18**, the highest release in that
+    range, which is a follow-up to the same defect — comparing the two
+    tarballs, 3.3.18 extends 3.3.17's zero-size guard to the async native
+    entry point, which 3.3.17 left unguarded.
+
+  **Neither package ships in the Scrye image.** Both are marked `dev` in the
+  lockfile and neither appears in the built SPA (`nanoid` runs inside PostCSS
+  at build time; `js-yaml` only ever parses this repo's own ESLint config).
+  The runtime stage of `docker/Dockerfile` copies `frontend/dist` out of the
+  builder and no `node_modules`, so the vulnerable code never reaches a
+  deployed instance — the fix is for the build and development toolchain.
+
+  The lockfile diff is exactly those two entries — six lines each way, the
+  `version`/`resolved`/`integrity` triple per package — with no transitive
+  requirement moved and no unrelated churn. After the refresh `npm audit`
+  reports 0 vulnerabilities at every severity, and the frontend suites are
+  unchanged: ESLint clean, Prettier clean, 79 tests across 21 files passing,
+  and a build of 7,035 modules to 645.18 kB JS / 201.38 kB CSS — byte-for-byte
+  the sizes recorded for the pre-refresh baseline.
+
+- **`cryptography` bumped 49.0.0 → 50.0.0, closing CVE-2026-69247** (HIGH) — a
+  Bleichenbacher-style oracle in the PKCS7 decryption helpers, where
+  `pkcs7_decrypt_der` and its variants exposed distinguishable errors and timing
+  while unwrapping an encrypted key. Upstream's fix substitutes a random key on
+  failure, per RFC 3218. Verified against pyca/cryptography's own `CHANGELOG.rst`
+  rather than the scanner's `FIXED IN` column: the entry is recorded under
+  **50.0.0 (2026-07-31)**, and 49.0.0 (2026-06-12) predates it.
+
+  **Scrye was never exposed.** It uses four symbols from the library, all in
+  `backend/app/core/crypto.py` — `AESGCM`, `HKDF`, `hashes` and `InvalidTag` — and
+  never calls PKCS7 at all, so the vulnerable code path is unreachable. The bump
+  is taken because the finding is *fixable*, which is what the dogfood gate keys
+  on (`CLAUDE.md` § Dependency hygiene), not because the path was live.
+
+  50.0.0 is a major, and its breaking changes miss Scrye's surface: FFDH is
+  deprecated, X.509 verification APIs stabilised, and SCT/X.509 validation
+  tightened — none of which Scrye touches. (The ChaCha20 counter change landed in
+  49.0.0 and was already absorbed.) `backend/requirements.lock` was regenerated
+  with the pinned `uv 0.8.17` command from `CONTRIBUTING.md` § Backend dependency
+  lock; the diff is that one package and its hashes, with no transitive churn.
+
+### Changed
+
+- **`@types/node` 24.13.3 → 26.2.0** — a deliberate reversal of the standing
+  "keep it on the 24 line" decision (`docs/upgrades/frontend-toolchain-86.md`
+  §5, and #145's narrowing on 2026-08-03), taken on the maintainer's
+  instruction. Nothing in the toolchain requires it: the only `@types/node`
+  constraints in the tree are the optional peers of `vite@8.2.1`
+  (`^20.19.0 || >=22.12.0`) and `vitest@4.1.10`
+  (`^20.0.0 || ^22.0.0 || >=24.0.0`), both of which 24.13.3 already satisfied.
+  This is currency, not a fix.
+
+  **The reason the old decision was reversible is that step 4 already shrank
+  the blast radius to one file.** §5's argument was that a `@types/node` ahead
+  of the pinned Node 24 runtime "describes APIs the build does not have and
+  feeds them straight into the type-aware ESLint gate" — written while
+  `tsconfig.app.json` still inherited TypeScript's enumerate-everything `types`
+  default. Since step 4 (#179) wrote `"types": []` there explicitly, the app
+  project no longer resolves the package at all: `tsc -p tsconfig.app.json
+  --listFiles` loads **1,063 files and zero of them are `@types/node`**, while
+  `tsconfig.node.json` loads **82**. The whole surface of this bump is
+  `vite.config.ts`, whose only Node API use is `process.env` — and
+  `interface ProcessEnv extends Dict<string> {}` is character-identical in both
+  versions.
+
+  **Compatibility with Node 24 was measured rather than inferred from the
+  version number, and it is not unconditional.** Every exported symbol of every
+  `node:` module was enumerated from both packages with the installed
+  TypeScript 6.0.3 compiler API and the two sets diffed. 26.2.0 adds two
+  modules (`node:ffi`, `node:quic`) and 263 symbols, and **drops 72** — of
+  which 31 are value exports. Checked against a real **Node 24.19.0**
+  (the head of the 24 line, which `ci.yml`'s `node-version: "24"` resolves to):
+  **26 of those 31 are still present on Node 24** — 24 top-level `zlib.Z_*`
+  constants plus `assert.CallTracker` and `buffer.SlowBuffer` — so the new
+  types genuinely stop describing a handful of deprecated APIs the pinned
+  runtime still has. In the other direction, **44 of the 65 added value exports
+  do not exist on Node 24.19.0**, `node:ffi` and `node:quic` wholesale. Neither
+  list is referenced anywhere in this repository, and neither is reachable from
+  `src/`. Both are recorded so the residual is a known quantity rather than an
+  assumption.
+
+  **The lockfile diff is +8/−8: 306 packages before and after, zero added, zero
+  removed, two bumped** — `@types/node` itself and its sole dependency
+  `undici-types` 7.18.2 → 8.3.0. `eslint --print-config` was diffed before and
+  after on one representative file of each class (app `.tsx`, library `.ts`,
+  the test override) **plus `vite.config.ts`, the one file this bump can
+  reach**: all four are byte-identical at **135 rules**. Lint, `format:check`,
+  `tsc -b --force` and `npm audit` are clean; the suite is the same **80 tests
+  across 22 files**, diffed per test name rather than by total; and all three
+  emitted assets are **byte-identical** by SHA-256 to the pre-bump baseline,
+  which is the proof a types-only devDependency cannot reach what ships.
+
+- **`globals` 17.8.0 → 17.9.0, `@testing-library/user-event` 14.6.1 → 14.6.3,
+  and `postcss` 8.5.25 → 8.5.26** — step 8, the last step of the frontend
+  toolchain sweep in `docs/upgrades/frontend-toolchain-86.md`. Three routine
+  minors/patches with no config change and no coupling; all three were
+  confirmed still `latest` at the registry before the bump. No source, test, or
+  config file changed.
+
+  **The lockfile diff is +13/−13: 306 packages before and after, zero added,
+  zero removed, exactly the three targets bumped.** The only other movement is
+  `postcss@8.5.26` raising its own `nanoid` requirement from `^3.3.16` to
+  `^3.3.17` — which installs nothing new, because the lockfile already carries
+  `nanoid@3.3.18` from the 2026-08-09 advisory refresh. This is the cleanest
+  lockfile diff of the eight-step sweep.
+
+  **The `globals` caution the sweep document carries was discharged by
+  measurement, not by a green lint run.** A `globals` minor can silently
+  *shrink* a set, leaving `eslint.config.js`'s `globals.browser` smaller while
+  lint stays clean. It did not: `globals.browser` goes **1191 → 1196 keys,
+  five added and none removed** — `PerformanceMarkConditional`,
+  `PermissionsPolicy`, `RTCIceCandidatePair`, `WebTransportDatagramsWritable`
+  and `WebTransportSendGroup`, all read-only.
+
+  **`eslint --print-config` was diffed before and after on one representative
+  file of each file class** (app `.tsx`, library `.ts`, and the test override).
+  All three hold at **135 rules with nothing added, removed, or re-severitied**,
+  and no rule's options moved; the only difference in the resolved config is
+  those five `languageOptions.globals` entries. **The build output is
+  byte-identical** — all three emitted assets match the pre-bump baseline by
+  SHA-256, not merely by content hash, which is the meaningful signal here
+  because `postcss` runs in the build path via `frontend/postcss.config.cjs`.
+
+  Suites on both sides, each from a clean `rm -rf node_modules && npm ci`: lint
+  clean, `format:check` clean, **80 tests across 22 files** (compared per test
+  name and status, not by total — the two lists diff empty), build 630.29 kB JS
+  / 196.79 kB CSS, `npm audit` **0 vulnerabilities**.
+
+- **Vite 6.4.3 → 8.2.1 and `@vitejs/plugin-react` 4.3.4 → 6.0.5** — step 7 of
+  the frontend toolchain sweep in `docs/upgrades/frontend-toolchain-86.md`,
+  crossing two majors on each package. The two move in lockstep because
+  `@vitejs/plugin-react@6.0.5` declares `vite: "^8.0.0"` as a **required**
+  (non-optional) peer — it does not merely tolerate Vite 8. These are the only
+  two packages bumped; `frontend/vite.config.ts`, both tsconfigs,
+  `eslint.config.js` and every source and test file are untouched.
+
+  **Vite 8 replaces Rollup + esbuild with Rolldown + Oxc, and CSS minification
+  moves to Lightning CSS.** This is the one step in the sweep that changes what
+  ships, so the emitted bundle was compared against the pre-bump baseline
+  rather than assumed equivalent:
+
+  | | Vite 6.4.3 | Vite 8.2.1 | Δ |
+  |---|---|---|---|
+  | modules transformed | 7,035 | 7,018 | −17 |
+  | JS | 645.14 kB (gzip 193.61) | 630.29 kB (gzip 187.36) | −14.85 kB (−2.30%) |
+  | CSS | 201.38 kB (gzip 29.30) | 196.79 kB (gzip 28.63) | −4.59 kB (−2.28%) |
+  | build time | 7.30 s | 1.28 s | −5.7× |
+
+  **The module delta is entirely CommonJS-interop scaffolding, not application
+  code.** Both bundlers' module lists were captured and diffed: the 19 ids
+  present only under Vite 6 are `commonjsHelpers.js` plus the
+  `?commonjs-es-import` / `?commonjs-exports` / `?commonjs-module` proxy
+  modules `@rollup/plugin-commonjs` mints when converting `react`, `react-dom`,
+  `scheduler`, `cookie`, `fast-deep-equal` and `set-cookie-parser` to ESM.
+  Rolldown handles CommonJS natively and mints none. Exactly one id is new
+  (`vite/preload-helper.js`, a Vite-internal helper). **No application or
+  library module was added or removed.**
+
+  **The CSS was verified declaration by declaration, because a Lightning CSS
+  regression fails no test.** Both stylesheets were parsed, their comma-joined
+  selector lists split into individual selectors (so the minifiers' rule
+  merging and splitting cancels out), colours canonicalised, and the shorthands
+  Lightning CSS introduced expanded back to longhands. Result: **1,171
+  (context, selector) keys on each side, none gained, none lost, and zero
+  declarations added or dropped.** Every difference is a semantics-preserving
+  minifier rewrite — 29 vendor prefixes removed where the unprefixed property
+  is present (`-moz-appearance` ×14, `-webkit-appearance` ×14,
+  `-webkit-transform`), `transparent` → `#00000000`, `center` → `50%`,
+  `0rem` → `0`, `.15s ease` → `.15s` (`ease` is the initial
+  `transition-timing-function`), `top/right/bottom/left: 0` → `inset: 0`,
+  `padding-inline-start/end` → `padding-inline`, `:nth-of-type(1)` →
+  `:first-of-type`, `*:before` → `:before`, adjacent rules with identical
+  declaration blocks merged, and the six `::-webkit-*` spin/search-button
+  selectors **split** out of one comma list into six rules — which is a
+  correctness improvement, since a browser that fails to parse one selector in
+  a comma list discards the whole rule.
+
+  **Rendering was compared pixel by pixel, with a calibrated noise floor.** Six
+  routes (dashboard, scans list, new scan, scan detail, settings, account) were
+  rendered from both builds against a stubbed API in headless Chromium, in
+  **both light and dark mode**. A first pass diffed non-zero, and re-running the
+  *same* build twice showed a ~135-pixel noise floor from in-flight animations —
+  so that pass measured nothing. With animations frozen the noise floor is
+  **exactly zero across all twelve views**, and against it **all twelve views
+  are pixel-identical between Vite 6 and Vite 8.**
+
+  **The one genuine behaviour change is the browser target.** Vite 8's default
+  build target is `baseline-widely-available`, which resolves to **Chrome 111,
+  Edge 111, Firefox 114, Safari 16.4** — up from esbuild's `modules` default
+  (roughly Chrome 87 / Firefox 78 / Safari 14). Every syntax Lightning CSS
+  newly emitted is inside that target: Media Queries Level 4 range syntax
+  (`(device-width<=31.25em)`, Safari 16.4+), multi-position gradient colour
+  stops (Safari 12.1+), and unprefixed `appearance` (Safari 15.4+). No project
+  document states a browser floor, so none needed correcting.
+
+  **No `vite.config.ts` change was required**, as the sweep document predicts:
+  the config has no `build.rollupOptions` (so the `rollupOptions` →
+  `rolldownOptions` rename does not apply), no `esbuild`, `optimizeDeps` or
+  `manualChunks` keys, and `plugins: [react()]` passes no options.
+
+  **`@vitejs/plugin-react` 6.0.0 removed every Babel feature — and this repo
+  passed no `babel` option, so nothing had to move to `@rolldown/plugin-babel`
+  and nothing was dropped.** There is no `.babelrc`, no `babel.config.*`, and
+  no `babel` key anywhere in `frontend/`. React Fast Refresh now runs through
+  Oxc; the dev server was smoke-tested to confirm it still serves
+  `/@react-refresh` and still injects `$RefreshReg$` into `.tsx` transforms,
+  even though the `react-refresh` npm package has left the tree.
+
+  The lockfile moves 339 → 305 packages, every movement attributable: 30 added
+  (`rolldown` + 15 platform bindings, `lightningcss` + 12 platform bindings,
+  `@oxc-project/types`, `@rolldown/pluginutils`, `detect-libc`), 61 removed
+  (`esbuild` + 25 `@esbuild/*`, `rollup` + 25 `@rollup/rollup-*`, plugin-react
+  4's Babel subtree, and `react-refresh`), and 3 bumped (the two targets plus a
+  `picomatch` dedupe). `@babel/core` and `@babel/parser` remain in the tree,
+  but their only requirer is now `eslint-plugin-react-hooks@7.1.1` rather than
+  plugin-react. Lint, `format:check` and `npm audit` (0 vulnerabilities) are
+  clean, and the suite is unchanged at **80 tests across 22 files**, compared
+  per test name rather than by total.
+
+- **jsdom 26.1.0 → 30.0.1** — step 6 of the frontend toolchain sweep in
+  `docs/upgrades/frontend-toolchain-86.md`, crossing four majors (27, 28, 29,
+  30). **`jsdom` is the only package bumped**; `vite` stays at 6.4.3 (step 7),
+  and no config, source or test file changed. jsdom is a devDependency reached
+  only through Vitest's `environment: 'jsdom'` — nothing in `frontend/src/`
+  imports it — so the emitted bundle is unchanged down to its content hashes
+  (7,035 modules → 645.14 kB JS `index-Vvdzytcz.js` / 201.38 kB CSS
+  `index-D2wHtcHV.css`, identical to the pre-bump baseline).
+
+  **The Node floor rises, which is the one change with a reach outside the test
+  run.** `jsdom@30.0.1` declares `engines.node: "^22.22.2 || ^24.15.0 ||
+  >=26.0.0"`. All three runtimes that matter satisfy it — CI's
+  `node-version: "24"` resolves to 24.19.0, and `docker/Dockerfile`'s pinned
+  `node:24-bookworm-slim@sha256:235600a8…` ships Node 24.18.1 (confirmed by two
+  independent registry reads) — so neither `ci.yml` nor the Dockerfile needed a
+  change. `README.md` and `CONTRIBUTING.md` did: both said "Node 22+", under
+  which a contributor on Node 22.13 would install cleanly and then run `npm
+  test` on a runtime jsdom does not support. Both now say **Node 22.22.2+ or
+  24.15+**.
+
+  **The selector-engine swap was measured, not argued.** jsdom 27.0.0 replaced
+  the CSS selector engine (`nwsapi` → `@asamuzakjp/dom-selector`), and a
+  Testing Library query can resolve to a *different* element after such a swap
+  while every downstream assertion still passes — drift a green suite cannot
+  catch. Per the sweep document's Step 6 checklist, a throwaway `setupFiles`
+  shim wrapped every `screen` query method and logged each resolved element's
+  DOM index path plus its normalised `outerHTML`; the suite was run on both
+  jsdom versions and the two logs diffed. **176 query resolutions across 46
+  tests in 17 files — the diff is empty.** Every query resolved to the same
+  element on both sides. The shim was deleted before this PR; it was a
+  measurement, not a fixture.
+
+  Four further changes across the span were re-verified inert against the
+  *installed* tree rather than inherited from the scoping document: the 29.0.0
+  CSSOM rewrite has no author CSS to act on (`vite.config.ts`'s `test` block
+  sets no `css` key, so Vitest's default `css: false` applies and Mantine's
+  stylesheets never enter jsdom); 27.0.0's `element.click()` → `PointerEvent`
+  change is unreachable (no `.click()` anywhere in `frontend/src/` — all 26
+  interactions go through `userEvent`/`fireEvent`, which build their own
+  events); passive-by-default events cannot bite (no `preventDefault` in
+  `src/`); and `matchMedia`, `ResizeObserver` and `scrollIntoView` are
+  implemented in **zero** files of the shipped `lib/` in both 26.1.0 and
+  30.0.1, so `src/test/setup.ts`'s `if (!…)` polyfill guards behave
+  identically.
+
+  The lockfile moves 338 → 340 packages: 12 added, 10 removed, 19 bumped, every
+  one attributed to jsdom or its transitive closure by resolving each package's
+  requirers in both lockfiles. The new selector engine and the `css-tree`-based
+  CSSOM arrive (`@asamuzakjp/dom-selector`, `css-tree`, `mdn-data`,
+  `@bramus/specificity`, `bidi-js`, `require-from-string`,
+  `@csstools/css-syntax-patches-for-csstree`), `undici` replaces the
+  `ws`/`http-proxy-agent`/`https-proxy-agent`/`agent-base` stack, and
+  `cssstyle` → `rrweb-cssom` and `whatwg-encoding` → `iconv-lite` →
+  `safer-buffer` are orphaned along with `nwsapi`. Nothing outside that closure
+  moved: `vite`, `vitest`, `typescript`, `eslint`, `postcss`, `react` and
+  `react-dom` are unchanged in the resolved tree, and the top-level
+  `lru-cache@5.1.1` Babel depends on is untouched (jsdom's `11.5.2` copies are
+  all nested). Lint, `format:check`, build and `npm audit` (0 vulnerabilities)
+  are unchanged, and the test suite holds at **80 tests across 22 files** —
+  compared per test, not per total: both runs were captured with
+  `--reporter=json` and reduced to sorted `file :: full test name :: status`
+  triples, which diff empty.
+
+- **Vitest 3.2.7 → 4.1.10** — step 5 of the frontend toolchain sweep in
+  `docs/upgrades/frontend-toolchain-86.md`. **`vitest` is the only package
+  bumped**, and it stays on the pinned `vite@6.4.3`: `vitest@4.1.10` declares
+  `vite: "^6.0.0 || ^7.0.0 || ^8.0.0"` as a required (non-optional) peer, so
+  Vitest 4 needs no Vite major and does not have to wait for step 7. `jsdom`
+  stays at 26.1.0 (step 6) and `vite` at 6.4.3 (step 7).
+
+  **`frontend/vite.config.ts` needed no change**, confirmed against the shipped
+  4.1.10 artifact rather than the migration guide: `dist/config.d.ts` still
+  carries `declare module "vite" { interface UserConfig { test?: … } }`, so the
+  `/// <reference types="vitest/config" />` plus `defineConfig` from `'vite'`
+  arrangement still types the `test` key; `extends?: string | true` is still on
+  the project-configuration type; and `projects` is already the current
+  spelling, so the `workspace` → `projects` rename is inert. Vitest 4's other
+  breaking changes have no consumer here — no `coverage`, `poolOptions`,
+  `reporters`, `deps.*` or `css` keys in the config, no snapshots, and no
+  test-options-as-third-argument call sites. The narrowed default `exclude`
+  (v3's five patterns down to `node_modules` and `.git`) collects nothing new,
+  because both projects' `include` globs are confined to `src/**`.
+
+  **One type error had to be fixed, in test code**, and it is the one thing the
+  sweep document's Step 5 row did not predict. Vitest 4 widened `vi.fn`'s
+  type-parameter constraint from `Procedure` to `Procedure | Constructable` (the
+  change that lets `vi.spyOn` mock constructors), so the alias
+  `ReturnType<typeof vi.fn>` — which instantiates a generic at its *constraint*,
+  not its default — now resolves to `Mock<Procedure | Constructable>` and no
+  longer satisfies a plain call signature. `tsc -b` failed at
+  `OidcLinkCard.test.tsx:65`, where such a mock is passed to
+  `.mockImplementation()` on a `History.replaceState` spy. Fixed at that one
+  site by typing the mock against the real method signature
+  (`Mock<typeof window.history.replaceState>`) instead of the loose alias, which
+  is more accurate than what it replaced. No autofix was run, in bulk or
+  otherwise. The sibling `ReturnType<typeof vi.fn>` at line 49 still compiles —
+  its mock is only ever asserted on — and was deliberately left alone.
+
+  **`vi.restoreAllMocks()` changed meaning, and it reaches one suite — but no
+  test's outcome depends on it.** In Vitest 4 it restores only spies created
+  with `vi.spyOn`, where Vitest 3 also reset plain `vi.fn()` implementations.
+  Measured on both versions with a standalone probe rather than read from the
+  guide: v3 reports the `vi.fn()` implementation gone after the call, v4 reports
+  it surviving; `vi.spyOn` spies are restored under both.
+  `OidcLinkCard.test.tsx` is the only file combining a `vi.mock` factory's
+  `vi.fn()`s with `vi.restoreAllMocks()` in `afterEach`, so its three mocks now
+  carry implementations across tests. Instrumenting the real suite shows the
+  carryover is real and inert: `startOidcLink`/`unlinkOidcIdentity` retain an
+  implementation from the test that sets it onward, yet are invoked **zero**
+  times in every later test, and every one of the ten tests sets
+  `getOidcLinkStatus`'s own resolved value before rendering.
+
+  **Suites, from a fresh `rm -rf node_modules && npm ci`:** lint clean,
+  `format:check` clean, **80 tests across 22 files** — identical to the
+  pre-bump baseline down to per-test name and status — `npm audit` 0
+  vulnerabilities, and a build of 7,035 modules whose emitted assets carry the
+  **same content hashes** as the baseline (`index-Vvdzytcz.js` 645.14 kB,
+  `index-D2wHtcHV.css` 201.38 kB), which is the proof that a test-runner
+  devDependency changed nothing that ships.
+
+- **TypeScript 5.7.2 → 6.0.3, and `frontend/tsconfig.app.json` pins
+  `"types": []`** — step 4 of the frontend toolchain sweep in
+  `docs/upgrades/frontend-toolchain-86.md`. **`typescript` is the only package
+  that moved**: the lockfile diff is one entry's `version`/`resolved`/
+  `integrity` triple, 346 packages before and after, nothing added, removed, or
+  bumped transitively, `lockfileVersion` still 3. No source file changed.
+
+  **This stops at 6.0.3 deliberately, and 6.0.3 is the ceiling, not the
+  latest.** `typescript@7.0.2` is the Go-native compiler: its `"."` export is
+  `./lib/version.cjs`, `lib/typescript.js` and `tsserver` are gone, and
+  `@typescript-eslint/typescript-estree` uses 114 distinct `ts.*` symbols from
+  that removed API. Re-checked at the registry on **2026-08-09** rather than
+  taken from the scoping document: `typescript-eslint@8.66.0` (`latest`) and its
+  `8.66.1-alpha.10` canary both peer `typescript: ">=4.8.4 <6.1.0"`, and
+  `@typescript-eslint/parser` and `/typescript-estree` carry the same range —
+  so no published typescript-eslint accepts TypeScript 7. 6.0.3 (2026-04-16) is
+  the highest release inside `<6.1.0` and the last JS-based TypeScript. A future
+  `typescript@7.x` offer from Dependabot is expected and is **not** an oversight;
+  re-run `npm view typescript-eslint@latest peerDependencies.typescript` before
+  treating the ceiling as stale. No `ignore` rule was added — TypeScript 7 is
+  wanted, just not before typescript-eslint supports it.
+
+  **`"types": []` is written out rather than inherited.** TypeScript 6.0 changes
+  the option's default from "enumerate every package in `node_modules/@types`"
+  to `[]`. It is a no-op for `src/` — **verified, not assumed, and verified
+  twice**: `src/` has zero references to `process`, `Buffer`, `__dirname` or
+  `__filename` and no `NodeJS.` namespace use, all 22 test files import their
+  globals from `'vitest'` (Vitest's `globals` option is not set), and timers go
+  through `window.setTimeout` from the DOM lib. The empirical leg is the
+  stronger one: the edit was applied **under 5.7.2 first**, where the old
+  enumerate-everything default was still live, and `tsc -b --force` plus
+  `npm run lint` stayed clean — so nothing in `src/` was relying on the ambient
+  `@types` enumeration that 6.0 withdraws. `frontend/tsconfig.node.json` needed
+  no change; it already sets `"types": ["node"]` for `vite.config.ts`, which is
+  the one file that does use `process`.
+
+  **The inference change the scoping document flags as unpre-emptable did
+  surface — silently, and it is benign.** TypeScript 6.0's "less
+  context-sensitivity on `this`-less functions" produced **no error and no
+  deprecation diagnostic**; `tsc -b --force` is clean. It shows up only in
+  inferred types, found by emitting declarations under both compilers and
+  diffing them: the sole difference across 79 `.d.ts` files is `FindingsTable`
+  in `frontend/src/pages/ScanDetailPage.tsx`, where the `React.memo` overload
+  resolved for a `this`-less named function expression moves from
+  `NamedExoticComponent<FindingsTableProps>` to
+  `MemoExoticComponent<(props: FindingsTableProps) => JSX.Element>`. The public
+  contract is unchanged — a type probe confirms both compilers accept the exact
+  prop object and reject an extra and a missing prop identically — and the repo
+  emits no declarations (`noEmit: true`), so nothing consumes the printed form.
+  It is the only `memo`/`forwardRef` site in `src/`.
+
+  **Nothing else moved.** `eslint --print-config` on an app `.tsx`, a library
+  `.ts` and a test override is **byte-identical** before and after, 135 rules
+  each. Lint clean, `format:check` clean, **80 tests across 22 files**,
+  `npm audit` 0 vulnerabilities, and the build emits the **same content hashes**
+  as before (`index-Vvdzytcz.js` 645.14 kB, `index-D2wHtcHV.css` 201.38 kB,
+  7,035 modules) — the proof that a compiler-only step changed nothing that
+  ships.
+
+- **React Compiler lint rules adopted from `eslint-plugin-react-hooks@7.1.1`,
+  with `react-hooks/set-state-in-effect` held back until the `#176` work later
+  in this release** — step 3 of the frontend
+  toolchain sweep in `docs/upgrades/frontend-toolchain-86.md`. **No dependency
+  version moved**; `frontend/package.json` and `frontend/package-lock.json` are
+  byte-identical. Step 2's holding edit in `frontend/eslint.config.js` is
+  replaced by the `...reactHooks.configs.recommended.rules` spread it was
+  standing in for, so the resolved rule set goes **121 → 135 rules** — verified
+  with `eslint --print-config` on an app `.tsx`, a library `.ts` and a test
+  override, all three moving identically. The 14 added are 11 at `error`
+  (`config`, `error-boundaries`, `gating`, `globals`, `immutability`,
+  `preserve-manual-memoization`, `purity`, `refs`, `set-state-in-render`,
+  `static-components`, `use-memo`), 2 at `warn` (`incompatible-library`,
+  `unsupported-syntax`), and `set-state-in-effect` at `off`. Nothing else in
+  the resolved config moved at any severity.
+
+  **Twelve of the fourteen report nothing against the current tree** —
+  including `immutability`, `purity` and `preserve-manual-memoization`, which
+  the scoping document expected to fire in volume. The whole adoption cost is
+  two rules and 24 findings.
+
+  **`react-hooks/refs` — 6 findings, all fixed by hand.** All six are one
+  idiom in `frontend/src/pages/ScansPage.tsx`: a `useRef(viewFromParams(…))`
+  whose `.current` was read during render to seed six `useState` initializers.
+  Reading a ref during render is what the rule forbids, so the ref is replaced
+  by a lazy `useState` initializer — `const [initialView] = useState(() =>
+  viewFromParams(searchParams))` — which runs `viewFromParams` exactly once on
+  first render, as the ref did. Behaviour is unchanged and the History
+  deep-linking tests (`P3-1`) still pass. This is the sweep's first step to
+  change runtime code, so unlike steps 1 and 2 the emitted bundle moves:
+  `index-BNB6IweX.js` 645.18 kB → `index-Vvdzytcz.js` 645.14 kB. The CSS is
+  untouched and keeps its hash (`index-D2wHtcHV.css`).
+
+  **`react-hooks/set-state-in-effect` — 18 findings, rule held at `off` for this
+  step with the reason in the config and the work tracked in
+  [#176](https://github.com/tyler-rich/Scrye/issues/176).** Only **6** of the 18
+  are the synchronous setState-in-effect the rule's rationale describes, and
+  two of those are deliberate effects that each closed a real bug —
+  `ScanDetailPage`'s `:scanId` reset (`L17`/`P2-2`) and `ScansPage`'s compare
+  reconcile (`P3-2`) — so #176 names them explicitly rather than leaving a
+  future session to "fix" them blind. The other **12** are the fetch-on-mount
+  idiom, where every `setState` runs after an `await`; they are deliberately
+  **not** in #176's scope, because a three-shape probe against the installed
+  7.1.1 showed the report tracks what the compiler can see rather than a
+  behavioural difference: with `load` defined in the component body
+  `void load()` reports while the semantically identical
+  `void (async () => { await load(); })()` does not, and moving `load` behind a
+  custom hook silences every shape. There is no fix for those 12 that is an
+  improvement — only hiding the call from the analyser, or a data-fetching
+  refactor that is its own decision.
+
+  **Superseded later in this release.** All six in-scope sites were subsequently
+  replaced (see § Fixed above), and the rule now ships enabled at **`'warn'`**
+  rather than `off` — a deliberate choice over the alternatives, since the
+  plugin's own preset severity is `error` and the 12 fetch-on-mount findings
+  remain, undisguised, with no `eslint-disable` anywhere. Lint and CI pass at 0
+  errors / 13 warnings.
+
+- **ESLint 9.39.4 → 10.8.1, with `@eslint/js` 9.39.4 → 10.0.1,
+  `eslint-plugin-react-hooks` 5.1.0 → 7.1.1 and `eslint-plugin-react-refresh`
+  0.4.16 → 0.5.3** — step 2 of the frontend toolchain sweep in
+  `docs/upgrades/frontend-toolchain-86.md`, unblocked by step 1
+  (`typescript-eslint@8.66.0` is the first release to peer `eslint ^10.0.0`).
+  Lint-only: no source file changed, `npm test` and `npm run build` are
+  unchanged, and the emitted bundle carries the **same content hashes** as
+  before (`index-BNB6IweX.js`, `index-D2wHtcHV.css`). `typescript` stays at
+  5.7.2 and no other package in `frontend/package.json` moved.
+
+  **`eslint-plugin-react-hooks` is peer-forced, and its rule-set expansion is
+  deliberately held inert.** 5.1.0 peers `eslint` only up to `^9`; the `^10.0.0`
+  clause first appears in 7.1.0, so ESLint 10 cannot resolve against the old
+  pin. But 7.x's `configs.recommended.rules` folds in the React Compiler set —
+  resolved from the installed package, it is **16 rules (13 `error`, 3 `warn`)**
+  where 5.1.0's was 2. `frontend/eslint.config.js` spread that object, so the
+  bump alone would have enabled 14 new rules. The spread is replaced by the two
+  rules it contained under 5.1.0 — `react-hooks/rules-of-hooks: 'error'` and
+  `react-hooks/exhaustive-deps: 'warn'`, verified against 5.1.0's shipped
+  config — making the edit behaviour-preserving. Adopting the compiler set is
+  step 3 and remains a separate decision. Confirmed at the resolved config, not
+  assumed: `eslint --print-config` reports exactly those two `react-hooks/*`
+  rules, at their original severities, for all three file classes.
+
+  **The resolved rule set moved by three rules, and every movement was checked
+  with `eslint --print-config` on an app `.tsx`, a library `.ts`, and a test
+  override — before and after.** All three classes moved identically, 118 → 121
+  rules:
+
+  - **Added at `error`, all three from `@eslint/js` 10.0.0's revised
+    `eslint:recommended`:** `no-unassigned-vars`, `no-useless-assignment`,
+    `preserve-caught-error`. Attributed by resolving the shipped config object
+    from both packages rather than reading release notes — 9.39.4's recommended
+    carries 61 rules, 10.0.1's carries 64, and the delta is exactly those three
+    with nothing removed and nothing re-severitied.
+  - **`no-shadow-restricted-names`** — its `reportGlobalThis` default flips
+    `false` → `true`, so `globalThis` is now reported. The one genuine
+    behaviour change among the severity-carrying rules; it finds nothing here.
+  - **Two entries changed shape without changing behaviour:**
+    `no-constant-binary-expression` gains a new option
+    (`checkRelationalComparisons`, default `false`, so opt-in) and
+    `no-unused-vars` materialises a full default-option object. Both are ESLint
+    10 adding or revising `meta.defaultOptions`, not a print-config formatting
+    change — 25 of the 72 core rules in this config carry `defaultOptions` and
+    only these two moved. `no-unused-vars` is at severity `0` here regardless,
+    disabled by typescript-eslint in favour of its own rule.
+
+  **`@eslint/eslintrc` and `js-yaml` are now absent from the tree entirely** —
+  `eslint@10.8.1` no longer depends on eslintrc, which was this repo's only path
+  to `js-yaml`. `npm ls` reports nothing for either. That permanently removes
+  the path behind GHSA-5p4m-2wfm-xmqj, which the lockfile refresh above had
+  closed by version alone.
+
+  **None of ESLint 10's removals reach this repo, checked rather than assumed:**
+  there has never been an `.eslintrc*` file (flat config since Phase 0), there
+  are no `eslint-env` comments anywhere, no custom rules or `SourceCode` /
+  rule-context API use, no `RuleTester` or `Linter`/`ESLint` API consumers, and
+  no bracket expressions in any ignore glob. The new engine floor
+  (`^20.19.0 || ^22.13.0 || >=24`) is satisfied by CI's Node 24 and by the
+  `node:24-bookworm-slim` digest the image pins.
+
+- **`typescript-eslint` 8.19.0 → 8.66.0** — step 1 of the frontend toolchain
+  sweep in `docs/upgrades/frontend-toolchain-86.md`, taken alone because it is
+  the only unblocking move in that sequence: the pinned 8.19.0 capped
+  `typescript` at `<5.8.0` and `eslint` at `^9`, and 8.66.0 raises those to
+  `<6.1.0` and `^10.0.0`. No other package in `frontend/package.json` moved and
+  no ESLint or TypeScript config was edited.
+
+  **Two of the scoping document's predictions did not hold, and both are worth
+  carrying into the remaining steps.**
+
+  - **An existing rule's implementation got stricter.** The rule *set* is
+    unchanged, exactly as predicted — `recommended-type-checked.js` is identical
+    across the 47-minor span, 50 entries either side. But
+    `@typescript-eslint/no-unnecessary-type-assertion` now catches what it
+    previously missed, reporting two redundant `'' as string` assertions in
+    `NewScanPage.tsx`'s `useForm` initial values. Both were removed by hand;
+    `tsc -b` confirms the inferred form type is unchanged, and the emitted
+    bundle is byte-identical (same content hashes), since the assertions erase
+    at compile time. **"No new rules" does not mean "no new findings."**
+  - **The effective rule set did change, in the relaxing direction.** The
+    document's claim that the shipped `recommendedTypeChecked` is byte-for-byte
+    identical is wrong, not merely incomplete: it diffed one of the three files
+    that config composes. The layer it did not diff,
+    `eslint-recommended-raw.js`, gains **`no-with: 'off'`** (22 → 23 entries),
+    which drops `no-with` from `error` to `off` in the resolved config. Accepted
+    rather than restored — `with` is a hard compile error under this repo's
+    tsconfigs (verified at the compiler: `TS1101` plus `TS2410`), so the rule is
+    genuinely redundant here.
+
+  The lockfile change is confined to the `typescript-eslint` subtree: the ten
+  `@typescript-eslint/*` packages plus `ts-api-utils` 1.4.3 → 2.5.0 and nested
+  `minimatch`/`brace-expansion` bumps; two new first-party splits
+  (`project-service`, `tsconfig-utils`); and three nested copies that exist only
+  because the top-level ones stay pinned for ESLint 9. `typescript-estree`'s
+  swap from `fast-glob` to `tinyglobby` — already present in the tree at a
+  satisfying version — orphans 17 packages, each checked to have no surviving
+  requirer. Net 374 → 362 packages, `npm audit` still 0 at every severity, and
+  the suites are unchanged: ESLint clean, Prettier clean, 79 tests across 21
+  files, and a build of 7,035 modules to 645.18 kB JS / 201.38 kB CSS.
+- **Bundled scanner binaries updated: Trivy 0.72.0 → 0.73.0, Grype 0.115.0 →
+  0.116.1, Syft 1.46.0 → 1.50.0** — the current upstream releases, verified by
+  resolving each project's tags rather than from any advisory or summary. No
+  breaking changes, deprecations, or CLI changes in any release crossed, and
+  Syft's JSON schema moves only at patch level (16.1.5 → 16.1.10), so Scrye's
+  JSON parsing and the persisted-SBOM format are unaffected. Highlights: Trivy
+  gains native discovery of VEX documents stored as OCI artifacts; Grype 0.116
+  adds lightweight Go reachability analysis that reduces false positives and
+  dedupes govulndb/GHSA twins; Syft picks up vcpkg and macOS `.app` cataloging.
+  The CI dogfood gate's `aquasec/trivy` / `anchore/grype` scan images (pinned to
+  the bundled versions by design) and the weekly re-scan move in lockstep, with
+  digests resolved from the registry. `THIRD_PARTY_LICENSES/` re-verified at the
+  new tags: every bundled `LICENSE` (and Trivy's `NOTICE`) is byte-identical
+  upstream, and Grype/Syft still ship no `NOTICE`, so only the version table
+  changes.
+- **`uvicorn[standard]` 0.52.0 → 0.52.1 and `alembic` 1.18.5 → 1.19.1**, the
+  mergeable half of Dependabot **#157**, reapplied by hand because Dependabot
+  edits `pyproject.toml` only and leaves `backend/requirements.lock` stale — its
+  own branch fails CI's lock-drift gate. `requirements.lock` was regenerated with
+  the pinned `uv 0.8.17` command from `CONTRIBUTING.md` § Backend dependency lock;
+  the diff is those two packages and their hashes, with no transitive churn.
+  Neither release changes a deployed Scrye's behaviour, configuration or schema.
+  - **uvicorn 0.52.1** is four WebSocket-only fixes (closing handshake, write
+    flow control, connection loss during a backpressured write, and denial-
+    response headers). Scrye serves no WebSocket route and the SPA opens no
+    socket, so none of it is reachable here — pure currency.
+  - **alembic 1.19.1, not the 1.19.0 Dependabot proposed.** 1.19.0 (2026-08-04)
+    added named-CHECK-constraint autogenerate detection; 1.19.1 (2026-08-08,
+    published after #157 opened) fixes a defect in exactly that feature, where
+    column-bound check constraints produced wrong autogenerate results. Both
+    changes are confined to the migration-*authoring* path — no shipped migration
+    and no runtime behaviour is affected.
+- **Routine dependency currency across the backend, frontend and CI**, triaged
+  from the three grouped Dependabot PRs opened after v0.3.0 (#144, #145, #146)
+  and reapplied by hand rather than merged as-built. No change to a deployed
+  Scrye's behaviour, configuration or schema.
+  - **Backend.** `fastapi` 0.140.13 → 0.141.1 (the release adds an
+    `app.frontend()` dev-server convenience Scrye does not use) and
+    `uvicorn[standard]` 0.51.0 → 0.52.0 (adds an **opt-in** experimental
+    `--http zttp` parser, which upstream marks not-for-production and the image
+    never selects — `docker/entrypoint.sh` passes no `--http` flag, so the
+    default parser is unchanged). `starlette` holds at 1.3.1 and
+    `backend/requirements.lock` was regenerated with the pinned `uv`. `ruff`
+    0.16.0 → 0.16.1 (dev tooling only).
+  - **Frontend.** `@mantine/*` 7.15.2 → 7.17.8 (a minor inside the locked v7
+    line), `@tabler/icons-react` 3.46.0, `@testing-library/react` 16.3.2,
+    `@testing-library/jest-dom` 7.0.0, `postcss-preset-mantine` 1.18.0,
+    `globals` 17.8.0, `prettier` 3.9.6, and `@types/node` 22.20.0 → 24.13.3 to
+    match the Node 24 the SPA is built on. All are build- or test-time packages
+    except Mantine and the icon set; the shipped bundle changes only by
+    Mantine's own 7.15 → 7.17 fixes. Prettier 3.9 reformats short union types
+    onto one line, which is why three source files show whitespace-only edits.
+  - **CI.** `github/codeql-action` re-pinned from the `v4.37.4` annotated *tag
+    object* to the commit that tag dereferences to. Same release, same CodeQL
+    bundle, same `security-extended` suite — a SHA-pin correctness fix, not a
+    version bump.
+
 ## [0.3.0] - 2026-08-03
 
 ### Upgrade notes
@@ -719,7 +1432,8 @@ model, in a single hardened container.
   + tmpfs, resource limits, healthcheck, loopback-only port binding); CSRF
   protection, rate-limited auth, and an audit log.
 
-[Unreleased]: https://github.com/tyler-rich/Scrye/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/tyler-rich/Scrye/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/tyler-rich/Scrye/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/tyler-rich/Scrye/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tyler-rich/Scrye/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tyler-rich/Scrye/releases/tag/v0.1.0

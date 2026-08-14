@@ -191,7 +191,30 @@ export const FindingsTable = memo(function FindingsTable({
   );
 });
 
-/** Detail view for a single scan: status, summary, artifacts, findings. */
+/**
+ * Route element for `/scans/:scanId`: keys {@link ScanDetailPage} by the scan
+ * id so React remounts it — state, refs, and effects reset wholesale — whenever
+ * the id changes. React Router reuses the matched element across `/scans/:id`
+ * navigations, so without the remount the previous scan's header, findings,
+ * artifacts, tag draft, and poll state linger, and the artifacts/findings
+ * effects (gated on the stale `scan.status`) fire for the new id against the
+ * old status (L17 / P2-2). A remount also voids the old scan's in-flight
+ * request resolutions — they land on the unmounted instance as no-ops — which
+ * the per-field reset effect this replaces could not do.
+ */
+export function ScanDetailRoute() {
+  const { scanId } = useParams();
+  return <ScanDetailPage key={scanId} />;
+}
+
+/**
+ * Detail view for a single scan: status, summary, artifacts, findings.
+ *
+ * Mount via {@link ScanDetailRoute}: every piece of per-scan state below
+ * assumes a fresh component instance per scan id, and the keyed remount is
+ * what provides that. Rendering this component bare across `:scanId` changes
+ * reintroduces L17 / P2-2.
+ */
 export function ScanDetailPage() {
   const { scanId } = useParams();
   const id = Number(scanId);
@@ -203,7 +226,13 @@ export function ScanDetailPage() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [findingsTotal, setFindingsTotal] = useState(0);
-  const [findingsLoading, setFindingsLoading] = useState(false);
+  // The findings request `findings`/`findingsTotal` were last settled for, as a
+  // key. "Loading" is then derived rather than stored: a stored flag could only
+  // be raised synchronously from the effect that starts the fetch, which
+  // commits an extra render — and one in which the table has already dropped
+  // its spinner but has no rows yet, so it renders "no findings match" over a
+  // request still in flight.
+  const [findingsSettledKey, setFindingsSettledKey] = useState<string | null>(null);
   const [findingsLoaded, setFindingsLoaded] = useState(false);
   // Latest-wins guard so rapid severity/class filter toggles can't render an
   // earlier filter's response over a later one (L18 / P2-3).
@@ -223,6 +252,12 @@ export function ScanDetailPage() {
   const [pollHalt, setPollHalt] = useState<'error' | 'gone' | null>(null);
   const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Which findings request the current view calls for, and whether what is on
+  // screen is that request's result yet. Findings are only ever fetched for a
+  // succeeded scan, so nothing is in flight before then.
+  const findingsKey = `${id}|${severityFilter ?? ''}|${classFilter ?? ''}`;
+  const findingsLoading = scan?.status === 'succeeded' && findingsSettledKey !== findingsKey;
 
   const loadScan = useCallback(async (): Promise<'ok' | 'error' | 'gone'> => {
     try {
@@ -263,47 +298,30 @@ export function ScanDetailPage() {
 
   const loadFindings = useCallback(async () => {
     const token = findingsGuard.current.begin();
-    setFindingsLoading(true);
     try {
       const page = await listFindings(id, {
         severity: severityFilter ?? undefined,
         finding_class: classFilter ?? undefined,
         limit: FINDINGS_LIMIT,
       });
+      // Only the latest request settles the view, on either outcome: a
+      // superseded one returns above and leaves the key unmatched, so the
+      // spinner stays up for the request that replaced it. Settling in both
+      // branches rather than a `finally` keeps every setState behind the
+      // `await` — a `finally` is also reachable synchronously, on the path
+      // where the call itself throws.
       if (!findingsGuard.current.isCurrent(token)) return;
       setFindings(page.items);
       setFindingsTotal(page.total);
       setFindingsLoaded(true);
       setError(null);
+      setFindingsSettledKey(findingsKey);
     } catch (err: unknown) {
       if (!findingsGuard.current.isCurrent(token)) return;
       setError(err instanceof ApiError ? err.message : 'Failed to load findings.');
-    } finally {
-      if (findingsGuard.current.isCurrent(token)) setFindingsLoading(false);
+      setFindingsSettledKey(findingsKey);
     }
-  }, [id, severityFilter, classFilter]);
-
-  // Reset all per-scan state when the :scanId param changes. React Router
-  // reuses this component instance across /scans/:id navigations, so without
-  // this the header, findings, artifacts, tag draft, and poll state of the
-  // previous scan linger — and the artifacts/findings effects (gated on the
-  // stale scan.status) would fire for the new id against the old status
-  // (L17 / P2-2).
-  useEffect(() => {
-    setScan(null);
-    setArtifacts([]);
-    setFindings([]);
-    setFindingsTotal(0);
-    setFindingsLoaded(false);
-    setFindingsLoading(false);
-    findingsGuard.current.begin();
-    setSeverityFilter(null);
-    setClassFilter(null);
-    setTagDraft([]);
-    lastSyncedTags.current = [];
-    setError(null);
-    setPollHalt(null);
-  }, [id]);
+  }, [id, severityFilter, classFilter, findingsKey]);
 
   useEffect(() => {
     void loadScan();

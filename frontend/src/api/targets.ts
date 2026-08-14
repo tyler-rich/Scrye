@@ -22,11 +22,7 @@ export interface CredentialOption {
 // --- Registries --------------------------------------------------------------
 
 export type RegistryAuthType =
-  | 'username_password'
-  | 'token'
-  | 'aws_ecr'
-  | 'google_gcr'
-  | 'azure_acr';
+  'username_password' | 'token' | 'aws_ecr' | 'google_gcr' | 'azure_acr';
 
 /** Auth types that carry a stored secret (the rest use a credential helper). */
 export const SECRET_BEARING_AUTH_TYPES: RegistryAuthType[] = ['username_password', 'token'];
