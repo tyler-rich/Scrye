@@ -127,7 +127,7 @@ services:
   # rebuild trivy-server on a non-root base with a writable cache path.
   trivy-server:
     profiles: ["trivy-server"]
-    image: aquasec/trivy:0.73.0@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c
+    image: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
     command: ["server", "--listen", "0.0.0.0:4954"]
     networks:
       - scrye_net
@@ -169,7 +169,7 @@ services:
   # mapping.
   docker-socket-proxy:
     profiles: ["docker-env"]
-    image: wollomatic/socket-proxy:1.12.3@sha256:74e770f5ed3cfc9ecb6350e177d2aa55873568c85bc953079834e68607dbf71b
+    image: wollomatic/socket-proxy:1.13.1@sha256:3935b709275e4ec35d6ed5a5c4a1f0d01ed31eec5e7234efc3357ecd47689002
     # The upstream image is `USER 65534:65534`. Unlike the old root-in-container
     # HAProxy image, this one must be given the *host's* docker GID to read the
     # socket at all: /var/run/docker.sock is root:docker mode 0660. Find it with
