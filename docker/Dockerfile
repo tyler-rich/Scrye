@@ -24,7 +24,7 @@
 # each 24.x patch); do not let a Dependabot major stand in for it — node majors
 # are ignored in .github/dependabot.yml precisely so the digest refresh is what
 # Dependabot offers here.
-FROM node:24-bookworm-slim@sha256:235600a8101ab264e117b1768e925532262668dc9b581ef1dd7d96ced463b8e7 AS frontend-builder
+FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS frontend-builder
 WORKDIR /build/frontend
 
 # Install deps from the lockfile first for better layer caching. The BuildKit
@@ -40,7 +40,7 @@ RUN npm run build
 
 
 # --- Stage 2: download + checksum-verify the scanner binaries ----------------
-FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS scanners
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS scanners
 ARG TARGETARCH
 # Pinned, current scanner versions (CLAUDE.md § Dependency hygiene).
 ARG TRIVY_VERSION=0.73.0
@@ -158,7 +158,7 @@ RUN set -eux; \
 # new tag is 3.14.7 or later. Resolve the replacement against the registry (the
 # `3.14-slim-bookworm` tag moves with each 3.14.x patch); don't copy a digest
 # from a rendered page. See docs/ARCHIVE.md §14 (2026-08-11).
-FROM python:3.14-slim-bookworm@sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52 AS backend-builder
+FROM python:3.14-slim-bookworm@sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83 AS backend-builder
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build/backend
 
@@ -198,7 +198,7 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
 # --- Final stage: minimal runtime image --------------------------------------
 # Same 3.14.7+ digest as the builder stage above — see the GC / interpreter-CVE
 # note there. Both FROM lines must move together.
-FROM python:3.14-slim-bookworm@sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52 AS runtime
+FROM python:3.14-slim-bookworm@sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83 AS runtime
 
 # ca-certificates: scanner DB downloads + TLS. curl: container HEALTHCHECK.
 # git: authenticated clone of generic-host private repos into tmpfs, so the
