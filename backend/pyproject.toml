@@ -40,10 +40,10 @@ dependencies = [
     # authoring path only; no shipped migration or runtime behaviour changes.
     "alembic==1.19.1",
     "argon2-cffi==25.1.0",
-    "cryptography==50.0.0",
+    "cryptography==50.0.2",
     "httpx==0.28.1",
     "python-multipart==0.0.32",
-    "authlib==1.7.2",
+    "authlib==1.9.1",
     "pyotp==2.10.0",
 ]
 
